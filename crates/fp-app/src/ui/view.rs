@@ -539,6 +539,62 @@ pub fn animation_period(max_fps: u32) -> std::time::Duration {
     }
 }
 
+/// Whether `reading` still shows on meter `c`'s scale: a level, a peak hold
+/// or an average above its bottom. A stopped player's meter falls for a
+/// while; the interface draws it falling (phone layout spec PL31).
+pub fn meter_moving(reading: &fp_engine::meter::MeterReading, c: &fp_model::MeterConfig) -> bool {
+    let shows = |db: &f32| super::widgets::meter_position(*db, c) > 0.0;
+    reading.level_db.iter().any(shows)
+        || reading.rms_db.iter().any(shows)
+        || (c.peak_hold_in_use() && reading.hold_db.iter().any(shows))
+}
+
+/// How long an idle interface waits for its next frame, `millis` into the
+/// clock's second: until just after the next second, when the clock has
+/// changed (PL32). A frame a hair early would ask for another at once.
+pub fn idle_wait(millis: u32) -> std::time::Duration {
+    std::time::Duration::from_millis(u64::from(IDLE_PAST_SECOND_MS + 1000 - millis.min(999)))
+}
+
+/// How often a paused player's blink is drawn: twice per phase of its
+/// 2 Hz blink.
+const BLINK_FRAME: std::time::Duration = std::time::Duration::from_millis(250);
+/// How soon an idle desktop draws again (it polls what changed elsewhere).
+const DESKTOP_IDLE: std::time::Duration = std::time::Duration::from_millis(100);
+
+/// How soon the next frame is due: at `ui.max_fps` while something moves
+/// (`animating`, or a meter still falling, PL31), four times a second while
+/// a paused player blinks, and otherwise just after the clock's next second
+/// on a `touch` device (PL32; `millis` into the current second) or ten times
+/// a second on a desktop.
+pub fn next_frame(
+    state: &AppState,
+    telemetry: &fp_engine::conductor::Telemetry,
+    touch: bool,
+    millis: u32,
+) -> std::time::Duration {
+    let meters = telemetry
+        .players
+        .iter()
+        .any(|(_, t)| meter_moving(&t.meter, &state.config.meter));
+    if animating(state) || meters {
+        animation_period(state.config.ui.max_fps)
+    } else if state
+        .players
+        .iter()
+        .any(|p| p.transport == Transport::Paused)
+    {
+        BLINK_FRAME
+    } else if touch {
+        idle_wait(millis)
+    } else {
+        DESKTOP_IDLE
+    }
+}
+
+/// How far past the second an idle frame lands.
+const IDLE_PAST_SECOND_MS: u32 = 10;
+
 /// Something on screen moves on its own (a meter, a countdown, a blinking
 /// Pause button): the interface repaints every frame instead of at the idle
 /// rate. A paused CUE still has its `cue`, so its window keeps blinking.

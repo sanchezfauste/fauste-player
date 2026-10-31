@@ -11,6 +11,7 @@ use super::app::{Scene, ViewState};
 use super::panel_layout::PANEL_GAP;
 use super::theme;
 use super::widgets::{self, TileStyle, font};
+use egui_phosphor::regular as icon;
 
 /// The shortest side, in points (Android's dp), from which a screen is a
 /// tablet (spec §6).
@@ -111,22 +112,118 @@ pub(crate) fn apply_style(ctx: &egui::Context) {
     });
 }
 
-/// The phone's top bar, left part: Live | Carts | Playlists | Music, shrunk (their
-/// names cut short) to stop before `right`, where the lock and More begin.
-pub(crate) fn screen_tiles(ui: &mut Ui, scene: &Scene<'_>, phone: &mut PhoneView, right: f32) {
+/// The phone's tabs: the screen, its name's message and its icon (PL26).
+const TABS: [(PhoneScreen, &str, &str); 4] = [
+    (PhoneScreen::Live, "touch-live", icon::BROADCAST),
+    (PhoneScreen::Carts, "touch-carts", icon::SQUARES_FOUR),
+    (PhoneScreen::Playlists, "touch-playlists", icon::PLAYLIST),
+    (PhoneScreen::Music, "touch-music", icon::MUSIC_NOTES),
+];
+
+/// The gap between the top bar's tiles.
+const TAB_GAP: f32 = 4.0;
+
+/// The phone's top bar, left part, stopping before `right` (where the lock
+/// and More begin): the four tabs as icons, the chosen one with its name
+/// when there is room (PL26), and in landscape on the Playlists screen the
+/// player chips after them (PL27).
+pub(crate) fn screen_tiles(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    phone: &mut PhoneView,
+    right: f32,
+    landscape: bool,
+) {
     let t = scene.i18n;
-    ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
-    let each = ((right - ui.cursor().left() - 12.0) / 4.0).max(TARGET);
-    for (screen, key) in [
-        (PhoneScreen::Live, "touch-live"),
-        (PhoneScreen::Carts, "touch-carts"),
-        (PhoneScreen::Playlists, "touch-playlists"),
-        (PhoneScreen::Music, "touch-music"),
-    ] {
-        if chip_at_most(ui, &t.tr(key), phone.screen == screen, each) {
+    ui.spacing_mut().item_spacing = vec2(TAB_GAP, 0.0);
+    let players = scene.state.player_ids();
+    let chips = landscape && phone.screen == PhoneScreen::Playlists && !players.is_empty();
+    let icons = TABS.len() as f32 * (TARGET + TAB_GAP);
+    // The chips keep room for two of them before the name takes any.
+    let kept = if chips {
+        2.0 * (TARGET + TAB_GAP) + 12.0
+    } else {
+        0.0
+    };
+    let room = right - ui.cursor().left() - icons - kept;
+    for (screen, key, glyph) in TABS {
+        let name = t.tr(key);
+        let on = phone.screen == screen;
+        let name_width = text_width(ui, &name);
+        let named = on && name_width + 8.0 <= room;
+        if tab(ui, glyph, &name, on, named.then_some(name_width)) {
             phone.screen = screen;
         }
     }
+    if chips {
+        let bar = ui.max_rect();
+        let left = ui.cursor().left() + 12.0;
+        let rect = Rect::from_min_max(
+            egui::pos2(left, bar.center().y - TARGET / 2.0),
+            egui::pos2(right.max(left), bar.center().y + TARGET / 2.0),
+        );
+        let mut chips_ui = ui.new_child(
+            UiBuilder::new()
+                .max_rect(rect)
+                .layout(Layout::top_down(Align::Min)),
+        );
+        player_chips(&mut chips_ui, scene, phone, &players);
+    }
+}
+
+/// The width of `text` in a tab's font.
+fn text_width(ui: &Ui, text: &str) -> f32 {
+    ui.painter()
+        .layout_no_wrap(text.to_owned(), font(13.0), theme::TEXT)
+        .size()
+        .x
+}
+
+/// One tab: its icon, and its name beside it when `named` (the name's
+/// width); the name is its accessible label either way.
+fn tab(ui: &mut Ui, glyph: &str, name: &str, on: bool, named: Option<f32>) -> bool {
+    let width = named.map_or(TARGET, |w| TARGET + w + 4.0);
+    let glyph = glyph.to_owned();
+    let text = named.map(|_| name.to_owned());
+    widgets::tile_without_tooltip(
+        ui,
+        vec2(width, TARGET),
+        name,
+        true,
+        chip_style(on),
+        move |p, r, c| {
+            let icon = p.layout_no_wrap(glyph, egui::FontId::proportional(20.0), c);
+            let icon_x = r.left() + (TARGET - icon.size().x) / 2.0;
+            let icon_y = r.center().y - icon.size().y / 2.0;
+            p.galley(egui::pos2(icon_x, icon_y), icon, c);
+            if let Some(text) = text {
+                let galley = p.layout_no_wrap(text, font(13.0), c);
+                let y = r.center().y - galley.size().y / 2.0;
+                p.galley(egui::pos2(r.left() + TARGET - 6.0, y), galley, c);
+            }
+        },
+    )
+    .clicked()
+}
+
+/// The player chips (P1, P2…) of the Playlists screen, scrolling sideways
+/// when they do not fit (PL8, PL27).
+fn player_chips(ui: &mut Ui, scene: &Scene<'_>, phone: &mut PhoneView, players: &[PlayerId]) {
+    let Some(shown) = phone.shown_player(players) else {
+        return;
+    };
+    egui::ScrollArea::horizontal()
+        .id_salt("phone-chips")
+        .show(ui, |ui| {
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = vec2(TAB_GAP, 0.0);
+                for (index, id) in players.iter().enumerate() {
+                    if chip(ui, &player_name(scene, index), *id == shown) {
+                        phone.playlists = Some(*id);
+                    }
+                }
+            });
+        });
 }
 
 /// Whether the phone's lock holds faders and waveforms (PL12). It guards
@@ -230,22 +327,7 @@ fn chip_at_most(ui: &mut Ui, label: &str, on: bool, max_width: f32) -> bool {
         .x
         + 28.0;
     let width = natural.min(max_width);
-    let style = if on {
-        TileStyle {
-            fill: theme::NEUTRAL_800,
-            border: theme::NEUTRAL_700,
-            content: theme::TEXT,
-            hover_fill: theme::NEUTRAL_700,
-            ..TileStyle::plain()
-        }
-    } else {
-        TileStyle {
-            border: theme::NEUTRAL_800,
-            content: theme::NEUTRAL_400,
-            hover_fill: theme::NEUTRAL_800,
-            ..TileStyle::plain()
-        }
-    };
+    let style = chip_style(on);
     let owned = label.to_owned();
     widgets::tile_without_tooltip(
         ui,
@@ -261,6 +343,26 @@ fn chip_at_most(ui: &mut Ui, label: &str, on: bool, max_width: f32) -> bool {
         },
     )
     .clicked()
+}
+
+/// A chip's look: highlighted when chosen.
+fn chip_style(on: bool) -> TileStyle {
+    if on {
+        TileStyle {
+            fill: theme::NEUTRAL_800,
+            border: theme::NEUTRAL_700,
+            content: theme::TEXT,
+            hover_fill: theme::NEUTRAL_700,
+            ..TileStyle::plain()
+        }
+    } else {
+        TileStyle {
+            border: theme::NEUTRAL_800,
+            content: theme::NEUTRAL_400,
+            hover_fill: theme::NEUTRAL_800,
+            ..TileStyle::plain()
+        }
+    }
 }
 
 /// A phone's middle area: the screen chosen in the top bar.
@@ -424,21 +526,11 @@ fn playlists(
     let Some(shown) = view_state.phone.shown_player(players) else {
         return;
     };
-    ui.horizontal(|ui| {
-        egui::ScrollArea::horizontal()
-            .id_salt("phone-chips")
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
-                    for (index, id) in players.iter().enumerate() {
-                        if chip(ui, &player_name(scene, index), *id == shown) {
-                            view_state.phone.playlists = Some(*id);
-                        }
-                    }
-                });
-            });
-    });
-    ui.add_space(PANEL_GAP);
+    // In landscape the chips are in the top bar (PL27).
+    if !landscape {
+        ui.horizontal(|ui| player_chips(ui, scene, &mut view_state.phone, players));
+        ui.add_space(PANEL_GAP);
+    }
     let Ok(index) = scene.state.player_index(shown) else {
         return;
     };

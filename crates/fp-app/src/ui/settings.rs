@@ -743,7 +743,7 @@ fn set_stacked(ui: &Ui, stacked: bool) {
     ui.data_mut(|d| d.insert_temp(stacked_id(), stacked));
 }
 
-fn stacked(ui: &Ui) -> bool {
+pub(super) fn stacked(ui: &Ui) -> bool {
     ui.data(|d| d.get_temp::<bool>(stacked_id()))
         .unwrap_or(false)
 }
@@ -1899,12 +1899,14 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         }
     });
     ui.add_space(12.0);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
+    // The buttons go to the next line when the name leaves them no room.
+    let new_width = column_width(ui).min(240.0);
+    ui.horizontal_wrapped(|ui| {
+        ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
         ui.add(
             egui::TextEdit::singleline(&mut st.new_name)
                 .hint_text(t.tr("settings-new-playlist"))
-                .desired_width(240.0),
+                .desired_width(new_width),
         );
         let label = t.tr("settings-new-playlist");
         let name = st.new_name.trim().to_owned();
@@ -1948,16 +1950,22 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     } else {
         32.0
     };
+    // A phone's count and length columns are narrower (PL33).
+    let (count_width, length_width) = if stacked(ui) {
+        (40.0, 60.0)
+    } else {
+        (70.0, 80.0)
+    };
     let name_width = if stacked(ui) {
-        (column_width(ui) - 70.0 - 80.0 - 3.0 * 8.0 - buttons).max(100.0)
+        (column_width(ui) - count_width - length_width - 3.0 * 8.0 - buttons).max(80.0)
     } else {
         300.0
     };
     ui.horizontal(|ui| {
         for (key, width) in [
             ("settings-playlist-name", name_width),
-            ("settings-playlist-tracks", 70.0),
-            ("settings-playlist-duration", 80.0),
+            ("settings-playlist-tracks", count_width),
+            ("settings-playlist-duration", length_width),
         ] {
             ui.add_sized(
                 vec2(width, 16.0),
@@ -2008,7 +2016,7 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 *edit = name.clone();
             }
             ui.add_sized(
-                vec2(70.0, 20.0),
+                vec2(count_width, 20.0),
                 egui::Label::new(
                     RichText::new(count.to_string())
                         .font(font(13.0))
@@ -2017,7 +2025,7 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 .selectable(false),
             );
             ui.add_sized(
-                vec2(80.0, 20.0),
+                vec2(length_width, 20.0),
                 egui::Label::new(
                     RichText::new(format::clock(total))
                         .font(font(13.0))

@@ -81,7 +81,7 @@ fn drag_scroll_offset(ui: &mut Ui, last: Option<TableScroll>, files_pointed: boo
     if !entry_drag && !file_drag {
         return None;
     }
-    let pointer = ctx.pointer_hover_pos()?;
+    let pointer = drop_pointer(&ctx)?;
     let on_table_layer = ctx
         .layer_id_at(pointer)
         .unwrap_or_else(egui::LayerId::background)
@@ -301,7 +301,7 @@ pub(crate) fn track_table(
     let pressed_in_table = ui.rect_contains_pointer(area) && ui.input(|i| i.pointer.primary_down());
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     let mut built = 0;
-    let pointer = ui.ctx().pointer_hover_pos();
+    let pointer = drop_pointer(ui.ctx());
     let entries = &list.entries;
     // A phone's rows have a drag handle and more moves in their menu.
     let phone = view_state.phone_active;
@@ -1176,6 +1176,14 @@ fn phone_moves(
         .response
         .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text.clone()));
     });
+}
+
+/// Where a drag would drop. A finger lifted from a touch screen ends its
+/// touch in the frame it is released (egui-winit sends `PointerGone` with
+/// it), which clears the hover position; the interaction position outlives
+/// it for that frame, so the entry lands where the line showed.
+fn drop_pointer(ctx: &egui::Context) -> Option<egui::Pos2> {
+    ctx.input(|i| i.pointer.hover_pos().or_else(|| i.pointer.interact_pos()))
 }
 
 /// A row's drag handle (≡) at the right of `ui`'s cell on a phone (PL10):

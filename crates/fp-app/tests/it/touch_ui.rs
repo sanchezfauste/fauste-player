@@ -11,7 +11,7 @@ use crate::support;
 
 use egui::{Vec2, vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::ui::app::AppUi;
 use std::sync::Arc;
 use support::{Fake, harness, harness_sized, state};
@@ -19,6 +19,8 @@ use support::{Fake, harness, harness_sized, state};
 const PORTRAIT: Vec2 = vec2(412.0, 892.0);
 const LANDSCAPE: Vec2 = vec2(892.0, 412.0);
 const TABLET: Vec2 = vec2(800.0, 1280.0);
+/// A Samsung A56 upright, in dp (1080×2340 at 450 dpi).
+const A56: Vec2 = vec2(384.0, 832.0);
 
 fn touch(players: usize, size: Vec2) -> (Harness<'static, AppUi>, Arc<Fake>) {
     let (mut h, fake) = harness_sized(state(players, 3), size, |ui| ui.with_touch());
@@ -56,6 +58,36 @@ fn drag(h: &mut Harness<'static, AppUi>, from: egui::Pos2, to: egui::Pos2) {
         pressed: false,
         modifiers: egui::Modifiers::NONE,
     });
+    h.run_steps(3);
+}
+
+/// As `drag`, ended the way a finger ends on a device: the release and the
+/// pointer leaving come in the same frame (egui-winit sends `PointerGone`
+/// with a touch's end).
+fn drag_lifting(h: &mut Harness<'static, AppUi>, from: egui::Pos2, to: egui::Pos2) {
+    h.event(egui::Event::PointerMoved(from));
+    h.event(egui::Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    for k in 1..=5 {
+        h.event(egui::Event::PointerMoved(
+            from + (to - from) * (k as f32 / 5.0),
+        ));
+        h.step();
+    }
+    // `event` runs one frame per event: both go into one frame's input.
+    let events = &mut h.input_mut().events;
+    events.push(egui::Event::PointerButton {
+        pos: to,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    events.push(egui::Event::PointerGone);
     h.run_steps(3);
 }
 
@@ -229,22 +261,21 @@ fn the_live_cartwall_fits_a_portrait_phone() {
     assert!(two.left() > one.right(), "2 right of 1");
 }
 
-/// Two cards show at once on a 6-inch phone held upright (PL5): about
-/// 400 × 860 dp, less the system bars.
+/// On a 6-inch phone held upright (PL5, PL29: finger-sized buttons) the
+/// first card shows whole and the second one's top shows under it, so the
+/// operator sees there is more to scroll to: about 400 × 860 dp, less the
+/// system bars.
 #[test]
 fn two_cards_fit_a_portrait_phone() {
     let (h, _fake) = touch(3, vec2(400.0, 820.0));
     let carts_top = h.get_by_label("Cart 1, empty").rect().top();
     let plays: Vec<egui::Rect> = h.query_all_by_label("Play").map(|n| n.rect()).collect();
+    assert!(plays[0].bottom() < carts_top, "the first card's Play shows");
+    let second = h.get_all_by_label("P2").next().unwrap().rect();
     assert!(
-        plays[1].bottom() < carts_top,
-        "the second card's Play shows"
+        second.bottom() < carts_top,
+        "the second card's header shows"
     );
-    let faders: Vec<egui::Rect> = h
-        .query_all_by_label_contains("Volume")
-        .map(|n| n.rect())
-        .collect();
-    assert!(faders[1].bottom() < carts_top, "and its fader");
 }
 
 #[test]
@@ -623,6 +654,30 @@ fn a_drag_from_the_handle_moves_the_entry() {
     let handle = h.get_all_by_label("Drag to move").nth(2).unwrap().rect();
     let to = h.get_all_by_label("Song 1").next().unwrap().rect();
     drag(
+        &mut h,
+        handle.center(),
+        egui::pos2(handle.center().x, to.top() + 2.0),
+    );
+    let sent = moves(&fake);
+    assert!(
+        matches!(
+            sent.as_slice(),
+            [fp_model::Command::MoveEntry { index: 0, .. }]
+        ),
+        "{sent:?}"
+    );
+}
+
+/// PL10, on a device: lifting the finger ends the touch in the frame it
+/// is released, and the entry still moves where the line showed.
+#[test]
+fn a_drag_from_the_handle_moves_the_entry_when_the_finger_lifts() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    fake.take_sent();
+    let handle = h.get_all_by_label("Drag to move").nth(2).unwrap().rect();
+    let to = h.get_all_by_label("Song 1").next().unwrap().rect();
+    drag_lifting(
         &mut h,
         handle.center(),
         egui::pos2(handle.center().x, to.top() + 2.0),
@@ -1104,7 +1159,8 @@ fn locked_a_tap_on_a_waveform_does_not_seek() {
 #[test]
 fn locked_play_still_plays() {
     let (mut h, fake) = locked(true);
-    h.get_all_by_label("Play").last().unwrap().click();
+    // P1 plays: its Play button is Next, which also sends `Play`.
+    h.get_by_label("Fade into the next track").click();
     h.run_steps(2);
     assert!(
         fake.take_sent()
@@ -1262,4 +1318,376 @@ fn the_playlists_section_fits_a_phone() {
     h.run_steps(3);
     let delete = h.get_by_label("Delete").rect();
     assert!(delete.right() <= PORTRAIT.x, "{delete:?}");
+}
+
+/// Every text a frame drew.
+fn drawn_texts(h: &Harness<'static, AppUi>) -> Vec<String> {
+    drawn(h, false)
+}
+
+/// The texts a frame drew cut short ("…") in the top bar.
+fn cut_in_top_bar(h: &Harness<'static, AppUi>) -> Vec<String> {
+    let only_bar: Vec<_> = h
+        .output()
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.elided && t.pos.y < 56.0 => {
+                Some(t.galley.text().to_owned())
+            }
+            _ => None,
+        })
+        .collect();
+    only_bar
+}
+
+fn drawn(h: &Harness<'static, AppUi>, only_cut: bool) -> Vec<String> {
+    let walk_cut = only_cut;
+    fn walk(shape: &egui::Shape, only_cut: bool, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(t) if !only_cut || t.galley.elided => {
+                out.push(t.galley.text().to_owned());
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, only_cut, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, walk_cut, &mut out);
+    }
+    out
+}
+
+/// A phone in German, its tabs found by name, none cut short.
+fn german(size: Vec2) -> Harness<'static, AppUi> {
+    let mut s = state(2, 3);
+    s.config.ui.language = Some("de-DE".to_owned());
+    let (mut h, _fake) = harness_sized(s, size, |ui| ui.with_touch());
+    h.run_steps(3);
+    h
+}
+
+/// PL26: a phone's tabs are icons named for a screen reader; no name is
+/// cut short with "…", in a long language either.
+#[test]
+fn a_phones_tabs_are_icons_and_none_is_cut_short() {
+    for size in [PORTRAIT, LANDSCAPE, A56] {
+        let (h, _fake) = touch(2, size);
+        for name in ["Live", "Carts", "Playlists", "Music"] {
+            assert!(h.query_by_label(name).is_some(), "{name} {size:?}");
+        }
+        let cut = cut_in_top_bar(&h);
+        assert!(cut.is_empty(), "{cut:?} {size:?}");
+        let h = german(size);
+        let cut = cut_in_top_bar(&h);
+        assert!(cut.is_empty(), "de-DE {cut:?} {size:?}");
+    }
+}
+
+/// PL26: the chosen tab adds its name beside its icon when there is room
+/// (in landscape; upright the clock keeps it).
+#[test]
+fn the_chosen_tab_shows_its_name() {
+    let (mut h, _fake) = touch(2, LANDSCAPE);
+    tab(&mut h, "Playlists");
+    let chosen = h.get_by_label("Playlists").rect().width();
+    let other = h.get_by_label("Carts").rect().width();
+    assert!(chosen > other + 20.0, "{chosen} {other}");
+    assert!(drawn_texts(&h).iter().any(|t| t == "Playlists"));
+    assert!(!drawn_texts(&h).iter().any(|t| t == "Carts"));
+}
+
+/// PL27: in landscape the Playlists screen's player chips sit in the top
+/// bar; upright they keep their own row under it.
+#[test]
+fn landscape_playlists_put_the_player_chips_in_the_top_bar() {
+    let (mut h, _fake) = touch(4, LANDSCAPE);
+    tab(&mut h, "Playlists");
+    // The top bar is 56 high under the harness's 8 margin.
+    let bar = h.get_by_label("Playlists").rect();
+    let chip = h.get_by_label("P4").rect();
+    assert!(
+        chip.top() >= bar.top() && chip.bottom() <= bar.bottom(),
+        "{chip:?} {bar:?}"
+    );
+    let (mut h, _fake) = touch(4, PORTRAIT);
+    tab(&mut h, "Playlists");
+    let bar = h.get_by_label("Playlists").rect();
+    let chip = h.get_all_by_label("P4").next().unwrap().rect();
+    assert!(chip.top() >= bar.bottom(), "{chip:?} {bar:?}");
+}
+
+/// PL28: a phone in landscape leaves the status legend out; upright and on
+/// a tablet it stays.
+#[test]
+fn a_landscape_phone_leaves_the_legend_out() {
+    let (h, _fake) = touch(2, LANDSCAPE);
+    assert!(h.query_by_label("Intro").is_none());
+    for size in [PORTRAIT, vec2(1280.0, 800.0)] {
+        let (h, _fake) = touch(2, size);
+        assert!(h.query_by_label("Intro").is_some(), "{size:?}");
+    }
+}
+
+/// PL29: a phone's transport buttons are finger targets.
+#[test]
+fn a_phones_transport_buttons_are_finger_sized() {
+    for size in [A56, LANDSCAPE] {
+        let (h, _fake) = touch(2, size);
+        for name in ["Stop", "Pause", "Previous track", "Fade stop"] {
+            let r = h.get_all_by_label(name).next().unwrap().rect();
+            assert!(
+                r.height() >= 48.0 && r.width() >= 48.0,
+                "{name} {r:?} {size:?}"
+            );
+        }
+    }
+}
+
+/// PL29: a phone's card shows the elapsed time and the track's total.
+#[test]
+fn a_phones_card_shows_elapsed_and_total() {
+    for size in [A56, LANDSCAPE] {
+        let (mut h, _fake) = touch(1, size);
+        // The test tracks have no length: the total shows as unknown.
+        assert!(h.query_by_label("00:00 / —").is_some(), "{size:?}");
+        tab(&mut h, "Playlists");
+        assert!(h.query_by_label("00:00 / —").is_some(), "{size:?}");
+    }
+}
+
+/// PL28: the Playlists card shows its transport whole in landscape.
+#[test]
+fn the_landscape_playlists_card_shows_its_transport() {
+    let (mut h, _fake) = touch(4, LANDSCAPE);
+    tab(&mut h, "Playlists");
+    let screen = h.get_by_label("Playlists").rect().max.y;
+    for name in ["Play", "Stop after the current track", "Fade stop"] {
+        let r = h.get_all_by_label(name).next().unwrap().rect();
+        assert!(
+            r.bottom() <= LANDSCAPE.y && r.top() > screen,
+            "{name} {r:?}"
+        );
+    }
+}
+
+/// PL30: a phone's meter and fader are narrow and draw no scale numbers.
+#[test]
+fn a_phones_meter_is_narrow_without_a_scale() {
+    let (h, _fake) = touch(1, A56);
+    let fader = h
+        .get_all_by_role(egui::accesskit::Role::Slider)
+        .next()
+        .unwrap()
+        .rect();
+    assert!(fader.width() <= 30.0, "{fader:?}");
+    let texts = drawn_texts(&h);
+    assert!(!texts.iter().any(|t| t == "-20" || t == "-12"), "{texts:?}");
+}
+
+/// PL28: a compact card keeps its buttons inside it: the next card starts
+/// below the first card's lowest button.
+#[test]
+fn a_compact_card_keeps_its_buttons_inside() {
+    let (h, _fake) = touch(2, A56);
+    let lowest = h.get_all_by_label("Fade stop").next().unwrap().rect();
+    let next_wave = h
+        .get_all_by_label("Waveform: click to seek")
+        .nth(1)
+        .unwrap()
+        .rect();
+    assert!(
+        lowest.bottom() + 10.0 < next_wave.top(),
+        "{lowest:?} {next_wave:?}"
+    );
+}
+
+/// PL28: upright, the Playlists card shows its transport whole too.
+#[test]
+fn the_portrait_playlists_card_shows_its_transport() {
+    // The A56's status bar (24) and gesture bar (24) take their share.
+    let (mut h, _fake) = support::harness_inset(state(4, 3), A56, 24.0, 24.0, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    // Above the status bar, whose legend sits in it.
+    let bottom = h.get_by_label("Intro").rect().top() - 4.0;
+    for name in ["Play", "Stop after the current track", "Fade stop"] {
+        let r = h.get_all_by_label(name).next().unwrap().rect();
+        assert!(r.bottom() <= bottom, "{name} {r:?}");
+    }
+}
+
+/// PL31: the interface keeps drawing while a meter still shows a level
+/// on its scale (a stopped player's meter falling), and stops once it is
+/// at the bottom.
+#[test]
+fn a_falling_meter_keeps_the_interface_drawing() {
+    let c = fp_model::MeterConfig::default();
+    let mut reading = fp_engine::meter::MeterReading::default();
+    assert!(!fp_app::ui::view::meter_moving(&reading, &c));
+    reading.level_db = [-20.0, -24.0];
+    assert!(fp_app::ui::view::meter_moving(&reading, &c));
+    reading.level_db = [-119.0; 2];
+    reading.hold_db = [-6.0; 2];
+    assert!(
+        fp_app::ui::view::meter_moving(&reading, &c),
+        "the hold still shows"
+    );
+}
+
+/// PL32: idle, the next frame is just after the clock's next second (a
+/// frame a hair early would only ask for another one at once).
+#[test]
+fn idle_waits_for_the_next_second() {
+    use fp_app::ui::view::idle_wait;
+    use std::time::Duration;
+    assert_eq!(idle_wait(10), Duration::from_millis(1000));
+    assert_eq!(idle_wait(250), Duration::from_millis(760));
+    assert_eq!(idle_wait(999), Duration::from_millis(11));
+}
+
+/// Opens Settings → `section` on an upright A56.
+fn a56_settings(section: &str) -> Harness<'static, AppUi> {
+    let (mut h, _fake) = touch(2, A56);
+    more(&mut h, "Settings");
+    h.get_by_label(section).click();
+    h.run_steps(3);
+    h
+}
+
+/// PL33: the cartwall editor fits an upright phone: the cart grid (eight
+/// columns by default) wraps to the width, and the rows and columns
+/// sliders get a line each, wide enough for a finger.
+#[test]
+fn the_cartwall_editor_fits_an_upright_phone() {
+    let h = a56_settings("Cartwall");
+    let carts: Vec<egui::Rect> = h
+        .query_all_by_label_contains("Cart ")
+        .filter(|n| n.accesskit_node().role() == egui::accesskit::Role::Button)
+        .map(|n| n.rect())
+        .collect();
+    assert!(carts.len() >= 16, "{}", carts.len());
+    for cart in &carts {
+        assert!(cart.right() <= A56.x, "{cart:?}");
+        assert!(cart.width() >= 48.0, "{cart:?}");
+    }
+    let slider = |name: &str| {
+        h.get_all_by_role(egui::accesskit::Role::Slider)
+            .find(|n| n.accesskit_node().label().as_deref() == Some(name))
+            .unwrap()
+            .rect()
+    };
+    let (rows, cols) = (slider("Rows"), slider("Columns"));
+    assert!(cols.top() >= rows.bottom(), "{rows:?} {cols:?}");
+    for slider in [rows, cols] {
+        assert!(
+            slider.right() <= A56.x && slider.width() >= 150.0,
+            "{slider:?}"
+        );
+    }
+}
+
+/// The A56 lying down, in dp.
+const A56_LANDSCAPE: Vec2 = vec2(832.0, 384.0);
+
+/// The widgets of what shows that reach past the screen's right edge.
+fn overflowing(h: &Harness<'static, AppUi>, width: f32) -> Vec<String> {
+    h.root()
+        .query_all(egui_kittest::kittest::By::new().predicate(|_| true))
+        .filter_map(|n| {
+            let b = n.accesskit_node().bounding_box()?;
+            (b.width() > 0.0 && b.x1 as f32 > width + 0.5).then(|| {
+                format!(
+                    "{:?} {:?} x {:.0}..{:.0}",
+                    n.accesskit_node().role(),
+                    n.accesskit_node().label(),
+                    b.x0,
+                    b.x1
+                )
+            })
+        })
+        .collect()
+}
+
+/// PL33: every Settings section fits a phone, upright and lying down: no
+/// widget reaches past the screen's right edge.
+#[test]
+fn every_settings_section_fits_a_phone() {
+    let sections = [
+        "Audio outputs",
+        "Players",
+        "Meters",
+        "Analysis",
+        "Loudness",
+        "Playlists",
+        "Cartwall",
+        "Keyboard shortcuts",
+    ];
+    let mut found = Vec::new();
+    for size in [A56, A56_LANDSCAPE] {
+        for section in sections {
+            let (mut h, _fake) = touch(2, size);
+            more(&mut h, "Settings");
+            h.get_all_by_label(section).last().unwrap().click();
+            h.run_steps(3);
+            for o in overflowing(&h, size.x) {
+                found.push(format!("{size:?} {section}: {o}"));
+            }
+        }
+    }
+    assert!(found.is_empty(), "{}", found.join("\n"));
+}
+
+/// PL33: the four screens and About fit a phone, upright and lying down.
+#[test]
+fn every_phone_screen_fits() {
+    let mut found = Vec::new();
+    for size in [A56, A56_LANDSCAPE] {
+        for screen in ["Live", "Carts", "Playlists", "Music", "About"] {
+            let (mut h, _fake) = touch(4, size);
+            if screen == "About" {
+                more(&mut h, "About");
+            } else {
+                tab(&mut h, screen);
+            }
+            for o in overflowing(&h, size.x) {
+                found.push(format!("{size:?} {screen}: {o}"));
+            }
+        }
+    }
+    assert!(found.is_empty(), "{}", found.join("\n"));
+}
+
+/// PL32: the interface gives the conductor its waker.
+#[test]
+fn the_interface_gives_its_waker() {
+    let (_h, fake) = touch(1, A56);
+    assert!(fake.waker_set.load(std::sync::atomic::Ordering::Relaxed));
+}
+
+/// PL32: when the next frame comes. Something moving: at `max_fps`. A
+/// paused player blinks (2 Hz): four frames a second. Idle, a touch device
+/// waits for the clock's next second, a desktop draws ten frames a second
+/// as before.
+#[test]
+fn the_next_frame_follows_what_moves() {
+    use fp_app::ui::view::next_frame;
+    use std::time::Duration;
+    let telemetry = fp_engine::conductor::Telemetry::default();
+    let mut s = state(1, 3);
+    assert_eq!(
+        next_frame(&s, &telemetry, false, 250),
+        Duration::from_millis(100)
+    );
+    assert_eq!(
+        next_frame(&s, &telemetry, true, 250),
+        Duration::from_millis(760)
+    );
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, fp_model::Command::Play(p)).unwrap();
+    assert!(next_frame(&s, &telemetry, true, 250) <= Duration::from_millis(34));
+    fp_model::apply(&mut s, fp_model::Command::Pause(p)).unwrap();
+    assert_eq!(s.players[0].transport, fp_model::Transport::Paused);
+    assert!(next_frame(&s, &telemetry, true, 250) <= Duration::from_millis(250));
 }

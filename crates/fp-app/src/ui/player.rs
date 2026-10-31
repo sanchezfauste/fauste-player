@@ -32,6 +32,8 @@ const CARD_WAVE_HEIGHT: f32 = 44.0;
 /// before it was first measured and the most of an upright screen it takes.
 const PLAYLISTS_WAVE_HEIGHT: f32 = 72.0;
 const PLAYLISTS_CARD_HEIGHT: f32 = 330.0;
+/// The shortest a compact card's waveform gets (PL28).
+const MIN_WAVE_HEIGHT: f32 = 28.0;
 const PLAYLISTS_CARD_SHARE: f32 = 0.55;
 const TABS_HEIGHT: f32 = 30.0;
 /// Width of the "+" (new playlist) button at the right end of the tabs.
@@ -88,7 +90,16 @@ pub(crate) fn column(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             header(ui, scene, view_state, id, index, &pv);
-            top_block(ui, scene, covers, id, &pv, &telemetry, !locked);
+            top_block(
+                ui,
+                scene,
+                covers,
+                id,
+                &pv,
+                &telemetry,
+                !locked,
+                BlockSize::Desktop,
+            );
             wave_sized(ui, scene, view_state, id, &pv, WAVE_HEIGHT, true, locked);
             time_row(ui, scene, &pv);
         });
@@ -177,22 +188,36 @@ pub(crate) fn playlists_screen(
             .layout(Layout::top_down(Align::Min)),
     );
     card_ui.set_clip_rect(card_rect.intersect(ui.clip_rect()));
-    // A card taller than the screen (sideways) scrolls.
+    // The card is compact and its waveform takes the height the rest
+    // leaves (PL28), measured in the last frame; a card still taller than
+    // its room scrolls.
+    let rest_id = ui.scope_id().with(("playlists-card-rest", id.0));
+    let room = if landscape {
+        card_rect.height()
+    } else {
+        area.height() * PLAYLISTS_CARD_SHARE
+    };
+    let rest = ui
+        .data(|d| d.get_temp::<f32>(rest_id))
+        .unwrap_or(PLAYLISTS_CARD_HEIGHT - MIN_WAVE_HEIGHT);
+    let wave = (room - rest).clamp(MIN_WAVE_HEIGHT, PLAYLISTS_WAVE_HEIGHT);
     let output = egui::ScrollArea::vertical()
         .id_salt(("playlists-card", id.0))
         .auto_shrink([false, true])
         .show(&mut card_ui, |ui| {
-            card_sized(
-                ui,
-                scene,
-                view_state,
-                covers,
-                index,
-                PLAYLISTS_WAVE_HEIGHT,
-                true,
-            );
+            card_sized(ui, scene, view_state, covers, index, wave, true);
         });
-    ui.data_mut(|d| d.insert_temp(used_id, output.content_size.y));
+    let used = output.content_size.y;
+    let measured = used - wave;
+    // A new measure lays the card out again at once, not at the next idle
+    // frame (a rotation, the screen just opened).
+    if (measured - rest).abs() > 0.5 {
+        ui.ctx().request_repaint();
+    }
+    ui.data_mut(|d| {
+        d.insert_temp(used_id, used);
+        d.insert_temp(rest_id, measured);
+    });
     ui.allocate_rect(area, egui::Sense::hover());
 }
 
@@ -220,6 +245,7 @@ pub(crate) fn card(
 
 /// A player's card with a waveform `wave_height` tall, where markers are
 /// edited when `markers` is set.
+#[allow(clippy::too_many_arguments)]
 fn card_sized(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -254,10 +280,20 @@ fn card_sized(
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
             let locked = super::touch::locked(scene, view_state);
             wave_sized(ui, scene, view_state, id, &pv, wave_height, markers, locked);
+            phone_time_row(ui, scene, &pv);
             header(ui, scene, view_state, id, index, &pv);
             // A drag that starts on the fader moves it (PL14), unless
             // locked (PL12); one that starts elsewhere scrolls the cards.
-            top_block(ui, scene, covers, id, &pv, &telemetry, !locked);
+            top_block(
+                ui,
+                scene,
+                covers,
+                id,
+                &pv,
+                &telemetry,
+                !locked,
+                BlockSize::PhoneCompact,
+            );
         });
 }
 
@@ -799,8 +835,29 @@ const ROW_GAP: f32 = 8.0;
 /// meter, EBU's, with its two rulers, and the fader with its scale).
 const COUNTDOWN_MIN_SCALE: f32 = 10.5 / 38.0;
 
+/// How a player's top block is laid out.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum BlockSize {
+    /// The desktop and tablet column.
+    Desktop,
+    /// A phone's card (PL28–PL30): no cover, a lower info row.
+    PhoneCompact,
+}
+
+/// The size of a phone's small transport buttons: a finger's (PL29).
+const PHONE_BUTTON: f32 = super::touch::TARGET;
+/// A phone's Play button: as tall as two rows of small buttons.
+const PHONE_PLAY_SIZE: f32 = PHONE_BUTTON * 2.0 + GAP;
+/// The height of the info row.
+const INFO_HEIGHT: f32 = 64.0;
+/// The height of a compact card's info row: two lines, no cover.
+const COMPACT_INFO_HEIGHT: f32 = 40.0;
+
 /// The info row and the transport on the left, the meter and fader column
-/// on the right spanning both (feedback spec §3.2).
+/// on the right spanning both (feedback spec §3.2). A `phone` card has
+/// finger-sized buttons, its countdown on the time row and a compact meter
+/// and fader (PL29, PL30).
+#[allow(clippy::too_many_arguments)]
 fn top_block(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -809,10 +866,26 @@ fn top_block(
     pv: &PlayerView,
     telemetry: &fp_engine::engine::PlayerTelemetry,
     fader: bool,
+    size: BlockSize,
 ) {
-    let height = PLAY_SIZE * 2.0 + ROW_GAP;
+    let phone = size != BlockSize::Desktop;
+    let info_height = if size == BlockSize::PhoneCompact {
+        COMPACT_INFO_HEIGHT
+    } else {
+        INFO_HEIGHT
+    };
+    let height = if phone {
+        info_height + ROW_GAP + PHONE_PLAY_SIZE
+    } else {
+        PLAY_SIZE * 2.0 + ROW_GAP
+    };
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-    let split = (rect.right() - meter_column_width(&scene.state.config.meter)).max(rect.left());
+    let column_width = if phone {
+        COMPACT_COLUMN_WIDTH
+    } else {
+        meter_column_width(&scene.state.config.meter)
+    };
+    let split = (rect.right() - column_width).max(rect.left());
     let left = Rect::from_min_max(
         rect.min,
         pos2((split - METER_COLUMN_GAP).max(rect.left()), rect.bottom()),
@@ -824,18 +897,40 @@ fn top_block(
             .layout(Layout::top_down(Align::Min)),
     );
     left_ui.spacing_mut().item_spacing = vec2(6.0, ROW_GAP);
-    info_row(&mut left_ui, scene, covers, id, pv, telemetry);
-    transport(&mut left_ui, scene, id, pv);
+    let cover = size != BlockSize::PhoneCompact;
+    info_row(&mut left_ui, scene, covers, id, pv, telemetry, cover);
+    transport(&mut left_ui, scene, id, pv, phone);
     let mut right_ui = ui.new_child(
         UiBuilder::new()
             .max_rect(right)
             .layout(Layout::left_to_right(Align::Min)),
     );
-    meter_column(&mut right_ui, scene, id, telemetry, height, fader);
+    meter_column(&mut right_ui, scene, id, telemetry, height, fader, phone);
+}
+
+/// The width of a phone's meter and fader column (PL30).
+const COMPACT_COLUMN_WIDTH: f32 =
+    widgets::COMPACT_METER_WIDTH + METER_FADER_GAP + widgets::COMPACT_FADER_WIDTH;
+
+/// A phone card's time row, under the waveform (PL29): the elapsed time
+/// and the track's total on the left, the countdown on the right.
+fn phone_time_row(ui: &mut Ui, scene: &Scene<'_>, pv: &PlayerView) {
+    let text = view::time_text(pv.elapsed, pv.total, &scene.i18n.tr("placeholder-none"));
+    ui.allocate_ui_with_layout(
+        vec2(ui.available_width(), 40.0),
+        Layout::left_to_right(Align::Center),
+        |ui| {
+            widgets::tabular_label(ui, &text, &font(14.0), theme::NEUTRAL_300);
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                countdown(ui, pv);
+            });
+        },
+    );
 }
 
 /// The level meter and the volume fader, `height` tall; the fader only
 /// shows the level unless `fader`.
+#[allow(clippy::too_many_arguments)]
 fn meter_column(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -843,6 +938,7 @@ fn meter_column(
     telemetry: &fp_engine::engine::PlayerTelemetry,
     height: f32,
     fader: bool,
+    phone: bool,
 ) {
     let t = scene.i18n;
     ui.spacing_mut().item_spacing = vec2(METER_FADER_GAP, 0.0);
@@ -859,7 +955,12 @@ fn meter_column(
         max_tip: t.tr("tip-meter-max"),
     };
     let meter_top = ui.cursor().top();
-    if widgets::vu(ui, height, &telemetry.meter, meter, &labels) {
+    let vu = if phone {
+        widgets::vu_compact
+    } else {
+        widgets::vu
+    };
+    if vu(ui, height, &telemetry.meter, meter, &labels) {
         scene.ctl.reset_meter_max(id);
     }
     // A hairline in the gap between the meter and the fader, so the two
@@ -869,7 +970,11 @@ fn meter_column(
     // level readout under the fader, which may overhang the gap.
     let fader_left = ui.cursor().left();
     let meter_right = fader_left - METER_FADER_GAP;
-    let divider_x = (meter_right + widgets::fader_knob_left(fader_left) - DIVIDER_WIDTH) / 2.0;
+    let divider_x = if phone {
+        meter_right + (METER_FADER_GAP - DIVIDER_WIDTH) / 2.0
+    } else {
+        (meter_right + widgets::fader_knob_left(fader_left) - DIVIDER_WIDTH) / 2.0
+    };
     let divider_height = (height - widgets::FADER_READOUT_HEIGHT).max(0.0);
     ui.painter().rect_filled(
         Rect::from_min_size(
@@ -908,14 +1013,19 @@ fn meter_column(
     .unwrap_or_else(|| t.tr("volume-readout-silent"));
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-        let moved = widgets::fader(
+        let (draw, readout_fn): (FaderFn, ReadoutFn) = if phone {
+            (widgets::fader_compact, widgets::fader_readout_compact)
+        } else {
+            (widgets::fader, widgets::fader_readout)
+        };
+        let moved = draw(
             ui,
             (height - widgets::FADER_READOUT_HEIGHT).max(0.0),
             position,
             &tip,
             !locked && fader,
         );
-        widgets::fader_readout(ui, &readout, !locked && fader);
+        readout_fn(ui, &readout, !locked && fader);
         if let Some(pos) = moved {
             scene
                 .ctl
@@ -923,6 +1033,9 @@ fn meter_column(
         }
     });
 }
+
+type FaderFn = fn(&mut Ui, f32, f32, &str, bool) -> Option<f32>;
+type ReadoutFn = fn(&mut Ui, &str, bool);
 
 /// `elapsed / total` under the waveform, right-aligned, close to it.
 fn time_row(ui: &mut Ui, scene: &Scene<'_>, pv: &PlayerView) {
@@ -944,43 +1057,69 @@ fn info_row(
     id: PlayerId,
     pv: &PlayerView,
     telemetry: &fp_engine::engine::PlayerTelemetry,
+    with_cover: bool,
 ) {
     let t = scene.i18n;
     let current_track = view::shown_entry(scene.state, id)
         .and_then(|e| scene.state.playlists.entry(e))
         .map(|e| e.track);
     ui.allocate_ui_with_layout(
-        vec2(ui.available_width(), 64.0),
+        vec2(
+            ui.available_width(),
+            if with_cover {
+                INFO_HEIGHT
+            } else {
+                COMPACT_INFO_HEIGHT
+            },
+        ),
         Layout::left_to_right(Align::Center),
         |ui| {
             ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
-            cover(ui, scene, covers, current_track);
+            if with_cover {
+                cover(ui, scene, covers, current_track);
+            }
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = vec2(6.0, 2.0);
                 let title = pv.title.clone().unwrap_or_else(|| t.tr("no-track"));
-                ui.add(
-                    egui::Label::new(
-                        RichText::new(title)
-                            .font(font_medium(15.0))
-                            .color(theme::TEXT),
-                    )
-                    .selectable(false)
-                    .truncate(),
-                );
                 let artist = match (&pv.title, &pv.artist) {
                     (_, Some(artist)) => artist.clone(),
                     (Some(_), None) => t.tr("unknown-artist"),
                     (None, None) => t.tr("placeholder-none"),
                 };
-                ui.add(
-                    egui::Label::new(
-                        RichText::new(artist)
-                            .font(font(13.0))
-                            .color(theme::NEUTRAL_400),
-                    )
-                    .selectable(false)
-                    .truncate(),
-                );
+                if with_cover {
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(title)
+                                .font(font_medium(15.0))
+                                .color(theme::TEXT),
+                        )
+                        .selectable(false)
+                        .truncate(),
+                    );
+                    ui.add(
+                        egui::Label::new(
+                            RichText::new(artist)
+                                .font(font(13.0))
+                                .color(theme::NEUTRAL_400),
+                        )
+                        .selectable(false)
+                        .truncate(),
+                    );
+                } else {
+                    // A compact card: title and artist on one line (PL28).
+                    let mut job = egui::text::LayoutJob::default();
+                    job.append(
+                        &title,
+                        0.0,
+                        egui::TextFormat::simple(font_medium(15.0), theme::TEXT),
+                    );
+                    job.append(
+                        &artist,
+                        8.0,
+                        egui::TextFormat::simple(font(13.0), theme::NEUTRAL_400),
+                    );
+                    ui.add(egui::Label::new(job).selectable(false).truncate());
+                }
                 ui.add_space(2.0);
                 ui.horizontal(|ui| {
                     ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
@@ -1091,11 +1230,12 @@ pub fn sweep_band(r: Rect, left: f32) -> Rect {
     Rect::from_min_max(pos2(r.right() - width, r.top()), r.max)
 }
 
-fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
+fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView, phone: bool) {
     let t = scene.i18n;
     let blink = widgets::blink(scene.time);
+    let play_size = if phone { PHONE_PLAY_SIZE } else { PLAY_SIZE };
     ui.allocate_ui_with_layout(
-        vec2(ui.available_width(), PLAY_SIZE),
+        vec2(ui.available_width(), play_size),
         Layout::left_to_right(Align::Center),
         |ui| {
             ui.spacing_mut().item_spacing = vec2(GAP, GAP);
@@ -1173,7 +1313,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             };
             if widgets::tile(
                 ui,
-                vec2(PLAY_SIZE, PLAY_SIZE),
+                vec2(play_size, play_size),
                 &play_label,
                 available.play,
                 play_style,
@@ -1197,7 +1337,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
             {
                 scene.ctl.send(Command::Play(id));
             }
-            let small = vec2((PLAY_SIZE - GAP) / 2.0, (PLAY_SIZE - GAP) / 2.0);
+            let small = vec2((play_size - GAP) / 2.0, (play_size - GAP) / 2.0);
             let paused = pv.status == PlayerStatus::Paused;
             let pause_style = if paused {
                 widgets::paused_style(blink)
@@ -1312,46 +1452,51 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView) {
                     });
                 }
             });
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
-                let (main, tenths) = format::countdown(pv.remaining);
-                let colour = if pv.end_warning && (pv.remaining * 2.0).floor() as i64 % 2 == 1 {
-                    theme::ON_AIR_TEXT
-                } else {
-                    theme::TEXT
-                };
-                // Full size when it fits; smaller in a narrow player or for an
-                // hour-long time, so it never runs into the buttons.
-                let natural = widgets::tabular_size(ui.painter(), &main, &font_medium(38.0)).x
-                    + widgets::tabular_size(ui.painter(), &tenths, &font_medium(17.0)).x;
-                let scale =
-                    (ui.available_width() / natural.max(1.0)).clamp(COUNTDOWN_MIN_SCALE, 1.0);
-                let big = font_medium(38.0 * scale);
-                let tenths_font = font_medium(17.0 * scale);
-                let main_size = widgets::tabular_size(ui.painter(), &main, &big);
-                let tenths_size = widgets::tabular_size(ui.painter(), &tenths, &tenths_font);
-                let (rect, response) = ui.allocate_exact_size(
-                    vec2(main_size.x + tenths_size.x, main_size.y),
-                    Sense::hover(),
-                );
-                let spoken = format!("{main}{tenths}");
-                response.widget_info(|| {
-                    egui::WidgetInfo::labeled(egui::Role::Label, true, spoken.clone())
+            if !phone {
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    countdown(ui, pv);
                 });
-                widgets::paint_tabular(ui.painter(), rect.left_top(), &main, &big, colour);
-                // The tenths sit on the bottom of the big digits, smaller and dimmed.
-                widgets::paint_tabular(
-                    ui.painter(),
-                    pos2(
-                        rect.left() + main_size.x,
-                        rect.bottom() - tenths_size.y - 4.0 * scale,
-                    ),
-                    &tenths,
-                    &tenths_font,
-                    theme::NEUTRAL_500,
-                );
-            });
+            }
         },
+    );
+}
+
+/// The remaining time, large, its tenths small; red on the end warning's
+/// beat. Full size when it fits, smaller in a narrow player.
+fn countdown(ui: &mut Ui, pv: &PlayerView) {
+    ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
+    let (main, tenths) = format::countdown(pv.remaining);
+    let colour = if pv.end_warning && (pv.remaining * 2.0).floor() as i64 % 2 == 1 {
+        theme::ON_AIR_TEXT
+    } else {
+        theme::TEXT
+    };
+    // Full size when it fits; smaller in a narrow player or for an
+    // hour-long time, so it never runs into the buttons.
+    let natural = widgets::tabular_size(ui.painter(), &main, &font_medium(38.0)).x
+        + widgets::tabular_size(ui.painter(), &tenths, &font_medium(17.0)).x;
+    let scale = (ui.available_width() / natural.max(1.0)).clamp(COUNTDOWN_MIN_SCALE, 1.0);
+    let big = font_medium(38.0 * scale);
+    let tenths_font = font_medium(17.0 * scale);
+    let main_size = widgets::tabular_size(ui.painter(), &main, &big);
+    let tenths_size = widgets::tabular_size(ui.painter(), &tenths, &tenths_font);
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(main_size.x + tenths_size.x, main_size.y),
+        Sense::hover(),
+    );
+    let spoken = format!("{main}{tenths}");
+    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, spoken.clone()));
+    widgets::paint_tabular(ui.painter(), rect.left_top(), &main, &big, colour);
+    // The tenths sit on the bottom of the big digits, smaller and dimmed.
+    widgets::paint_tabular(
+        ui.painter(),
+        pos2(
+            rect.left() + main_size.x,
+            rect.bottom() - tenths_size.y - 4.0 * scale,
+        ),
+        &tenths,
+        &tenths_font,
+        theme::NEUTRAL_500,
     );
 }
 

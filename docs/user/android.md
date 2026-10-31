@@ -34,17 +34,22 @@ settings stay. The app is not in Google Play yet.
 ## The screen
 
 On a **phone** the top bar has four tabs, **Live**, **Carts**,
-**Playlists** and **Music**, then the **padlock** and **⋮** (More: Settings and About).
-The clock shows when there is room for it.
+**Playlists** and **Music**, shown as icons (the chosen one also with its
+name when there is room), then the **padlock** and **⋮** (More: Settings
+and About). The clock shows when there is room for it. Turned sideways,
+the Playlists screen puts its player chips (P1, P2…) in the top bar, and
+the status bar at the bottom shows only when it has something to say.
 
 - *Live:* every player as a card, and the cartwall. Each card has the
-  player's waveform on top (a tap seeks), its name, status, Single/Cont
-  and CUE, the title with the time left and the next track, the transport
-  (Play/Next, Previous, Pause, Stop, Restart, Fade stop, Stop after
-  current), and the meter with the volume fader. Held upright the cards
-  are on top, two at a time (scroll for more), and the cartwall below;
-  turned sideways the cards are on the left and the cartwall on the
-  right. A cart page too wide for the space shows in fewer columns, in
+  player's waveform on top (a tap seeks), the elapsed time and the
+  track's length with the time left in large digits, its name, status,
+  Single/Cont and CUE, the title and artist and the next track, the
+  transport (Play/Next, Previous, Pause, Stop, Restart, Fade stop, Stop
+  after current) with buttons a finger's size, and a slim meter with the
+  volume fader (no scales; the fader's level shows under it). Held
+  upright the cards are on top, one whole card and the start of the next
+  (scroll for more), and the cartwall below; turned sideways the cards
+  are on the left and the cartwall on the right. A cart page too wide for the space shows in fewer columns, in
   the same order.
 - *Carts:* the shown cart page, filling the screen. Swipe sideways to
   show the next or the previous page. Held upright, a page wider than
@@ -52,7 +57,8 @@ The clock shows when there is room for it.
 - *Playlists:* the chips at the top (P1, P2…) choose the player; under
   them are its playlist tabs (+ makes a new one), the track list and,
   at the bottom (on the right when the phone is on its side), the
-  player's card with a larger waveform for preparing a track. A long
+  player's card with a larger waveform for preparing a track (it gets
+  shorter when room is short, so the buttons always show). A long
   press on a row opens its menu, which also has **Move up**, **Move
   down** and **Move to another player** (the track goes right after that
   player's next track, in the playlist it shows; the track on air
@@ -64,6 +70,10 @@ The clock shows when there is room for it.
 
 Back from another screen goes to Live; on Music it first goes up a
 folder.
+
+When nothing moves on the screen, the app draws it once a second (for
+the clock) to spare the battery; a meter still falling after a pause or
+a stop keeps it drawing until the meter is down.
 
 **The padlock** guards against stray touches during a show. Locked (the
 padlock closed and lit), the volume faders only show the level and the

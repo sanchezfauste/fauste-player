@@ -251,3 +251,61 @@ room.
 - Whether the Live cards reuse `player::column` parts or a new card
   function.
 - How the 🎧 pre-listen shows that it plays.
+
+## 15. Polish after the first phone trials (maintainer, 2026-10-31)
+
+Tried on a Samsung A56 (1080×2340, 450 dpi: about 384×832 dp). Decided:
+the 🎧 pre-listen of a loose file waits; *Add after the next* keeps its
+rule; *Move up/down* stays allowed on the entry on air; a picker keeps the
+tabs inactive until it is answered or cancelled ("no tiene sentido hacer
+2 cosas a la vez"); a paused track ends with the app as PL23 says. iOS is
+parked: nothing is built for it, and new code keeps platform matters
+behind the `Platform` seam and in `fp-mobile` so an iOS shell stays
+possible.
+
+- PL25. **Row drag on a device.** A row dragged by its handle lands where
+  the line showed when the finger lifts (a touch ends with the pointer
+  gone in the frame of the release).
+- PL26. **Tabs as icons.** On a phone the four tabs are icons (Live
+  `BROADCAST`, Carts `SQUARES_FOUR`, Playlists `PLAYLIST`, Music
+  `MUSIC_NOTES`), each with its name as its accessible label; the chosen
+  tab adds its name beside the icon when the bar has room for it. Nothing
+  is cut short with "…".
+- PL27. **Player chips in the top bar (landscape).** On the Playlists
+  screen in landscape the P1, P2… chips sit in the top bar between the
+  tabs and the lock, and the row they had goes to the list and the card.
+  Portrait keeps the row.
+- PL28. **The card fits its space.** A player card is laid out for the
+  height it is given: below its natural height it gets compact (a
+  shorter waveform, no cover, title and artist on one line), so its
+  transport and its times always show. On a phone the status legend at
+  the bottom (On air · Next · Intro · Outro · Mix · backend) is left out
+  in landscape.
+- PL29. **Bigger transport, both times.** On a phone the transport
+  buttons are finger targets (48 dp) and the card shows the elapsed time
+  and the track's total next to the remaining time.
+- PL30. **Compact meters (study).** On a phone the meters and the fader
+  lose their scale legends and get narrower; the level readout stays.
+  Screenshots before/after go to the maintainer before it is final.
+- PL31. **Meters fall smoothly.** The interface keeps drawing at
+  `ui.max_fps` while any meter still shows a level (a paused or stopped
+  player's meter falling), not only while something plays.
+- PL32. **Low battery use.** Nothing redraws when nothing moves: no fixed
+  idle redraw; the clock redraws once a second (at the second), and work
+  from other threads (pickers, analysis, tags, notices) wakes the
+  interface when it delivers. Nothing draws while the app is in the
+  background or the screen is off. Measured on the emulator with
+  `dumpsys gfxinfo` / `dumpsys batterystats` before and after.
+- PL33. **Every screen fits.** Each Settings section, window and menu
+  fits a phone in both orientations with no sideways scroll: the
+  cartwall editor's cart grid wraps (or scales) to the width, its
+  rows × columns controls are stacked and usable by touch. Checked one by
+  one on the emulator at the A56 size.
+- PL34. **Live in landscape** *(open; proposal to the maintainer)*:
+  with PL29's buttons a card cannot be under ~300 dp, so two cards never
+  fit a phone on its side; proposed instead, a one-row mini card per
+  player (name, title, countdown, Play, Stop, Pause), a tap opening the
+  player on the Playlists screen.
+- Built (2026-10-31): upright Live shows one whole card and the start of
+  the next (PL5's "two at a time" gave way to PL29); every phone card is
+  compact (no cover).

@@ -15,7 +15,7 @@ use super::super::files::AUDIO_EXTENSIONS;
 use super::super::loudness_edit;
 use super::super::theme;
 use super::super::widgets::{self, TileStyle, font};
-use super::{SettingsState, labelled_row, row, toggle};
+use super::{SettingsState, column_width, labelled_row, row, stacked, toggle};
 
 #[derive(Default)]
 pub(crate) struct CartsState {
@@ -289,27 +289,46 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let rows_label = t.tr("settings-cart-rows");
     let cols_label = t.tr("settings-cart-cols");
     let mut commit = false;
+    // A phone gives each slider a line of its own, with its name, wide
+    // enough for a finger (PL33).
+    let phone = stacked(ui);
     row(ui, &t.tr("settings-cart-grid"), None, |ui| {
-        for (value, max, label) in [
-            (&mut rows, limits.max_cart_rows, &rows_label),
-            (&mut cols, limits.max_cart_cols, &cols_label),
-        ] {
-            let before = *value;
-            let response = ui.add(
-                egui::Slider::new(value, 1..=max.max(1))
-                    .step_by(1.0)
-                    .update_while_editing(false),
-            );
-            let v = f64::from(*value);
-            let owned = label.clone();
-            response.widget_info(|| egui::WidgetInfo::slider(true, v, owned.clone()));
-            // The box reports each keystroke as a change; only a new value
-            // is one.
-            if response.drag_stopped()
-                || (response.changed() && !response.dragged() && *value != before)
-            {
-                commit = true;
+        let mut sliders = |ui: &mut Ui| {
+            for (value, max, label) in [
+                (&mut rows, limits.max_cart_rows, &rows_label),
+                (&mut cols, limits.max_cart_cols, &cols_label),
+            ] {
+                let before = *value;
+                let response = if phone {
+                    ui.horizontal(|ui| {
+                        ui.add(
+                            egui::Label::new(RichText::new(label.as_str()).font(font(13.0)))
+                                .selectable(false),
+                        );
+                        // The slider and its number box share the rest.
+                        ui.spacing_mut().slider_width = (column_width(ui) - 70.0).max(80.0);
+                        grid_slider(ui, value, max)
+                    })
+                    .inner
+                } else {
+                    grid_slider(ui, value, max)
+                };
+                let v = f64::from(*value);
+                let owned = label.clone();
+                response.widget_info(|| egui::WidgetInfo::slider(true, v, owned.clone()));
+                // The box reports each keystroke as a change; only a new value
+                // is one.
+                if response.drag_stopped()
+                    || (response.changed() && !response.dragged() && *value != before)
+                {
+                    commit = true;
+                }
             }
+        };
+        if phone {
+            ui.vertical(|ui| sliders(ui));
+        } else {
+            sliders(ui);
         }
     });
     c.grid_draft = Some((page_id, rows, cols));
@@ -324,14 +343,16 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         c.grid_draft = None;
     }
     ui.add_space(8.0);
-    let cell_w = ((ui.available_width() - 6.0 * f32::from(page.cols.max(1) - 1))
-        / f32::from(page.cols.max(1)))
-    .max(48.0);
-    for (r, chunk) in page.carts.chunks(usize::from(page.cols.max(1))).enumerate() {
+    // The page's grid, its rows wrapped when its columns would be under
+    // a finger's width (PL33): the carts keep their order.
+    let width = column_width(ui);
+    let per_row = cart_columns(width, page.cols);
+    let cell_w = (width - CART_GAP * (per_row as f32 - 1.0)) / per_row as f32;
+    for (r, chunk) in page.carts.chunks(per_row).enumerate() {
         ui.horizontal(|ui| {
-            ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
+            ui.spacing_mut().item_spacing = vec2(CART_GAP, CART_GAP);
             for (k, cart) in chunk.iter().enumerate() {
-                let index = r * usize::from(page.cols.max(1)) + k;
+                let index = r * per_row + k;
                 let selected = index == c.index;
                 let label = t.tr_args("settings-cart-n", &[("n", (index + 1).into())]);
                 let style = TileStyle {
@@ -594,6 +615,28 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             },
         );
     }
+}
+
+/// The gap between the carts of the editor's grid.
+const CART_GAP: f32 = 6.0;
+/// The narrowest a cart of the editor's grid gets before its row wraps.
+const CART_MIN_WIDTH: f32 = 48.0;
+
+/// How many carts a row of the editor's grid holds in `width`: the page's
+/// columns, or fewer when they would be narrower than a finger.
+fn cart_columns(width: f32, cols: u16) -> usize {
+    let cols = usize::from(cols.max(1));
+    let fit = ((width + CART_GAP) / (CART_MIN_WIDTH + CART_GAP)).floor() as usize;
+    cols.min(fit.max(1))
+}
+
+/// A slider for a grid size, `1..=max`.
+fn grid_slider(ui: &mut Ui, value: &mut u16, max: u16) -> egui::Response {
+    ui.add(
+        egui::Slider::new(value, 1..=max.max(1))
+            .step_by(1.0)
+            .update_while_editing(false),
+    )
 }
 
 fn color_key(color: Option<CartColor>) -> &'static str {

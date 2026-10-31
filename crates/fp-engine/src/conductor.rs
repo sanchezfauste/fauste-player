@@ -4,8 +4,8 @@
 //! immutable snapshots. The UI never locks anything the audio path waits on.
 
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
@@ -149,7 +149,16 @@ pub struct Conductor {
     /// The counters of the real-time side, for the log (audit A8).
     bus_watches: HashMap<BusKey, [Watch; 6]>,
     underrun_watches: HashMap<PlayerId, Watch>,
+    /// Called when a new model is published (phone layout spec PL32).
+    waker: WakerSlot,
 }
+
+/// What the conductor calls when it publishes a new model: the interface's
+/// "draw a frame", so an idle interface need not poll.
+pub type Waker = Box<dyn Fn() + Send + Sync>;
+
+/// The waker, shared between the conductor and its handle.
+type WakerSlot = Arc<Mutex<Option<Waker>>>;
 
 /// The UI's side of the conductor.
 pub struct ConductorHandle {
@@ -161,6 +170,7 @@ pub struct ConductorHandle {
     pub rejected: Receiver<ModelError>,
     stop: Option<Arc<AtomicBool>>,
     thread: Option<JoinHandle<()>>,
+    waker: WakerSlot,
 }
 
 /// Characters of a command kept in a log line.
@@ -204,6 +214,12 @@ impl ConductorHandle {
 }
 
 impl ConductorHandle {
+    /// Sets what the conductor calls each time it publishes a new model.
+    pub fn set_waker(&self, waker: Waker) {
+        let mut slot = self.waker.lock().unwrap_or_else(PoisonError::into_inner);
+        *slot = Some(waker);
+    }
+
     /// Restarts the maximum of `player`'s meter; never blocks. `false` if
     /// the queue is full.
     pub fn reset_meter_max(&self, player: PlayerId) -> bool {
@@ -244,6 +260,7 @@ impl Conductor {
         let (rejected_tx, rejected_rx) = crossbeam_channel::bounded(64);
         let model = Arc::new(ArcSwap::from_pointee(state.clone()));
         let telemetry = Arc::new(ArcSwap::from_pointee(Telemetry::default()));
+        let waker: WakerSlot = Arc::new(Mutex::new(None));
         let conductor = Conductor {
             state,
             engine,
@@ -259,6 +276,7 @@ impl Conductor {
             started: Vec::new(),
             bus_watches: HashMap::new(),
             underrun_watches: HashMap::new(),
+            waker: waker.clone(),
         };
         let handle = ConductorHandle {
             commands: tx,
@@ -268,6 +286,7 @@ impl Conductor {
             rejected: rejected_rx,
             stop: None,
             thread: None,
+            waker,
         };
         (conductor, handle)
     }
@@ -293,6 +312,7 @@ impl Conductor {
     /// One iteration: commands, engine, events, snapshots.
     pub fn tick(&mut self, now: Instant) {
         let mut changed = false;
+        let mut refused = false;
         let commands: Vec<Command> = self.commands.try_iter().collect();
         for command in commands {
             match apply(&mut self.state, command) {
@@ -304,6 +324,7 @@ impl Conductor {
                 }
                 Err(e) => {
                     let _ = self.rejected.try_send(e);
+                    refused = true;
                 }
             }
         }
@@ -341,6 +362,13 @@ impl Conductor {
         if changed {
             self.version += 1;
             self.model.store(Arc::new(self.state.clone()));
+        }
+        // The interface shows a new model, or why a command was refused.
+        if changed || refused {
+            let waker = self.waker.lock().unwrap_or_else(PoisonError::into_inner);
+            if let Some(wake) = waker.as_ref() {
+                wake();
+            }
         }
         let true_peak = self.state.config.meter.true_peak_in_use();
         if self.engine.true_peak() != true_peak {
