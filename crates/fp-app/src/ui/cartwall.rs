@@ -137,10 +137,10 @@ pub(crate) fn page_name(scene: &Scene<'_>, index: usize, name: &str) -> String {
 pub(crate) fn strip(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, fill: bool) {
     // RL14: collapsed on a side, the cartwall is a narrow strip.
     // Mobile spec §6: a phone's cartwall screen never folds; its Live
-    // screen's does (PL35).
+    // screen's does (PL35), always to the header: a phone has no side dock.
     let open = scene.state.cartwall.open || (view_state.phone_active && !live_fold(view_state));
     let dock = scene.state.layout.cartwall.dock;
-    if !open && dock.is_side() {
+    if !open && dock.is_side() && !view_state.phone_active {
         collapsed_strip(ui, scene, view_state, dock);
         return;
     }

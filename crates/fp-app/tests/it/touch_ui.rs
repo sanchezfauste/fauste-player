@@ -1715,6 +1715,24 @@ fn folded(players: usize, size: Vec2) -> (Harness<'static, AppUi>, Arc<Fake>) {
     (h, fake)
 }
 
+/// PL35: a cartwall docked on a side (kept from a tablet layout) still
+/// folds to its header across the bottom of a phone's Live screen, with
+/// *Stop all* and the fold caret, not the side strip.
+#[test]
+fn a_side_docked_cartwall_folds_to_its_header_on_a_phone() {
+    let mut s = state(2, 3);
+    s.cartwall.open = false;
+    s.layout.cartwall.dock = fp_model::layout::Dock::Right;
+    let (mut h, _fake) = harness_sized(s, A56, |ui| ui.with_touch());
+    h.run_steps(3);
+    assert!(h.query_by_label("Stop all").is_some(), "no Stop all");
+    let title = h.get_by_label("CARTWALL").rect();
+    assert!(
+        title.bottom() > A56.y - 60.0,
+        "header at the bottom: {title:?}"
+    );
+}
+
 /// PL35: the Live screen's cartwall header folds the cartwall.
 #[test]
 fn the_live_cartwall_folds() {
