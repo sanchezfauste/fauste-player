@@ -885,8 +885,20 @@ impl AppUi {
         self.view.phone_active = phone;
         self.view.touch = self.touch;
         let top = Rect::from_min_size(full.min, vec2(full.width(), top_height));
+        let faults = self
+            .service_faults
+            .as_ref()
+            .map_or(0, |f| f.load(std::sync::atomic::Ordering::Acquire));
+        // PL28: a phone in landscape gives the bar's height to the screen
+        // unless the bar has news.
+        let status_height =
+            if phone && full.width() > full.height() && !status_news(&scene, &self.view, faults) {
+                0.0
+            } else {
+                STATUS_BAR_HEIGHT
+            };
         let status = Rect::from_min_max(
-            egui::pos2(full.left(), full.bottom() - STATUS_BAR_HEIGHT),
+            egui::pos2(full.left(), full.bottom() - status_height),
             full.max,
         );
         let middle = Rect::from_min_max(
@@ -985,11 +997,9 @@ impl AppUi {
                 .max_rect(status)
                 .layout(Layout::left_to_right(Align::Center)),
         );
-        let faults = self
-            .service_faults
-            .as_ref()
-            .map_or(0, |f| f.load(std::sync::atomic::Ordering::Acquire));
-        status_bar(&mut status_ui, &scene, &self.view, faults);
+        if status_height > 0.0 {
+            status_bar(&mut status_ui, &scene, &self.view, faults);
+        }
         ui.allocate_rect(full, Sense::hover());
         // The CUE windows float over the screen; the dialogs below stay on top.
         cue_window::show_all(&ctx, &scene, &mut self.view);
@@ -1979,7 +1989,14 @@ fn top_bar(
     ui.add_space(10.0);
     if phone {
         // Mobile spec §6: a phone shows one screen at a time.
-        super::touch::screen_tiles(ui, scene, &mut view_state.phone, right_edge - 12.0);
+        let landscape = view_state.area.is_some_and(|a| a.width() > a.height());
+        super::touch::screen_tiles(
+            ui,
+            scene,
+            &mut view_state.phone,
+            right_edge - 12.0,
+            landscape,
+        );
         return;
     }
     // RL15: the panel tiles and the layout menu, on the left, 12 points
@@ -2189,17 +2206,10 @@ fn legend(ui: &mut Ui, color: Color32, label: &str) {
     });
 }
 
-fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u64) {
-    let rect = ui.max_rect();
-    ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
-    ui.painter().rect_filled(
-        Rect::from_min_size(rect.min, vec2(rect.width(), 1.0)),
-        0.0,
-        theme::NEUTRAL_800,
-    );
+/// The status bar's alerts, most urgent first: a lost device, dropouts,
+/// the audio focus, the services' faults.
+fn status_alerts(scene: &Scene<'_>, view_state: &ViewState, faults: u64) -> Vec<String> {
     let t = scene.i18n;
-    ui.spacing_mut().item_spacing = vec2(18.0, 0.0);
-    ui.add_space(12.0);
     let mut alerts: Vec<String> = scene
         .telemetry
         .buses
@@ -2222,6 +2232,33 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u6
     if faults > 0 {
         alerts.push(t.tr_args("alert-services-fault", &[("count", faults.into())]));
     }
+    alerts
+}
+
+/// Whether the status bar has something to say besides its legend and the
+/// platform: an alert, a notice or the analysis at work. A phone in
+/// landscape shows the bar only then (PL28).
+fn status_news(scene: &Scene<'_>, view_state: &ViewState, faults: u64) -> bool {
+    !status_alerts(scene, view_state, faults).is_empty()
+        || view_state
+            .notice
+            .as_ref()
+            .is_some_and(|(_, until)| *until > scene.time)
+        || analysis_status(scene).is_some()
+}
+
+fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u64) {
+    let rect = ui.max_rect();
+    ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
+    ui.painter().rect_filled(
+        Rect::from_min_size(rect.min, vec2(rect.width(), 1.0)),
+        0.0,
+        theme::NEUTRAL_800,
+    );
+    let t = scene.i18n;
+    ui.spacing_mut().item_spacing = vec2(18.0, 0.0);
+    ui.add_space(12.0);
+    let alerts = status_alerts(scene, view_state, faults);
     let notice = view_state
         .notice
         .as_ref()

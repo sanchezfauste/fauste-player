@@ -19,6 +19,8 @@ use support::{Fake, harness, harness_sized, state};
 const PORTRAIT: Vec2 = vec2(412.0, 892.0);
 const LANDSCAPE: Vec2 = vec2(892.0, 412.0);
 const TABLET: Vec2 = vec2(800.0, 1280.0);
+/// A Samsung A56 upright, in dp (1080×2340 at 450 dpi).
+const A56: Vec2 = vec2(384.0, 832.0);
 
 fn touch(players: usize, size: Vec2) -> (Harness<'static, AppUi>, Arc<Fake>) {
     let (mut h, fake) = harness_sized(state(players, 3), size, |ui| ui.with_touch());
@@ -1316,4 +1318,114 @@ fn the_playlists_section_fits_a_phone() {
     h.run_steps(3);
     let delete = h.get_by_label("Delete").rect();
     assert!(delete.right() <= PORTRAIT.x, "{delete:?}");
+}
+
+/// Every text a frame drew.
+fn drawn_texts(h: &Harness<'static, AppUi>) -> Vec<String> {
+    drawn(h, false)
+}
+
+/// The texts a frame drew cut short ("…") in the top bar.
+fn cut_in_top_bar(h: &Harness<'static, AppUi>) -> Vec<String> {
+    let only_bar: Vec<_> = h
+        .output()
+        .shapes
+        .iter()
+        .filter_map(|c| match &c.shape {
+            egui::Shape::Text(t) if t.galley.elided && t.pos.y < 56.0 => {
+                Some(t.galley.text().to_owned())
+            }
+            _ => None,
+        })
+        .collect();
+    only_bar
+}
+
+fn drawn(h: &Harness<'static, AppUi>, only_cut: bool) -> Vec<String> {
+    let walk_cut = only_cut;
+    fn walk(shape: &egui::Shape, only_cut: bool, out: &mut Vec<String>) {
+        match shape {
+            egui::Shape::Text(t) if !only_cut || t.galley.elided => {
+                out.push(t.galley.text().to_owned());
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, only_cut, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, walk_cut, &mut out);
+    }
+    out
+}
+
+/// A phone in German, its tabs found by name, none cut short.
+fn german(size: Vec2) -> Harness<'static, AppUi> {
+    let mut s = state(2, 3);
+    s.config.ui.language = Some("de-DE".to_owned());
+    let (mut h, _fake) = harness_sized(s, size, |ui| ui.with_touch());
+    h.run_steps(3);
+    h
+}
+
+/// PL26: a phone's tabs are icons named for a screen reader; no name is
+/// cut short with "…", in a long language either.
+#[test]
+fn a_phones_tabs_are_icons_and_none_is_cut_short() {
+    for size in [PORTRAIT, LANDSCAPE, A56] {
+        let (h, _fake) = touch(2, size);
+        for name in ["Live", "Carts", "Playlists", "Music"] {
+            assert!(h.query_by_label(name).is_some(), "{name} {size:?}");
+        }
+        let cut = cut_in_top_bar(&h);
+        assert!(cut.is_empty(), "{cut:?} {size:?}");
+        let h = german(size);
+        let cut = cut_in_top_bar(&h);
+        assert!(cut.is_empty(), "de-DE {cut:?} {size:?}");
+    }
+}
+
+/// PL26: the chosen tab adds its name beside its icon when there is room
+/// (in landscape; upright the clock keeps it).
+#[test]
+fn the_chosen_tab_shows_its_name() {
+    let (mut h, _fake) = touch(2, LANDSCAPE);
+    tab(&mut h, "Playlists");
+    let chosen = h.get_by_label("Playlists").rect().width();
+    let other = h.get_by_label("Carts").rect().width();
+    assert!(chosen > other + 20.0, "{chosen} {other}");
+    assert!(drawn_texts(&h).iter().any(|t| t == "Playlists"));
+    assert!(!drawn_texts(&h).iter().any(|t| t == "Carts"));
+}
+
+/// PL27: in landscape the Playlists screen's player chips sit in the top
+/// bar; upright they keep their own row under it.
+#[test]
+fn landscape_playlists_put_the_player_chips_in_the_top_bar() {
+    let (mut h, _fake) = touch(4, LANDSCAPE);
+    tab(&mut h, "Playlists");
+    // The top bar is 56 high under the harness's 8 margin.
+    let bar = h.get_by_label("Playlists").rect();
+    let chip = h.get_by_label("P4").rect();
+    assert!(
+        chip.top() >= bar.top() && chip.bottom() <= bar.bottom(),
+        "{chip:?} {bar:?}"
+    );
+    let (mut h, _fake) = touch(4, PORTRAIT);
+    tab(&mut h, "Playlists");
+    let bar = h.get_by_label("Playlists").rect();
+    let chip = h.get_all_by_label("P4").next().unwrap().rect();
+    assert!(chip.top() >= bar.bottom(), "{chip:?} {bar:?}");
+}
+
+/// PL28: a phone in landscape leaves the status legend out; upright and on
+/// a tablet it stays.
+#[test]
+fn a_landscape_phone_leaves_the_legend_out() {
+    let (h, _fake) = touch(2, LANDSCAPE);
+    assert!(h.query_by_label("Intro").is_none());
+    for size in [PORTRAIT, vec2(1280.0, 800.0)] {
+        let (h, _fake) = touch(2, size);
+        assert!(h.query_by_label("Intro").is_some(), "{size:?}");
+    }
 }
