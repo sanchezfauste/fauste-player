@@ -38,6 +38,19 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_setInsets(
     for (slot, value) in INSETS.iter().zip([left, top, right, bottom]) {
         slot.store((value.max(0) as f32).to_bits(), Ordering::Relaxed);
     }
+    wake();
+}
+
+/// Draws a frame for what the shell just reported: an idle interface draws
+/// only once a second otherwise (phone layout spec PL32).
+fn wake() {
+    if let Some(ctx) = REPAINT
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .as_ref()
+    {
+        ctx.request_repaint();
+    }
 }
 
 #[allow(unsafe_code)]
@@ -49,6 +62,7 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_setAudioFocusL
     lost: jboolean,
 ) {
     AUDIO_FOCUS_LOST.store(lost != 0, Ordering::Relaxed);
+    wake();
 }
 
 #[allow(unsafe_code)]
@@ -127,6 +141,7 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_setMediaFiles(
     {
         let _ = session.requests.try_send(ServiceRequest::RecheckUnreadable);
     }
+    wake();
 }
 
 #[allow(unsafe_code)]
@@ -137,13 +152,7 @@ pub extern "system" fn Java_com_sanchezfauste_fausteplayer_Native_back(
     _this: JObject<'_>,
 ) {
     BACK.store(true, Ordering::Release);
-    if let Some(ctx) = REPAINT
-        .lock()
-        .unwrap_or_else(std::sync::PoisonError::into_inner)
-        .as_ref()
-    {
-        ctx.request_repaint();
-    }
+    wake();
 }
 
 #[allow(unsafe_code)]

@@ -539,6 +539,26 @@ pub fn animation_period(max_fps: u32) -> std::time::Duration {
     }
 }
 
+/// Whether `reading` still shows on meter `c`'s scale: a level, a peak hold
+/// or an average above its bottom. A stopped player's meter falls for a
+/// while; the interface draws it falling (phone layout spec PL31).
+pub fn meter_moving(reading: &fp_engine::meter::MeterReading, c: &fp_model::MeterConfig) -> bool {
+    let shows = |db: &f32| super::widgets::meter_position(*db, c) > 0.0;
+    reading.level_db.iter().any(shows)
+        || reading.rms_db.iter().any(shows)
+        || (c.peak_hold_in_use() && reading.hold_db.iter().any(shows))
+}
+
+/// How long an idle interface waits for its next frame, `millis` into the
+/// clock's second: until just after the next second, when the clock has
+/// changed (PL32). A frame a hair early would ask for another at once.
+pub fn idle_wait(millis: u32) -> std::time::Duration {
+    std::time::Duration::from_millis(u64::from(IDLE_PAST_SECOND_MS + 1000 - millis.min(999)))
+}
+
+/// How far past the second an idle frame lands.
+const IDLE_PAST_SECOND_MS: u32 = 10;
+
 /// Something on screen moves on its own (a meter, a countdown, a blinking
 /// Pause button): the interface repaints every frame instead of at the idle
 /// rate. A paused CUE still has its `cue`, so its window keeps blinking.

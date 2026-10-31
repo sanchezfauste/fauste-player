@@ -893,3 +893,28 @@ fn a_rate_change_waits_for_the_playing_player_and_applies_after_its_stop() {
     assert_eq!(device.config().unwrap().sample_rate, 44_100);
     assert!(fp_model::pending(conductor.state()).is_empty());
 }
+
+/// PL32: the conductor wakes the interface when it publishes a new model
+/// (a command from anywhere: the remote API, MIDI), and only then, so an
+/// idle interface need not poll.
+#[test]
+fn a_new_model_wakes_the_interface() {
+    let (mut conductor, handle, _device, now) = offline_conductor(model(1, 3));
+    let woken = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    let count = woken.clone();
+    handle.set_waker(Box::new(move || {
+        count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }));
+    conductor.tick(now);
+    let idle = woken.load(std::sync::atomic::Ordering::Relaxed);
+    conductor.tick(now);
+    assert_eq!(
+        woken.load(std::sync::atomic::Ordering::Relaxed),
+        idle,
+        "no change, no wake"
+    );
+    let p = conductor.state().players[0].id;
+    assert!(handle.send(Command::SetVolume(p, 0.5)));
+    conductor.tick(now);
+    assert!(woken.load(std::sync::atomic::Ordering::Relaxed) > idle);
+}

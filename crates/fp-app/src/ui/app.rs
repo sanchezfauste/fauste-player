@@ -4,7 +4,6 @@
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use std::time::Duration;
 
 use crossbeam_channel::{Receiver, Sender};
 use egui::{
@@ -43,8 +42,6 @@ use crate::tags::{TagJob, TagOutcome, TagWorker};
 const TOP_BAR_HEIGHT: f32 = 34.0;
 const STATUS_BAR_HEIGHT: f32 = 24.0;
 const NOTICE_SECS: f64 = 5.0;
-/// Idle repaint period (the clock).
-const IDLE_REPAINT: Duration = Duration::from_millis(100);
 
 /// The payload of a column header being dragged (feedback 2 spec O24): its
 /// position in the list of columns.
@@ -765,6 +762,11 @@ impl AppUi {
                 super::touch::apply_style(&ctx);
             }
             self.themed = true;
+            // A command from elsewhere (the remote API, MIDI) changes the
+            // model while the interface is idle: it draws then (PL32).
+            let repaint = ctx.clone();
+            self.ctl
+                .set_waker(Box::new(move || repaint.request_repaint()));
             ctx.request_repaint();
             return;
         }
@@ -1272,11 +1274,18 @@ impl AppUi {
         if take_drops && self.view.tag_editor.is_none() && self.view.confirm_reset.is_none() {
             self.file_drops(&ctx, &state);
         }
-        let busy = super::view::animating(&state);
+        // A meter still falling moves too (PL31); idle, only the clock
+        // does, once a second (PL32).
+        let busy = super::view::animating(&state)
+            || telemetry
+                .players
+                .iter()
+                .any(|(_, t)| super::view::meter_moving(&t.meter, &state.config.meter));
         if busy {
             ctx.request_repaint_after(super::view::animation_period(state.config.ui.max_fps));
         } else {
-            ctx.request_repaint_after(IDLE_REPAINT);
+            let millis = chrono::Local::now().timestamp_subsec_millis();
+            ctx.request_repaint_after(super::view::idle_wait(millis));
         }
     }
 

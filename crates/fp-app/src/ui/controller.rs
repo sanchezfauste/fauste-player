@@ -3,7 +3,7 @@
 
 use std::sync::Arc;
 
-use fp_engine::conductor::{ConductorHandle, Telemetry};
+use fp_engine::conductor::{ConductorHandle, Telemetry, Waker};
 use fp_model::{AppState, Command, ModelError, PlayerId, Route};
 
 pub trait Controller: Send + Sync {
@@ -19,6 +19,9 @@ pub trait Controller: Send + Sync {
     fn reset_meter_max(&self, player: PlayerId) -> bool;
     /// The next command the model refused, if any.
     fn take_rejection(&self) -> Option<ModelError>;
+    /// Sets what to call when a new model is published (PL32); a
+    /// controller that never changes on its own needs none.
+    fn set_waker(&self, _waker: Waker) {}
 }
 
 impl Controller for ConductorHandle {
@@ -44,5 +47,9 @@ impl Controller for ConductorHandle {
 
     fn take_rejection(&self) -> Option<ModelError> {
         self.rejected.try_recv().ok()
+    }
+
+    fn set_waker(&self, waker: Waker) {
+        ConductorHandle::set_waker(self, waker);
     }
 }

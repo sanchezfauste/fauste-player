@@ -1517,3 +1517,32 @@ fn the_portrait_playlists_card_shows_its_transport() {
         assert!(r.bottom() <= bottom, "{name} {r:?}");
     }
 }
+
+/// PL31: the interface keeps drawing while a meter still shows a level
+/// on its scale (a stopped player's meter falling), and stops once it is
+/// at the bottom.
+#[test]
+fn a_falling_meter_keeps_the_interface_drawing() {
+    let c = fp_model::MeterConfig::default();
+    let mut reading = fp_engine::meter::MeterReading::default();
+    assert!(!fp_app::ui::view::meter_moving(&reading, &c));
+    reading.level_db = [-20.0, -24.0];
+    assert!(fp_app::ui::view::meter_moving(&reading, &c));
+    reading.level_db = [-119.0; 2];
+    reading.hold_db = [-6.0; 2];
+    assert!(
+        fp_app::ui::view::meter_moving(&reading, &c),
+        "the hold still shows"
+    );
+}
+
+/// PL32: idle, the next frame is just after the clock's next second (a
+/// frame a hair early would only ask for another one at once).
+#[test]
+fn idle_waits_for_the_next_second() {
+    use fp_app::ui::view::idle_wait;
+    use std::time::Duration;
+    assert_eq!(idle_wait(10), Duration::from_millis(1000));
+    assert_eq!(idle_wait(250), Duration::from_millis(760));
+    assert_eq!(idle_wait(999), Duration::from_millis(11));
+}
