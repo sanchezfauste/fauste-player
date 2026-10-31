@@ -8,5 +8,4 @@ mod learn;
 mod message;
 mod router;
 mod service;
-mod service_log;
 mod support;

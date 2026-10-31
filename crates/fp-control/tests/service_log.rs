@@ -1,9 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
 //! The MIDI service's log (J6): what a field log needs to tell a dead
-//! connection from a silent device. Alone in its binary, so no other test's
-//! thread caches the log callsites as uninteresting.
+//! connection from a silent device. Its own test binary: tracing caches a
+//! callsite's interest the first time it is hit, so a test in a shared
+//! binary that logs the same line first, with no subscriber, would hide it
+//! from the subscriber here.
 
-use crate::support;
+#[path = "it/support/mod.rs"]
+mod support;
 
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};

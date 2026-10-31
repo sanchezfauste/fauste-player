@@ -45,7 +45,10 @@ process-wide state keeps its own binary next to `tests/it`: the panic hook
 (`fp-app/tests/bootstrap.rs`, `crash_cap.rs`, `crash_cap_live.rs`) and a
 global tracing subscriber (`fp-app/tests/remote.rs`,
 `fp-remote/tests/bind_log.rs`, `osc_refusal_log.rs`,
-`fp-engine/tests/decoder_priority.rs`). A new test file goes into
+`fp-engine/tests/decoder_priority.rs`), and a test that reads the log
+through a scoped subscriber (`fp-control/tests/service_log.rs`: tracing
+caches a callsite's interest when first hit, so another test logging the
+same line first, with no subscriber, hides it). A new test file goes into
 `tests/it` with a `mod` line in `main.rs`, unless it needs a process of its
 own. In `fp-engine` the binary installs the `assert_no_alloc` allocator
 once for the allocation audits; it only acts inside `assert_no_alloc` blocks.
