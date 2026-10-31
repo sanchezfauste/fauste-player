@@ -233,11 +233,14 @@ for any accessible widget past an A56's edge, upright and on its side.
 
 **Drawing (PL31, PL32).** The interface draws at `ui.max_fps` while
 something moves (`view::animating`, or a meter whose level, average or
-peak hold still shows on its scale: `view::meter_moving`) and otherwise
-once a second, just after the clock's second (`view::idle_wait`). What
+peak hold still shows on its scale: `view::meter_moving`), four times a
+second while a paused player blinks, and otherwise, in touch mode, once a
+second just after the clock's second (`view::next_frame`,
+`view::idle_wait`; the desktop keeps ten frames a second). What
 it used to poll for wakes it instead: the conductor calls the waker set
 through `Controller::set_waker` each time it publishes a new model (a
-command from the remote API or MIDI), and the JNI calls that report
+command from the remote API or MIDI) or refuses a command (the waker asks
+for a frame within 33 ms, so a burst draws at most at the frame rate), and the JNI calls that report
 insets, the audio focus, the media files or Back call
 `ctx.request_repaint()`. A phone in landscape leaves the status bar out
 unless it has news (an alert, a notice, the analysis at work). On the
