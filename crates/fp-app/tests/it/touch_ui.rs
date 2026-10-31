@@ -59,6 +59,36 @@ fn drag(h: &mut Harness<'static, AppUi>, from: egui::Pos2, to: egui::Pos2) {
     h.run_steps(3);
 }
 
+/// As `drag`, ended the way a finger ends on a device: the release and the
+/// pointer leaving come in the same frame (egui-winit sends `PointerGone`
+/// with a touch's end).
+fn drag_lifting(h: &mut Harness<'static, AppUi>, from: egui::Pos2, to: egui::Pos2) {
+    h.event(egui::Event::PointerMoved(from));
+    h.event(egui::Event::PointerButton {
+        pos: from,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    for k in 1..=5 {
+        h.event(egui::Event::PointerMoved(
+            from + (to - from) * (k as f32 / 5.0),
+        ));
+        h.step();
+    }
+    // `event` runs one frame per event: both go into one frame's input.
+    let events = &mut h.input_mut().events;
+    events.push(egui::Event::PointerButton {
+        pos: to,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    events.push(egui::Event::PointerGone);
+    h.run_steps(3);
+}
+
 const ADD: &str = "Add tracks to this playlist";
 
 /// Opens the top bar's More menu and picks `entry` (Settings, About).
@@ -623,6 +653,30 @@ fn a_drag_from_the_handle_moves_the_entry() {
     let handle = h.get_all_by_label("Drag to move").nth(2).unwrap().rect();
     let to = h.get_all_by_label("Song 1").next().unwrap().rect();
     drag(
+        &mut h,
+        handle.center(),
+        egui::pos2(handle.center().x, to.top() + 2.0),
+    );
+    let sent = moves(&fake);
+    assert!(
+        matches!(
+            sent.as_slice(),
+            [fp_model::Command::MoveEntry { index: 0, .. }]
+        ),
+        "{sent:?}"
+    );
+}
+
+/// PL10, on a device: lifting the finger ends the touch in the frame it
+/// is released, and the entry still moves where the line showed.
+#[test]
+fn a_drag_from_the_handle_moves_the_entry_when_the_finger_lifts() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    fake.take_sent();
+    let handle = h.get_all_by_label("Drag to move").nth(2).unwrap().rect();
+    let to = h.get_all_by_label("Song 1").next().unwrap().rect();
+    drag_lifting(
         &mut h,
         handle.center(),
         egui::pos2(handle.center().x, to.top() + 2.0),
