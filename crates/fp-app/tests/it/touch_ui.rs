@@ -1862,3 +1862,23 @@ fn eight_mini_cards_scroll_over_a_folded_cartwall() {
         assert!(p.right() > A56_LANDSCAPE.x * 0.7, "the whole width: {p:?}");
     }
 }
+
+/// PL28 on a real A56 on its side: the status bar and the gesture bar take
+/// 24 dp each of the 384, and the Playlists card's whole transport still
+/// shows.
+#[test]
+fn the_landscape_playlists_card_fits_between_the_system_bars() {
+    let (mut h, _fake) =
+        support::harness_inset(state(4, 3), A56_LANDSCAPE, 24.0, 24.0, |ui| ui.with_touch());
+    h.run_steps(3);
+    tab(&mut h, "Playlists");
+    for name in [
+        "Play",
+        "Restart the track",
+        "Stop after the current track",
+        "Fade stop",
+    ] {
+        let r = h.get_all_by_label(name).next().unwrap().rect();
+        assert!(r.bottom() <= A56_LANDSCAPE.y - 24.0, "{name} {r:?}");
+    }
+}

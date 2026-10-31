@@ -265,9 +265,11 @@ fn card_sized(
     egui::Frame::new()
         .fill(theme::SURFACE)
         .stroke(Stroke::new(1.0, theme::NEUTRAL_800))
-        .inner_margin(10.0)
+        // Tight vertical room, so the whole card fits a phone on its side
+        // between the system bars (PL28).
+        .inner_margin(egui::Margin::symmetric(10, 4))
         .show(ui, |ui| {
-            ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
+            ui.spacing_mut().item_spacing = vec2(6.0, 4.0);
             let locked = super::touch::locked(scene, view_state);
             wave_sized(ui, scene, view_state, id, &pv, wave_height, markers, locked);
             phone_time_row(ui, scene, &pv);
