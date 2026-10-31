@@ -5,7 +5,7 @@
 use egui::{Color32, Ui, vec2};
 use fp_model::{LoudnessReadout, MeterBallistics};
 
-use super::{row, slider, toggle, update};
+use super::{column_width, row, slider, toggle, update};
 use crate::ui::app::Scene;
 use crate::ui::theme;
 use crate::ui::widgets::{self, TileStyle, font};
@@ -171,6 +171,8 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
         Some(&t.tr("settings-hint-loudness")),
         |ui| {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            // Three to a line, narrower on a phone (PL33).
+            let width = (column_width(ui) / 3.0).min(130.0);
             for (readout, key) in [
                 (LoudnessReadout::Off, "loudness-off"),
                 (LoudnessReadout::Momentary, "loudness-momentary"),
@@ -187,7 +189,7 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
                     content: if on { theme::TEXT } else { theme::NEUTRAL_400 },
                     ..TileStyle::plain()
                 };
-                if widgets::tile(ui, vec2(130.0, 30.0), &text, true, style, |p, r, c| {
+                if widgets::tile(ui, vec2(width, 30.0), &text, true, style, |p, r, c| {
                     p.text(
                         r.center(),
                         egui::Align2::CENTER_CENTER,

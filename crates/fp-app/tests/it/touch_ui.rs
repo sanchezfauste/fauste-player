@@ -11,7 +11,7 @@ use crate::support;
 
 use egui::{Vec2, vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::ui::app::AppUi;
 use std::sync::Arc;
 use support::{Fake, harness, harness_sized, state};
@@ -1545,4 +1545,116 @@ fn idle_waits_for_the_next_second() {
     assert_eq!(idle_wait(10), Duration::from_millis(1000));
     assert_eq!(idle_wait(250), Duration::from_millis(760));
     assert_eq!(idle_wait(999), Duration::from_millis(11));
+}
+
+/// Opens Settings → `section` on an upright A56.
+fn a56_settings(section: &str) -> Harness<'static, AppUi> {
+    let (mut h, _fake) = touch(2, A56);
+    more(&mut h, "Settings");
+    h.get_by_label(section).click();
+    h.run_steps(3);
+    h
+}
+
+/// PL33: the cartwall editor fits an upright phone: the cart grid (eight
+/// columns by default) wraps to the width, and the rows and columns
+/// sliders get a line each, wide enough for a finger.
+#[test]
+fn the_cartwall_editor_fits_an_upright_phone() {
+    let h = a56_settings("Cartwall");
+    let carts: Vec<egui::Rect> = h
+        .query_all_by_label_contains("Cart ")
+        .filter(|n| n.accesskit_node().role() == egui::accesskit::Role::Button)
+        .map(|n| n.rect())
+        .collect();
+    assert!(carts.len() >= 16, "{}", carts.len());
+    for cart in &carts {
+        assert!(cart.right() <= A56.x, "{cart:?}");
+        assert!(cart.width() >= 48.0, "{cart:?}");
+    }
+    let slider = |name: &str| {
+        h.get_all_by_role(egui::accesskit::Role::Slider)
+            .find(|n| n.accesskit_node().label().as_deref() == Some(name))
+            .unwrap()
+            .rect()
+    };
+    let (rows, cols) = (slider("Rows"), slider("Columns"));
+    assert!(cols.top() >= rows.bottom(), "{rows:?} {cols:?}");
+    for slider in [rows, cols] {
+        assert!(
+            slider.right() <= A56.x && slider.width() >= 150.0,
+            "{slider:?}"
+        );
+    }
+}
+
+/// The A56 lying down, in dp.
+const A56_LANDSCAPE: Vec2 = vec2(832.0, 384.0);
+
+/// The widgets of what shows that reach past the screen's right edge.
+fn overflowing(h: &Harness<'static, AppUi>, width: f32) -> Vec<String> {
+    h.root()
+        .query_all(egui_kittest::kittest::By::new().predicate(|_| true))
+        .filter_map(|n| {
+            let b = n.accesskit_node().bounding_box()?;
+            (b.width() > 0.0 && b.x1 as f32 > width + 0.5).then(|| {
+                format!(
+                    "{:?} {:?} x {:.0}..{:.0}",
+                    n.accesskit_node().role(),
+                    n.accesskit_node().label(),
+                    b.x0,
+                    b.x1
+                )
+            })
+        })
+        .collect()
+}
+
+/// PL33: every Settings section fits a phone, upright and lying down: no
+/// widget reaches past the screen's right edge.
+#[test]
+fn every_settings_section_fits_a_phone() {
+    let sections = [
+        "Audio outputs",
+        "Players",
+        "Meters",
+        "Analysis",
+        "Loudness",
+        "Playlists",
+        "Cartwall",
+        "Keyboard shortcuts",
+    ];
+    let mut found = Vec::new();
+    for size in [A56, A56_LANDSCAPE] {
+        for section in sections {
+            let (mut h, _fake) = touch(2, size);
+            more(&mut h, "Settings");
+            h.get_all_by_label(section).last().unwrap().click();
+            h.run_steps(3);
+            for o in overflowing(&h, size.x) {
+                found.push(format!("{size:?} {section}: {o}"));
+            }
+        }
+    }
+    assert!(found.is_empty(), "{}", found.join("\n"));
+}
+
+/// PL33: the four screens and About fit a phone, upright and lying down.
+#[test]
+fn every_phone_screen_fits() {
+    let mut found = Vec::new();
+    for size in [A56, A56_LANDSCAPE] {
+        for screen in ["Live", "Carts", "Playlists", "Music", "About"] {
+            let (mut h, _fake) = touch(4, size);
+            if screen == "About" {
+                more(&mut h, "About");
+            } else {
+                tab(&mut h, screen);
+            }
+            for o in overflowing(&h, size.x) {
+                found.push(format!("{size:?} {screen}: {o}"));
+            }
+        }
+    }
+    assert!(found.is_empty(), "{}", found.join("\n"));
 }

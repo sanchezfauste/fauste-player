@@ -175,14 +175,18 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         );
         ui.add_space(8.0);
     }
-    ui.horizontal(|ui| {
+    // The help wraps to the body's width (a phone's is narrow, PL33).
+    let help_width = super::column_width(ui);
+    ui.scope(|ui| {
+        ui.set_max_width(help_width);
         ui.add(
             egui::Label::new(
                 RichText::new(t.tr("shortcut-help"))
                     .font(font(11.0))
                     .color(theme::NEUTRAL_500),
             )
-            .selectable(false),
+            .selectable(false)
+            .wrap(),
         );
     });
     ui.add_space(8.0);
@@ -208,7 +212,8 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 },
                 ..TileStyle::plain()
             };
-            let width = (ui.available_width() - 110.0).max(200.0);
+            // Unbind takes the last 110 points of the body's width.
+            let width = (super::column_width(ui) - 110.0).max(120.0);
             if widgets::tile(ui, vec2(width, 28.0), &name, true, style, |p, r, c| {
                 p.text(
                     r.left_center() + vec2(10.0, 0.0),
