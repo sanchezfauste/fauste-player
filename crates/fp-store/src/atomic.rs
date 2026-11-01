@@ -108,12 +108,12 @@ fn rotate_backups(path: &Path, backups: usize) -> io::Result<()> {
 }
 
 #[cfg(unix)]
-fn sync_dir(dir: &Path) -> io::Result<()> {
+pub(crate) fn sync_dir(dir: &Path) -> io::Result<()> {
     File::open(dir)?.sync_all()
 }
 
 #[cfg(not(unix))]
-fn sync_dir(_dir: &Path) -> io::Result<()> {
+pub(crate) fn sync_dir(_dir: &Path) -> io::Result<()> {
     Ok(())
 }
 

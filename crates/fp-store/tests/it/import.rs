@@ -262,9 +262,8 @@ fn entries_and_carts_of_tracks_the_library_lacks_are_dropped_with_a_warning() {
     assert_eq!(loaded.state.playlists.get(list).unwrap().entries.len(), 2);
     assert!(loaded.state.cartwall.pages[0].carts[1].track.is_none());
     // The database accepted the result: a save works and reloads the same.
-    let mut state = loaded.state;
+    let state = loaded.state;
     save_all(&mut s, &state, 0.0);
-    state.layout.locked = false;
     let again = store(&dir).load("Main");
     assert_eq!(again.state.library, state.library);
     assert!(again.warnings.is_empty(), "{:?}", again.warnings);
@@ -293,4 +292,142 @@ fn a_schema_1_playlists_file_counts_its_played_entries_for_every_player() {
     let players: Vec<_> = loaded.state.players.iter().map(|p| p.id).collect();
     assert!(players.iter().all(|p| entries[0].is_played_by(*p)));
     assert!(players.iter().all(|p| !entries[1].is_played_by(*p)));
+}
+
+/// Sets `limits.max_state_file_bytes` in `config.json`.
+fn set_state_limit(s: &Store, bytes: u64) {
+    fs::create_dir_all(&s.paths().config_dir).unwrap();
+    let doc = serde_json::json!({
+        "schema_version": 1,
+        "config": {"limits": {"max_state_file_bytes": bytes}}
+    });
+    fs::write(s.paths().config_file(), doc.to_string()).unwrap();
+}
+
+/// Pads a JSON file with trailing spaces up to `bytes`.
+fn pad(path: &Path, bytes: usize) {
+    let mut text = fs::read(path).unwrap();
+    text.resize(bytes, b' ');
+    fs::write(path, text).unwrap();
+}
+
+const MIB: usize = 1024 * 1024;
+
+#[test]
+fn an_oversized_document_stops_the_import_until_it_can_be_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = with_json(&dir);
+    set_state_limit(&s, MIB as u64);
+    pad(&s.paths().playlists_file(), MIB + 10);
+
+    let first = s.load("Main");
+    assert!(
+        first.warnings.iter().any(|w| w.contains("playlists.json")),
+        "{:?}",
+        first.warnings
+    );
+    assert!(!s.paths().database_file().exists());
+    assert!(!data_files(&s).iter().any(|n| n.ends_with(".imported")));
+    assert!(s.paths().session_file().exists() && s.paths().carts_file().exists());
+    // What was read is shown, and nothing is saved this session.
+    assert_eq!(
+        first.state.cartwall.pages,
+        state_of_fixtures().cartwall.pages
+    );
+    let state = first.state;
+    s.save_state(&state, |_| 0.0, std::time::Instant::now())
+        .unwrap();
+    assert!(!s.paths().database_file().exists());
+
+    set_state_limit(&s, 4 * MIB as u64);
+    let second = store(&dir).load("Main");
+    assert!(second.warnings.is_empty(), "{:?}", second.warnings);
+    assert_eq!(second.state.library.len(), 3);
+    assert!(!s.paths().playlists_file().exists());
+    assert!(s.paths().data_dir.join("playlists.json.imported").exists());
+    assert!(s.paths().data_dir.join("session.json.imported").exists());
+}
+
+#[test]
+fn documents_that_are_all_unreadable_leave_no_database_and_no_renames() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = with_json(&dir);
+    set_state_limit(&s, MIB as u64);
+    for name in ["playlists.json", "carts.json", "session.json"] {
+        pad(&s.paths().data_dir.join(name), MIB + 10);
+    }
+    let loaded = s.load("Main");
+    assert!(loaded.warnings.len() >= 3, "{:?}", loaded.warnings);
+    assert!(!s.paths().database_file().exists());
+    assert!(!data_files(&s).iter().any(|n| n.ends_with(".imported")));
+}
+
+#[test]
+fn a_stale_write_ahead_log_next_to_the_json_files_is_ignored() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = with_json(&dir);
+    fs::write(s.paths().data_dir.join("fauste.db-wal"), b"garbage garbage").unwrap();
+    fs::write(s.paths().data_dir.join("fauste.db-shm"), b"garbage").unwrap();
+    let loaded = s.load("Main");
+    same_state(&loaded.state, &state_of_fixtures());
+    assert_eq!(count(&s, "tracks"), 3);
+}
+
+#[test]
+fn a_crash_between_the_marker_and_the_rename_is_redone() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = with_json(&dir);
+    let data = s.paths().data_dir.clone();
+    fs::write(data.join("fauste.db.import-pending"), b"playlists.json\n").unwrap();
+    fs::write(data.join("fauste.db.importing"), b"half").unwrap();
+    let loaded = s.load("Main");
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    same_state(&loaded.state, &state_of_fixtures());
+    let names = data_files(&s);
+    assert!(
+        !names
+            .iter()
+            .any(|n| n.contains("importing") || n.contains("pending"))
+    );
+    assert!(data.join("session.json.imported").exists());
+}
+
+#[test]
+fn a_json_file_that_appears_after_an_interrupted_import_is_not_renamed() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = with_json(&dir);
+    s.fail_import_rename = true;
+    s.load("Main");
+    // A file that was not part of the import turns up before the retry.
+    let extra = s.paths().data_dir.join("playlists.json.bak2");
+    assert!(!extra.exists());
+    fs::write(&extra, b"{}").unwrap();
+    s.fail_import_rename = false;
+    s.load("Main");
+    assert!(extra.exists());
+    assert!(!s.paths().playlists_file().exists());
+}
+
+#[test]
+fn legacy_played_marks_without_a_session_are_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = with_json(&dir);
+    fs::remove_file(s.paths().session_file()).unwrap();
+    let path = s.paths().playlists_file();
+    let mut doc: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    doc["schema_version"] = 1.into();
+    for list in doc["playlists"].as_array_mut().unwrap() {
+        for entry in list["entries"].as_array_mut().unwrap() {
+            let obj = entry.as_object_mut().unwrap();
+            let played = obj.remove("played_by").is_some();
+            obj.insert("played".into(), played.into());
+        }
+    }
+    fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+    let loaded = s.load("Main");
+    assert!(
+        loaded.warnings.iter().any(|w| w.contains("played")),
+        "{:?}",
+        loaded.warnings
+    );
 }

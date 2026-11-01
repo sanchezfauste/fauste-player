@@ -26,7 +26,7 @@ use std::path::{Path, PathBuf};
 
 use fp_model::{CartPage, Limits, PlayerSession};
 
-use crate::atomic::{Loaded, backup_path, load_with_fallback, sibling};
+use crate::atomic::{LoadSource, Loaded, backup_path, load_with_fallback, sibling, sync_dir};
 use crate::db::Db;
 use crate::db::snapshot::{self, Snapshot};
 use crate::docs::{PLAYLISTS_MIGRATIONS, PLAYLISTS_SCHEMA, PlaylistsDoc};
@@ -74,23 +74,44 @@ fn imported_name(file: &Path) -> PathBuf {
     sibling(file, "imported")
 }
 
-/// Renames every JSON file that exists to `<name>.imported`, going on past
-/// a failure. Returns the first error.
-fn rename_json_files(paths: &AppPaths, backups: usize, fail: bool) -> io::Result<()> {
+/// Renames the listed JSON files that exist to `<name>.imported`, going on
+/// past a failure. Returns the first error.
+fn rename_json_files(files: &[PathBuf], fail: bool) -> io::Result<()> {
     if fail {
         return Err(io::Error::other("injected failure"));
     }
     let mut first = None;
-    for file in json_files(paths, backups) {
+    for file in files {
         if !file.exists() {
             continue;
         }
-        if let Err(e) = fs::rename(&file, imported_name(&file)) {
+        if let Err(e) = fs::rename(file, imported_name(file)) {
             tracing::warn!("{}: could not rename: {e}", file.display());
             first.get_or_insert(e);
         }
     }
     first.map_or(Ok(()), Err)
+}
+
+/// Renames the files, makes the renames durable, then removes the marker.
+fn finish_renames(paths: &AppPaths, files: &[PathBuf], fail: bool, warnings: &mut Vec<String>) {
+    let renamed = rename_json_files(files, fail).and_then(|()| sync_dir(&paths.data_dir));
+    match renamed {
+        Ok(()) => remove_if_exists(&marker_file(paths)),
+        Err(e) => warnings.push(format!(
+            "import: could not rename the JSON files after the import: {e}"
+        )),
+    }
+}
+
+/// The JSON files named in the marker, one per line.
+fn files_in_marker(paths: &AppPaths) -> Vec<PathBuf> {
+    fs::read_to_string(marker_file(paths))
+        .unwrap_or_default()
+        .lines()
+        .filter(|name| !name.is_empty())
+        .map(|name| paths.data_dir.join(name))
+        .collect()
 }
 
 fn remove_if_exists(path: &Path) {
@@ -126,12 +147,9 @@ pub(crate) fn import_legacy(
     // An earlier import committed and was interrupted before its renames.
     if marker.exists() {
         if database.exists() {
-            match rename_json_files(paths, backups, fail_rename) {
-                Ok(()) => remove_if_exists(&marker),
-                Err(e) => warnings.push(format!(
-                    "import: could not rename the JSON files after the import: {e}"
-                )),
-            }
+            // Only the files the import consumed; later ones are new.
+            let files = files_in_marker(paths);
+            finish_renames(paths, &files, fail_rename, warnings);
             return Imported::Nothing;
         }
         // The commit never happened.
@@ -146,9 +164,22 @@ pub(crate) fn import_legacy(
     }
 
     remove_importing(paths);
-    let Some(snap) = read_documents(paths, limits, warnings) else {
+    let read = read_documents(paths, limits, warnings);
+    if !read.unread.is_empty() {
+        // A file that could not be read now (too large, newer, I/O error)
+        // would be lost behind a database that does not hold it.
+        for file in &read.unread {
+            warnings.push(format!(
+                "{}: not read; nothing is imported or saved this session, the import is retried at the next start",
+                file.display()
+            ));
+        }
+        return Imported::Failed(Box::new(read.snapshot));
+    }
+    if !read.any_read {
         return Imported::Nothing;
-    };
+    }
+    let snap = read.snapshot;
     let summary = format!(
         "{} tracks, {} playlists, {} cart pages and {} players",
         snap.library.len(),
@@ -156,7 +187,12 @@ pub(crate) fn import_legacy(
         snap.cart_pages.len(),
         snap.players.len()
     );
-    if let Err(e) = commit(paths, &snap) {
+    // The files whose content goes into the database.
+    let consumed: Vec<PathBuf> = json_files(paths, backups)
+        .into_iter()
+        .filter(|f| f.exists())
+        .collect();
+    if let Err(e) = commit(paths, &snap, &consumed) {
         remove_importing(paths);
         remove_if_exists(&marker);
         warnings.push(format!(
@@ -165,18 +201,13 @@ pub(crate) fn import_legacy(
         return Imported::Failed(Box::new(snap));
     }
     tracing::info!("imported the JSON documents into the database: {summary}");
-    match rename_json_files(paths, backups, fail_rename) {
-        Ok(()) => remove_if_exists(&marker),
-        Err(e) => warnings.push(format!(
-            "import: could not rename the JSON files after the import: {e}"
-        )),
-    }
+    finish_renames(paths, &consumed, fail_rename, warnings);
     Imported::Committed
 }
 
 /// Writes `snap` to the temporary database and renames it to `fauste.db`
 /// behind the marker.
-fn commit(paths: &AppPaths, snap: &Snapshot) -> Result<(), StoreError> {
+fn commit(paths: &AppPaths, snap: &Snapshot, consumed: &[PathBuf]) -> Result<(), StoreError> {
     fs::create_dir_all(&paths.data_dir)?;
     let importing = importing_file(paths);
     let mut db = Db::open(&importing).map_err(|e| io::Error::other(e.to_string()))?;
@@ -192,20 +223,60 @@ fn commit(paths: &AppPaths, snap: &Snapshot) -> Result<(), StoreError> {
         name.push(suffix);
         remove_if_exists(Path::new(&name));
     }
-    fs::write(marker_file(paths), b"")?;
-    fs::rename(&importing, paths.database_file())?;
+    // The marker names the files this import consumed.
+    let names: Vec<String> = consumed
+        .iter()
+        .filter_map(|f| f.file_name())
+        .map(|n| n.to_string_lossy().into_owned())
+        .collect();
+    fs::write(marker_file(paths), names.join("\n"))?;
+    sync_dir(&paths.data_dir)?;
+    // No database exists here, so side files next to the name are stale.
+    let database = paths.database_file();
+    for suffix in ["-wal", "-shm"] {
+        let mut name = database.clone().into_os_string();
+        name.push(suffix);
+        remove_if_exists(Path::new(&name));
+    }
+    fs::rename(&importing, &database)?;
+    sync_dir(&paths.data_dir)?;
     Ok(())
 }
 
-/// Reads the three documents. None when none of them could be read.
-fn read_documents(
-    paths: &AppPaths,
-    limits: &Limits,
-    warnings: &mut Vec<String>,
-) -> Option<Snapshot> {
+/// What reading the three documents gave.
+struct Read {
+    snapshot: Snapshot,
+    /// At least one document was read.
+    any_read: bool,
+    /// Document files that still exist although nothing read or
+    /// quarantined them.
+    unread: Vec<PathBuf>,
+}
+
+/// The files of a document that the loader skipped without reading or
+/// quarantining them: all that remain before the one it used (or all of
+/// them when it used none).
+fn skipped(main: &Path, backups: usize, source: LoadSource) -> Vec<PathBuf> {
+    let candidates =
+        std::iter::once(main.to_path_buf()).chain((1..=backups).map(|n| backup_path(main, n)));
+    let used = match source {
+        LoadSource::Primary => 0,
+        LoadSource::Backup(n) => n,
+        LoadSource::Defaults => usize::MAX,
+    };
+    candidates
+        .enumerate()
+        .filter(|(i, f)| *i < used && f.exists())
+        .map(|(_, f)| f)
+        .collect()
+}
+
+/// Reads the three documents.
+fn read_documents(paths: &AppPaths, limits: &Limits, warnings: &mut Vec<String>) -> Read {
+    let backups = limits.backup_count;
     let lists: Loaded<PlaylistsDoc> = load_doc(
         &paths.playlists_file(),
-        limits.backup_count,
+        backups,
         limits.max_state_file_bytes,
         PLAYLISTS_SCHEMA,
         PLAYLISTS_MIGRATIONS,
@@ -213,21 +284,23 @@ fn read_documents(
     warnings.extend(lists.warnings);
     let session = load_with_fallback(
         &paths.session_file(),
-        limits.backup_count,
+        backups,
         limits.max_state_file_bytes,
         parse_session,
     );
     warnings.extend(session.warnings);
     let carts = load_with_fallback(
         &paths.carts_file(),
-        limits.backup_count,
+        backups,
         limits.max_state_file_bytes,
         parse_carts,
     );
     warnings.extend(carts.warnings);
-    if lists.value.is_none() && session.value.is_none() && carts.value.is_none() {
-        return None;
-    }
+    let mut unread = skipped(&paths.playlists_file(), backups, lists.source);
+    unread.extend(skipped(&paths.session_file(), backups, session.source));
+    unread.extend(skipped(&paths.carts_file(), backups, carts.source));
+    let any_read = lists.value.is_some() || session.value.is_some() || carts.value.is_some();
+    let no_session = session.value.is_none();
 
     let (library, mut playlists, mut ids) = lists
         .value
@@ -277,6 +350,16 @@ fn read_documents(
     if !players.is_empty() {
         let ids_of: Vec<_> = players.iter().map(|p| p.id).collect();
         playlists.convert_legacy_played(&ids_of);
+    } else if no_session
+        && playlists
+            .iter()
+            .flat_map(|p| p.entries.iter())
+            .any(|e| e.legacy_played)
+    {
+        warnings.push(
+            "import: there is no readable session, so the played marks of the old playlists are dropped"
+                .to_owned(),
+        );
     }
 
     // A reference to a track the library does not have cannot be stored:
@@ -301,13 +384,17 @@ fn read_documents(
     ids.observe(walls.max_raw_id());
     warnings.extend(walls.normalize(limits, &mut ids, &library));
 
-    Some(Snapshot {
-        library,
-        playlists,
-        ids,
-        players,
-        cartwall: cartwall_session,
-        layout,
-        cart_pages: walls.pages,
-    })
+    Read {
+        snapshot: Snapshot {
+            library,
+            playlists,
+            ids,
+            players,
+            cartwall: cartwall_session,
+            layout,
+            cart_pages: walls.pages,
+        },
+        any_read,
+        unread,
+    }
 }
