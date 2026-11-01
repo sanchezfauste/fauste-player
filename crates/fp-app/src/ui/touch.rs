@@ -115,15 +115,19 @@ fn second_finger_tap(ui: &Ui, rect: Rect) -> bool {
         .ctx()
         .data(|d| d.get_temp::<Fingers>(key).is_some_and(|f| f.frame == frame));
     if !seen {
-        let events: Vec<(egui::TouchId, egui::TouchPhase, egui::Pos2)> = ui.input(|i| {
-            i.events
-                .iter()
-                .filter_map(|e| match e {
-                    egui::Event::Touch { id, phase, pos, .. } => Some((*id, *phase, *pos)),
-                    _ => None,
-                })
-                .collect()
-        });
+        let (touching, events): (bool, Vec<(egui::TouchId, egui::TouchPhase, egui::Pos2)>) = ui
+            .input(|i| {
+                (
+                    i.any_touches(),
+                    i.events
+                        .iter()
+                        .filter_map(|e| match e {
+                            egui::Event::Touch { id, phase, pos, .. } => Some((*id, *phase, *pos)),
+                            _ => None,
+                        })
+                        .collect(),
+                )
+            });
         ui.ctx().data_mut(|d| {
             let f = d.get_temp_mut_or_default::<Fingers>(key);
             f.frame = frame;
@@ -145,6 +149,10 @@ fn second_finger_tap(ui: &Ui, rect: Rect) -> bool {
                         }
                     }
                 }
+            }
+            // A frame that drew no transport missed its touches' ends.
+            if !touching {
+                f.down.clear();
             }
         });
     }
