@@ -233,13 +233,24 @@ start_app() {
 # The first start analyses the songs (waveforms, durations, loudness) and
 # saves them; the second shows them from the start.
 library_ready() {
-    shell cat "$files/data/playlists.json" 2>/dev/null | python3 -c '
-import json, sys
+    # The database with its write-ahead log and shared-memory files, copied
+    # to the host: the saved rows may still be in the log.
+    local dir=$tmp/library suffix
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    for suffix in "" -wal -shm; do
+        adb exec-out "cat '$files/data/fauste.db$suffix' 2>/dev/null" > "$dir/fauste.db$suffix" || true
+    done
+    python3 - "$dir/fauste.db" <<'PY'
+import json, sqlite3, sys
 try:
-    tracks = json.load(sys.stdin)["library"]
-except (ValueError, KeyError):
+    db = sqlite3.connect(sys.argv[1], timeout=5)
+    docs = [json.loads(r[0]) for r in db.execute("SELECT doc FROM tracks")]
+    db.close()
+except Exception:
     sys.exit(1)
-sys.exit(0 if tracks and all(t.get("analyzed") and t.get("loudness") for t in tracks) else 1)'
+sys.exit(0 if docs and all(t.get("analyzed") and t.get("loudness") for t in docs) else 1)
+PY
 }
 start_app
 timeout=${PLAY_SHOTS_ANALYSIS_TIMEOUT:-180}
