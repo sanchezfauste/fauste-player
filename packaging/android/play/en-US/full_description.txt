@@ -1,0 +1,25 @@
+Fauste Player puts music, jingles and spots on air. It is a radio playout application: several independent players run side by side, each with its own playlists, and tracks mix sample-accurately at their MIX points. The Android app runs the same playout core as the desktop application, with a layout made for touch.
+
+PLAYERS AND PLAYLISTS
+• One or more players, each with its playlists, in SINGLE or CONT mode
+• Segues at each track's MIX point, cue-in, intro, outro and cue-out markers found by a background analysis, and markers you set with a long press on the waveform
+• Pre-listen (CUE) on a separate output, such as headphones
+• Loudness normalization
+• Move tracks by dragging, or send one to another player right after its next track
+
+CARTWALL
+• Instant carts for jingles, effects and spots, on pages you swipe through
+• Fold the cartwall on the Live screen to give the players more room
+
+MADE FOR THE STUDIO
+• Playout keeps going with the screen off or another app in front, with a notification while something plays
+• Nothing goes on air by itself after a start, a restart or a crash
+• A padlock guards against stray touches during a show: the transport and the carts keep working
+• Choose the output of each player, the cartwall and their CUE: the speaker, wired headphones, a USB interface or a Bluetooth speaker
+• Browse the music on your device by folder, artist or album, and search it
+
+PRIVATE AND FREE
+Fauste Player has no accounts, no ads, no analytics and no tracking, and it does not ask for network access. It is free software under the GNU GPL (version 3 or later), and the same project runs on Linux, Windows and macOS.
+
+User guide: https://sanchezfauste.com/fauste-player/guide/
+Source code and issues: https://github.com/sanchezfauste/fauste-player

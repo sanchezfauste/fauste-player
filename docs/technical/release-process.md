@@ -378,8 +378,10 @@ the PE Subsystem field is not 2 (GUI); CI runs that script's `--self-test`
 `com.sanchezfauste.FaustePlayer`:
 - the icons (SVG, PNG sizes, `.ico`). `fauste-player.svg` is the source: after
   changing it, run `scripts/package/icons.sh` (inkscape and ImageMagick) and
-  commit the regenerated PNGs and `.ico`. The window icon, the packages, the
-  `.icns` and the website favicon all read these files;
+  commit the regenerated PNGs and `.ico` (and the MSIX logos and the Google
+  Play icon and feature graphic it also writes). The window icon, the
+  packages, the `.icns` and the website favicon all read these files;
+- the Google Play listing (`packaging/android/play`, see "Stores");
 - the desktop entry;
 - the AppStream metainfo. It carries no version: `scripts/package/metainfo.sh`
   adds the one being packaged;
@@ -461,6 +463,7 @@ packaging: the workflow refuses other tags, and tags made before it
 |---|---|---|---|
 | `msstore` | Microsoft Store | builds an unsigned MSIX (`scripts/package/msix.sh`; the Store signs it) and submits it with the Microsoft Store CLI (`msstore publish`) | the `MSSTORE_*` secrets and variables are set |
 | `snap` | Snap Store | builds `snap/snapcraft.yaml` on amd64 and arm64 (`snapcore/action-build`), uploads and releases it (`snapcore/action-publish`), and on a release (not a pre-release) sends the amd64 snap's summary, description, title, licence and icon to the store listing (`snapcraft upload-metadata --force`) | `SNAPCRAFT_STORE_CREDENTIALS` is set |
+| `google-play` | Google Play | checks the listing in `packaging/android/play` (`scripts/package/play-listing.py check` and its tests), downloads the release's signed `fauste-player-<version>-android.aab` (checking its `.sha256`) and uploads it to one track with the release notes of `changelogs/default.txt` (`r0adkll/upload-google-play`) | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is set |
 | `flathub` | Flathub | writes the Flathub manifest (`scripts/package/flathub-manifest.py`: the in-tree manifest with the release's git tag and commit as its source) and `cargo-sources.json`, lints both with `flatpak-builder-lint`, and opens a pull request on `flathub/com.sanchezfauste.FaustePlayer` | `FLATHUB_TOKEN` is set |
 | `winget` | WinGet | opens a pull request on `microsoft/winget-pkgs` with the release's MSI (`vedantmgoyal9/winget-releaser`) | `WINGET_TOKEN` is set |
 | `aur` | AUR | writes the `fauste-player-bin` PKGBUILD from `packaging/aur/PKGBUILD.in` (`scripts/package/aur.sh`, with the checksums of the release archives), checks it with `makepkg --printsrcinfo` and `namcap`, and pushes it | `AUR_SSH_PRIVATE_KEY` is set |
@@ -469,7 +472,12 @@ packaging: the workflow refuses other tags, and tags made before it
   channel; the other stores skip them.
 - **Dry run:** a pull request that touches `snap/`, `packaging/`, the store
   scripts or `stores.yml` builds the MSIX and both snaps, lints the Flathub
-  manifest and checks the PKGBUILD, and publishes nothing.
+  manifest, checks the Google Play listing and the PKGBUILD, and publishes
+  nothing.
+- **Google Play** takes the bundle `release-build.yml` built and signed (the
+  `binaries` job runs before `stores`), never a rebuild: a release made
+  without the Android release key has no bundle, and the job fails. A
+  pre-release shares its release's `versionCode`, so it never goes to Play.
 - **Shared metadata:** the snap, the Flathub build and the stores' listings
   read the AppStream metainfo (`packaging/linux/com.sanchezfauste.FaustePlayer.metainfo.xml`),
   whose screenshots point at `docs/images` on `master` (the Snap Store takes
@@ -500,6 +508,9 @@ credentials; variables hold public identifiers.
 | `MSSTORE_IDENTITY_NAME`, `MSSTORE_PUBLISHER`, `MSSTORE_PUBLISHER_DISPLAY_NAME` | variables | Package/Identity/Name, Package/Identity/Publisher (`CN=…`) and Package/Properties/PublisherDisplayName from Product identity |
 | `SNAPCRAFT_STORE_CREDENTIALS` | secret | the output of `snapcraft export-login --snaps=fauste-player --acls=package_access,package_push,package_update,package_release -` (`package_update` also covers the listing update) |
 | `SNAP_CHANNEL` | variable (optional) | the channel releases go to; default `stable` |
+| `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` | secret | the JSON key of the Google Cloud service account invited to Play Console (see below) |
+| `GOOGLE_PLAY_TRACK` | variable (optional) | the track every release goes to: `internal` (default), `alpha` (closed testing), `beta` (open testing) or `production` |
+| `GOOGLE_PLAY_STATUS` | variable (optional) | the release status: `completed` (default; it goes out after Play's review) or `draft` (it waits in Play Console). Play accepts only `draft` until the app has been reviewed once |
 | `FLATHUB_TOKEN` | secret | a token of a maintainer of `flathub/com.sanchezfauste.FaustePlayer` that can push branches and open pull requests there: fine-grained (*contents* and *pull requests* write) if the flathub organisation accepts fine-grained tokens, otherwise classic with `public_repo` |
 | `WINGET_TOKEN` | secret | a classic token with the `public_repo` scope, of the account that owns the fork of `microsoft/winget-pkgs`; best a separate bot account (`WINGET_FORK_USER`), since `public_repo` on the maintainer's account can also push to this repository |
 | `WINGET_IDENTIFIER`, `WINGET_FORK_USER` | variables (optional) | the package identifier (default `SanchezFauste.FaustePlayer`) and the fork's owner (default the repository owner) |
@@ -550,6 +561,86 @@ credentials; variables hold public identifiers.
    4320×1440, at most 2 MB. Re-upload them after a visible UI change. The
    icon (40×40 to 512×512, 1:1) comes from the snap on every release; the
    store's "Update metadata on release" refreshes the texts only.
+
+**Google Play**
+
+The listing lives in `packaging/android/play`, in fastlane's layout: per
+language (`en-US`, `es-ES`) `title.txt` (at most 30 characters),
+`short_description.txt` (80), `full_description.txt` (4000) and
+`changelogs/default.txt` (500, the release notes of every upload), and in
+`en-US/images` the 512 × 512 `icon.png` and the 1024 × 500
+`featureGraphic.png`, rendered by `scripts/package/icons.sh`, and the phone
+screenshots in `phoneScreenshots/` (at least two, at most 2:1).
+`scripts/package/play-listing.py check` checks the limits and sizes.
+The screenshots come from a release build on the emulator with the
+screenshot songs and carts (`target/screenshots/music` and `carts`, pushed
+to the device's `Music` folder): `adb shell wm size 1080x2160` (Play
+refuses a taller ratio), the status bar in demo mode
+(`settings put global sysui_demo_allowed 1`, then the
+`com.android.systemui.demo` broadcasts `enter`, `clock`, `notifications
+-e visible false`), then `adb exec-out screencap -p`. Retake them after a
+visible change to the phone layout. Play
+Console does not read these files: copy them in by hand when they change
+(`en-US` is the default language). Other languages are translated with AI
+before a release, as the guide is.
+
+1. Create a [Play Console](https://play.google.com/console) developer
+   account (a one-time fee) and verify the identity it asks for. A new
+   personal account must run a closed test with at least 12 testers who
+   stay opted in for 14 days in a row before it may apply for production
+   access: start it early.
+2. Create the app: name *Fauste Player*, default language English (United
+   States), app, free.
+3. **App signing.** Choose to sign with your own key (Play Console offers to
+   export and upload it with Google's `pepk` tool): the release key behind
+   `ANDROID_KEYSTORE`. The APK on the releases page and the app from Play
+   then share one signature, so users can move between them without
+   uninstalling. Letting Google generate the key instead makes the two
+   incompatible, and the choice cannot be undone.
+4. **Store listing** from `packaging/android/play` (above), with a contact
+   email and the website `https://sanchezfauste.com/fauste-player/`.
+5. **App content** (Policy → App content):
+   - *Privacy policy:* `https://sanchezfauste.com/fauste-player/privacy.html`
+     (`site/privacy.html`; it covers the Android app).
+   - *Ads:* no ads. *App access:* everything works without an account or
+     special access.
+   - *Content rating:* the IARC questionnaire, category "Utility,
+     productivity, communication or other"; answer no to every content
+     question (the app plays the user's
+     own files and has no user interaction or sharing between people).
+   - *Target audience:* 18 and over (a tool for radio presenters and
+     stations); not designed for children.
+   - *Data safety:* the app collects and shares no user data (it has no
+     `INTERNET` permission), so the answer is "No" to both and the rest of
+     the form is skipped.
+   - *Foreground service permissions:* `FOREGROUND_SERVICE_MEDIA_PLAYBACK`,
+     task *Media playback*. Description: "Fauste Player is a radio playout
+     app. While playout is active (a player playing or holding the next
+     track to put on air, or a cart playing), the foreground service keeps
+     the audio going with the screen off or another app in front, so a live
+     broadcast is never cut. It starts when the user loads or plays a
+     track and stops when playout ends." Play asks for a link to a short
+     video (unlisted on YouTube is enough): start a track, show the
+     notification, go home and turn the screen off and on with the track
+     still going, then come back and stop it.
+   - Government app, financial features, health, news: no.
+6. **First upload by hand.** Play's API refuses the first bundle of an app:
+   upload `fauste-player-<version>-android.aab` from the latest release to
+   the internal testing track in Play Console, then the closed test of
+   step 1 (track *Closed testing*, Play's API name `alpha`, with the
+   testers' email list or a Google Group).
+7. **API access.** In Google Cloud, in a project of your own, enable the
+   *Google Play Android Developer API* and create a service account with a
+   JSON key. In Play Console → Users and permissions, invite the service
+   account's email with the app's permissions *Release to production,
+   exclude devices, and use Play App Signing* and *Release apps to testing
+   tracks* (and *View app information*). The key goes into
+   `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON`.
+8. Set `GOOGLE_PLAY_TRACK` to the track releases should go to (`alpha`
+   during the closed test, then `production`) and `GOOGLE_PLAY_STATUS` to
+   `draft` until Play has reviewed the app once; remove it afterwards. From
+   then on every release is uploaded by the workflow, and each update still
+   goes through Play's review.
 
 **Flathub**
 1. The application ID must belong to a domain or code host the developer
