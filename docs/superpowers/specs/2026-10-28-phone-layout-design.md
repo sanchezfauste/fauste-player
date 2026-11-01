@@ -334,8 +334,8 @@ cartwall folds ("ok pero que se pueda plegar la cartwall").
 - PL37. **The card's order** (replaces PL4's): the header line (name,
   status, Single/Cont, CUE); the cover (40 dp, in the info row's height,
   so the card grows by nothing), title and artist, the next track; the
-  waveform as the seek bar; the time row; then the transport with the
-  meter and fader. The card's margins and the space between its rows are
+  waveform as the seek bar; then the time row over the transport, with
+  the meter and fader beside both (as tall as the two). The card's margins and the space between its rows are
   the gap between its buttons. A phone's Play glyph and caption grow with
   the button.
 - PL38. **Buttons under a second finger.** A tap on a player's transport

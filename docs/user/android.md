@@ -43,8 +43,8 @@ the status bar at the bottom shows only when it has something to say.
 - *Live:* every player as a card, and the cartwall. Each card has, top
   to bottom, the player's name, status, Single/Cont and CUE; the cover,
   the title and artist and the next track; the waveform (a tap seeks);
-  the elapsed time and the track's length with the time left in large
-  digits; then the
+  then the elapsed time and the track's length with the time left in
+  large digits over the
   transport (Play/Next, Previous, Pause, Stop, Restart, Fade stop, Stop
   after current) with buttons a finger's size, and a slim meter with the
   volume fader (no scales; the fader's level shows under it). The
