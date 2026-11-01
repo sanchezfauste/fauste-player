@@ -1027,7 +1027,9 @@ const ROW_GAP: f32 = 8.0;
 /// The countdown shrinks to fit down to this share of its size (38 → 10.5 px:
 /// a ten-hour time in a player at its minimum width, beside the widest
 /// meter, EBU's, with its two rulers, and the fader with its scale).
-const COUNTDOWN_MIN_SCALE: f32 = 10.5 / 38.0;
+const COUNTDOWN_MIN_SCALE: f32 = 10.5 / COUNTDOWN_SIZE;
+/// The countdown's digits at full size.
+const COUNTDOWN_SIZE: f32 = 38.0;
 
 /// How a player's top block is laid out.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1069,7 +1071,7 @@ fn top_block(
 ) {
     let phone = size != BlockSize::Desktop;
     let height = if phone {
-        PHONE_TIME_ROW_HEIGHT + GAP + PHONE_PLAY_SIZE
+        phone_time_row_height(ui) + GAP + PHONE_PLAY_SIZE
     } else {
         PLAY_SIZE * 2.0 + ROW_GAP
     };
@@ -1111,15 +1113,18 @@ fn top_block(
 const COMPACT_COLUMN_WIDTH: f32 =
     widgets::COMPACT_METER_WIDTH + METER_FADER_GAP + widgets::COMPACT_FADER_WIDTH;
 
-/// The height of a phone card's time row.
-const PHONE_TIME_ROW_HEIGHT: f32 = 40.0;
+/// The height of a phone card's time row: the countdown's at full size,
+/// so the row never grows past what the card allocated for it.
+fn phone_time_row_height(ui: &Ui) -> f32 {
+    widgets::tabular_size(ui.painter(), "0", &font_medium(COUNTDOWN_SIZE)).y
+}
 
 /// A phone card's time row, under the waveform (PL29): the elapsed time
 /// and the track's total on the left, the countdown on the right.
 fn phone_time_row(ui: &mut Ui, scene: &Scene<'_>, pv: &PlayerView) {
     let text = view::time_text(pv.elapsed, pv.total, &scene.i18n.tr("placeholder-none"));
     ui.allocate_ui_with_layout(
-        vec2(ui.available_width(), PHONE_TIME_ROW_HEIGHT),
+        vec2(ui.available_width(), phone_time_row_height(ui)),
         Layout::left_to_right(Align::Center),
         |ui| {
             widgets::tabular_label(ui, &text, &font(14.0), theme::NEUTRAL_300);
@@ -1673,10 +1678,10 @@ fn countdown(ui: &mut Ui, pv: &PlayerView) {
     let colour = countdown_colour(pv);
     // Full size when it fits; smaller in a narrow player or for an
     // hour-long time, so it never runs into the buttons.
-    let natural = widgets::tabular_size(ui.painter(), &main, &font_medium(38.0)).x
+    let natural = widgets::tabular_size(ui.painter(), &main, &font_medium(COUNTDOWN_SIZE)).x
         + widgets::tabular_size(ui.painter(), &tenths, &font_medium(17.0)).x;
     let scale = (ui.available_width() / natural.max(1.0)).clamp(COUNTDOWN_MIN_SCALE, 1.0);
-    let big = font_medium(38.0 * scale);
+    let big = font_medium(COUNTDOWN_SIZE * scale);
     let tenths_font = font_medium(17.0 * scale);
     let main_size = widgets::tabular_size(ui.painter(), &main, &big);
     let tenths_size = widgets::tabular_size(ui.painter(), &tenths, &tenths_font);

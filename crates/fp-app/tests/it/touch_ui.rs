@@ -1973,3 +1973,16 @@ fn the_landscape_playlists_card_fits_between_the_system_bars() {
         assert!(r.bottom() <= A56_LANDSCAPE.y - 24.0, "{name} {r:?}");
     }
 }
+
+/// PL37: a card's buttons keep its margin below them: the time row is as
+/// tall as its countdown, so the card's content never runs into its
+/// bottom edge.
+#[test]
+fn a_cards_buttons_keep_its_bottom_margin() {
+    let (h, _fake) = touch(2, A56);
+    let play = h.get_all_by_label("Play").next().unwrap().rect();
+    let p2 = h.get_all_by_label("P2").next().unwrap().rect();
+    // The first card's bottom margin, its stroke, the space between the
+    // cards and the second card's top margin and stroke.
+    assert!(p2.top() - play.bottom() >= 22.0, "{play:?} {p2:?}");
+}
