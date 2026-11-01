@@ -155,7 +155,12 @@ stops or changes playout.
   marker editing, then `top_block` at `BlockSize::PhoneCompact`: the time
   row `phone_time_row` (elapsed / total and the countdown) over the
   transport, the meter and fader beside both; 48-point transport buttons (`PHONE_BUTTON`), and the compact
-  meter and fader `widgets::vu_compact` / `fader_compact`, PL28–PL30; the
+  meter and fader `widgets::vu_compact` / `fader_compact`, PL28–PL30;
+  `phone_split` shares the width (PL39): the time row is as wide as the
+  buttons, so the countdown ends with them, and the meter's ruler and the
+  fader's numbers show only when they fit beside 48-point buttons (the
+  meter's first); too narrow for the bare column, the buttons shrink
+  down to `PHONE_BUTTON_MIN` (36); the
   card's margins and rows are `GAP` apart, as its buttons). egui follows
   one finger as its pointer, so `touch::tapped` also reads a second
   finger's tap from its `Event::Touch`es (PL38): the transport works while

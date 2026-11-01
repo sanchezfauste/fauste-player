@@ -1046,8 +1046,62 @@ enum BlockSize {
 
 /// The size of a phone's small transport buttons: a finger's (PL29).
 const PHONE_BUTTON: f32 = super::touch::TARGET;
-/// A phone's Play button: as tall as two rows of small buttons.
-const PHONE_PLAY_SIZE: f32 = PHONE_BUTTON * 2.0 + GAP;
+/// The smallest a phone's small buttons get on a phone too narrow for
+/// [`PHONE_BUTTON`] beside the meter and fader (PL39).
+const PHONE_BUTTON_MIN: f32 = 36.0;
+
+/// The width of a phone's transport with small buttons `button` wide: Play
+/// (two buttons and a gap) and three columns of small buttons.
+fn phone_transport_width(button: f32) -> f32 {
+    5.0 * button + 4.0 * GAP
+}
+
+/// How a phone card shares its width (PL39): the transport, and right of
+/// it the meter and fader column, with the scales that fit.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct PhoneSplit {
+    /// The small buttons' size; Play is two of them and a gap.
+    button: f32,
+    /// The meter's ruler and the fader's numbers.
+    meter_scale: bool,
+    fader_scale: bool,
+    /// The meter and fader column's width.
+    column: f32,
+}
+
+/// The split of a phone card `width` wide for meter `c`: finger-sized
+/// buttons, then the meter's scale and the fader's, each only if it fits
+/// beside them. Too narrow for the buttons, they shrink (down to
+/// [`PHONE_BUTTON_MIN`]) and no scale shows.
+fn phone_split(width: f32, c: &fp_model::MeterConfig) -> PhoneSplit {
+    let column = |meter_scale: bool, fader_scale: bool| {
+        widgets::compact_meter_width(c, meter_scale)
+            + METER_FADER_GAP
+            + widgets::compact_fader_width(fader_scale)
+    };
+    let room = width - phone_transport_width(PHONE_BUTTON) - METER_COLUMN_GAP;
+    let fits = [(true, true), (true, false), (false, false)]
+        .into_iter()
+        .find(|&(m, f)| column(m, f) <= room);
+    match fits {
+        Some((meter_scale, fader_scale)) => PhoneSplit {
+            button: PHONE_BUTTON,
+            meter_scale,
+            fader_scale,
+            column: column(meter_scale, fader_scale),
+        },
+        None => {
+            let column = column(false, false);
+            let left = width - column - METER_COLUMN_GAP;
+            PhoneSplit {
+                button: ((left - 4.0 * GAP) / 5.0).clamp(PHONE_BUTTON_MIN, PHONE_BUTTON),
+                meter_scale: false,
+                fader_scale: false,
+                column,
+            }
+        }
+    }
+}
 /// How much a phone's Play glyph and caption grow at most: less than the
 /// button, which is wide enough for longer captions.
 const PHONE_PLAY_GLYPH_SCALE: f32 = 1.4;
@@ -1072,23 +1126,26 @@ fn top_block(
     fader: bool,
     size: BlockSize,
 ) {
-    let phone = size != BlockSize::Desktop;
-    let height = if phone {
-        phone_time_row_height(ui) + GAP + PHONE_PLAY_SIZE
-    } else {
-        PLAY_SIZE * 2.0 + ROW_GAP
+    let phone = (size != BlockSize::Desktop)
+        .then(|| phone_split(ui.available_width(), &scene.state.config.meter));
+    let height = match phone {
+        Some(p) => phone_time_row_height(ui) + GAP + 2.0 * p.button + GAP,
+        None => PLAY_SIZE * 2.0 + ROW_GAP,
     };
     let (rect, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
-    let column_width = if phone {
-        COMPACT_COLUMN_WIDTH
-    } else {
-        meter_column_width(&scene.state.config.meter)
+    let column_width = match phone {
+        Some(p) => p.column,
+        None => meter_column_width(&scene.state.config.meter),
     };
     let split = (rect.right() - column_width).max(rect.left());
-    let left = Rect::from_min_max(
-        rect.min,
-        pos2((split - METER_COLUMN_GAP).max(rect.left()), rect.bottom()),
-    );
+    // A phone's left part is as wide as its buttons, so the countdown above
+    // them ends where they end (PL39); the room left goes to the gap before
+    // the meter.
+    let left_right = match phone {
+        Some(p) => (rect.left() + phone_transport_width(p.button)).min(split - METER_COLUMN_GAP),
+        None => split - METER_COLUMN_GAP,
+    };
+    let left = Rect::from_min_max(rect.min, pos2(left_right.max(rect.left()), rect.bottom()));
     let right = Rect::from_min_max(pos2(split, rect.top()), rect.max);
     let mut left_ui = ui.new_child(
         UiBuilder::new()
@@ -1096,14 +1153,15 @@ fn top_block(
             .layout(Layout::top_down(Align::Min)),
     );
     left_ui.spacing_mut().item_spacing = vec2(6.0, ROW_GAP);
-    if phone {
+    if phone.is_some() {
         // The times over the transport, so the meter and fader span both.
         left_ui.spacing_mut().item_spacing = vec2(GAP, GAP);
         phone_time_row(&mut left_ui, scene, pv);
     } else {
         info_row(&mut left_ui, scene, covers, id, pv, telemetry, false);
     }
-    transport(&mut left_ui, scene, id, pv, phone);
+    let play_size = phone.map_or(PLAY_SIZE, |p| 2.0 * p.button + GAP);
+    transport(&mut left_ui, scene, id, pv, play_size, phone.is_some());
     let mut right_ui = ui.new_child(
         UiBuilder::new()
             .max_rect(right)
@@ -1111,10 +1169,6 @@ fn top_block(
     );
     meter_column(&mut right_ui, scene, id, telemetry, height, fader, phone);
 }
-
-/// The width of a phone's meter and fader column (PL30).
-const COMPACT_COLUMN_WIDTH: f32 =
-    widgets::COMPACT_METER_WIDTH + METER_FADER_GAP + widgets::COMPACT_FADER_WIDTH;
 
 /// The height of a phone card's time row: the countdown's at full size,
 /// so the row never grows past what the card allocated for it.
@@ -1150,7 +1204,7 @@ fn meter_column(
     telemetry: &fp_engine::engine::PlayerTelemetry,
     height: f32,
     fader: bool,
-    phone: bool,
+    phone: Option<PhoneSplit>,
 ) {
     let t = scene.i18n;
     ui.spacing_mut().item_spacing = vec2(METER_FADER_GAP, 0.0);
@@ -1167,12 +1221,11 @@ fn meter_column(
         max_tip: t.tr("tip-meter-max"),
     };
     let meter_top = ui.cursor().top();
-    let vu = if phone {
-        widgets::vu_compact
-    } else {
-        widgets::vu
+    let reset = match phone {
+        Some(p) => widgets::vu_compact(ui, height, &telemetry.meter, meter, &labels, p.meter_scale),
+        None => widgets::vu(ui, height, &telemetry.meter, meter, &labels),
     };
-    if vu(ui, height, &telemetry.meter, meter, &labels) {
+    if reset {
         scene.ctl.reset_meter_max(id);
     }
     // A hairline in the gap between the meter and the fader, so the two
@@ -1184,12 +1237,12 @@ fn meter_column(
     // height, past the meter's own bottom line.
     let fader_left = ui.cursor().left();
     let meter_right = fader_left - METER_FADER_GAP;
-    let divider_x = if phone {
+    let divider_x = if phone.is_some() {
         meter_right + (METER_FADER_GAP - DIVIDER_WIDTH) / 2.0
     } else {
         (meter_right + widgets::fader_knob_left(fader_left) - DIVIDER_WIDTH) / 2.0
     };
-    let divider_height = if phone {
+    let divider_height = if phone.is_some() {
         height
     } else {
         (height - widgets::FADER_READOUT_HEIGHT).max(0.0)
@@ -1231,19 +1284,27 @@ fn meter_column(
     .unwrap_or_else(|| t.tr("volume-readout-silent"));
     ui.vertical(|ui| {
         ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-        let (draw, readout_fn): (FaderFn, ReadoutFn) = if phone {
-            (widgets::fader_compact, widgets::fader_readout_compact)
-        } else {
-            (widgets::fader, widgets::fader_readout)
+        let enabled = !locked && fader;
+        let fader_height = (height - widgets::FADER_READOUT_HEIGHT).max(0.0);
+        let moved = match phone {
+            Some(p) => {
+                let moved = widgets::fader_compact(
+                    ui,
+                    fader_height,
+                    position,
+                    &tip,
+                    enabled,
+                    p.fader_scale,
+                );
+                widgets::fader_readout_compact(ui, &readout, enabled, p.fader_scale);
+                moved
+            }
+            None => {
+                let moved = widgets::fader(ui, fader_height, position, &tip, enabled);
+                widgets::fader_readout(ui, &readout, enabled);
+                moved
+            }
         };
-        let moved = draw(
-            ui,
-            (height - widgets::FADER_READOUT_HEIGHT).max(0.0),
-            position,
-            &tip,
-            !locked && fader,
-        );
-        readout_fn(ui, &readout, !locked && fader);
         if let Some(pos) = moved {
             scene
                 .ctl
@@ -1251,9 +1312,6 @@ fn meter_column(
         }
     });
 }
-
-type FaderFn = fn(&mut Ui, f32, f32, &str, bool) -> Option<f32>;
-type ReadoutFn = fn(&mut Ui, &str, bool);
 
 /// `elapsed / total` under the waveform, right-aligned, close to it.
 fn time_row(ui: &mut Ui, scene: &Scene<'_>, pv: &PlayerView) {
@@ -1451,10 +1509,16 @@ pub fn sweep_band(r: Rect, left: f32) -> Rect {
     Rect::from_min_max(pos2(r.right() - width, r.top()), r.max)
 }
 
-fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView, phone: bool) {
+fn transport(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    id: PlayerId,
+    pv: &PlayerView,
+    play_size: f32,
+    phone: bool,
+) {
     let t = scene.i18n;
     let blink = widgets::blink(scene.time);
-    let play_size = if phone { PHONE_PLAY_SIZE } else { PLAY_SIZE };
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), play_size),
         Layout::left_to_right(Align::Center),

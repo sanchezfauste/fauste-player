@@ -347,3 +347,20 @@ cartwall folds ("ok pero que se pueda plegar la cartwall").
   example holding the fader down, then Next, then the fader up), and a
   tap counts though the finger rolls a little (up to 16 dp) or stays down
   a while; a finger that leaves the button taps nothing.
+
+## 18. Countdown and scales on the card (maintainer, 2026-11-01)
+
+Decided: the countdown ends where the transport ends, smaller when it
+does not fit; the meter's and the fader's scales show when they fit
+beside the buttons and not otherwise ("que aparezca si puede caber bien").
+
+- PL39. **The card's width** (replaces PL30's "lose their scale legends"):
+  the transport keeps its 48 dp buttons; the time row above it is as wide
+  as the buttons, so the countdown's right edge is the last button
+  column's, and the countdown shrinks to fit (a ten-hour time included)
+  without reaching the elapsed time. The width left right of the buttons
+  goes to the meter and fader column: the meter's scale (one ruler, left
+  of the bars) shows when it fits, then the fader's numbers (right of the
+  knob) when both fit; the meter's comes first. On a phone too narrow for
+  48 dp buttons beside the bare meter and fader, the buttons shrink (down
+  to 36 dp) so they never run into the meter, and no scale shows.

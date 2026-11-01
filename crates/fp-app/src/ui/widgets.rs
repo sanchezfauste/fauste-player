@@ -876,52 +876,65 @@ pub fn vu(
     c: &MeterConfig,
     labels: &MeterLabels,
 ) -> bool {
-    vu_sized(ui, height, reading, c, labels, false)
+    vu_sized(ui, height, reading, c, labels, None)
 }
 
 /// Width of the compact meter: its two bars, no rulers.
 pub const COMPACT_METER_WIDTH: f32 = 2.0 * BAR_WIDTH + BAR_GAP;
 
-/// [`vu`] without its rulers (phone layout spec PL30): the bars, the peak
-/// hold, the maximum and the loudness line, [`COMPACT_METER_WIDTH`] wide.
+/// Width of meter `c`'s compact form: [`COMPACT_METER_WIDTH`], and its left
+/// ruler when `ruler`.
+pub fn compact_meter_width(c: &MeterConfig, ruler: bool) -> f32 {
+    if ruler {
+        side_width(label_column(c)) + COMPACT_METER_WIDTH
+    } else {
+        COMPACT_METER_WIDTH
+    }
+}
+
+/// [`vu`] for a phone (phone layout spec PL30, PL39): the bars, the peak
+/// hold, the maximum and the loudness line, and the scale on one ruler, on
+/// the left, only when `ruler`; [`compact_meter_width`] wide.
 pub fn vu_compact(
     ui: &mut Ui,
     height: f32,
     reading: &MeterReading,
     c: &MeterConfig,
     labels: &MeterLabels,
+    ruler: bool,
 ) -> bool {
-    vu_sized(ui, height, reading, c, labels, true)
+    vu_sized(ui, height, reading, c, labels, Some(ruler))
 }
 
+/// Draws the meter: the desktop's with `compact` `None`, a phone's with
+/// `Some(ruler)`.
 fn vu_sized(
     ui: &mut Ui,
     height: f32,
     reading: &MeterReading,
     c: &MeterConfig,
     labels: &MeterLabels,
-    compact: bool,
+    compact: Option<bool>,
 ) -> bool {
-    let width = if compact {
-        COMPACT_METER_WIDTH
-    } else {
-        meter_width(c)
+    let width = match compact {
+        Some(ruler) => compact_meter_width(c, ruler),
+        None => meter_width(c),
     };
     let (rect, response) = ui.allocate_exact_size(vec2(width, height), Sense::hover());
     let meter_label = labels.meter.clone();
     response
         .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, meter_label.clone()));
     let line = loudness_line(reading, c);
-    // The compact meter is the full one with its rulers outside its rect,
-    // and not drawn.
-    let laid = if compact {
-        let side = side_width(label_column(c));
-        Rect::from_min_max(
+    // The compact meter is the full one with the rulers it does not draw
+    // outside its rect.
+    let side = side_width(label_column(c));
+    let laid = match compact {
+        Some(true) => Rect::from_min_max(rect.min, pos2(rect.right() + side, rect.bottom())),
+        Some(false) => Rect::from_min_max(
             pos2(rect.left() - side, rect.top()),
             pos2(rect.right() + side, rect.bottom()),
-        )
-    } else {
-        rect
+        ),
+        None => rect,
     };
     let l = meter_layout(laid, c, line.is_some());
     let max_response = ui
@@ -998,7 +1011,12 @@ fn vu_sized(
     // The rulers, outside the bars: the labels and a tick for every
     // labelled mark on each side, the minor ticks and the alignment tick.
     // Nothing is drawn over the bars or between them.
-    for ruler in l.rulers.iter().filter(|_| !compact) {
+    // A compact meter draws its left ruler, if any.
+    let drawn = |r: &&Ruler| match compact {
+        Some(ruler) => ruler && r.side == Side::Left,
+        None => true,
+    };
+    for ruler in l.rulers.iter().filter(drawn) {
         for tick in &l.ticks {
             painter.rect_filled(ruler.tick_rect(tick), 0.0, tick_colour(tick.kind));
         }
@@ -1497,27 +1515,27 @@ pub const FADER_READOUT_HEIGHT: f32 = LOUDNESS_LINE_HEIGHT;
 /// The level readout under the volume fader, in the small style of the
 /// meter's numbers; dimmed when the fader is not `enabled` (locked).
 pub fn fader_readout(ui: &mut Ui, text: &str, enabled: bool) {
-    fader_readout_sized(ui, text, enabled, false);
+    fader_readout_sized(ui, text, enabled, None);
 }
 
-/// [`fader_readout`] under a compact fader, centred on it.
-pub fn fader_readout_compact(ui: &mut Ui, text: &str, enabled: bool) {
-    fader_readout_sized(ui, text, enabled, true);
+/// [`fader_readout`] under a compact fader, centred on its knob; as wide
+/// as the fader, with its scale when `scale`.
+pub fn fader_readout_compact(ui: &mut Ui, text: &str, enabled: bool, scale: bool) {
+    fader_readout_sized(ui, text, enabled, Some(scale));
 }
 
-fn fader_readout_sized(ui: &mut Ui, text: &str, enabled: bool, compact: bool) {
-    let width = if compact {
-        COMPACT_FADER_WIDTH
-    } else {
-        FADER_WIDTH
+fn fader_readout_sized(ui: &mut Ui, text: &str, enabled: bool, compact: Option<bool>) {
+    let width = match compact {
+        Some(scale) => compact_fader_width(scale),
+        None => FADER_WIDTH,
     };
     let (rect, response) =
         ui.allocate_exact_size(vec2(width, FADER_READOUT_HEIGHT), Sense::hover());
     let owned = text.to_owned();
     response.widget_info(|| WidgetInfo::labeled(Role::Label, enabled, owned.clone()));
     if ui.is_rect_visible(rect) {
-        let x = if compact {
-            rect.center().x
+        let x = if compact.is_some() {
+            compact_fader_axis_x(rect)
         } else {
             fader_axis_x(rect)
         };
@@ -1638,19 +1656,21 @@ fn fader_mark_label(db: f32) -> String {
 /// wheel. A notch crosses the track at each scale mark, with the level on
 /// its right, away from the meter's own scale.
 pub fn fader(ui: &mut Ui, height: f32, position: f32, label: &str, enabled: bool) -> Option<f32> {
-    fader_sized(ui, height, position, label, enabled, false)
+    fader_sized(ui, height, position, label, enabled, None)
 }
 
-/// [`fader`] without its scale (phone layout spec PL30): the notches
-/// stay, the numbers go, and the knob is wide enough for a finger.
+/// [`fader`] for a phone (phone layout spec PL30, PL39): the knob is wide
+/// enough for a finger and the notches stay; the numbers show on the
+/// knob's right only when `scale`.
 pub fn fader_compact(
     ui: &mut Ui,
     height: f32,
     position: f32,
     label: &str,
     enabled: bool,
+    scale: bool,
 ) -> Option<f32> {
-    fader_sized(ui, height, position, label, enabled, true)
+    fader_sized(ui, height, position, label, enabled, Some(scale))
 }
 
 /// Width of the compact fader: its knob and a notch's reach either side.
@@ -1658,24 +1678,47 @@ pub const COMPACT_FADER_WIDTH: f32 = COMPACT_KNOB_WIDTH + 4.0;
 /// The compact fader's knob, wider and taller for a finger.
 const COMPACT_KNOB_WIDTH: f32 = 24.0;
 const COMPACT_KNOB_HEIGHT: f32 = 20.0;
+/// Room for the compact fader's scale on the knob's right: the gap after
+/// the knob and the widest label ("-50", 3 characters of the marks' font).
+const COMPACT_FADER_SCALE: f32 = 2.0 + 3.0 * FADER_MARK_FONT * 1233.0 / 2048.0 + 1.0;
 
+/// Width of the compact fader, with its scale when `scale`.
+pub fn compact_fader_width(scale: bool) -> f32 {
+    if scale {
+        COMPACT_FADER_WIDTH + COMPACT_FADER_SCALE
+    } else {
+        COMPACT_FADER_WIDTH
+    }
+}
+
+/// The x of a compact fader's axis in a column `rect`: the middle of its
+/// knob's room, which starts at the left.
+fn compact_fader_axis_x(rect: Rect) -> f32 {
+    rect.left() + COMPACT_FADER_WIDTH / 2.0
+}
+
+/// Draws the fader: the desktop's with `compact` `None`, a phone's with
+/// `Some(scale)`.
 fn fader_sized(
     ui: &mut Ui,
     height: f32,
     position: f32,
     label: &str,
     enabled: bool,
-    compact: bool,
+    compact: Option<bool>,
 ) -> Option<f32> {
     let sense = if enabled {
         Sense::click_and_drag()
     } else {
         Sense::hover()
     };
-    let (width, knob_width, knob_height) = if compact {
-        (COMPACT_FADER_WIDTH, COMPACT_KNOB_WIDTH, COMPACT_KNOB_HEIGHT)
-    } else {
-        (FADER_WIDTH, FADER_KNOB_WIDTH, FADER_KNOB_HEIGHT)
+    let (width, knob_width, knob_height) = match compact {
+        Some(scale) => (
+            compact_fader_width(scale),
+            COMPACT_KNOB_WIDTH,
+            COMPACT_KNOB_HEIGHT,
+        ),
+        None => (FADER_WIDTH, FADER_KNOB_WIDTH, FADER_KNOB_HEIGHT),
     };
     let (rect, response) = ui.allocate_exact_size(vec2(width, height), sense);
     let owned = label.to_owned();
@@ -1804,10 +1847,16 @@ fn fader_sized(
         };
         // The track sits at the left of the fader, next to the meter; the
         // scale marks are on its right, away from the meter's own scale.
-        let centre_x = if compact {
-            rect.center().x
+        let centre_x = if compact.is_some() {
+            compact_fader_axis_x(rect)
         } else {
             fader_axis_x(rect)
+        };
+        // The numbers start past the notches, or past a compact knob.
+        let labels_x = if compact.is_some() {
+            centre_x + COMPACT_KNOB_WIDTH / 2.0 + 2.0
+        } else {
+            centre_x + FADER_NOTCH_REACH + 2.0
         };
         let track = Rect::from_center_size(
             pos2(centre_x, rect.center().y),
@@ -1832,11 +1881,11 @@ fn fader_sized(
                     Stroke::new(1.0, mark_colour),
                 );
             }
-            if compact {
+            if compact == Some(false) {
                 continue;
             }
             painter.text(
-                pos2(centre_x + FADER_NOTCH_REACH + 2.0, y),
+                pos2(labels_x, y),
                 Align2::LEFT_CENTER,
                 fader_mark_label(db),
                 FontId::monospace(FADER_MARK_FONT),
