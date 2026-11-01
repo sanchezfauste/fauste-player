@@ -75,6 +75,7 @@ scripts/package/msix.sh <target>              # Microsoft Store MSIX (Windows, G
 scripts/package/flathub-manifest.py <tag> <commit> <out>  # the Flathub manifest of a release (PyYAML)
 scripts/package/aur.sh <version> <out>        # the AUR PKGBUILD of a published release
 scripts/package/play-listing.py check          # the Google Play listing (packaging/android/play) against Play's limits
+scripts/package/play-screenshots.sh [--out <dir>]  # the Google Play phone screenshots on a running google_apis emulator (needs the release APK; see docs/technical/release-process.md)
 python3 -m unittest discover -s scripts/package/tests -p 'test_*.py'  # packaging script tests
 scripts/package/notices.sh <out> [features]   # THIRD-PARTY.html with cargo-about (the snap, Flatpak, Flathub and Android builds; NOTICES_MANIFEST picks the crate)
 scripts/package/icons.sh                      # regenerate the PNG and .ico icons from packaging/icons/fauste-player.svg (inkscape, magick)
@@ -215,7 +216,7 @@ hand: release-please writes it from the commits.
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX, MSIX and Info.plist, the AUR PKGBUILD template, the Google Play listing (`packaging/android/play`); the per-format package scripts |
 | `snap/` | The snap recipe (`snapcraft.yaml`, where snapcraft looks for it) |
 | `site/`, `scripts/site/` | The landing page and privacy policy templates with their texts in `site/locales/<lang>.toml` (rendered by `scripts/site/landing.py`), and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
-| `.github/workflows` | CI (with the SonarQube Cloud analysis and coverage; `sonar-project.properties`), Dependabot (`dependabot.yml`), release-please, release builds and packages, store publishing (`stores.yml`: Microsoft Store, Snap Store, Google Play, Flathub, WinGet, AUR), GitHub Pages, commit checks |
+| `.github/workflows` | CI (with the SonarQube Cloud analysis and coverage; `sonar-project.properties`), Dependabot (`dependabot.yml`), release-please, release builds and packages, store publishing (`stores.yml`: Microsoft Store, Snap Store, Google Play, Flathub, WinGet, AUR), GitHub Pages, commit checks, screenshot retakes (`screenshots.yml` for `docs/images`, `play-screenshots.yml` for the Google Play listing) |
 
 ## Design source
 
@@ -284,6 +285,11 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   and reopen it); the optional `SCREENSHOTS_TOKEN` secret avoids both.
   Review the images before merging. The translated guides' screenshots are
   taken at publish time and never committed.
+
+  The Google Play phone screenshots work the same way on an Android
+  emulator: `scripts/package/play-screenshots.sh` and the
+  `play-screenshots` workflow (PRs from `docs/retake-play-screenshots`;
+  see `docs/technical/release-process.md`).
 
   On a GNOME Wayland desktop, `xdotool` clicks into XWayland windows need
   the "remote interaction" permission every session; Xvfb avoids that.

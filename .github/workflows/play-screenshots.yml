@@ -1,0 +1,182 @@
+name: play-screenshots
+
+# Retakes the Google Play phone screenshots
+# (packaging/android/play/en-US/images/phoneScreenshots) on an Android
+# emulator and opens or updates a single pull request, from the branch
+# docs/retake-play-screenshots, with the images that really changed.
+#   - push to master touching the UI, its strings, the Android app or the
+#     screenshot scripts: retake and compare;
+#   - workflow_dispatch: a manual retake;
+#   - a pull request touching the screenshot scripts or this workflow:
+#     only `shots`, so the images can be looked at in its artefact.
+# scripts/package/play-screenshots.sh takes them (a release APK, the demo
+# state, the status bar in demo mode); scripts/site/compare-screenshots.sh
+# compares them with a fuzz and the masks of
+# packaging/android/play/screenshot-masks.txt (the app's clock). Nothing is
+# opened when no image changed. The stores workflow uploads the committed
+# images to Google Play with each release.
+#
+# Two jobs, as in the screenshots workflow: `shots` builds and runs the app
+# with read-only permissions and no stored credentials; `publish` has the
+# write permissions but runs no build. Its one-time setup is the same
+# (the "Allow GitHub Actions to create and approve pull requests" setting,
+# or the SCREENSHOTS_TOKEN secret).
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - crates/fp-app/src/ui/**
+      - crates/fp-app/locales/**
+      - crates/fp-app/assets/**
+      - crates/fp-app/examples/demo_session.rs
+      - crates/fp-mobile/**
+      - mobile/android/**
+      - scripts/package/play-screenshots.sh
+      - scripts/site/tones.sh
+      - scripts/site/compare-screenshots.sh
+      - packaging/android/play/screenshot-masks.txt
+      - .github/workflows/play-screenshots.yml
+  pull_request:
+    paths:
+      - scripts/package/play-screenshots.sh
+      - packaging/android/play/screenshot-masks.txt
+      - .github/workflows/play-screenshots.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two runs never race on the branch; a queued run starts after the first.
+concurrency:
+  group: play-screenshots-${{ github.event_name == 'pull_request' && github.ref || 'master' }}
+  cancel-in-progress: false
+
+env:
+  BRANCH: docs/retake-play-screenshots
+  SHOTS: packaging/android/play/en-US/images/phoneScreenshots
+
+jobs:
+  shots:
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.compare.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Install the screenshot tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends imagemagick ffmpeg
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Install the pinned toolchain and the Android targets
+        run: |
+          rustup show active-toolchain || rustup toolchain install
+          rustup target add aarch64-linux-android x86_64-linux-android
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-ndk
+      # Without a key the release APK is signed with the debug key: enough
+      # for the emulator. The runner's SDK carries an NDK r27.
+      - run: scripts/package/android.sh release
+      # The emulator needs KVM, which the runner has but only for root.
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      # google_apis (no Play Store) gives adb root, which the script needs;
+      # pixel_6 is a 1080 × 2400, 420 dpi phone.
+      - name: Take the screenshots
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot-save -no-audio -no-boot-anim -gpu swiftshader_indirect
+          script: scripts/package/play-screenshots.sh --out "$RUNNER_TEMP/new-shots"
+      - name: Compare with the committed screenshots
+        id: compare
+        shell: bash
+        run: |
+          set -o pipefail
+          scripts/site/compare-screenshots.sh --masks packaging/android/play/screenshot-masks.txt \
+            "$RUNNER_TEMP/new-shots" "$SHOTS" | tee "$RUNNER_TEMP/new-shots/changes.txt"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: play-screenshots
+          path: ${{ runner.temp }}/new-shots
+          if-no-files-found: error
+
+  publish:
+    needs: shots
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          token: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: play-screenshots
+          path: ${{ runner.temp }}/new-shots
+      - name: Close the pull request when nothing changed
+        if: needs.shots.outputs.changed != 'true'
+        env:
+          GH_TOKEN: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+        run: |
+          number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh pr close "$number" --delete-branch \
+              --comment "The Play screenshots match the committed ones again; nothing to retake."
+          fi
+      - name: Install ImageMagick
+        if: needs.shots.outputs.changed == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends imagemagick
+      - name: Open or update the pull request
+        if: needs.shots.outputs.changed == 'true'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.SCREENSHOTS_TOKEN || github.token }}
+          SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          new="$RUNNER_TEMP/new-shots"
+          scripts/site/compare-screenshots.sh --masks packaging/android/play/screenshot-masks.txt \
+            --apply "$new" "$SHOTS"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "$BRANCH"
+          git add "$SHOTS"
+          git commit -m "docs: retake the Google Play screenshots" \
+            -m "Retaken by the play-screenshots workflow from ${SHA}."
+          git push --force origin "$BRANCH"
+          {
+            echo "Google Play screenshots retaken from \`${SHA}\` by the play-screenshots workflow."
+            echo
+            echo "Images that changed (more than the fuzz and pixel tolerance of \`scripts/site/compare-screenshots.sh\`):"
+            echo
+            sed 's/^\([a-z]*\) \(.*\)$/- \1: `\2`/' "$new/changes.txt"
+            echo
+            echo "Look at the images before merging; the stores workflow uploads them to Google Play with the next release. If CI did not start on this pull request, close and reopen it."
+          } > "$RUNNER_TEMP/body.md"
+          number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --title "docs: retake the Google Play screenshots" --body-file "$RUNNER_TEMP/body.md"
+          else
+            gh pr create --base master --head "$BRANCH" \
+              --title "docs: retake the Google Play screenshots" --body-file "$RUNNER_TEMP/body.md"
+          fi

@@ -463,7 +463,7 @@ packaging: the workflow refuses other tags, and tags made before it
 |---|---|---|---|
 | `msstore` | Microsoft Store | builds an unsigned MSIX (`scripts/package/msix.sh`; the Store signs it) and submits it with the Microsoft Store CLI (`msstore publish`) | the `MSSTORE_*` secrets and variables are set |
 | `snap` | Snap Store | builds `snap/snapcraft.yaml` on amd64 and arm64 (`snapcore/action-build`), uploads and releases it (`snapcore/action-publish`), and on a release (not a pre-release) sends the amd64 snap's summary, description, title, licence and icon to the store listing (`snapcraft upload-metadata --force`) | `SNAPCRAFT_STORE_CREDENTIALS` is set |
-| `google-play` | Google Play | checks the listing in `packaging/android/play` (`scripts/package/play-listing.py check` and its tests), downloads the release's signed `fauste-player-<version>-android.aab` (checking its `.sha256`) and uploads it to one track with the release notes of `changelogs/default.txt` (`r0adkll/upload-google-play`) | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is set |
+| `google-play` | Google Play | checks the listing in `packaging/android/play` (`scripts/package/play-listing.py check` and its tests), downloads the release's signed `fauste-player-<version>-android.aab` (checking its `.sha256`) and uploads it to one track with the release notes of `changelogs/default.txt` (`r0adkll/upload-google-play`), then updates the store listing from the same folder: texts, icon, feature graphic and phone screenshots (fastlane's `supply`, only the images that changed) | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is set |
 | `flathub` | Flathub | writes the Flathub manifest (`scripts/package/flathub-manifest.py`: the in-tree manifest with the release's git tag and commit as its source) and `cargo-sources.json`, lints both with `flatpak-builder-lint`, and opens a pull request on `flathub/com.sanchezfauste.FaustePlayer` | `FLATHUB_TOKEN` is set |
 | `winget` | WinGet | opens a pull request on `microsoft/winget-pkgs` with the release's MSI (`vedantmgoyal9/winget-releaser`) | `WINGET_TOKEN` is set |
 | `aur` | AUR | writes the `fauste-player-bin` PKGBUILD from `packaging/aur/PKGBUILD.in` (`scripts/package/aur.sh`, with the checksums of the release archives), checks it with `makepkg --printsrcinfo` and `namcap`, and pushes it | `AUR_SSH_PRIVATE_KEY` is set |
@@ -572,19 +572,43 @@ language (`en-US`, `es-ES`) `title.txt` (at most 30 characters),
 `featureGraphic.png`, rendered by `scripts/package/icons.sh`, and the phone
 screenshots in `phoneScreenshots/` (at least two, at most 2:1).
 `scripts/package/play-listing.py check` checks the limits and sizes.
-The screenshots come from a release build on the emulator with the
-screenshot songs and carts (`target/screenshots/music` and `carts`, pushed
-to the device's `Music` folder): `adb shell wm size 1080x2160` (Play
-refuses a taller ratio), the status bar in demo mode
-(`settings put global sysui_demo_allowed 1`, then the
-`com.android.systemui.demo` broadcasts `enter`, `clock`, `notifications
--e visible false`), then `adb exec-out screencap -p`, saved without alpha
-(`magick shot.png -alpha off PNG24:shot.png`; Play refuses 32-bit
-screenshots). Retake them after a
-visible change to the phone layout. Play
-Console does not read these files: copy them in by hand when they change
-(`en-US` is the default language). Other languages are translated with AI
-before a release, as the guide is.
+The stores workflow uploads the whole listing to Play with every release
+(`en-US` is the default language; Play shows its images for the other
+languages). Other languages are translated with AI before a release, as
+the guide is.
+
+Nobody retakes the screenshots by hand:
+`scripts/package/play-screenshots.sh [--apk <file>] [--out <dir>]` takes
+them on a running emulator. It installs the release APK of
+`android.sh release`, generates the screenshot songs and carts
+(`scripts/site/tones.sh`), writes the demo state with
+`examples/demo_session` (players paused mid-track, so two runs give the
+same images), rewrites its paths to the device's `Music/Demo` and
+`Music/Carts` and pushes it into the app's files folder. That needs root:
+an emulator image without the Play Store (`google_apis`), where `adb root`
+works; the script refuses a real phone, replaces the emulator's `Music`
+folder and stops when there is audio anywhere else on it (the Music screen
+would list it). It fixes the screen at 1080 × 2160 (Play refuses a taller
+ratio) and 420 dpi, puts the status bar in demo mode (9:00, full battery
+and signal, no notifications), opens each screen with a tap on its
+top-bar button and saves 24-bit PNGs (Play refuses an alpha channel). The
+taps are pixels of that fixed screen: after a change to the top bar or the
+Music screen, check them. The app's clock changes on every run, and
+`packaging/android/play/screenshot-masks.txt` hides it from
+`scripts/site/compare-screenshots.sh`.
+
+The `play-screenshots` workflow (`.github/workflows/play-screenshots.yml`)
+runs it on a push to `master` that touches the UI, its strings, the
+Android app, `demo_session.rs` or the scripts (and on `workflow_dispatch`):
+it builds the release APK (signed with the debug key), starts an API 34
+`google_apis` emulator with the `pixel_6` profile
+(`reactivecircus/android-emulator-runner`), takes the screenshots,
+compares them with the committed ones and opens or updates one pull
+request from `docs/retake-play-screenshots` (closing it when nothing
+differs any more), as the `screenshots` workflow does for `docs/images`,
+with the same one-time setup. A pull request that touches the script, the masks or the
+workflow only takes and compares them; the images are in its
+`play-screenshots` artefact.
 
 1. Create a [Play Console](https://play.google.com/console) developer
    account (a one-time fee) and verify the identity it asks for. A new
@@ -599,8 +623,11 @@ before a release, as the guide is.
    then share one signature, so users can move between them without
    uninstalling. Letting Google generate the key instead makes the two
    incompatible, and the choice cannot be undone.
-4. **Store listing** from `packaging/android/play` (above), with a contact
-   email and the website `https://sanchezfauste.com/fauste-player/`.
+4. **Store listing:** the app category (*Music & Audio*), a contact
+   email and the website `https://sanchezfauste.com/fauste-player/`. The
+   texts and images come from `packaging/android/play` (above), uploaded by
+   the workflow with each release; until the first one, copy them in by
+   hand.
 5. **App content** (Policy → App content):
    - *Privacy policy:* `https://sanchezfauste.com/fauste-player/privacy.html`
      (`site/privacy.html`; it covers the Android app).

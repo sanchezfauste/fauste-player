@@ -1,0 +1,9 @@
+# Regions that change on every run of scripts/package/play-screenshots.sh,
+# painted on both images by scripts/site/compare-screenshots.sh before
+# comparing:
+#   <image> <x>,<y>,<w>,<h>      (pixels of that image; '#' starts a comment)
+# The app's clock, at the right end of the top bar (1080 × 2160, 420 dpi).
+1-live.png 880,150,200,80
+2-carts.png 880,150,200,80
+3-playlists.png 880,150,200,80
+4-music.png 880,150,200,80
