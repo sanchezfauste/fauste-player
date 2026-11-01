@@ -47,7 +47,12 @@ the status bar at the bottom shows only when it has something to say.
   large digits over the
   transport (Play/Next, Previous, Pause, Stop, Restart, Fade stop, Stop
   after current) with buttons a finger's size, and a slim meter with the
-  volume fader (no scales; the fader's level shows under it). The
+  volume fader (the fader's level shows under it). The time left ends
+  where the buttons end, smaller for a long track. On most phones the
+  meter shows its scale on its left, and on a wider one (about 406 dp
+  and up) the fader shows its levels too; on a narrow phone (under about
+  384 dp) neither does, and the buttons get a little smaller so they
+  fit. The
   buttons work while another finger holds the fader, and a tap counts
   though the finger rolls a little or stays down a moment. Held
   upright the cards are on top, one whole card and the start of the next

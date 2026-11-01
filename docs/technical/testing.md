@@ -63,6 +63,11 @@ once for the allocation audits; it only acts inside `assert_no_alloc` blocks.
   sleeps to wait for audio.
 - UI tests use `Harness::builder().with_step_dt(0.02)` so that two clicks
   fall within the double-click delay.
+- kittest draws the interface inside an 8-point margin, so the shared
+  harnesses' screen is 16 points narrower and shorter than their size.
+  A test that measures a phone layout against a real width uses
+  `support::harness_device`, which draws over the whole screen as eframe
+  does on a device.
 - The `test-hooks` feature of `fp-app` is enabled for its own tests through
   a self dev-dependency.
 

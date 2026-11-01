@@ -1615,7 +1615,8 @@ fn the_landscape_playlists_card_shows_its_transport() {
     }
 }
 
-/// PL30: a phone's meter and fader are narrow and draw no scale numbers.
+/// PL30, PL39: at the A56's width the meter and fader are narrow and draw
+/// no scale numbers: 48 dp buttons leave no room for them.
 #[test]
 fn a_phones_meter_is_narrow_without_a_scale() {
     let (h, _fake) = touch(1, A56);
