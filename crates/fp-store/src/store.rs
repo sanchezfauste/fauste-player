@@ -10,6 +10,7 @@ use crate::db::snapshot::{self, Snapshot};
 use crate::db::{Db, open_with_fallback, reopen_after_unreadable};
 use crate::docs::{CONFIG_MIGRATIONS, CONFIG_SCHEMA, ConfigDoc};
 use crate::error::StoreError;
+use crate::import::Imported;
 use crate::lenient::config_from_value;
 use crate::migrate::upgrade;
 use crate::paths::AppPaths;
@@ -47,6 +48,10 @@ pub struct Store {
     disk: DiskState,
     /// When the last backup of the database was made.
     last_backup: Option<Instant>,
+    /// Test hook: makes the step of the JSON import that renames the files
+    /// fail, like an interrupted import.
+    #[doc(hidden)]
+    pub fail_import_rename: bool,
 }
 
 pub(crate) fn parse_config(bytes: &[u8]) -> Result<(fp_model::Config, Vec<String>), ParseError> {
@@ -70,6 +75,7 @@ impl Store {
             saved: None,
             disk: DiskState::Unopened,
             last_backup: None,
+            fail_import_rename: false,
         }
     }
 
@@ -107,19 +113,37 @@ impl Store {
         };
         warnings.extend(config.validate().into_iter().map(|w| w.to_string()));
 
-        let snap = match self.open_db(config.limits.backup_count) {
+        let imported = crate::import::import_legacy(
+            &self.paths,
+            &config.limits,
+            self.fail_import_rename,
+            &mut warnings,
+        );
+        let snap = if let Imported::Failed(snap) = imported {
+            // Nothing is written this session; the next start imports again.
+            let path = self.paths.database_file();
+            self.disable_disk(&path, &mut warnings);
+            *snap
+        } else {
+            self.load_database(&config, &mut warnings)
+        };
+        // Without player rows the players' ids are not known.
+        let players_known = !snap.players.is_empty();
+        restore(config, snap, players_known, warnings, default_playlist_name)
+    }
+
+    /// Opens the database and reads its snapshot.
+    fn load_database(&mut self, config: &fp_model::Config, warnings: &mut Vec<String>) -> Snapshot {
+        match self.open_db(config.limits.backup_count) {
             Ok(opened_warnings) => {
                 warnings.extend(opened_warnings);
-                self.read_baseline(config.limits.backup_count, &mut warnings)
+                self.read_baseline(config.limits.backup_count, warnings)
             }
             Err(e) => {
                 warnings.push(format!("database: {e}; starting with the defaults"));
                 Snapshot::default()
             }
-        };
-        // Without player rows the players' ids are not known.
-        let players_known = !snap.players.is_empty();
-        restore(config, snap, players_known, warnings, default_playlist_name)
+        }
     }
 
     /// Opens the database file (creating `data_dir`) and keeps it. Returns

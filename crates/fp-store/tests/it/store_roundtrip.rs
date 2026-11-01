@@ -593,18 +593,6 @@ fn a_corrupt_database_falls_back_to_the_backup_with_a_warning() {
     assert!(!loaded.warnings.is_empty());
 }
 
-#[test]
-fn a_home_with_only_the_old_json_documents_loads_empty_for_now() {
-    // The import of those documents comes with the next change.
-    let dir = tempfile::tempdir().unwrap();
-    let mut s = store(&dir);
-    fs::create_dir_all(&s.paths().data_dir).unwrap();
-    fs::write(s.paths().playlists_file(), b"{}").unwrap();
-    let loaded = s.load("Main");
-    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
-    assert_eq!(loaded.state.playlists.len(), 1);
-}
-
 fn corrupt_aside(s: &Store) -> Vec<PathBuf> {
     let db = s.paths().database_file();
     fs::read_dir(db.parent().unwrap())

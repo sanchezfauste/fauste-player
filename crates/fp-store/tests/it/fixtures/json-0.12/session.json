@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "players": [
+    {
+      "id": 2,
+      "playlist": 1,
+      "current": null,
+      "next": 24,
+      "next_explicit": false,
+      "mode": "Continuous",
+      "stop_after_current": false,
+      "position_secs": 0.0,
+      "volume": 1.0,
+      "columns": {
+        "fractions": null
+      },
+      "history": [],
+      "pending_start": null
+    },
+    {
+      "id": 3,
+      "playlist": 1,
+      "current": null,
+      "next": 24,
+      "next_explicit": false,
+      "mode": "Continuous",
+      "stop_after_current": false,
+      "position_secs": 0.0,
+      "volume": 1.0,
+      "columns": {
+        "fractions": null
+      },
+      "history": [],
+      "pending_start": [
+        26,
+        3.5
+      ]
+    },
+    {
+      "id": 4,
+      "playlist": 1,
+      "current": null,
+      "next": 24,
+      "next_explicit": false,
+      "mode": "Continuous",
+      "stop_after_current": false,
+      "position_secs": 0.0,
+      "volume": 1.0,
+      "columns": {
+        "fractions": null
+      },
+      "history": [],
+      "pending_start": null
+    },
+    {
+      "id": 5,
+      "playlist": 1,
+      "current": null,
+      "next": 24,
+      "next_explicit": false,
+      "mode": "Continuous",
+      "stop_after_current": false,
+      "position_secs": 0.0,
+      "volume": 1.0,
+      "columns": {
+        "fractions": null
+      },
+      "history": [],
+      "pending_start": null
+    }
+  ],
+  "cartwall": {
+    "open": true,
+    "page": null
+  },
+  "layout": {
+    "player_shares": [],
+    "hidden_players": [],
+    "cartwall": {
+      "dock": "Right",
+      "size": 0.4,
+      "hidden": false
+    },
+    "locked": true,
+    "touch_locked": false
+  }
+}

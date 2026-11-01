@@ -1,0 +1,140 @@
+{
+  "schema_version": 2,
+  "library": [
+    {
+      "id": 23,
+      "path": "/m/a.flac",
+      "title": "Song 0",
+      "artist": "Artist",
+      "album": "",
+      "duration_secs": 180.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": {
+          "secs": 1.5,
+          "source": "Manual"
+        },
+        "intro_end": {
+          "secs": 9.0,
+          "source": "Manual"
+        },
+        "outro_start": null,
+        "segue_start": {
+          "secs": 170.25,
+          "source": "Manual"
+        },
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null,
+      "analysis_version": 0,
+      "date": null,
+      "genre": "",
+      "album_artist": "",
+      "composer": "",
+      "comment": "",
+      "tags_read": false,
+      "bitrate_read": false,
+      "loudness": null,
+      "loudness_pass": null,
+      "loudness_edit": {
+        "excluded": false,
+        "trim_db": 0.0
+      }
+    },
+    {
+      "id": 25,
+      "path": "/m/b.flac",
+      "title": "Song 1",
+      "artist": "Artist",
+      "album": "",
+      "duration_secs": 181.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": null,
+        "intro_end": null,
+        "outro_start": null,
+        "segue_start": null,
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null,
+      "analysis_version": 0,
+      "date": null,
+      "genre": "",
+      "album_artist": "",
+      "composer": "",
+      "comment": "",
+      "tags_read": false,
+      "bitrate_read": false,
+      "loudness": null,
+      "loudness_pass": null,
+      "loudness_edit": {
+        "excluded": false,
+        "trim_db": -2.5
+      }
+    },
+    {
+      "id": 27,
+      "path": "/m/c.flac",
+      "title": "Song 2",
+      "artist": "Artist",
+      "album": "",
+      "duration_secs": 182.0,
+      "kind": "Music",
+      "file_state": "Ok",
+      "markers": {
+        "cue_in": null,
+        "intro_end": null,
+        "outro_start": null,
+        "segue_start": null,
+        "cue_out": null
+      },
+      "analyzed": false,
+      "format": null,
+      "analysis_version": 0,
+      "date": null,
+      "genre": "",
+      "album_artist": "",
+      "composer": "",
+      "comment": "",
+      "tags_read": false,
+      "bitrate_read": false,
+      "loudness": null,
+      "loudness_pass": null,
+      "loudness_edit": {
+        "excluded": false,
+        "trim_db": 0.0
+      }
+    }
+  ],
+  "playlists": [
+    {
+      "id": 1,
+      "name": "Main",
+      "entries": [
+        {
+          "id": 24,
+          "track": 23,
+          "played_by": [
+            2
+          ]
+        },
+        {
+          "id": 26,
+          "track": 25,
+          "repeat": true
+        },
+        {
+          "id": 28,
+          "track": 27
+        }
+      ]
+    }
+  ],
+  "ids": {
+    "last": 45
+  }
+}

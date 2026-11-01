@@ -29,7 +29,7 @@ fn parse_doc<T: DeserializeOwned>(
 
 /// Parses `session.json`. A saved pending start that does not parse loads
 /// as none (the model decides how); each one dropped is reported.
-fn parse_session(bytes: &[u8]) -> Result<(SessionDoc, Vec<String>), ParseError> {
+pub(crate) fn parse_session(bytes: &[u8]) -> Result<(SessionDoc, Vec<String>), ParseError> {
     let value: serde_json::Value =
         serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
     let value = upgrade(value, SESSION_SCHEMA, SESSION_MIGRATIONS)?;
@@ -61,8 +61,7 @@ fn parse_session(bytes: &[u8]) -> Result<(SessionDoc, Vec<String>), ParseError> 
     Ok((doc, notes))
 }
 
-#[allow(dead_code)] // the import of the legacy documents uses it
-fn load_doc<T: DeserializeOwned>(
+pub(crate) fn load_doc<T: DeserializeOwned>(
     path: &Path,
     backups: usize,
     max_bytes: u64,
@@ -76,7 +75,7 @@ fn load_doc<T: DeserializeOwned>(
 
 /// Parses `carts.json`. A cart colour that does not parse loads as none
 /// (the model decides how, cart colour spec CC3); each one is reported.
-fn parse_carts(bytes: &[u8]) -> Result<(CartsDoc, Vec<String>), ParseError> {
+pub(crate) fn parse_carts(bytes: &[u8]) -> Result<(CartsDoc, Vec<String>), ParseError> {
     let value: serde_json::Value =
         serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
     let value = upgrade(value, CARTS_SCHEMA, CARTS_MIGRATIONS)?;
