@@ -74,8 +74,8 @@ scripts/package/linux.sh <target>             # .deb, .rpm and AppImage (Windows
 scripts/package/msix.sh <target>              # Microsoft Store MSIX (Windows, Git Bash, Windows SDK)
 scripts/package/flathub-manifest.py <tag> <commit> <out>  # the Flathub manifest of a release (PyYAML)
 scripts/package/aur.sh <version> <out>        # the AUR PKGBUILD of a published release
-scripts/package/play-listing.py check          # the Google Play listing (packaging/android/play) against Play's limits
-scripts/package/play-screenshots.sh [--out <dir>]  # the Google Play phone screenshots on a running google_apis emulator (needs the release APK; see docs/technical/release-process.md)
+scripts/package/play-listing.py check          # the Google Play listing (packaging/android/play) against Play's limits, one per interface language
+scripts/package/play-screenshots.sh [--out <dir>] [--lang <locale>]  # the Google Play phone screenshots in every interface language on a running google_apis emulator (needs the release APK; see docs/technical/release-process.md)
 python3 -m unittest discover -s scripts/package/tests -p 'test_*.py'  # packaging script tests
 scripts/package/notices.sh <out> [features]   # THIRD-PARTY.html with cargo-about (the snap, Flatpak, Flathub and Android builds; NOTICES_MANIFEST picks the crate)
 scripts/package/icons.sh                      # regenerate the PNG and .ico icons from packaging/icons/fauste-player.svg (inkscape, magick)
@@ -171,7 +171,8 @@ A change is not done until everything that describes it says the same:
   otherwise. A new guide language also needs its `site/locales/<lang>.toml`;
 - UI strings in every locale file (en-US and es-ES written with each
   change, the rest translated in bulk with AI); a new locale is one
-  `locales/<tag>/main.ftl` plus one entry in `i18n::LOCALES` (see `docs/technical/ui.md`).
+  `locales/<tag>/main.ftl` plus one entry in `i18n::LOCALES`, and its
+  Google Play listing folder in `packaging/android/play` (see `docs/technical/ui.md`).
 
 The PR template has a checklist for it. `CHANGELOG.md` is never edited by
 hand: release-please writes it from the commits.
@@ -289,7 +290,12 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   The Google Play phone screenshots work the same way on an Android
   emulator: `scripts/package/play-screenshots.sh` and the
   `play-screenshots` workflow (PRs from `docs/retake-play-screenshots`;
-  see `docs/technical/release-process.md`).
+  see `docs/technical/release-process.md`). They are taken and committed
+  in every interface language (`packaging/android/play/<language>`); the
+  English ones are also the guide's (`docs/images/android`, kept the same
+  by the workflow and checked by `play-listing.py check`), and each
+  translated guide shows those of its language. A new interface language
+  also needs its Play listing folder.
 
   On a GNOME Wayland desktop, `xdotool` clicks into XWayland windows need
   the "remote interaction" permission every session; Xvfb avoids that.

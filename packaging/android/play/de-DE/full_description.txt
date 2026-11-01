@@ -1,0 +1,25 @@
+Fauste Player bringt Musik, Jingles und Spots auf Sendung. Es ist eine Radio-Playout-Anwendung: Mehrere unabhängige Player laufen nebeneinander, jeder mit eigenen Playlists, und die Titel gehen an ihren MIX-Punkten samplegenau ineinander über. Die Android-App nutzt denselben Playout-Kern wie die Desktop-Anwendung, mit einer Oberfläche für die Bedienung per Touch.
+
+PLAYER UND PLAYLISTS
+• Ein oder mehrere Player, jeder mit seinen Playlists, im Modus SINGLE oder CONT
+• Mixe am MIX-Punkt jedes Titels, Cue-in-, Intro-, Outro- und Cue-out-Marker aus einer Analyse im Hintergrund, und Marker, die du mit langem Drücken auf die Wellenform setzt
+• Vorhören (CUE) auf einem eigenen Ausgang, etwa Kopfhörern
+• Lautheitsnormalisierung
+• Titel per Ziehen verschieben oder einen Titel direkt hinter den nächsten Titel eines anderen Players schicken
+
+CARTWALL
+• Sofort startende Carts für Jingles, Effekte und Spots, auf Seiten, zwischen denen du wischst
+• Die Cartwall im Live-Bildschirm einklappen, damit die Player mehr Platz haben
+
+FÜR DAS STUDIO GEMACHT
+• Das Playout läuft bei ausgeschaltetem Bildschirm oder mit einer anderen App im Vordergrund weiter, mit einer Benachrichtigung, solange etwas spielt
+• Nach einem Start, Neustart oder Absturz geht nichts von selbst auf Sendung
+• Ein Vorhängeschloss schützt während der Sendung vor versehentlichen Berührungen: Transport und Carts funktionieren weiter
+• Den Ausgang jedes Players, der Cartwall und ihres CUE wählen: Lautsprecher, kabelgebundene Kopfhörer, ein USB-Interface oder ein Bluetooth-Lautsprecher
+• Die Musik auf dem Gerät nach Ordner, Interpret oder Album durchsuchen und durchblättern
+
+PRIVAT UND FREI
+Fauste Player hat keine Konten, keine Werbung, keine Analyse und kein Tracking, und er fragt nicht nach Netzwerkzugriff. Er ist freie Software unter der GNU GPL (Version 3 oder neuer), und dasselbe Projekt läuft unter Linux, Windows und macOS.
+
+Benutzerhandbuch: https://sanchezfauste.com/fauste-player/guide/de/
+Quellcode und Fehlermeldungen: https://github.com/sanchezfauste/fauste-player

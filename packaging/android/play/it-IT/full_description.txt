@@ -1,0 +1,25 @@
+Fauste Player manda in onda musica, jingle e spot. È un'applicazione di messa in onda radiofonica: più lettori indipendenti funzionano fianco a fianco, ognuno con le sue playlist, e i brani si susseguono con precisione al campione nei loro punti MIX. L'app Android usa lo stesso nucleo di messa in onda dell'applicazione desktop, con un'interfaccia pensata per il tocco.
+
+LETTORI E PLAYLIST
+• Uno o più lettori, ognuno con le sue playlist, in modalità SINGLE o CONT
+• Mix nel punto MIX di ogni brano, marcatori di cue-in, intro, outro e cue-out trovati da un'analisi in background, e marcatori che imposti con una pressione prolungata sulla forma d'onda
+• Preascolto (CUE) su un'uscita separata, come le cuffie
+• Normalizzazione della loudness
+• Sposta i brani trascinandoli, o mandane uno a un altro lettore subito dopo il suo brano successivo
+
+CARTWALL
+• Cart istantanei per jingle, effetti e spot, su pagine che scorri con il dito
+• Chiudi la cartwall nella schermata Diretta per dare più spazio ai lettori
+
+PENSATA PER LO STUDIO
+• La messa in onda continua a schermo spento o con un'altra app in primo piano, con una notifica finché qualcosa suona
+• Niente va in onda da solo dopo un avvio, un riavvio o un arresto anomalo
+• Un lucchetto protegge dai tocchi accidentali durante il programma: il trasporto e i cart continuano a funzionare
+• Scegli l'uscita di ogni lettore, della cartwall e del loro CUE: l'altoparlante, cuffie con filo, un'interfaccia USB o un altoparlante Bluetooth
+• Sfoglia la musica del dispositivo per cartella, artista o album, e fai ricerche al suo interno
+
+PRIVATA E LIBERA
+Fauste Player non ha account, né pubblicità, né analisi, né tracciamento, e non chiede l'accesso alla rete. È software libero sotto la GNU GPL (versione 3 o successiva), e lo stesso progetto funziona su Linux, Windows e macOS.
+
+Guida utente: https://sanchezfauste.com/fauste-player/guide/it/
+Codice sorgente e segnalazioni: https://github.com/sanchezfauste/fauste-player

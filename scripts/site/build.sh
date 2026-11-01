@@ -9,7 +9,9 @@
 # FAUSTE_SHOTS_DIR names a folder with screenshots taken in each language
 # (<lang>/main-screen.png, <lang>/guide/*.png; see
 # scripts/site/localized-screenshots.sh): each translated book then shows
-# its own, and any it lacks keeps the English one from docs/images.
+# its own, and any it lacks keeps the English one from docs/images. The
+# Android screenshots of a translated book come from the Google Play
+# listing of its language (packaging/android/play), always.
 #
 # The release comes from `gh release view --json tagName,url,assets`, or from
 # the JSON file named by FAUSTE_RELEASE_JSON (tests, offline builds). Without
@@ -58,6 +60,9 @@ cp -R "$root"/docs/images/. "$out/images/"
 if [ -n "${FAUSTE_SHOTS_DIR:-}" ]; then
     python3 "$root/scripts/site/guide.py" images "$out" "$FAUSTE_SHOTS_DIR"
 fi
+# The Android page of each translated guide shows the Google Play
+# screenshots of its language.
+python3 "$root/scripts/site/guide.py" android-images "$out"
 
 # The landing page and the privacy policy: templates rendered in English and
 # in each translation of site/locales (into <lang>/), after the screenshots

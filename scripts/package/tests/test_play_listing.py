@@ -23,24 +23,24 @@ def png(path, width, height, colour=2):
     path.write_bytes(b"\x89PNG\r\n\x1a\n" + data)
 
 
-def language(root, lang, title="Fauste Player", notes="What's new"):
+def language(root, lang, title="Fauste Player", notes="What's new", shots=("1-live", "2-carts")):
     base = root / lang
     (base / "changelogs").mkdir(parents=True)
     (base / "title.txt").write_text(title + "\n", encoding="utf-8")
     (base / "short_description.txt").write_text("Radio playout\n", encoding="utf-8")
     (base / "full_description.txt").write_text("Radio playout.\n", encoding="utf-8")
     (base / "changelogs" / "default.txt").write_text(notes + "\n", encoding="utf-8")
+    for name in shots:
+        png(base / f"images/phoneScreenshots/{name}.png", 1080, 2160)
 
 
 class CheckTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.root = Path(self.tmp.name)
+        self.root = Path(self.tmp.name) / "listing"
         language(self.root, "en-US")
         png(self.root / "en-US/images/icon.png", 512, 512, colour=6)
         png(self.root / "en-US/images/featureGraphic.png", 1024, 500)
-        png(self.root / "en-US/images/phoneScreenshots/1-live.png", 1080, 2160)
-        png(self.root / "en-US/images/phoneScreenshots/2-carts.png", 1080, 2160)
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -132,8 +132,65 @@ class CheckTest(unittest.TestCase):
             ["en-US: images/phoneScreenshots/2-carts.png is 300 × 500 (at most 2:1, 320 to 3840 px)"],
         )
 
+    def test_a_translation_without_screenshots_fails(self):
+        # Play would show the default language's: English on a translated listing.
+        language(self.root, "es-ES", shots=())
+        self.assertEqual(
+            play_listing.check(self.root),
+            ["es-ES: phone screenshots (none), not those of en-US (1-live.png, 2-carts.png)"],
+        )
+
+    def test_a_translation_s_screenshots_are_checked(self):
+        language(self.root, "es-ES")
+        png(self.root / "es-ES/images/phoneScreenshots/2-carts.png", 1080, 2400)
+        self.assertEqual(
+            play_listing.check(self.root),
+            ["es-ES: images/phoneScreenshots/2-carts.png is 1080 × 2400 (at most 2:1, 320 to 3840 px)"],
+        )
+
+    def test_a_translation_has_the_default_language_s_screenshots(self):
+        language(self.root, "es-ES", shots=("1-live", "9-other"))
+        self.assertEqual(
+            play_listing.check(self.root),
+            ["es-ES: phone screenshots 1-live.png, 9-other.png, not those of en-US "
+             "(1-live.png, 2-carts.png)"],
+        )
+
+    def test_every_interface_locale_has_a_listing(self):
+        locales = self.root.parent / "locales"
+        for tag in ("en-US", "ca-ES", "es-ES", "de-DE"):
+            (locales / tag).mkdir(parents=True, exist_ok=True)
+        language(self.root, "ca")
+        language(self.root, "es-ES")
+        self.assertEqual(
+            play_listing.check(self.root, locales=locales),
+            ["de-DE: no Google Play listing (de-DE or de)"],
+        )
+
+    def test_the_guide_shows_the_default_language_s_screenshots(self):
+        guide = self.root.parent / "guide-shots"
+        guide.mkdir()
+        shots = self.root / "en-US/images/phoneScreenshots"
+        (guide / "1-live.png").write_bytes((shots / "1-live.png").read_bytes())
+        self.assertEqual(
+            play_listing.check(self.root, guide=guide),
+            ["the guide's screenshots in guide-shots are not those of en-US: 2-carts.png"],
+        )
+        png(guide / "2-carts.png", 1080, 1000)
+        self.assertEqual(
+            play_listing.check(self.root, guide=guide),
+            ["the guide's screenshots in guide-shots are not those of en-US: 2-carts.png"],
+        )
+        (guide / "2-carts.png").write_bytes((shots / "2-carts.png").read_bytes())
+        self.assertEqual(play_listing.check(self.root, guide=guide), [])
+
     def test_the_repository_listing_passes(self):
-        self.assertEqual(play_listing.check(play_listing.LISTING), [])
+        self.assertEqual(
+            play_listing.check(
+                play_listing.LISTING, locales=play_listing.LOCALES, guide=play_listing.GUIDE_SHOTS
+            ),
+            [],
+        )
 
 
 class WhatsNewTest(unittest.TestCase):

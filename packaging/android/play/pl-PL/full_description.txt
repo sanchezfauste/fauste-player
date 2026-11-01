@@ -1,0 +1,25 @@
+Fauste Player wypuszcza na antenę muzykę, dżingle i spoty. To aplikacja do emisji radiowej: kilka niezależnych odtwarzaczy działa obok siebie, każdy z własnymi playlistami, a utwory przechodzą jeden w drugi z dokładnością do próbki w swoich punktach MIX. Aplikacja na Androida korzysta z tego samego rdzenia emisji co aplikacja na komputer, z układem zaprojektowanym do obsługi dotykiem.
+
+ODTWARZACZE I PLAYLISTY
+• Jeden lub więcej odtwarzaczy, każdy ze swoimi playlistami, w trybie SINGLE lub CONT
+• Miksy w punkcie MIX każdego utworu, znaczniki cue-in, intro, outro i cue-out wyznaczane przez analizę w tle oraz znaczniki ustawiane długim naciśnięciem przebiegu
+• Odsłuch (CUE) na osobnym wyjściu, na przykład w słuchawkach
+• Normalizacja głośności
+• Przenoś utwory, przeciągając je, lub wyślij utwór do innego odtwarzacza tuż po jego następnym utworze
+
+CARTWALL
+• Natychmiastowe carty z dżinglami, efektami i spotami, na stronach przewijanych palcem
+• Zwiń cartwall na ekranie Na żywo, aby zrobić więcej miejsca dla odtwarzaczy
+
+STWORZONY DO STUDIA
+• Emisja trwa przy wyłączonym ekranie lub z inną aplikacją na pierwszym planie, z powiadomieniem, dopóki coś gra
+• Nic nie trafia na antenę samo po uruchomieniu, ponownym uruchomieniu ani awarii
+• Kłódka chroni przed przypadkowym dotknięciem podczas audycji: transport i carty działają dalej
+• Wybierz wyjście każdego odtwarzacza, cartwallu i ich CUE: głośnik, słuchawki przewodowe, interfejs USB lub głośnik Bluetooth
+• Przeglądaj muzykę na urządzeniu według folderu, wykonawcy lub albumu i przeszukuj ją
+
+PRYWATNY I WOLNY
+Fauste Player nie ma kont, reklam, analityki ani śledzenia i nie prosi o dostęp do sieci. To wolne oprogramowanie na licencji GNU GPL (wersja 3 lub nowsza), a ten sam projekt działa w systemach Linux, Windows i macOS.
+
+Podręcznik użytkownika: https://sanchezfauste.com/fauste-player/guide/pl/
+Kod źródłowy i zgłoszenia: https://github.com/sanchezfauste/fauste-player

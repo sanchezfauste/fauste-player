@@ -736,4 +736,8 @@ The `test-hooks` feature adds `AppUi::fail_next_frame` and
 - Arguments use `tr_args(key, &[("name", value.into())])`.
 - To add a language: add `locales/<tag>/main.ftl` with every en-US message
   translated, and one `Locale` entry in `LOCALES` at its place by name. Nothing
-  else changes: Settings, negotiation and About follow the registry.
+  else changes in the app: Settings, negotiation and About follow the
+  registry. The Google Play listing needs its folder too
+  (`packaging/android/play/<tag>`, or the language alone where Play has no
+  regional code; `play-listing.py check` fails without it), and the
+  `play-screenshots` workflow then takes its screenshots.

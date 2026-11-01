@@ -1,9 +1,11 @@
 name: play-screenshots
 
 # Retakes the Google Play phone screenshots
-# (packaging/android/play/en-US/images/phoneScreenshots) on an Android
-# emulator and opens or updates a single pull request, from the branch
-# docs/retake-play-screenshots, with the images that really changed.
+# (packaging/android/play/<language>/images/phoneScreenshots, in every
+# interface language) on an Android emulator and opens or updates a single
+# pull request, from the branch docs/retake-play-screenshots, with the
+# images that really changed. The English ones are also the user guide's
+# (docs/images/android); each translated guide shows those of its language.
 #   - push to master touching the UI, its strings, the Android app or the
 #     screenshot scripts: retake and compare;
 #   - workflow_dispatch: a manual retake;
@@ -12,7 +14,8 @@ name: play-screenshots
 # scripts/package/play-screenshots.sh takes them (a release APK, the demo
 # state, the status bar in demo mode); scripts/site/compare-screenshots.sh
 # compares them with a fuzz and the masks of
-# packaging/android/play/screenshot-masks.txt (the app's clock). Nothing is
+# packaging/android/play/screenshot-masks.txt (the app's clock, the blinking
+# buttons). Nothing is
 # opened when no image changed. The stores workflow uploads the committed
 # images to Google Play with each release.
 #
@@ -60,7 +63,8 @@ concurrency:
 
 env:
   BRANCH: docs/retake-play-screenshots
-  SHOTS: packaging/android/play/en-US/images/phoneScreenshots
+  LISTING: packaging/android/play
+  GUIDE_SHOTS: docs/images/android
 
 jobs:
   shots:
@@ -120,12 +124,20 @@ jobs:
         run: |
           set -o pipefail
           scripts/site/compare-screenshots.sh --masks packaging/android/play/screenshot-masks.txt \
-            "$RUNNER_TEMP/new-shots" "$SHOTS" | tee "$RUNNER_TEMP/new-shots/changes.txt"
+            "$RUNNER_TEMP/new-shots" "$LISTING" | tee "$RUNNER_TEMP/new-shots/changes.txt"
       - uses: actions/upload-artifact@v7
         with:
           name: play-screenshots
           path: ${{ runner.temp }}/new-shots
           if-no-files-found: error
+      # What was taken up to a failure, with the last screen of a capture
+      # that never settled (<name>.failed.png).
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: play-screenshots-failed
+          path: ${{ runner.temp }}/new-shots
+          if-no-files-found: ignore
 
   publish:
     needs: shots
@@ -167,11 +179,14 @@ jobs:
           set -euo pipefail
           new="$RUNNER_TEMP/new-shots"
           scripts/site/compare-screenshots.sh --masks packaging/android/play/screenshot-masks.txt \
-            --apply "$new" "$SHOTS"
+            --apply "$new" "$LISTING"
+          cp "$LISTING"/en-US/images/phoneScreenshots/*.png "$GUIDE_SHOTS"/
+          # What the stores workflow checks before an upload.
+          scripts/package/play-listing.py check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"
-          git add "$SHOTS"
+          git add "$LISTING" "$GUIDE_SHOTS"
           git commit -m "docs: retake the Google Play screenshots" \
             -m "Retaken by the play-screenshots workflow from ${SHA}."
           git push --force origin "$BRANCH"

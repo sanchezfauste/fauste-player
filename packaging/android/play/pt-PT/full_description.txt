@@ -1,0 +1,25 @@
+O Fauste Player põe no ar música, jingles e spots. É uma aplicação de emissão de rádio: vários leitores independentes funcionam lado a lado, cada um com as suas listas, e as faixas encadeiam-se com precisão de amostra nos seus pontos MIX. A app para Android usa o mesmo núcleo de emissão que a aplicação para computador, com uma disposição pensada para o toque.
+
+LEITORES E LISTAS
+• Um ou mais leitores, cada um com as suas listas, no modo SINGLE ou CONT
+• Misturas no ponto MIX de cada faixa, marcadores de cue-in, intro, outro e cue-out encontrados por uma análise em segundo plano, e marcadores que coloca com um toque longo na forma de onda
+• Pré-escuta (CUE) numa saída à parte, como uns auscultadores
+• Normalização do loudness
+• Mova faixas arrastando-as, ou envie uma para outro leitor logo a seguir à sua próxima faixa
+
+CARTUCHEIRA
+• Cartuchos instantâneos para jingles, efeitos e spots, em páginas que passa com o dedo
+• Recolha a cartucheira no ecrã Direto para dar mais espaço aos leitores
+
+PENSADA PARA O ESTÚDIO
+• A emissão continua com o ecrã desligado ou com outra app à frente, com uma notificação enquanto algo toca
+• Nada vai para o ar sozinho após um arranque, um reinício ou uma falha
+• Um cadeado protege de toques acidentais durante o programa: o transporte e os cartuchos continuam a funcionar
+• Escolha a saída de cada leitor, da cartucheira e do seu CUE: o altifalante, auscultadores com fios, uma interface USB ou uma coluna Bluetooth
+• Explore a música do dispositivo por pasta, artista ou álbum, e pesquise nela
+
+PRIVADA E LIVRE
+O Fauste Player não tem contas, nem anúncios, nem análises, nem rastreio, e não pede acesso à rede. É software livre sob a GNU GPL (versão 3 ou posterior), e o mesmo projeto funciona em Linux, Windows e macOS.
+
+Guia do utilizador: https://sanchezfauste.com/fauste-player/guide/pt/
+Código-fonte e problemas: https://github.com/sanchezfauste/fauste-player
