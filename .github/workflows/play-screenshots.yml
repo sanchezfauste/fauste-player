@@ -30,16 +30,22 @@ on:
       - crates/fp-app/locales/**
       - crates/fp-app/assets/**
       - crates/fp-app/examples/demo_session.rs
+      - crates/fp-model/**
       - crates/fp-mobile/**
       - mobile/android/**
       - scripts/package/play-screenshots.sh
+      - scripts/package/android.sh
       - scripts/site/tones.sh
       - scripts/site/compare-screenshots.sh
       - packaging/android/play/screenshot-masks.txt
       - .github/workflows/play-screenshots.yml
   pull_request:
     paths:
+      - crates/fp-app/examples/demo_session.rs
       - scripts/package/play-screenshots.sh
+      - scripts/package/android.sh
+      - scripts/site/tones.sh
+      - scripts/site/compare-screenshots.sh
       - packaging/android/play/screenshot-masks.txt
       - .github/workflows/play-screenshots.yml
   workflow_dispatch:
@@ -68,7 +74,8 @@ jobs:
       - name: Install the screenshot tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends imagemagick ffmpeg
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libasound2-dev libdbus-1-dev imagemagick ffmpeg
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -80,10 +87,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@v2
         with:
-          tool: cargo-ndk
+          tool: cargo-ndk,cargo-about
       # Without a key the release APK is signed with the debug key: enough
       # for the emulator. The runner's SDK carries an NDK r27.
       - run: scripts/package/android.sh release
+      # The script builds it too; here a failure shows on its own, before
+      # the emulator starts.
+      - name: Build the demo state writer
+        run: cargo build --release --locked -p fp-app --example demo_session
       # The emulator needs KVM, which the runner has but only for root.
       - name: Enable KVM
         run: |

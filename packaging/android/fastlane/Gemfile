@@ -1,0 +1,5 @@
+# fastlane's supply uploads the Google Play listing (stores.yml). The lock
+# pins every gem it runs with the service account's key.
+source "https://rubygems.org"
+
+gem "fastlane", "2.241.1"

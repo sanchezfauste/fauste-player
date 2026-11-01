@@ -4,6 +4,7 @@
 #
 #   scripts/package/android.sh <debug|release>
 #   scripts/package/android.sh --self-test   # checks version_code
+#   scripts/package/android.sh --version-code <version>   # prints it (stores.yml)
 #
 # Needs the Android SDK (ANDROID_HOME, or sdk.dir in
 # mobile/android/local.properties) with NDK r27 (ANDROID_NDK_HOME, or the
@@ -28,6 +29,11 @@ version_code() {
   fi
   echo $(( 10#${major} * 1000000 + 10#${minor} * 1000 + 10#${patch} ))
 }
+
+if [[ "${1:-}" == --version-code ]]; then
+  version_code "${2:?usage: android.sh --version-code <version>}"
+  exit
+fi
 
 if [[ "${1:-}" == --self-test ]]; then
   failed=0

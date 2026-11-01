@@ -47,6 +47,20 @@ updates:
           - version-update:semver-minor
           - version-update:semver-major
 
+  # fastlane, which uploads the Google Play listing (stores.yml).
+  - package-ecosystem: bundler
+    directory: "/packaging/android/fastlane"
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+    commit-message:
+      prefix: ci
+      include: scope
+    groups:
+      fastlane:
+        patterns:
+          - "*"
   - package-ecosystem: github-actions
     directory: "/"
     schedule:

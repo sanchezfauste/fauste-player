@@ -463,7 +463,7 @@ packaging: the workflow refuses other tags, and tags made before it
 |---|---|---|---|
 | `msstore` | Microsoft Store | builds an unsigned MSIX (`scripts/package/msix.sh`; the Store signs it) and submits it with the Microsoft Store CLI (`msstore publish`) | the `MSSTORE_*` secrets and variables are set |
 | `snap` | Snap Store | builds `snap/snapcraft.yaml` on amd64 and arm64 (`snapcore/action-build`), uploads and releases it (`snapcore/action-publish`), and on a release (not a pre-release) sends the amd64 snap's summary, description, title, licence and icon to the store listing (`snapcraft upload-metadata --force`) | `SNAPCRAFT_STORE_CREDENTIALS` is set |
-| `google-play` | Google Play | checks the listing in `packaging/android/play` (`scripts/package/play-listing.py check` and its tests), downloads the release's signed `fauste-player-<version>-android.aab` (checking its `.sha256`) and uploads it to one track with the release notes of `changelogs/default.txt` (`r0adkll/upload-google-play`), then updates the store listing from the same folder: texts, icon, feature graphic and phone screenshots (fastlane's `supply`, only the images that changed) | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is set |
+| `google-play` | Google Play | checks the listing in `packaging/android/play` (`scripts/package/play-listing.py check` and its tests), downloads the release's signed `fauste-player-<version>-android.aab` (checking its `.sha256`) and uploads it to one track with the release notes of `changelogs/default.txt` (`r0adkll/upload-google-play`), then updates the store listing from the same folder: texts, icon, feature graphic and phone screenshots (fastlane's `supply`, pinned with every gem it runs by `packaging/android/fastlane/Gemfile.lock` and installed without the key; it is given the release's track and `versionCode`, from `android.sh --version-code`, and sends only the images that changed) | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is set |
 | `flathub` | Flathub | writes the Flathub manifest (`scripts/package/flathub-manifest.py`: the in-tree manifest with the release's git tag and commit as its source) and `cargo-sources.json`, lints both with `flatpak-builder-lint`, and opens a pull request on `flathub/com.sanchezfauste.FaustePlayer` | `FLATHUB_TOKEN` is set |
 | `winget` | WinGet | opens a pull request on `microsoft/winget-pkgs` with the release's MSI (`vedantmgoyal9/winget-releaser`) | `WINGET_TOKEN` is set |
 | `aur` | AUR | writes the `fauste-player-bin` PKGBUILD from `packaging/aur/PKGBUILD.in` (`scripts/package/aur.sh`, with the checksums of the release archives), checks it with `makepkg --printsrcinfo` and `namcap`, and pushes it | `AUR_SSH_PRIVATE_KEY` is set |
@@ -591,11 +591,13 @@ folder and stops when there is audio anywhere else on it (the Music screen
 would list it). It fixes the screen at 1080 × 2160 (Play refuses a taller
 ratio) and 420 dpi, puts the status bar in demo mode (9:00, full battery
 and signal, no notifications), opens each screen with a tap on its
-top-bar button and saves 24-bit PNGs (Play refuses an alpha channel). The
+top-bar button and saves 24-bit PNGs (Play refuses an alpha channel) once
+two captures in a row are the same, after checking the screen's size. The
 taps are pixels of that fixed screen: after a change to the top bar or the
-Music screen, check them. The app's clock changes on every run, and
-`packaging/android/play/screenshot-masks.txt` hides it from
-`scripts/site/compare-screenshots.sh`.
+Music screen, check them. The app's clock and a paused player's blinking
+Play and Pause buttons change all the time:
+`packaging/android/play/screenshot-masks.txt` lists them, for
+`scripts/site/compare-screenshots.sh` and for that wait.
 
 The `play-screenshots` workflow (`.github/workflows/play-screenshots.yml`)
 runs it on a push to `master` that touches the UI, its strings, the

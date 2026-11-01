@@ -12,18 +12,22 @@
 # which needs root: an emulator image without the Play Store (google_apis,
 # `adb root`). It replaces the emulator's Music folder with the demo songs
 # and carts, and stops when there is audio elsewhere on the emulator (the
-# Music screen would list it). Then it fixes the screen at 1080 × 2160 (Play refuses a
-# taller ratio) and 420 dpi, puts the status bar in demo mode, opens each
-# screen with a tap on its top-bar button and saves the screenshots as
-# 24-bit PNG (Play refuses an alpha channel).
+# Music screen would list it). Then it fixes the screen at 1080 × 2160
+# (Play refuses a taller ratio) and 420 dpi, puts the status bar in demo
+# mode, opens each screen with a tap on its top-bar button and saves the
+# screenshots as 24-bit PNG (Play refuses an alpha channel) once the
+# screen has stopped changing.
 #
 # The taps are in pixels of that fixed screen: after a change to the phone
-# top bar or the Music screen, check them (TABS and music_scene below). The app's own clock changes on every
-# run; packaging/android/play/screenshot-masks.txt hides it from
-# scripts/site/compare-screenshots.sh.
+# top bar or the Music screen, check them (TABS and music_scene below).
+# The app's own clock and a paused player's blinking buttons change all the
+# time: packaging/android/play/screenshot-masks.txt lists them, for
+# scripts/site/compare-screenshots.sh and for the wait for a still screen.
 #
-# Needs adb (on PATH or under ANDROID_HOME), one running device, cargo,
-# python3, ffmpeg and ImageMagick.
+# Needs adb (on PATH or under ANDROID_HOME) and one running emulator
+# (ANDROID_SERIAL picks one of several), cargo, python3, ffmpeg and
+# ImageMagick. PLAY_SHOTS_ANALYSIS_TIMEOUT (seconds, default 180) bounds
+# the wait for the analysis of the songs.
 set -euo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
@@ -43,11 +47,12 @@ if ! command -v adb >/dev/null; then
     sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}
     PATH=$PATH:$sdk/platform-tools
 fi
-for tool in adb cargo python3 ffmpeg convert; do
+for tool in adb cargo python3 ffmpeg convert identify; do
     command -v "$tool" >/dev/null || die "$tool is needed"
 done
 [[ -f $apk ]] || die "no APK at $apk (scripts/package/android.sh release builds it)"
-[[ $(adb get-state 2>/dev/null) == device ]] || die "no device: start an emulator first"
+[[ $(adb get-state 2>/dev/null) == device ]] \
+    || die "no device, or several (set ANDROID_SERIAL): start an emulator first"
 
 package=com.sanchezfauste.FaustePlayer
 activity=$package/com.sanchezfauste.fausteplayer.MainActivity
@@ -55,12 +60,19 @@ activity=$package/com.sanchezfauste.fausteplayer.MainActivity
 device_root=/storage/emulated/0/Music
 device_music=$device_root/Demo
 device_carts=$device_root/Carts
-# The top-bar buttons (live, carts, playlists, music) on a 1080 × 2160,
-# 420 dpi screen, in pixels.
+# The screen the taps and the masks are measured on.
+WIDTH=1080
+HEIGHT=2160
+DENSITY=420
+# The top-bar buttons (live, carts, playlists, music), in pixels.
 TABS_Y=187
 declare -A TABS_X=([live]=88 [carts]=225 [playlists]=362 [music]=500)
+# What changes all the time on each screen, left out when waiting for it
+# to settle.
+masks=$root/packaging/android/play/screenshot-masks.txt
 
-shell() { adb shell "$@"; }
+# adb shell, without the carriage returns of its output.
+shell() { adb shell "$@" | tr -d '\r'; }
 
 # Waits up to $1 seconds for the command after it to succeed.
 wait_for() {
@@ -72,12 +84,15 @@ wait_for() {
     return 1
 }
 
+is_root() { [[ $(adb shell id -u 2>/dev/null | tr -d '\r') == 0 ]]; }
+
+# adb root restarts adbd: wait until the new one answers as root.
 adb root >/dev/null 2>&1 || true
-wait_for 20 adb get-state >/dev/null 2>&1 || die "the device did not come back after adb root"
+adb wait-for-device
+wait_for 30 is_root \
+    || die "adb has no root here: use an emulator image without the Play Store (google_apis)"
 [[ $(shell getprop ro.boot.qemu; shell getprop ro.kernel.qemu) == *1* ]] \
     || die "not an emulator: this script replaces the device's Music folder"
-[[ $(shell id -u | tr -d '\r') == 0 ]] \
-    || die "adb has no root here: use an emulator image without the Play Store (google_apis)"
 
 # The songs, the carts and the demo state (the paths rewritten to where
 # they are on the device).
@@ -109,27 +124,44 @@ shell mkdir -p "$device_music" "$device_carts"
 adb push "$work/music/." "$device_music/" >/dev/null
 adb push "$work/carts/." "$device_carts/" >/dev/null
 shell content call --method scan_volume --uri content://media --arg external_primary >/dev/null
-elsewhere=$(shell content query --uri content://media/external/audio/media --projection relative_path \
-    | grep '^Row' | grep -v 'relative_path=Music/' || true)
+rows=$(shell content query --uri content://media/external/audio/media --projection relative_path)
+grep -q 'relative_path=Music/Demo/' <<<"$rows" || die "the media scan did not find the songs"
+elsewhere=$(grep '^Row' <<<"$rows" | grep -v 'relative_path=Music/' || true)
 [[ -z $elsewhere ]] || die "audio outside the Music folder; delete it first:
 $elsewhere"
 
 files=/data/data/$package/files
-uid=$(shell stat -c %u "/data/data/$package" | tr -d '\r')
+uid=$(shell stat -c %u "/data/data/$package")
 shell mkdir -p "$files"
 adb push "$home/." "$files/" >/dev/null
 shell chown -R "$uid:$uid" "$files"
-shell restorecon -R "$files"
+shell restorecon -R "$files" >/dev/null
 
 # A fixed screen and status bar; put back as they were on exit.
+rotation=$(shell settings get system accelerometer_rotation)
+user_rotation=$(shell settings get system user_rotation)
+demo_allowed=$(shell settings get global sysui_demo_allowed)
+tmp=$(mktemp -d)
+put_back() {
+    local namespace=$1 key=$2 value=$3
+    if [[ $value == null ]]; then
+        shell settings delete "$namespace" "$key" >/dev/null || true
+    else
+        shell settings put "$namespace" "$key" "$value" || true
+    fi
+}
 restore() {
+    rm -rf "$tmp"
+    shell am broadcast -a com.android.systemui.demo -e command exit >/dev/null || true
     shell wm size reset || true
     shell wm density reset || true
-    shell am broadcast -a com.android.systemui.demo -e command exit >/dev/null || true
+    put_back system accelerometer_rotation "$rotation"
+    put_back system user_rotation "$user_rotation"
+    put_back global sysui_demo_allowed "$demo_allowed"
 }
 trap restore EXIT
-shell wm size 1080x2160
-shell wm density 420
+shell wm size "${WIDTH}x${HEIGHT}"
+shell wm density "$DENSITY"
 shell settings put system accelerometer_rotation 0
 shell settings put system user_rotation 0
 shell settings put global sysui_demo_allowed 1
@@ -137,24 +169,60 @@ demo() { shell am broadcast -a com.android.systemui.demo -e command "$@" >/dev/n
 demo enter
 demo clock -e hhmm 0900
 demo battery -e level 100 -e plugged false
-demo network -e wifi show -e level 4 -e mobile show -e level 4 -e datatype none
+demo network -e wifi show -e level 4 -e fully true -e mobile show -e level 4 -e datatype none
 demo notifications -e visible false
+
+in_front() { [[ $(shell dumpsys window | grep mCurrentFocus) == *"$activity"* ]]; }
+# Starts the app and waits until its window has the focus.
+start_app() {
+    shell am start -n "$activity" >/dev/null
+    wait_for 30 in_front || die "the app did not come to the front"
+}
 
 # The first start analyses the songs (waveforms, durations, loudness) and
 # saves them; the second shows them from the start.
 library_ready() {
     shell cat "$files/data/playlists.json" 2>/dev/null | python3 -c '
 import json, sys
-tracks = json.load(sys.stdin)["library"]
+try:
+    tracks = json.load(sys.stdin)["library"]
+except (ValueError, KeyError):
+    sys.exit(1)
 sys.exit(0 if tracks and all(t.get("analyzed") and t.get("loudness") for t in tracks) else 1)'
 }
-shell am start -n "$activity" >/dev/null
-wait_for 180 library_ready || die "the songs were not analysed after 180 s"
+start_app
+timeout=${PLAY_SHOTS_ANALYSIS_TIMEOUT:-180}
+wait_for "$timeout" library_ready || die "the songs were not analysed after $timeout s"
 shell am force-stop "$package"
-shell am start -n "$activity" >/dev/null
-sleep 8
+start_app
 
-mkdir -p "$out"
+# Saves the screen to $1 once two captures in a row are the same (the
+# image's masks left out), so a half-drawn screen is never kept.
+settled_capture() {
+    local file=$1 previous="" now size img rect x y w h draw=()
+    while read -r img rect _; do
+        [[ $img == "$(basename "$file")" ]] || continue
+        IFS=, read -r x y w h <<<"$rect"
+        draw+=(-draw "rectangle $x,$y $((x + w - 1)),$((y + h - 1))")
+    done < <(grep -v '^[[:space:]]*#' "$masks")
+    for _ in $(seq 60); do
+        adb exec-out screencap -p > "$tmp/shot.png"
+        # The pixels only: a PNG written by ImageMagick carries its time.
+        now=$(convert "$tmp/shot.png" -fill black "${draw[@]}" RGB:- | md5sum)
+        if [[ $now == "$previous" ]]; then
+            size=$(identify -format '%wx%h' "$tmp/shot.png")
+            [[ $size == "${WIDTH}x${HEIGHT}" ]] || die "the screen is $size, not ${WIDTH}x${HEIGHT}"
+            convert "$tmp/shot.png" -alpha off "PNG24:$file"
+            return 0
+        fi
+        previous=$now
+        sleep 0.5
+    done
+    die "the screen kept changing for 30 s ($file)"
+}
+
+tap() { shell input tap "$1" "$2"; sleep "${3:-1}"; }
+
 # The Music screen: the Demo folder, three songs chosen.
 music_scene() {
     tap 300 840 1.5 # Demo: the root lists the folders of Music, Carts first
@@ -163,15 +231,12 @@ music_scene() {
     done
 }
 
-tap() { shell input tap "$1" "$2"; sleep "${3:-1}"; }
-
+mkdir -p "$out"
 # shoot <name> <tab> [scene]
 shoot() {
-    tap "${TABS_X[$2]}" "$TABS_Y" 2
+    tap "${TABS_X[$2]}" "$TABS_Y" 1
     [[ -z ${3:-} ]] || "$3"
-    sleep 2
-    adb exec-out screencap -p > "$out/$1.png"
-    convert "$out/$1.png" -alpha off "PNG24:$out/$1.png"
+    settled_capture "$out/$1.png"
     echo "$out/$1.png"
 }
 shoot 1-live live
