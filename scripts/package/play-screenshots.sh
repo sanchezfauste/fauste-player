@@ -172,7 +172,19 @@ demo battery -e level 100 -e plugged false
 demo network -e wifi show -e level 4 -e fully true -e mobile show -e level 4 -e datatype none
 demo notifications -e visible false
 
-in_front() { [[ $(shell dumpsys window | grep mCurrentFocus) == *"$activity"* ]]; }
+# True when the app's window has the focus. A slow emulator (a CI runner)
+# may show another app's "not responding" dialog over it: stopping that app
+# closes the dialog.
+in_front() {
+    local focus
+    focus=$(shell dumpsys window | grep mCurrentFocus)
+    if [[ $focus =~ Application\ Not\ Responding:\ ([A-Za-z0-9._]+) && ${BASH_REMATCH[1]} != "$package" ]]; then
+        echo "Closing the not-responding dialog of ${BASH_REMATCH[1]}" >&2
+        shell am force-stop "${BASH_REMATCH[1]}"
+        return 1
+    fi
+    [[ $focus == *"$activity"* ]]
+}
 # What is on the screen and what the app logged, for a start that failed.
 start_report() {
     {
@@ -206,7 +218,8 @@ shell am force-stop "$package"
 start_app
 
 # Saves the screen to $1 once two captures in a row are the same (the
-# image's masks left out), so a half-drawn screen is never kept.
+# image's masks left out) with the app in front, so neither a half-drawn
+# screen nor a dialog over it is kept.
 settled_capture() {
     local file=$1 previous="" now size img rect x y w h draw=()
     while read -r img rect _; do
@@ -215,6 +228,11 @@ settled_capture() {
         draw+=(-draw "rectangle $x,$y $((x + w - 1)),$((y + h - 1))")
     done < <(grep -v '^[[:space:]]*#' "$masks")
     for _ in $(seq 60); do
+        if ! in_front; then
+            previous=""
+            sleep 0.5
+            continue
+        fi
         adb exec-out screencap -p > "$tmp/shot.png"
         # The pixels only: a PNG written by ImageMagick carries its time.
         now=$(convert "$tmp/shot.png" -fill black "${draw[@]}" RGB:- | md5sum)
@@ -227,7 +245,7 @@ settled_capture() {
         previous=$now
         sleep 0.5
     done
-    die "the screen kept changing for 30 s ($file)"
+    die "the screen kept changing, or the app was not in front, for 30 s ($file)"
 }
 
 tap() { shell input tap "$1" "$2"; sleep "${3:-1}"; }
