@@ -56,3 +56,10 @@ fn an_entry_needs_its_track_at_commit() {
     .unwrap();
     assert!(tx.commit().is_err());
 }
+
+#[test]
+fn a_missing_parent_directory_is_an_io_error() {
+    let dir = tempdir().unwrap();
+    let result = Db::open(&dir.path().join("missing/fauste.db"));
+    assert!(matches!(result, Err(OpenError::Io(_))));
+}

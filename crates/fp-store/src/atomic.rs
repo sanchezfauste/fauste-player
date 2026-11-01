@@ -30,7 +30,7 @@ pub struct Loaded<T> {
     pub warnings: Vec<String>,
 }
 
-fn sibling(path: &Path, suffix: &str) -> PathBuf {
+pub(crate) fn sibling(path: &Path, suffix: &str) -> PathBuf {
     let mut name = OsString::from(path.as_os_str());
     name.push(".");
     name.push(suffix);
@@ -134,7 +134,7 @@ fn read_limited(path: &Path, max_bytes: u64) -> io::Result<Option<Vec<u8>>> {
 
 /// `path` with a `<kind>-<seconds>` suffix that no file has yet: a second
 /// one within the same second gets `-2`, `-3`…
-fn unused_sibling(path: &Path, kind: &str) -> PathBuf {
+pub(crate) fn unused_sibling(path: &Path, kind: &str) -> PathBuf {
     let stamp = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
