@@ -6,6 +6,7 @@ pub mod db;
 pub mod docs;
 pub mod error;
 mod layout_notes;
+mod legacy;
 pub mod lenient;
 pub mod migrate;
 pub mod paths;
@@ -19,6 +20,7 @@ pub use docs::{
     CONFIG_SCHEMA, ConfigDoc, PLAYLISTS_SCHEMA, PlaylistsDoc, SESSION_SCHEMA, SessionDoc,
 };
 pub use error::StoreError;
+pub use legacy::fuzz_documents;
 pub use migrate::{Migration, upgrade};
 pub use paths::AppPaths;
-pub use store::{LoadedState, Store, fuzz_documents, peek_log_limits};
+pub use store::{LoadedState, Store, peek_log_limits};

@@ -37,6 +37,11 @@ impl AppPaths {
         self.config_dir.join("config.json")
     }
 
+    /// The library database.
+    pub fn database_file(&self) -> PathBuf {
+        self.data_dir.join("fauste.db")
+    }
+
     pub fn playlists_file(&self) -> PathBuf {
         self.data_dir.join("playlists.json")
     }

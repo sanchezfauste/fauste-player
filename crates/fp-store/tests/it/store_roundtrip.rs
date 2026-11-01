@@ -6,6 +6,8 @@ use std::path::PathBuf;
 use fp_model::{AppState, Command, Config, EngineAction, Transport, apply};
 use fp_store::{AppPaths, Store};
 
+use crate::support::{edit_db, edit_doc, save_all};
+
 fn store(dir: &tempfile::TempDir) -> Store {
     Store::new(AppPaths::under(dir.path()), Config::default().limits)
 }
@@ -22,7 +24,7 @@ fn first_run_starts_with_defaults_and_no_warnings() {
 #[test]
 fn saved_state_is_restored_paused_at_its_position() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     let mut state = AppState::new(Config::default(), "Main");
     let playlist = state.playlists.first_id().unwrap();
     let paths = vec![PathBuf::from("/m/a.flac"), PathBuf::from("/m/b.flac")];
@@ -42,9 +44,7 @@ fn saved_state_is_restored_paused_at_its_position() {
     let p = state.players[0].id;
     apply(&mut state, Command::Play(p)).unwrap();
 
-    s.save_config(&state).unwrap();
-    s.save_playlists(&state).unwrap();
-    s.save_session(&state, |_| 42.5).unwrap();
+    save_all(&mut s, &state, 42.5);
 
     let loaded = s.load("Main");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
@@ -60,11 +60,11 @@ fn saved_state_is_restored_paused_at_its_position() {
 }
 
 /// I2: a silent file's measurement (no integrated loudness) and the pass
-/// version survive a save and a load of the playlists file.
+/// version survive a save and a load of the track rows.
 #[test]
 fn the_loudness_measurement_round_trips() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     let mut state = AppState::new(Config::default(), "Main");
     let playlist = state.playlists.first_id().unwrap();
     let paths = vec![PathBuf::from("/m/silent.flac"), PathBuf::from("/m/b.flac")];
@@ -94,8 +94,7 @@ fn the_loudness_measurement_round_trips() {
             fp_model::LOUDNESS_VERSION,
         );
     }
-    s.save_config(&state).unwrap();
-    s.save_playlists(&state).unwrap();
+    save_all(&mut s, &state, 0.0);
     let loaded = s.load("Main");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
     assert_eq!(loaded.state.library, state.library);
@@ -104,7 +103,7 @@ fn the_loudness_measurement_round_trips() {
 #[test]
 fn newer_schema_is_not_quarantined() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     let path = s.paths().config_file();
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(&path, r#"{"schema_version":99,"config":{}}"#).unwrap();
@@ -121,7 +120,7 @@ fn newer_schema_is_not_quarantined() {
 #[test]
 fn corrupt_config_falls_back_to_defaults_with_a_warning() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     let path = s.paths().config_file();
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(&path, "not json").unwrap();
@@ -140,7 +139,7 @@ fn corrupt_config_falls_back_to_defaults_with_a_warning() {
 #[test]
 fn invalid_values_are_clamped_on_load() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     let path = s.paths().config_file();
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(
@@ -166,7 +165,7 @@ fn write_config(s: &Store, json: &str) {
 #[test]
 fn hand_edited_values_of_the_wrong_type_are_repaired_not_discarded() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     write_config(
         &s,
         r#"{"schema_version":1,"config":{
@@ -211,7 +210,7 @@ fn hand_edited_values_of_the_wrong_type_are_repaired_not_discarded() {
 #[test]
 fn an_unknown_window_system_loads_as_auto_with_a_warning() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     write_config(
         &s,
         r#"{"schema_version":1,"config":{"ui":{"window_system":"Mir","wave_color":"cyan"}}}"#,
@@ -230,7 +229,7 @@ fn an_unknown_window_system_loads_as_auto_with_a_warning() {
 #[test]
 fn a_newer_file_is_preserved_beyond_backup_rotation() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     let newer = r#"{"schema_version":99,"config":{}}"#;
     write_config(&s, newer);
     let loaded = s.load("Main");
@@ -249,7 +248,7 @@ fn a_newer_file_is_preserved_beyond_backup_rotation() {
 #[test]
 fn an_unknown_shortcut_does_not_discard_the_others() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     write_config(
         &s,
         r#"{ "schema_version": 1, "config": { "shortcuts": [
@@ -277,7 +276,7 @@ fn an_unknown_shortcut_does_not_discard_the_others() {
 #[test]
 fn bit_perfect_devices_round_trip_and_older_configs_have_none() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     write_config(
         &s,
         r#"{ "schema_version": 1, "config": { "outputs": { "sample_rate": 44100 } } }"#,
@@ -304,7 +303,7 @@ fn bit_perfect_devices_round_trip_and_older_configs_have_none() {
 }
 
 /// A saved state with one entry played by player 0.
-fn saved_with_a_played_entry(s: &Store) -> AppState {
+fn saved_with_a_played_entry(s: &mut Store) -> AppState {
     let mut state = AppState::new(Config::default(), "Main");
     let playlist = state.playlists.first_id().unwrap();
     let paths = vec![PathBuf::from("/m/a.flac"), PathBuf::from("/m/b.flac")];
@@ -319,87 +318,31 @@ fn saved_with_a_played_entry(s: &Store) -> AppState {
     .unwrap();
     let entry = state.playlists.get(playlist).unwrap().entries[0].id;
     state.playlists.mark_played(entry, state.players[0].id);
-    s.save_config(&state).unwrap();
-    s.save_playlists(&state).unwrap();
-    s.save_session(&state, |_| 0.0).unwrap();
+    save_all(s, &state, 0.0);
     state
 }
 
 #[test]
-fn playlists_are_saved_with_the_schema_that_has_per_player_played_marks() {
-    // Builds from before per-player marks require `played` on every entry;
-    // a newer schema makes them keep the file aside instead of discarding it.
+fn the_played_marks_of_every_player_round_trip() {
+    // Per-player marks: an entry played by player 0 stays unplayed for the
+    // other players after a save and a load.
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    saved_with_a_played_entry(&s);
-    let doc: serde_json::Value =
-        serde_json::from_slice(&fs::read(s.paths().playlists_file()).unwrap()).unwrap();
-    assert_eq!(doc["schema_version"], 2);
-}
-
-#[test]
-fn a_schema_1_playlists_file_counts_its_played_entries_for_every_player() {
-    let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let state = saved_with_a_played_entry(&s);
-    let path = s.paths().playlists_file();
-    let mut doc: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    doc["schema_version"] = 1.into();
-    for list in doc["playlists"].as_array_mut().unwrap() {
-        for entry in list["entries"].as_array_mut().unwrap() {
-            let obj = entry.as_object_mut().unwrap();
-            let played = obj.remove("played_by").is_some();
-            obj.insert("played".into(), played.into());
-        }
-    }
-    fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
-
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
     let loaded = s.load("Main");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
     let playlist = loaded.state.playlists.first_id().unwrap();
     let entries = &loaded.state.playlists.get(playlist).unwrap().entries;
     let players: Vec<_> = state.players.iter().map(|p| p.id).collect();
-    assert!(players.iter().all(|p| entries[0].is_played_by(*p)));
+    assert!(entries[0].is_played_by(players[0]));
+    assert!(players[1..].iter().all(|p| !entries[0].is_played_by(*p)));
     assert!(players.iter().all(|p| !entries[1].is_played_by(*p)));
-}
-
-#[test]
-fn repeated_playlist_ids_are_repaired_with_a_warning() {
-    let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let mut state = s.load("Main").state;
-    let playlist = state.playlists.first_id().unwrap();
-    apply(
-        &mut state,
-        Command::InsertPaths {
-            playlist,
-            index: 0,
-            paths: vec![PathBuf::from("/music/a.mp3")],
-        },
-    )
-    .unwrap();
-    s.save_playlists(&state).unwrap();
-    // A hand edit copies the playlist, ids and all.
-    let path = dir.path().join("data/playlists.json");
-    let mut doc: serde_json::Value =
-        serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
-    let lists = doc["playlists"].as_array_mut().unwrap();
-    let copy = lists[0].clone();
-    lists.push(copy);
-    fs::write(&path, serde_json::to_string(&doc).unwrap()).unwrap();
-    let loaded = s.load("Main");
-    assert_eq!(loaded.state.playlists.len(), 2);
-    assert!(
-        loaded.warnings.iter().any(|w| w.contains("duplicate id")),
-        "{:?}",
-        loaded.warnings
-    );
 }
 
 #[test]
 fn analysis_fields_this_version_dropped_are_ignored_with_a_warning() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     write_config(
         &s,
         r#"{"schema_version":1,"config":{"analysis":{
@@ -425,12 +368,11 @@ fn analysis_fields_this_version_dropped_are_ignored_with_a_warning() {
 #[test]
 fn a_saved_pending_start_that_does_not_parse_is_dropped_with_a_warning() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    saved_with_a_played_entry(&s);
-    let path = s.paths().session_file();
-    let mut doc: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    doc["players"][0]["pending_start"] = serde_json::json!("garbage");
-    fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    edit_doc(&s, "players", state.players[0].id.0, |doc| {
+        doc["pending_start"] = serde_json::json!("garbage");
+    });
 
     let loaded = s.load("Main");
     assert!(loaded.state.players[0].pending_start.is_none());
@@ -446,7 +388,7 @@ fn a_devices_own_settings_are_dropped_on_load_when_no_route_names_it() {
     // Operator feedback 4, Q12: written by an earlier version, which kept
     // them for when the device was routed again.
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     let path = s.paths().config_file();
     fs::create_dir_all(path.parent().unwrap()).unwrap();
     fs::write(
@@ -477,7 +419,7 @@ fn a_devices_own_settings_are_dropped_on_load_when_no_route_names_it() {
 
 /// Player 1 plays on `dac`; the last of four players, removed before the
 /// save, played on `gone`. Both devices have their own rate.
-fn routes_of_a_removed_player(s: &Store) -> (AppState, fp_model::PlayerId) {
+fn routes_of_a_removed_player(s: &mut Store) -> (AppState, fp_model::PlayerId) {
     use fp_model::{OutputDevice, PlayerRoutes, Route};
     let mut state = AppState::new(Config::default(), "Main");
     let route = |device: &str| {
@@ -510,16 +452,16 @@ fn routes_of_a_removed_player(s: &Store) -> (AppState, fp_model::PlayerId) {
     }
     apply(&mut state, Command::SetPlayerCount(3)).unwrap();
     s.save_config(&state).unwrap();
-    s.save_playlists(&state).unwrap();
     (state, removed)
 }
 
 #[test]
 fn the_routes_of_a_removed_player_and_their_devices_settings_are_dropped_on_load() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let (state, removed) = routes_of_a_removed_player(&s);
-    s.save_session(&state, |_| 0.0).unwrap();
+    let mut s = store(&dir);
+    let (state, removed) = routes_of_a_removed_player(&mut s);
+    s.save_state(&state, |_| 0.0, std::time::Instant::now())
+        .unwrap();
     let loaded = s.load("Main");
     let o = &loaded.state.config.outputs;
     assert!(o.player_routes(removed).is_none());
@@ -535,11 +477,16 @@ fn the_routes_of_a_removed_player_and_their_devices_settings_are_dropped_on_load
 
 #[test]
 fn without_a_session_no_route_is_dropped() {
-    // The players' ids are not known: a route may be for a player whose
-    // session is only missing.
+    // The players' ids are not known (the database has no player rows): a
+    // route may be for a player whose session is only missing.
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let (state, removed) = routes_of_a_removed_player(&s);
+    let mut s = store(&dir);
+    let (state, removed) = routes_of_a_removed_player(&mut s);
+    s.save_state(&state, |_| 0.0, std::time::Instant::now())
+        .unwrap();
+    edit_db(&s, |db| {
+        db.conn().execute("DELETE FROM players", []).unwrap();
+    });
     let loaded = s.load("Main");
     let o = &loaded.state.config.outputs;
     assert!(o.player_routes(removed).is_some());
@@ -549,7 +496,7 @@ fn without_a_session_no_route_is_dropped() {
 #[test]
 fn an_old_restart_handoff_is_ignored_on_load() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     write_config(
         &s,
         r#"{"schema_version":1,"config":{"tuning":{"restart_handoff_ms":5000,"declick_ms":7}}}"#,
@@ -567,4 +514,93 @@ fn an_old_restart_handoff_is_ignored_on_load() {
         "{:?}",
         loaded.warnings
     );
+}
+
+fn backups(s: &Store) -> usize {
+    (1..=9)
+        .filter(|n| fp_store::backup_path(&s.paths().database_file(), *n).exists())
+        .count()
+}
+
+#[test]
+fn the_first_save_makes_a_backup_and_the_next_waits_for_the_interval() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = AppState::new(Config::default(), "Main");
+    assert_eq!(state.config.tuning.backup_interval_secs, 300);
+    let now = std::time::Instant::now();
+    let secs = std::time::Duration::from_secs;
+    s.save_state(&state, |_| 0.0, now).unwrap();
+    assert_eq!(backups(&s), 1, "the first save");
+    s.save_state(&state, |_| 0.0, now + secs(10)).unwrap();
+    assert_eq!(backups(&s), 1, "within the interval");
+    s.save_state(&state, |_| 0.0, now + secs(301)).unwrap();
+    assert_eq!(backups(&s), 2, "after the interval");
+}
+
+#[test]
+fn later_saves_write_on_top_of_what_load_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    let mut loaded = s.load("Main");
+    let playlist = loaded.state.playlists.first_id().unwrap();
+    apply(
+        &mut loaded.state,
+        Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths: vec![PathBuf::from("/m/c.flac")],
+        },
+    )
+    .unwrap();
+    s.save_state(&loaded.state, |_| 0.0, std::time::Instant::now())
+        .unwrap();
+    let again = s.load("Main");
+    assert!(again.warnings.is_empty(), "{:?}", again.warnings);
+    assert_eq!(again.state.library, loaded.state.library);
+    assert_eq!(again.state.playlists, loaded.state.playlists);
+    assert_eq!(again.state.library.len(), state.library.len() + 1);
+}
+
+#[test]
+fn a_repaired_row_is_written_back_so_the_warning_is_not_repeated() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    let track = state.library.ids()[0].0;
+    edit_db(&s, |db| {
+        db.conn()
+            .execute("UPDATE tracks SET doc = '{' WHERE id = ?1", [track as i64])
+            .unwrap();
+    });
+    let loaded = s.load("Main");
+    assert_eq!(loaded.warnings.len(), 1, "{:?}", loaded.warnings);
+    let again = s.load("Main");
+    assert!(again.warnings.is_empty(), "{:?}", again.warnings);
+}
+
+#[test]
+fn a_corrupt_database_falls_back_to_the_backup_with_a_warning() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    drop(s);
+    let mut s = store(&dir);
+    fs::write(s.paths().database_file(), b"this is not a database").unwrap();
+    let loaded = s.load("Main");
+    assert_eq!(loaded.state.playlists, state.playlists);
+    assert!(!loaded.warnings.is_empty());
+}
+
+#[test]
+fn a_home_with_only_the_old_json_documents_loads_empty_for_now() {
+    // The import of those documents comes with the next change.
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    fs::create_dir_all(&s.paths().data_dir).unwrap();
+    fs::write(s.paths().playlists_file(), b"{}").unwrap();
+    let loaded = s.load("Main");
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    assert_eq!(loaded.state.playlists.len(), 1);
 }

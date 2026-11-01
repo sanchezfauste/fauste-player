@@ -375,6 +375,13 @@ fn read_cart_pages(conn: &Connection, warnings: &mut Vec<String>) -> Vec<CartPag
         match parse_doc::<CartPage>(doc) {
             Ok(mut page) => {
                 page.id = id;
+                // Cart colour spec CC3: a colour that does not parse loads
+                // as none; say so.
+                if let Some(value) = text(doc).and_then(|t| serde_json::from_str::<Value>(t).ok()) {
+                    warnings.extend(crate::legacy::unknown_cart_colors(
+                        &serde_json::json!({ "pages": [value] }),
+                    ));
+                }
                 pages.push(page);
             }
             Err(e) => warnings.push(format!(

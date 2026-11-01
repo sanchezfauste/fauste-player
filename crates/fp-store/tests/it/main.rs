@@ -10,3 +10,4 @@ mod db_snapshot;
 mod playlist_io;
 mod session_layout;
 mod store_roundtrip;
+mod support;

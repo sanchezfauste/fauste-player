@@ -1,19 +1,17 @@
 use std::path::Path;
+use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use serde::de::DeserializeOwned;
 
 use fp_model::{AppState, EngineAction, Limits, PlayerId, RestoreParts};
 
-use crate::atomic::{Loaded, ParseError, load_with_fallback, write_atomic};
-use crate::docs::{
-    CARTS_MIGRATIONS, CARTS_SCHEMA, CONFIG_MIGRATIONS, CONFIG_SCHEMA, CartsDoc, ConfigDoc,
-    PLAYLISTS_MIGRATIONS, PLAYLISTS_SCHEMA, PlaylistsDoc, SESSION_MIGRATIONS, SESSION_SCHEMA,
-    SessionDoc,
-};
+use crate::atomic::{ParseError, load_with_fallback, write_atomic};
+use crate::db::snapshot::{self, Snapshot};
+use crate::db::{Db, open_with_fallback};
+use crate::docs::{CONFIG_MIGRATIONS, CONFIG_SCHEMA, ConfigDoc};
 use crate::error::StoreError;
 use crate::lenient::config_from_value;
-use crate::migrate::{Migration, upgrade};
+use crate::migrate::upgrade;
 use crate::paths::AppPaths;
 
 /// Result of loading everything at startup. Loading never fails: problems
@@ -29,54 +27,16 @@ pub struct Store {
     paths: AppPaths,
     /// Limits used to read `config.json` itself; the loaded config's limits apply afterwards.
     limits: Limits,
+    /// The open database; none until `load` or the first `save_state` opens it.
+    db: Option<Db>,
+    /// What the database holds, as far as this store knows. None means
+    /// unknown: the next save writes everything.
+    saved: Option<Snapshot>,
+    /// When the last backup of the database was made.
+    last_backup: Option<Instant>,
 }
 
-fn parse_doc<T: DeserializeOwned>(
-    bytes: &[u8],
-    schema: u32,
-    migrations: &[Migration],
-) -> Result<T, ParseError> {
-    let value: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
-    let value = upgrade(value, schema, migrations)?;
-    serde_json::from_value(value).map_err(|e| ParseError::Corrupt(e.to_string()))
-}
-
-/// Parses `session.json`. A saved pending start that does not parse loads
-/// as none (the model decides how); each one dropped is reported.
-fn parse_session(bytes: &[u8]) -> Result<(SessionDoc, Vec<String>), ParseError> {
-    let value: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
-    let value = upgrade(value, SESSION_SCHEMA, SESSION_MIGRATIONS)?;
-    let raw: Vec<bool> = value
-        .get("players")
-        .and_then(serde_json::Value::as_array)
-        .map(|players| {
-            players
-                .iter()
-                .map(|p| p.get("pending_start").is_some_and(|v| !v.is_null()))
-                .collect()
-        })
-        .unwrap_or_default();
-    let layout_notes = crate::layout_notes::layout_notes(value.get("layout"));
-    let doc: SessionDoc =
-        serde_json::from_value(value).map_err(|e| ParseError::Corrupt(e.to_string()))?;
-    let mut notes: Vec<String> = raw
-        .iter()
-        .zip(&doc.players)
-        .filter(|(had, p)| **had && p.pending_start.is_none())
-        .map(|(_, p)| {
-            format!(
-                "session: the saved pending start of player {:?} is not valid; ignored",
-                p.id
-            )
-        })
-        .collect();
-    notes.extend(layout_notes);
-    Ok((doc, notes))
-}
-
-fn parse_config(bytes: &[u8]) -> Result<(fp_model::Config, Vec<String>), ParseError> {
+pub(crate) fn parse_config(bytes: &[u8]) -> Result<(fp_model::Config, Vec<String>), ParseError> {
     let value: serde_json::Value =
         serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
     let value = upgrade(value, CONFIG_SCHEMA, CONFIG_MIGRATIONS)?;
@@ -88,101 +48,31 @@ fn parse_config(bytes: &[u8]) -> Result<(fp_model::Config, Vec<String>), ParseEr
     Ok((config, notes))
 }
 
-fn load_doc<T: DeserializeOwned>(
-    path: &Path,
-    backups: usize,
-    max_bytes: u64,
-    schema: u32,
-    migrations: &[Migration],
-) -> Loaded<T> {
-    load_with_fallback(path, backups, max_bytes, |bytes| {
-        parse_doc(bytes, schema, migrations)
-    })
-}
-
-/// Parses `carts.json`. A cart colour that does not parse loads as none
-/// (the model decides how, cart colour spec CC3); each one is reported.
-fn parse_carts(bytes: &[u8]) -> Result<(CartsDoc, Vec<String>), ParseError> {
-    let value: serde_json::Value =
-        serde_json::from_slice(bytes).map_err(|e| ParseError::Corrupt(e.to_string()))?;
-    let value = upgrade(value, CARTS_SCHEMA, CARTS_MIGRATIONS)?;
-    let notes = unknown_cart_colors(&value);
-    let doc: CartsDoc =
-        serde_json::from_value(value).map_err(|e| ParseError::Corrupt(e.to_string()))?;
-    Ok((doc, notes))
-}
-
-/// One note per cart whose `color` is present, not `null` and not a known
-/// name.
-fn unknown_cart_colors(value: &serde_json::Value) -> Vec<String> {
-    items(value.get("pages"))
-        .iter()
-        .flat_map(|page| items(page.get("carts")))
-        .filter_map(|cart| {
-            let raw = cart.get("color").filter(|c| !c.is_null())?;
-            let known = raw.as_str().and_then(fp_model::CartColor::from_name);
-            known.is_none().then(|| {
-                let id = cart
-                    .get("id")
-                    .map_or_else(|| "?".to_owned(), crate::lenient::quoted);
-                format!(
-                    "carts: cart {id} has an unknown colour {}; it has none",
-                    crate::lenient::quoted(raw)
-                )
-            })
-        })
-        .collect()
-}
-
-/// The elements of a JSON array, or none.
-fn items(value: Option<&serde_json::Value>) -> &[serde_json::Value] {
-    value
-        .and_then(serde_json::Value::as_array)
-        .map(Vec::as_slice)
-        .unwrap_or_default()
-}
-
-/// Runs `bytes` through every document parser and the restore, as loading
-/// does. For the fuzz targets only.
-#[doc(hidden)]
-pub fn fuzz_documents(bytes: &[u8]) {
-    let mut config = parse_config(bytes).map(|(c, _)| c).unwrap_or_default();
-    let _ = config.validate();
-    let lists: Option<PlaylistsDoc> = parse_doc(bytes, PLAYLISTS_SCHEMA, PLAYLISTS_MIGRATIONS).ok();
-    let session: Option<SessionDoc> = parse_session(bytes).ok().map(|(d, _)| d);
-    let carts: Option<CartsDoc> = parse_carts(bytes).ok().map(|(d, _)| d);
-    let (library, playlists, ids) = lists
-        .map(|d| (d.library, d.playlists, d.ids))
-        .unwrap_or_default();
-    let (sessions, cartwall_session, layout) = session
-        .map(|d| (d.players, d.cartwall, d.layout))
-        .unwrap_or_default();
-    let _ = AppState::restore(
-        RestoreParts {
-            config,
-            library,
-            playlists,
-            cart_pages: carts.map(|d| d.pages).unwrap_or_default(),
-            cartwall_session,
-            layout,
-            ids,
-        },
-        &sessions,
-        "Main",
-    );
-}
-
 impl Store {
     pub fn new(paths: AppPaths, limits: Limits) -> Self {
-        Self { paths, limits }
+        Self {
+            paths,
+            limits,
+            db: None,
+            saved: None,
+            last_backup: None,
+        }
     }
 
     pub fn paths(&self) -> &AppPaths {
         &self.paths
     }
 
-    pub fn load(&self, default_playlist_name: &str) -> LoadedState {
+    /// The open database (tests).
+    #[doc(hidden)]
+    pub fn db_for_tests(&mut self) -> Option<&mut Db> {
+        self.db.as_mut()
+    }
+
+    pub fn load(&mut self, default_playlist_name: &str) -> LoadedState {
         let mut warnings = Vec::new();
+        self.db = None;
+        self.saved = None;
 
         // Read leniently: a hand-edited value of the wrong type falls back to its
         // default (with a warning) instead of discarding the whole file.
@@ -201,108 +91,55 @@ impl Store {
             None => Default::default(),
         };
         warnings.extend(config.validate().into_iter().map(|w| w.to_string()));
-        let limits = config.limits.clone();
 
-        let lists: Loaded<PlaylistsDoc> = load_doc(
-            &self.paths.playlists_file(),
-            limits.backup_count,
-            limits.max_state_file_bytes,
-            PLAYLISTS_SCHEMA,
-            PLAYLISTS_MIGRATIONS,
-        );
-        warnings.extend(lists.warnings);
-        let session: Loaded<(SessionDoc, Vec<String>)> = load_with_fallback(
-            &self.paths.session_file(),
-            limits.backup_count,
-            limits.max_state_file_bytes,
-            parse_session,
-        );
-        warnings.extend(session.warnings);
-        let session = Loaded {
-            value: session.value.map(|(doc, notes)| {
-                warnings.extend(notes);
-                doc
-            }),
-            source: session.source,
-            warnings: Vec::new(),
-        };
-        let carts: Loaded<(CartsDoc, Vec<String>)> = load_with_fallback(
-            &self.paths.carts_file(),
-            limits.backup_count,
-            limits.max_state_file_bytes,
-            parse_carts,
-        );
-        warnings.extend(carts.warnings);
-        let carts_doc = carts.value.map(|(doc, notes)| {
-            warnings.extend(notes);
-            doc
-        });
-
-        let (library, playlists, ids) = lists
-            .value
-            .map(|d| (d.library, d.playlists, d.ids))
-            .unwrap_or_default();
-        // Without a session the players' ids are not known.
-        let players_known = session.value.is_some();
-        let (sessions, cartwall_session, layout) = session
-            .value
-            .map(|d| (d.players, d.cartwall, d.layout))
-            .unwrap_or_default();
-        // RL19: the restore repairs the layout; a copy says what it repaired.
-        let saved_layout = layout.clone();
-        let cart_pages = carts_doc.map(|d| d.pages).unwrap_or_default();
-        // Report what the restore will repair in the cart pages (the restore
-        // itself applies the same normalisation).
-        {
-            let mut probe = fp_model::Cartwall {
-                pages: cart_pages.clone(),
-                ..fp_model::Cartwall::default()
-            };
-            let mut probe_ids = ids.clone();
-            probe_ids.observe(probe.max_raw_id());
-            warnings.extend(probe.normalize(&config.limits, &mut probe_ids, &library));
-            // And in the playlists: ids a hand edit repeated get new ones.
-            let mut lists = playlists.clone();
-            probe_ids.observe(lists.max_raw_id());
-            for s in &sessions {
-                probe_ids.observe(s.id.0);
+        let snap = match self.open_db(config.limits.backup_count) {
+            Ok(opened_warnings) => {
+                warnings.extend(opened_warnings);
+                self.read_baseline(&mut warnings)
             }
-            warnings.extend(lists.normalize(&mut probe_ids));
-        }
-        let (mut state, actions) = AppState::restore(
-            RestoreParts {
-                config,
-                library,
-                playlists,
-                cart_pages,
-                cartwall_session,
-                layout,
-                ids,
-            },
-            &sessions,
-            default_playlist_name,
-        );
-        // The restore ran the same repair for the same players.
-        let mut probe = saved_layout;
-        warnings.extend(
-            fp_model::settle_layout(&mut probe, &state.player_ids())
-                .into_iter()
-                .map(|note| format!("session: {note}")),
-        );
-        // Operator feedback 4, Q12: a removed player's routes and the
-        // settings of a device no route names (kept until now, so a
-        // route edit in Settings loses nothing) are forgotten.
-        let outputs = &mut state.config.outputs;
-        if players_known {
-            let players: Vec<PlayerId> = state.players.iter().map(|p| p.id).collect();
-            outputs.forget_routes_of_other_players(&players);
-        }
-        outputs.forget_unrouted_devices();
-        LoadedState {
-            state,
-            actions,
-            warnings,
-        }
+            Err(e) => {
+                warnings.push(format!("database: {e}; starting with the defaults"));
+                Snapshot::default()
+            }
+        };
+        // Without player rows the players' ids are not known.
+        let players_known = !snap.players.is_empty();
+        restore(config, snap, players_known, warnings, default_playlist_name)
+    }
+
+    /// Opens the database file (creating `data_dir`) and keeps it. Returns
+    /// the warnings of the opening.
+    fn open_db(&mut self, backups: usize) -> Result<Vec<String>, StoreError> {
+        std::fs::create_dir_all(&self.paths.data_dir)?;
+        let opened = open_with_fallback(&self.paths.database_file(), backups)
+            .map_err(|e| StoreError::Io(std::io::Error::other(e.to_string())))?;
+        self.db = Some(opened.db);
+        Ok(opened.warnings)
+    }
+
+    /// Reads the snapshot of the open database and makes it the baseline
+    /// for the next save. When the read repaired or dropped anything, the
+    /// repaired snapshot is written first so disk and baseline agree; if
+    /// that fails there is no baseline and the next save writes everything.
+    fn read_baseline(&mut self, warnings: &mut Vec<String>) -> Snapshot {
+        let Some(db) = self.db.as_mut() else {
+            return Snapshot::default();
+        };
+        let (snap, read_warnings) = snapshot::read(db);
+        let repaired = !read_warnings.is_empty();
+        warnings.extend(read_warnings);
+        self.saved = if repaired {
+            match snapshot::write_full(db, &snap) {
+                Ok(()) => Some(snap.clone()),
+                Err(e) => {
+                    tracing::warn!("could not write back the repaired library: {e}");
+                    None
+                }
+            }
+        } else {
+            Some(snap.clone())
+        };
+        snap
     }
 
     pub fn save_config(&self, state: &AppState) -> Result<(), StoreError> {
@@ -317,48 +154,120 @@ impl Store {
         )
     }
 
-    pub fn save_playlists(&self, state: &AppState) -> Result<(), StoreError> {
-        let doc = PlaylistsDoc {
-            schema_version: PLAYLISTS_SCHEMA,
-            library: state.library.clone(),
-            playlists: state.playlists.clone(),
-            ids: state.ids.clone(),
-        };
-        write_doc(
-            &self.paths.playlists_file(),
-            &doc,
-            state.config.limits.backup_count,
-        )
-    }
-
-    pub fn save_carts(&self, state: &AppState) -> Result<(), StoreError> {
-        let doc = CartsDoc {
-            schema_version: CARTS_SCHEMA,
-            pages: state.cartwall.pages.clone(),
-        };
-        write_doc(
-            &self.paths.carts_file(),
-            &doc,
-            state.config.limits.backup_count,
-        )
-    }
-
-    pub fn save_session(
-        &self,
+    /// Saves the playlists, library, carts, players and layout to the
+    /// database: only the rows that changed since the last save. A backup
+    /// follows when none was made yet or `tuning.backup_interval_secs` have
+    /// passed since the last one; a failed backup is logged, not an error.
+    pub fn save_state(
+        &mut self,
         state: &AppState,
         position_of: impl Fn(PlayerId) -> f64,
+        now: Instant,
     ) -> Result<(), StoreError> {
-        let doc = SessionDoc {
-            schema_version: SESSION_SCHEMA,
-            players: state.sessions(position_of),
-            cartwall: state.cartwall.session(),
-            layout: state.layout.clone(),
+        let backups = state.config.limits.backup_count;
+        if self.db.is_none() {
+            for w in self.open_db(backups)? {
+                tracing::warn!("{w}");
+            }
+            self.saved = None;
+        }
+        let Some(db) = self.db.as_mut() else {
+            return Err(StoreError::Io(std::io::Error::other(
+                "the database is not open",
+            )));
         };
-        write_doc(
-            &self.paths.session_file(),
-            &doc,
-            state.config.limits.backup_count,
-        )
+        let new = Snapshot::of(state, position_of);
+        match &self.saved {
+            Some(old) => snapshot::write_changes(db, old, &new)?,
+            None => snapshot::write_full(db, &new)?,
+        }
+        self.saved = Some(new);
+
+        let interval = Duration::from_secs(state.config.tuning.backup_interval_secs);
+        let due = self
+            .last_backup
+            .is_none_or(|last| now.saturating_duration_since(last) >= interval);
+        if due {
+            match db.backup_rotating(backups) {
+                Ok(()) => self.last_backup = Some(now),
+                Err(e) => tracing::warn!("could not back up the database: {e}"),
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Builds the state from the saved parts, repairing what a hand edit or an
+/// older version left inconsistent; each repair adds a warning.
+fn restore(
+    config: fp_model::Config,
+    snap: Snapshot,
+    players_known: bool,
+    mut warnings: Vec<String>,
+    default_playlist_name: &str,
+) -> LoadedState {
+    let Snapshot {
+        library,
+        playlists,
+        ids,
+        players: sessions,
+        cartwall: cartwall_session,
+        layout,
+        cart_pages,
+    } = snap;
+    // RL19: the restore repairs the layout; a copy says what it repaired.
+    let saved_layout = layout.clone();
+    // Report what the restore will repair in the cart pages (the restore
+    // itself applies the same normalisation).
+    {
+        let mut probe = fp_model::Cartwall {
+            pages: cart_pages.clone(),
+            ..fp_model::Cartwall::default()
+        };
+        let mut probe_ids = ids.clone();
+        probe_ids.observe(probe.max_raw_id());
+        warnings.extend(probe.normalize(&config.limits, &mut probe_ids, &library));
+        // And in the playlists: ids a hand edit repeated get new ones.
+        let mut lists = playlists.clone();
+        probe_ids.observe(lists.max_raw_id());
+        for s in &sessions {
+            probe_ids.observe(s.id.0);
+        }
+        warnings.extend(lists.normalize(&mut probe_ids));
+    }
+    let (mut state, actions) = AppState::restore(
+        RestoreParts {
+            config,
+            library,
+            playlists,
+            cart_pages,
+            cartwall_session,
+            layout,
+            ids,
+        },
+        &sessions,
+        default_playlist_name,
+    );
+    // The restore ran the same repair for the same players.
+    let mut probe = saved_layout;
+    warnings.extend(
+        fp_model::settle_layout(&mut probe, &state.player_ids())
+            .into_iter()
+            .map(|note| format!("session: {note}")),
+    );
+    // Operator feedback 4, Q12: a removed player's routes and the
+    // settings of a device no route names (kept until now, so a
+    // route edit in Settings loses nothing) are forgotten.
+    let outputs = &mut state.config.outputs;
+    if players_known {
+        let players: Vec<PlayerId> = state.players.iter().map(|p| p.id).collect();
+        outputs.forget_routes_of_other_players(&players);
+    }
+    outputs.forget_unrouted_devices();
+    LoadedState {
+        state,
+        actions,
+        warnings,
     }
 }
 
