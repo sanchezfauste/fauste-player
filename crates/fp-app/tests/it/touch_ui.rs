@@ -2068,16 +2068,16 @@ fn the_times_sit_under_the_waveform() {
     assert!(times.top() - wave.bottom() <= 8.0, "{wave:?} {times:?}");
 }
 
-/// PL37: a phone's playlist footer has finger-sized tiles with the card's
-/// even margin above, below and before them.
+/// PL37: a phone's playlist footer has larger tiles than the desktop's,
+/// with the card's even margin above, below and before them.
 #[test]
-fn the_playlist_footer_has_finger_sized_tiles() {
+fn the_playlist_footer_has_larger_tiles() {
     let (mut h, _fake) = touch(1, A56);
     tab(&mut h, "Playlists");
     let add = h.get_by_label("Add tracks to this playlist").rect();
     let more = h.get_by_label("More playlist actions").rect();
     let card = h.get_by_label("Play").rect();
-    assert!(add.height() >= 47.0, "{add:?}");
+    assert!(add.height() >= 32.0, "{add:?}");
     assert_eq!(add.height(), more.height(), "{add:?} {more:?}");
     // The card's left margin is 6 points inside its stroke.
     let list_left = card.left() - 6.0 - 1.0;
@@ -2085,4 +2085,96 @@ fn the_playlist_footer_has_finger_sized_tiles() {
         (add.left() - (list_left + 6.0)).abs() <= 1.5,
         "{add:?} {card:?}"
     );
+}
+
+/// PL37: a phone's divider between the meter and the fader runs the
+/// block's whole height, down to the fader's level readout.
+#[test]
+fn the_phone_divider_runs_down_to_the_readout() {
+    fn walk(shape: &egui::Shape, out: &mut Vec<egui::Rect>) {
+        match shape {
+            egui::Shape::Rect(r)
+                if r.fill == fp_app::ui::theme::DIVIDER && r.rect.width() == 1.0 =>
+            {
+                out.push(r.rect);
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let (h, _fake) = touch(1, A56);
+    let play = h.get_by_label("Play").rect();
+    let mut dividers = Vec::new();
+    for c in &h.output().shapes {
+        walk(&c.shape, &mut dividers);
+    }
+    let divider = dividers
+        .iter()
+        .find(|d| d.height() > 60.0)
+        .unwrap_or_else(|| panic!("a divider in {dividers:?}"));
+    assert!(
+        (divider.bottom() - play.bottom()).abs() < 1.0,
+        "{divider:?} {play:?}"
+    );
+}
+
+/// PL33: on a phone the loudness readout's options keep their names inside
+/// their tiles, even in a long language: a long name wraps.
+#[test]
+fn the_loudness_options_keep_their_names_inside() {
+    fn texts(shape: &egui::Shape, out: &mut Vec<(String, egui::Rect)>) {
+        match shape {
+            egui::Shape::Text(t) => {
+                out.push((t.galley.text().to_owned(), t.visual_bounding_rect()))
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| texts(s, out)),
+            _ => {}
+        }
+    }
+    for language in ["es-ES", "de-DE"] {
+        let i18n = fp_app::i18n::I18n::new(Some(language));
+        let ui = AppUi::new(
+            Fake::new(state(2, 3)),
+            fp_app::i18n::I18n::new(Some(language)),
+            fp_app::services::MediaCache::default(),
+        )
+        .with_touch();
+        let mut h = Harness::builder()
+            // A phone's width, tall enough to show the whole section.
+            .with_size(vec2(A56.x, 3000.0))
+            .with_step_dt(0.02)
+            .build_ui_state(
+                |ui, app: &mut AppUi| {
+                    app.guard_close(ui.ctx());
+                    app.ui(ui);
+                },
+                ui,
+            );
+        h.run_steps(3);
+        h.get_by_label(&i18n.tr("touch-more")).click();
+        h.run_steps(2);
+        h.get_by_label(&i18n.tr("top-settings")).click();
+        h.run_steps(3);
+        h.get_all_by_label(&i18n.tr("settings-tab-meters"))
+            .last()
+            .unwrap()
+            .click();
+        h.run_steps(3);
+        let mut drawn = Vec::new();
+        for c in &h.output().shapes {
+            texts(&c.shape, &mut drawn);
+        }
+        for key in ["loudness-off", "loudness-momentary", "loudness-short-term"] {
+            let name = i18n.tr(key);
+            let tile = h.get_by_label(&name).rect();
+            let (_, text) = drawn
+                .iter()
+                .find(|(t, _)| *t == name)
+                .unwrap_or_else(|| panic!("{name} drawn"));
+            assert!(
+                tile.expand(0.5).contains_rect(*text),
+                "{language} {name}: {text:?} in {tile:?}"
+            );
+        }
+    }
 }

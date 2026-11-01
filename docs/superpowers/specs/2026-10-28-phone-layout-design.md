@@ -340,8 +340,8 @@ cartwall folds ("ok pero que se pueda plegar la cartwall").
   the button. The elapsed time and the total sit at the top of the time
   row, right under the waveform. The volume fader's knob is a mixing
   desk's cap (grip lines and a bright index line on the level), on the
-  desktop too. A phone's playlist footer has finger-sized Add and ⋯ tiles
-  with the same margins.
+  desktop too. A phone's playlist footer has larger (32 dp) Add and ⋯
+  tiles with the same margins.
 - PL38. **Buttons under a second finger.** A tap on a player's transport
   (card and mini card) works while another finger is on the screen (for
   example holding the fader down, then Next, then the fader up), and a

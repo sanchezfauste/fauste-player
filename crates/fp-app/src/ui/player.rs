@@ -1178,8 +1178,10 @@ fn meter_column(
     // A hairline in the gap between the meter and the fader, so the two
     // read as separate instruments (itr07 J5).
     // Centred on what shows between the two: from the meter's right edge
-    // (its labels end there) to the fader's knob. It stops above the
-    // level readout under the fader, which may overhang the gap.
+    // (its labels end there) to the fader's knob. On the desktop it stops
+    // above the level readout under the fader, which may overhang the gap;
+    // a phone's narrow readout stays clear of it, so it runs the whole
+    // height, past the meter's own bottom line.
     let fader_left = ui.cursor().left();
     let meter_right = fader_left - METER_FADER_GAP;
     let divider_x = if phone {
@@ -1187,7 +1189,11 @@ fn meter_column(
     } else {
         (meter_right + widgets::fader_knob_left(fader_left) - DIVIDER_WIDTH) / 2.0
     };
-    let divider_height = (height - widgets::FADER_READOUT_HEIGHT).max(0.0);
+    let divider_height = if phone {
+        height
+    } else {
+        (height - widgets::FADER_READOUT_HEIGHT).max(0.0)
+    };
     ui.painter().rect_filled(
         Rect::from_min_size(
             pos2(divider_x, meter_top),
@@ -2119,16 +2125,19 @@ struct FooterLook {
     font: f32,
 }
 
-/// The desktop's slim footer, or a phone's with finger-sized tiles and the
+/// A phone's footer tiles: easy to hit, smaller than the transport's.
+const PHONE_FOOTER_TILE: f32 = 32.0;
+
+/// The desktop's slim footer, or a phone's with larger tiles and the
 /// card's even margins (PL37).
 fn footer_look(phone: bool) -> FooterLook {
     if phone {
         FooterLook {
-            height: PHONE_BUTTON + 2.0 * GAP,
+            height: PHONE_FOOTER_TILE + 2.0 * GAP,
             inset: GAP,
-            tile: PHONE_BUTTON,
-            tile_pad: 32.0,
-            font: 13.0,
+            tile: PHONE_FOOTER_TILE,
+            tile_pad: 24.0,
+            font: 12.0,
         }
     } else {
         FooterLook {
@@ -2146,7 +2155,7 @@ fn footer_more(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, playl
     let t = scene.i18n;
     let response = widgets::tile(
         ui,
-        vec2(PHONE_BUTTON, PHONE_BUTTON),
+        vec2(PHONE_FOOTER_TILE, PHONE_FOOTER_TILE),
         &t.tr("tip-footer-more"),
         true,
         TileStyle::plain(),
@@ -2155,7 +2164,7 @@ fn footer_more(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, playl
                 r.center(),
                 egui::Align2::CENTER_CENTER,
                 icon::DOTS_THREE,
-                font(18.0),
+                font(16.0),
                 c,
             );
         },
