@@ -1114,7 +1114,7 @@ const COMPACT_INFO_HEIGHT: f32 = 40.0;
 /// The info row and the transport on the left, the meter and fader column
 /// on the right spanning both (feedback spec §3.2). A `phone` card has
 /// finger-sized buttons, its countdown on the time row and a compact meter
-/// and fader (PL29, PL30).
+/// and fader (PL29, PL30, PL39).
 #[allow(clippy::too_many_arguments)]
 fn top_block(
     ui: &mut Ui,

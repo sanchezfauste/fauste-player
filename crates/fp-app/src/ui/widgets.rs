@@ -1678,8 +1678,9 @@ pub const COMPACT_FADER_WIDTH: f32 = COMPACT_KNOB_WIDTH + 4.0;
 /// The compact fader's knob, wider and taller for a finger.
 const COMPACT_KNOB_WIDTH: f32 = 24.0;
 const COMPACT_KNOB_HEIGHT: f32 = 20.0;
-/// Room for the compact fader's scale on the knob's right: the gap after
-/// the knob and the widest label ("-50", 3 characters of the marks' font).
+/// Room for the compact fader's scale past [`COMPACT_FADER_WIDTH`]: the
+/// labels start 2 px past the knob (which ends 2 px before that width),
+/// and the widest ("-50") is 3 characters of the marks' font, plus a pixel.
 const COMPACT_FADER_SCALE: f32 = 2.0 + 3.0 * FADER_MARK_FONT * 1233.0 / 2048.0 + 1.0;
 
 /// Width of the compact fader, with its scale when `scale`.

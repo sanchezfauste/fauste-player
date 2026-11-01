@@ -154,7 +154,7 @@ stops or changes playout.
   one line, the next track), the waveform `CARD_WAVE_HEIGHT` tall with no
   marker editing, then `top_block` at `BlockSize::PhoneCompact`: the time
   row `phone_time_row` (elapsed / total and the countdown) over the
-  transport, the meter and fader beside both; 48-point transport buttons (`PHONE_BUTTON`), and the compact
+  transport, the meter and fader beside both; 48-point transport buttons (`PHONE_BUTTON`, smaller on a narrow phone), and the compact
   meter and fader `widgets::vu_compact` / `fader_compact`, PL28–PL30;
   `phone_split` shares the width (PL39): the time row is as wide as the
   buttons, so the countdown ends with them, and the meter's ruler and the
