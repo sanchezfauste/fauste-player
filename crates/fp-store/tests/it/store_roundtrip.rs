@@ -35,7 +35,8 @@ fn saved_state_is_restored_paused_at_its_position() {
         },
     )
     .unwrap();
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.duration_secs = 200.0;
     }
     let p = state.players[0].id;
@@ -77,15 +78,15 @@ fn the_loudness_measurement_round_trips() {
     )
     .unwrap();
     {
-        let mut tracks = state.library.iter_mut();
-        tracks.next().unwrap().apply_loudness(
+        let ids = state.library.ids();
+        state.library.get_mut(ids[0]).unwrap().apply_loudness(
             Some(fp_model::LoudnessMeasurement {
                 integrated_lufs: None,
                 true_peak_dbtp: -60.5,
             }),
             fp_model::LOUDNESS_VERSION,
         );
-        tracks.next().unwrap().apply_loudness(
+        state.library.get_mut(ids[1]).unwrap().apply_loudness(
             Some(fp_model::LoudnessMeasurement {
                 integrated_lufs: Some(-14.25),
                 true_peak_dbtp: -0.5,

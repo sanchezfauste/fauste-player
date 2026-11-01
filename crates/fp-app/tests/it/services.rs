@@ -436,7 +436,8 @@ fn resetting_markers_analyses_the_track_again() {
 /// A library analysed by an older version: analysed, `older` says how.
 fn outdated_rig(files: &[PathBuf], dir: tempfile::TempDir, older: fn(&mut fp_model::Track)) -> Rig {
     rig_with(files, dir, Duration::ZERO, move |state| {
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.duration_secs = 1.0;
             track.format = Some(fp_model::AudioFormat {
@@ -528,7 +529,8 @@ fn a_cart_track_without_a_format_is_analysed_even_when_the_operator_said_later()
             },
         )
         .unwrap();
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.duration_secs = 1.0;
             track.format = None;
@@ -580,7 +582,8 @@ fn a_cart_track_that_has_its_format_is_left_alone() {
             },
         )
         .unwrap();
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.duration_secs = 1.0;
             // An older version's analysis, but with its format: it waits.
@@ -620,7 +623,8 @@ fn a_cart_track_whose_file_is_missing_is_not_analysed() {
             },
         )
         .unwrap();
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.format = None;
             track.file_state = FileState::Missing;
@@ -871,7 +875,8 @@ fn a_track_whose_tags_cannot_be_read_is_not_asked_again() {
     // Analysed already, with its tags still unread (and its loudness
     // measured, so the loudness pass sends nothing during the count).
     let mut r = rig_with(&[junk], dir, Duration::ZERO, |state| {
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.apply_loudness(None, fp_model::LOUDNESS_VERSION);
             track.format = Some(fp_model::AudioFormat {
@@ -914,7 +919,8 @@ fn a_missing_track_is_not_read() {
         dir,
         Duration::ZERO,
         |state| {
-            for track in state.library.iter_mut() {
+            for track_id in state.library.ids() {
+                let track = state.library.get_mut(track_id).unwrap();
                 track.analyzed = true;
                 track.file_state = FileState::Missing;
             }
@@ -956,7 +962,8 @@ fn a_stale_snapshot_does_not_read_a_track_twice() {
     let junk = dir.path().join("Band - Junk.wav");
     std::fs::write(&junk, b"this is not audio").unwrap();
     let mut r = rig_with(&[junk], dir, Duration::ZERO, |state| {
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.format = Some(fp_model::AudioFormat {
                 sample_rate: 44_100,
@@ -1485,7 +1492,8 @@ fn off_screen(state: &mut fp_model::AppState) {
 /// length known, no loudness measured yet; no track on screen.
 fn analysed_before_loudness(state: &mut fp_model::AppState) {
     off_screen(state);
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.analyzed = true;
         t.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
         t.tags_read = true;
@@ -1529,7 +1537,11 @@ fn the_pass_waits_for_normal_analysis() {
     let old_path = old.clone();
     let mut r = rig_with(&[old, new], dir, Duration::from_millis(300), move |s| {
         off_screen(s);
-        for t in s.library.iter_mut().filter(|t| t.path == old_path) {
+        for track_id in s.library.ids() {
+            let t = s.library.get_mut(track_id).unwrap();
+            if t.path != old_path {
+                continue;
+            }
             t.analyzed = true;
             t.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
             t.tags_read = true;
@@ -1609,7 +1621,8 @@ fn n6b_a_newer_loudness_version_measures_again() {
     let a = wav(dir.path(), "a.wav", 1);
     let mut r = rig_with(&[a], dir, Duration::ZERO, |s| {
         analysed_before_loudness(s);
-        for t in s.library.iter_mut() {
+        for track_id in s.library.ids() {
+            let t = s.library.get_mut(track_id).unwrap();
             t.apply_loudness(None, fp_model::LOUDNESS_VERSION - 1);
         }
     });
@@ -1774,7 +1787,8 @@ fn cart_rig(
             },
         )
         .unwrap();
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.duration_secs = 1.0;
             track.format = Some(fp_model::AudioFormat {
@@ -2131,7 +2145,8 @@ fn the_activity_is_rebuilt_only_when_something_changed() {
 /// A track analysed before the format carried a bit rate: analysed, tags and
 /// loudness done, the format known but with no bit rate.
 fn analysed_without_bitrate(state: &mut fp_model::AppState) {
-    for track in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let track = state.library.get_mut(track_id).unwrap();
         track.analyzed = true;
         track.tags_read = true;
         track.apply_loudness(None, fp_model::LOUDNESS_VERSION);

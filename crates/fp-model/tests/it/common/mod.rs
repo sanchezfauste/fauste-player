@@ -27,7 +27,8 @@ pub fn fixture(tracks: usize) -> AppState {
         },
     )
     .unwrap();
-    for track in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let track = state.library.get_mut(track_id).unwrap();
         track.duration_secs = 180.0;
     }
     state

@@ -290,7 +290,8 @@ fn n23_status_names() {
 fn normalizing() -> fp_model::AppState {
     let mut s = demo_state();
     s.config.loudness.normalize = true;
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.loudness = Some(fp_model::LoudnessMeasurement {
             integrated_lufs: Some(-20.0),
             true_peak_dbtp: -10.0,

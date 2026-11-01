@@ -59,7 +59,8 @@ fn the_range_is_the_whole_file_when_the_markers_are_ignored_and_they_are_kept() 
 #[test]
 fn an_unknown_duration_has_no_known_end() {
     let mut state = fixture(1);
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.duration_secs = 0.0;
     }
     let t = state.library.iter().next().unwrap();
@@ -177,7 +178,8 @@ fn a_transition_is_planned_at_the_end_of_the_range() {
 fn a_mix_point_past_the_cue_out_is_used_only_while_the_markers_are_off() {
     let mut state = fixture(3);
     mark_all(&mut state, 5.0, 170.0);
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.markers.set_auto(MarkerKind::SegueStart, Some(175.0));
     }
     let p = p0(&state);
@@ -281,7 +283,8 @@ fn a_restored_position_past_the_end_comes_back_at_the_start_of_the_range() {
 #[test]
 fn an_unknown_duration_plans_to_the_source_end() {
     let mut state = fixture(3);
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.duration_secs = 0.0;
     }
     set_use(&mut state, false);

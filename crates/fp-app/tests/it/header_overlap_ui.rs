@@ -236,7 +236,8 @@ fn a_not_normalized_track_reads_0_0_db_in_amber_and_the_reason_is_its_name() {
 fn the_gain_badge_keeps_its_width_whatever_the_gain() {
     let mut loud = state(1, 3);
     loud.config.loudness.normalize = true;
-    for t in loud.library.iter_mut() {
+    for track_id in loud.library.ids() {
+        let t = loud.library.get_mut(track_id).unwrap();
         t.analyzed = true;
         t.duration_secs = 180.0;
         t.loudness = Some(fp_model::LoudnessMeasurement {

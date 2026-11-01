@@ -25,7 +25,8 @@ fn state() -> AppState {
         },
     )
     .unwrap();
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = 180.0;
     }
     s

@@ -311,7 +311,8 @@ fn unity_is_exactly_one() {
 fn normalizing(tracks: usize) -> AppState {
     let mut s = fixture(tracks);
     s.config.loudness.normalize = true;
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.analyzed = true;
         t.loudness = Some(LoudnessMeasurement {
             integrated_lufs: Some(-20.0),

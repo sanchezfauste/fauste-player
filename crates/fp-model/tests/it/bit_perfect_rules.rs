@@ -263,7 +263,8 @@ fn plan(s: &AppState, p: PlayerId) -> Option<TransitionPlan> {
 /// A MIX point at 170 s on every track (they are 180 s long).
 fn with_segue(s: &mut AppState) {
     s.config.players.auto_segue = true;
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.markers.set_auto(MarkerKind::SegueStart, Some(170.0));
     }
 }

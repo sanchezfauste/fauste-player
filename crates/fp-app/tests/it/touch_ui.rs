@@ -1338,7 +1338,8 @@ fn a_tablet_has_no_lock_button() {
 #[test]
 fn the_drag_handle_leaves_the_duration_whole() {
     let mut s = state(1, 3);
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = 180.0;
     }
     let (mut h, _fake) = harness_sized(s, PORTRAIT, |ui| ui.with_touch());

@@ -32,7 +32,8 @@ fn card(size: Vec2, secs: f64) -> Harness<'static, AppUi> {
 fn card_with(size: Vec2, secs: f64, meter: fp_model::MeterBallistics) -> Harness<'static, AppUi> {
     let mut s = state(1, 3);
     s.config.meter.ballistics = meter;
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = secs;
     }
     // The meter's node is named "Level meter" without a loudness line.

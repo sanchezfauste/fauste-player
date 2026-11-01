@@ -102,6 +102,6 @@ pub use tag_sheet::{
     cover_changed, cover_unstored, field_problem, invalid_fields, unstored_fields,
 };
 pub use track::{
-    AudioFormat, FileState, InvalidDate, Library, Marker, MarkerKind, MarkerSource, Markers,
-    PlayRange, Track, TrackAnalysis, TrackKind, TrackTags, parse_tag_date,
+    AudioFormat, FileState, InvalidDate, Library, LibraryChanges, Marker, MarkerKind, MarkerSource,
+    Markers, PlayRange, Track, TrackAnalysis, TrackKind, TrackTags, parse_tag_date,
 };

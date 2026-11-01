@@ -309,7 +309,8 @@ fn releasing_over_the_scroll_bar_drops_nothing() {
 #[test]
 fn releasing_over_a_window_that_covers_the_table_drops_nothing() {
     let mut s = state(1, 20);
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = 180.0;
     }
     let (mut h, fake) = harness(s);

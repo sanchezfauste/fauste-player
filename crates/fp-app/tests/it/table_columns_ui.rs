@@ -26,7 +26,8 @@ fn with_columns(mut s: AppState, columns: &[TableColumn]) -> AppState {
 }
 
 fn tagged(mut s: AppState) -> AppState {
-    for (i, t) in s.library.iter_mut().enumerate() {
+    for (i, track_id) in s.library.ids().into_iter().enumerate() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = 200.0;
         t.album = format!("Album {}", i + 1);
         t.date = Some(format!("{}-05-14", 2000 + i));
@@ -391,7 +392,7 @@ fn drag(h: &mut Harness<'_, AppUi>, from: Pos2, to: Pos2) {
 #[test]
 fn the_comment_column_shows_the_comment_on_one_line() {
     let mut s = with_columns(state(1, 2), &[Title, Comment, Duration]);
-    s.library.iter_mut().next().unwrap().comment = "Live take\nfrom the studio".into();
+    s.library.get_mut(s.library.ids()[0]).unwrap().comment = "Live take\nfrom the studio".into();
     let (h, _) = harness(s);
     assert!(h.query_by_label("COMMENT").is_some());
     assert!(h.query_by_label("Live take from the studio").is_some());

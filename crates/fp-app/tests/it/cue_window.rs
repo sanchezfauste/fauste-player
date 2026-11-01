@@ -31,7 +31,8 @@ const FULL_VIEW: &str = "Full view";
 /// P1 is cueing its next entry; every track is 180 s long.
 fn cueing(players: usize) -> (Harness<'static, AppUi>, Arc<Fake>) {
     let mut s = state(players, 3);
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = 180.0;
     }
     let (mut h, fake) = harness(s);
@@ -292,7 +293,8 @@ fn a_paused_cue_keeps_the_interface_repainting() {
 /// P1 cues its next entry, a 180 s track whose intro ends at 30 s.
 fn cueing_with_intro() -> (Harness<'static, AppUi>, Arc<Fake>, TrackId) {
     let mut s = state(1, 3);
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = 180.0;
     }
     let track = s.playlists.iter().next().unwrap().entries[0].track;
@@ -541,7 +543,8 @@ fn stopping_the_cue_mid_drag_moves_no_marker() {
 /// entry 0's.
 fn cueing_another_entry() -> (Harness<'static, AppUi>, Arc<Fake>, TrackId, TrackId) {
     let mut s = state(1, 3);
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = 180.0;
     }
     let entries = s.playlists.iter().next().unwrap().entries.clone();
@@ -619,7 +622,8 @@ fn cue_at(fake: &Fake, secs: f64) {
 /// and positioned at 20 s. Returns the waveform's rectangle.
 fn zoomed_cue(paused: bool) -> (Harness<'static, AppUi>, Arc<Fake>, Rect) {
     let mut s = state(1, 3);
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = 180.0;
     }
     s.config.ui.follow_current_grace_secs = 0.01;

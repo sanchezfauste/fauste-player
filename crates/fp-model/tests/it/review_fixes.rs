@@ -216,7 +216,8 @@ fn unanalysed_tracks_transition_at_the_end_of_the_source() {
 // I5 — fade stop cancels the transition and works during an overlap.
 
 fn with_segue(state: &mut AppState, secs: f64) {
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.markers.set_auto(MarkerKind::SegueStart, Some(secs));
     }
 }
