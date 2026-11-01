@@ -257,24 +257,32 @@ alert_shown() {
 
 # Saves the screen to $1 once two captures in a row are the same (the
 # image's masks left out) with the app in front, so neither a half-drawn
-# screen nor a dialog over it is kept. A dropout alert in the status bar
-# (the emulator's audio stutters now and then) is waited out: it lasts 5 s.
+# screen nor a dialog over it is kept: within 30 s, or 90 s while a
+# dropout alert shows in the status bar (the emulator, without audio,
+# stutters now and then, and the alert lasts 5 s after the last dropout).
+# On failure the last screen is kept as <name>.failed.png.
 settled_capture() {
-    local file=$1 previous="" now size img rect x y w h draw=()
+    local file=$1 previous="" now size img rect x y w h draw=() why
+    local start=$SECONDS limit=30
+    why="nothing was captured"
+    rm -f "$tmp/shot.png"
     while read -r img rect _; do
         # shellcheck disable=SC2053 # the image is a pattern
         [[ $file == $img ]] || continue
         IFS=, read -r x y w h <<<"$rect"
         draw+=(-draw "rectangle $x,$y $((x + w - 1)),$((y + h - 1))")
     done < <(grep -v '^[[:space:]]*#' "$masks")
-    for _ in $(seq 60); do
+    while ((SECONDS - start < limit)); do
         if ! in_front; then
+            why="the app was not in front"
             previous=""
             sleep 0.5
             continue
         fi
         adb exec-out screencap -p > "$tmp/shot.png"
         if alert_shown "$tmp/shot.png"; then
+            why="the status bar showed an alert"
+            limit=90
             previous=""
             sleep 0.5
             continue
@@ -287,10 +295,12 @@ settled_capture() {
             convert "$tmp/shot.png" -alpha off "PNG24:$file"
             return 0
         fi
+        why="the screen kept changing"
         previous=$now
         sleep 0.5
     done
-    die "the screen kept changing, showed an alert, or the app was not in front, for 30 s ($file)"
+    [[ ! -s $tmp/shot.png ]] || cp "$tmp/shot.png" "${file%.png}.failed.png"
+    die "no settled screen after $limit s, last because $why ($file)"
 }
 
 tap() { shell input tap "$1" "$2"; sleep "${3:-1}"; }

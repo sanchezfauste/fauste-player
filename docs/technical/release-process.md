@@ -577,7 +577,8 @@ with Play's code: the locale's tag, or its language alone for `ca`)
 language's `images/phoneScreenshots/` the phone screenshots taken in that
 language (at least two, at most 2:1; every language has the same files).
 `scripts/package/play-listing.py check` checks the limits and sizes, that
-every interface language has a listing and that the user guide's copy of
+every interface language has a listing with the English listing's
+screenshot files (Play would show the English ones otherwise) and that the user guide's copy of
 the English screenshots (`docs/images/android`) is the same. The stores
 workflow uploads the whole listing to Play with every release (`en-US` is
 the default language; Play shows its icon and feature graphic for the
@@ -606,9 +607,12 @@ and signal, no notifications), opens each screen with a tap on its
 top-bar button and saves 24-bit PNGs (Play refuses an alpha channel) once
 two captures in a row are the same with the app in front (a slow
 emulator may show another app's "not responding" dialog: the script stops
-that app) and the status bar shows no alert (the emulator's audio stutters
-now and then, and a dropout alert lasts 5 s), after checking the screen's
-size. The songs are analysed once;
+that app) and the status bar shows no alert (the emulator, without audio,
+stutters now and then, and a dropout alert lasts 5 s: the script waits up
+to 90 s for it to go), after checking the screen's size. A capture that
+never settles stops the script, which says why and keeps the last screen
+as `<name>.failed.png` (the workflow uploads it as the
+`play-screenshots-failed` artefact). The songs are analysed once;
 then the app starts again in each language (`ui.language` in its
 `config.json`). The
 taps are pixels of that fixed screen: after a change to the top bar or the

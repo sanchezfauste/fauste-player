@@ -130,6 +130,14 @@ jobs:
           name: play-screenshots
           path: ${{ runner.temp }}/new-shots
           if-no-files-found: error
+      # What was taken up to a failure, with the last screen of a capture
+      # that never settled (<name>.failed.png).
+      - if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: play-screenshots-failed
+          path: ${{ runner.temp }}/new-shots
+          if-no-files-found: ignore
 
   publish:
     needs: shots
