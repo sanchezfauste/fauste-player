@@ -39,6 +39,13 @@ updates:
       # The patched Matroska reader must match the symphonia version.
       - dependency-name: symphonia
       - dependency-name: symphonia-*
+      # `midir` (MIDI on Android) still uses jni 0.21, whose API 0.22
+      # rewrote: fp-mobile moves with it, not before (two jni versions in
+      # the APK otherwise). Patch releases still arrive.
+      - dependency-name: jni
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-major
 
   - package-ecosystem: github-actions
     directory: "/"
