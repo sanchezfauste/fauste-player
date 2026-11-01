@@ -152,9 +152,9 @@ stops or changes playout.
 - *Live* (`touch::live`, PL4–PL6, PL37): a card per player (`player::card`:
   the header, `info_row` compact (a 40-point cover, title and artist on
   one line, the next track), the waveform `CARD_WAVE_HEIGHT` tall with no
-  marker editing, the time row `phone_time_row` with elapsed / total and
-  the countdown, then `top_block` at `BlockSize::PhoneCompact` (the
-  transport alone): 48-point transport buttons (`PHONE_BUTTON`), and the compact
+  marker editing, then `top_block` at `BlockSize::PhoneCompact`: the time
+  row `phone_time_row` (elapsed / total and the countdown) over the
+  transport, the meter and fader beside both; 48-point transport buttons (`PHONE_BUTTON`), and the compact
   meter and fader `widgets::vu_compact` / `fader_compact`, PL28–PL30; the
   card's margins and rows are `GAP` apart, as its buttons). egui follows
   one finger as its pointer, so `touch::tapped` also reads a second

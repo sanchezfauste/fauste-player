@@ -274,7 +274,6 @@ fn card_sized(
             header(ui, scene, view_state, id, index, &pv);
             info_row(ui, scene, covers, id, &pv, &telemetry, true);
             wave_sized(ui, scene, view_state, id, &pv, wave_height, markers, locked);
-            phone_time_row(ui, scene, &pv);
             // A drag that starts on the fader moves it (PL14), unless
             // locked (PL12); one that starts elsewhere scrolls the cards.
             top_block(
@@ -1035,8 +1034,8 @@ const COUNTDOWN_MIN_SCALE: f32 = 10.5 / 38.0;
 enum BlockSize {
     /// The desktop and tablet column.
     Desktop,
-    /// A phone's card (PL28–PL30): the transport alone, the info row
-    /// being above the waveform.
+    /// A phone's card (PL28–PL30): the time row over the transport, the
+    /// info row being above the waveform.
     PhoneCompact,
 }
 
@@ -1070,7 +1069,7 @@ fn top_block(
 ) {
     let phone = size != BlockSize::Desktop;
     let height = if phone {
-        PHONE_PLAY_SIZE
+        PHONE_TIME_ROW_HEIGHT + GAP + PHONE_PLAY_SIZE
     } else {
         PLAY_SIZE * 2.0 + ROW_GAP
     };
@@ -1092,7 +1091,11 @@ fn top_block(
             .layout(Layout::top_down(Align::Min)),
     );
     left_ui.spacing_mut().item_spacing = vec2(6.0, ROW_GAP);
-    if !phone {
+    if phone {
+        // The times over the transport, so the meter and fader span both.
+        left_ui.spacing_mut().item_spacing = vec2(GAP, GAP);
+        phone_time_row(&mut left_ui, scene, pv);
+    } else {
         info_row(&mut left_ui, scene, covers, id, pv, telemetry, false);
     }
     transport(&mut left_ui, scene, id, pv, phone);
@@ -1108,12 +1111,15 @@ fn top_block(
 const COMPACT_COLUMN_WIDTH: f32 =
     widgets::COMPACT_METER_WIDTH + METER_FADER_GAP + widgets::COMPACT_FADER_WIDTH;
 
+/// The height of a phone card's time row.
+const PHONE_TIME_ROW_HEIGHT: f32 = 40.0;
+
 /// A phone card's time row, under the waveform (PL29): the elapsed time
 /// and the track's total on the left, the countdown on the right.
 fn phone_time_row(ui: &mut Ui, scene: &Scene<'_>, pv: &PlayerView) {
     let text = view::time_text(pv.elapsed, pv.total, &scene.i18n.tr("placeholder-none"));
     ui.allocate_ui_with_layout(
-        vec2(ui.available_width(), 40.0),
+        vec2(ui.available_width(), PHONE_TIME_ROW_HEIGHT),
         Layout::left_to_right(Align::Center),
         |ui| {
             widgets::tabular_label(ui, &text, &font(14.0), theme::NEUTRAL_300);
