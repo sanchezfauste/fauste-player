@@ -340,4 +340,6 @@ cartwall folds ("ok pero que se pueda plegar la cartwall").
   the button.
 - PL38. **Buttons under a second finger.** A tap on a player's transport
   (card and mini card) works while another finger is on the screen (for
-  example holding the fader down, then Next, then the fader up).
+  example holding the fader down, then Next, then the fader up), and a
+  tap counts though the finger rolls a little (up to 16 dp) or stays down
+  a while; a finger that leaves the button taps nothing.

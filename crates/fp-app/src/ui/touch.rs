@@ -94,15 +94,31 @@ pub fn swipe_direction(delta: Vec2) -> Option<bool> {
 #[derive(Clone, Default)]
 struct Fingers {
     frame: u64,
-    /// Each finger down: where it started and whether another was down then.
-    down: Vec<(egui::TouchId, egui::Pos2, bool)>,
-    /// This frame's taps of a finger that was not the first: start and end.
+    /// Each finger down.
+    down: Vec<Finger>,
+    /// This frame's taps that egui's click misses: start and end.
     taps: Vec<(egui::Pos2, egui::Pos2)>,
 }
 
-/// Whether `response` was clicked, by the pointer or by a finger that came
-/// down while another was on the screen: egui follows the first finger
-/// only, so a tap on Next while a fader is held would be lost (PL38).
+/// A finger on the screen: where and when it came down and whether another
+/// was down then.
+#[derive(Clone, Copy)]
+struct Finger {
+    id: egui::TouchId,
+    start: egui::Pos2,
+    at: f64,
+    second: bool,
+}
+
+/// How far a finger may roll during a tap, in points: more than egui's
+/// click allows, less than a scroll.
+const TAP_SLOP: f32 = 16.0;
+
+/// Whether `response` was clicked, by the pointer or by a finger's tap:
+/// one that came down while another was on the screen (egui follows the
+/// first finger only, so a tap on Next while a fader is held would be
+/// lost), or one that rolled or lingered past what egui takes for a click
+/// (PL38).
 pub(crate) fn tapped(ui: &Ui, response: &egui::Response) -> bool {
     response.clicked()
         || (response.sense.senses_click() && second_finger_tap(ui, response.interact_rect))
@@ -115,19 +131,29 @@ fn second_finger_tap(ui: &Ui, rect: Rect) -> bool {
         .ctx()
         .data(|d| d.get_temp::<Fingers>(key).is_some_and(|f| f.frame == frame));
     if !seen {
-        let (touching, events): (bool, Vec<(egui::TouchId, egui::TouchPhase, egui::Pos2)>) = ui
-            .input(|i| {
-                (
-                    i.any_touches(),
-                    i.events
-                        .iter()
-                        .filter_map(|e| match e {
-                            egui::Event::Touch { id, phase, pos, .. } => Some((*id, *phase, *pos)),
-                            _ => None,
-                        })
-                        .collect(),
-                )
-            });
+        let (click_dist, click_duration) = ui.ctx().options(|o| {
+            (
+                o.input_options.max_click_dist,
+                o.input_options.max_click_duration,
+            )
+        });
+        let (now, touching, events): (
+            f64,
+            bool,
+            Vec<(egui::TouchId, egui::TouchPhase, egui::Pos2)>,
+        ) = ui.input(|i| {
+            (
+                i.time,
+                i.any_touches(),
+                i.events
+                    .iter()
+                    .filter_map(|e| match e {
+                        egui::Event::Touch { id, phase, pos, .. } => Some((*id, *phase, *pos)),
+                        _ => None,
+                    })
+                    .collect(),
+            )
+        });
         ui.ctx().data_mut(|d| {
             let f = d.get_temp_mut_or_default::<Fingers>(key);
             f.frame = frame;
@@ -136,15 +162,26 @@ fn second_finger_tap(ui: &Ui, rect: Rect) -> bool {
                 match phase {
                     egui::TouchPhase::Start => {
                         let second = !f.down.is_empty();
-                        f.down.retain(|(d, _, _)| *d != id);
-                        f.down.push((id, pos, second));
+                        f.down.retain(|finger| finger.id != id);
+                        f.down.push(Finger {
+                            id,
+                            start: pos,
+                            at: now,
+                            second,
+                        });
                     }
                     egui::TouchPhase::Move => {}
                     egui::TouchPhase::End | egui::TouchPhase::Cancel => {
-                        if let Some(at) = f.down.iter().position(|(d, _, _)| *d == id) {
-                            let (_, start, second) = f.down.swap_remove(at);
-                            if second && phase == egui::TouchPhase::End {
-                                f.taps.push((start, pos));
+                        if let Some(at) = f.down.iter().position(|finger| finger.id == id) {
+                            let finger = f.down.swap_remove(at);
+                            let moved = finger.start.distance(pos);
+                            // The first finger's ordinary tap is egui's click.
+                            let missed_click =
+                                moved > click_dist || now - finger.at > click_duration;
+                            if phase == egui::TouchPhase::End
+                                && (finger.second || (missed_click && moved <= TAP_SLOP))
+                            {
+                                f.taps.push((finger.start, pos));
                             }
                         }
                     }

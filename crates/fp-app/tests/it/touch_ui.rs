@@ -385,6 +385,64 @@ fn a_single_finger_tap_sends_play_once() {
     assert_eq!(plays, 1);
 }
 
+/// One finger tapping Play from `from` to `to`, `held` frames of 0.02 s
+/// apart, as the phone sends it: touch events and the pointer.
+fn finger_tap(h: &mut Harness<'static, AppUi>, from: egui::Pos2, to: egui::Pos2, held: usize) {
+    let press = |pos, pressed| egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    h.event(finger(0, egui::TouchPhase::Start, from));
+    h.event(egui::Event::PointerMoved(from));
+    h.event(press(from, true));
+    h.step();
+    for _ in 0..held {
+        h.step();
+    }
+    h.event(finger(0, egui::TouchPhase::Move, to));
+    h.event(egui::Event::PointerMoved(to));
+    h.step();
+    h.event(finger(0, egui::TouchPhase::End, to));
+    h.event(press(to, false));
+    h.run_steps(2);
+}
+
+fn plays_sent(fake: &Fake) -> usize {
+    fake.take_sent()
+        .iter()
+        .filter(|c| matches!(c, fp_model::Command::Play(_)))
+        .count()
+}
+
+/// PL38: a finger tap is a tap even when the finger rolls a little or
+/// stays down a while, which egui's click does not take.
+#[test]
+fn a_finger_tap_that_rolls_or_lingers_sends_play_once() {
+    for (shift, held) in [
+        (vec2(10.0, 4.0), 0),
+        (vec2(0.0, 0.0), 60),
+        (vec2(2.0, 0.0), 0),
+    ] {
+        let (mut h, fake) = touch(1, PORTRAIT);
+        let play = h.get_by_label("Play").rect().center();
+        fake.take_sent();
+        finger_tap(&mut h, play, play + shift, held);
+        assert_eq!(plays_sent(&fake), 1, "{shift:?} {held}");
+    }
+}
+
+/// A drag that starts on Play and leaves it is no tap.
+#[test]
+fn a_finger_drag_off_play_sends_nothing() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    let play = h.get_by_label("Play").rect().center();
+    fake.take_sent();
+    finger_tap(&mut h, play, play + vec2(0.0, 40.0), 0);
+    assert_eq!(plays_sent(&fake), 0);
+}
+
 /// A scroll of the cards that starts on a title moves nothing.
 #[test]
 fn a_scroll_of_the_cards_sends_nothing() {
