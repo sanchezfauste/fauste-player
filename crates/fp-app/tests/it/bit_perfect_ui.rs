@@ -93,7 +93,10 @@ fn knob_top(h: &egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, fader: e
         .iter()
         .filter(|r| r.fill != egui::Color32::TRANSPARENT)
         .filter(|r| fader.expand(0.5).contains_rect(r.rect))
-        .filter(|r| near(r.rect.width(), 12.0) && near(r.rect.height(), 6.0))
+        .filter(|r| {
+            near(r.rect.width(), 12.0)
+                && near(r.rect.height(), fp_app::ui::widgets::FADER_KNOB_HEIGHT)
+        })
         .collect();
     assert_eq!(knobs.len(), 1, "one knob in {fader:?}: {knobs:?}");
     knobs[0].rect.top()

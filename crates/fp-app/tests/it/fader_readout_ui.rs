@@ -105,7 +105,7 @@ fn readout_knob_and_left(h: &H, text: &str) -> (f32, f32, f32) {
             }
             egui::Shape::Rect(r)
                 if (r.rect.width() - 12.0).abs() < 0.01
-                    && r.fill == fp_app::ui::theme::NEUTRAL_100 =>
+                    && (r.rect.height() - fp_app::ui::widgets::FADER_KNOB_HEIGHT).abs() < 0.01 =>
             {
                 knobs.push(r.rect.center().x);
             }

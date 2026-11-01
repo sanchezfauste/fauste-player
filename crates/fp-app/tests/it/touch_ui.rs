@@ -2044,3 +2044,26 @@ fn a_cards_buttons_keep_its_bottom_margin() {
     // cards and the second card's top margin and stroke.
     assert!(p2.top() - play.bottom() >= 22.0, "{play:?} {p2:?}");
 }
+
+/// PL37: a card's header ends where its waveform does: CUE keeps the
+/// card's margin on the right, as the cartwall's Stop all does.
+#[test]
+fn the_header_ends_at_the_cards_margin() {
+    let (h, _fake) = touch(1, A56);
+    let wave = h.get_by_label("Waveform: click to seek").rect();
+    let cue = h
+        .get_all_by_label_contains("Pre-listen")
+        .next()
+        .unwrap()
+        .rect();
+    assert!((cue.right() - wave.right()).abs() < 0.5, "{cue:?} {wave:?}");
+}
+
+/// PL29: the elapsed time and the total sit right under the waveform.
+#[test]
+fn the_times_sit_under_the_waveform() {
+    let (h, _fake) = touch(1, A56);
+    let wave = h.get_by_label("Waveform: click to seek").rect();
+    let times = h.get_by_label("00:00 / —").rect();
+    assert!(times.top() - wave.bottom() <= 8.0, "{wave:?} {times:?}");
+}

@@ -797,10 +797,13 @@ fn header(
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing = vec2(SPACING, 0.0);
-                // The panel's buttons: at the right end, never collapsed.
-                ui.scope(|ui| {
-                    super::panels::header_buttons(ui, scene, view_state, Panel::Player(id))
-                });
+                // The panel's buttons: at the right end, never collapsed. A
+                // phone has none, and no empty item's spacing either.
+                if !view_state.phone_active {
+                    ui.scope(|ui| {
+                        super::panels::header_buttons(ui, scene, view_state, Panel::Player(id))
+                    });
+                }
                 let cue_style = if pv.cueing {
                     TileStyle {
                         fill: theme::CUE_BG,
@@ -1120,12 +1123,14 @@ fn phone_time_row_height(ui: &Ui) -> f32 {
 }
 
 /// A phone card's time row, under the waveform (PL29): the elapsed time
-/// and the track's total on the left, the countdown on the right.
+/// and the track's total on the left, at the top, the countdown on the
+/// right.
 fn phone_time_row(ui: &mut Ui, scene: &Scene<'_>, pv: &PlayerView) {
     let text = view::time_text(pv.elapsed, pv.total, &scene.i18n.tr("placeholder-none"));
     ui.allocate_ui_with_layout(
         vec2(ui.available_width(), phone_time_row_height(ui)),
-        Layout::left_to_right(Align::Center),
+        // The times read with the waveform, right under it.
+        Layout::left_to_right(Align::Min),
         |ui| {
             widgets::tabular_label(ui, &text, &font(14.0), theme::NEUTRAL_300);
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {

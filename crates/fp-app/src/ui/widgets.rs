@@ -1582,8 +1582,9 @@ const FADER_WHEEL_STEP: f32 = 0.025;
 /// The factor of drag and wheel while Ctrl or Shift is held (fine adjust).
 const FADER_FINE: f32 = 0.1;
 
-/// Height of the knob, in points.
-const FADER_KNOB_HEIGHT: f32 = 6.0;
+/// Height of the knob, in points: a mixing desk's fader cap, with room for
+/// its grip lines around the index line.
+pub const FADER_KNOB_HEIGHT: f32 = 14.0;
 
 /// Width of the knob; the track is as wide as [`FADER_TRACK_WIDTH`].
 const FADER_KNOB_WIDTH: f32 = 12.0;
@@ -1656,7 +1657,7 @@ pub fn fader_compact(
 pub const COMPACT_FADER_WIDTH: f32 = COMPACT_KNOB_WIDTH + 4.0;
 /// The compact fader's knob, wider and taller for a finger.
 const COMPACT_KNOB_WIDTH: f32 = 24.0;
-const COMPACT_KNOB_HEIGHT: f32 = 10.0;
+const COMPACT_KNOB_HEIGHT: f32 = 20.0;
 
 fn fader_sized(
     ui: &mut Ui,
@@ -1796,10 +1797,10 @@ fn fader_sized(
     let shown = dragging.or(changed).unwrap_or(position);
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
-        let (level_colour, knob_colour, mark_colour) = if enabled {
-            (theme::NEUTRAL_300, theme::NEUTRAL_100, theme::NEUTRAL_400)
+        let (level_colour, mark_colour) = if enabled {
+            (theme::NEUTRAL_300, theme::NEUTRAL_400)
         } else {
-            (theme::NEUTRAL_600, theme::NEUTRAL_600, theme::NEUTRAL_600)
+            (theme::NEUTRAL_600, theme::NEUTRAL_600)
         };
         // The track sits at the left of the fader, next to the meter; the
         // scale marks are on its right, away from the meter's own scale.
@@ -1847,16 +1848,60 @@ fn fader_sized(
             pos2(centre_x - knob_width / 2.0, knob_bottom - knob_height),
             pos2(centre_x + knob_width / 2.0, knob_bottom),
         );
-        painter.rect_filled(knob, 0.0, knob_colour);
-        painter.rect_stroke(
-            knob,
-            0.0,
-            Stroke::new(1.0, theme::NEUTRAL_900),
-            StrokeKind::Outside,
-        );
+        paint_fader_cap(painter, knob, enabled);
     }
     response.on_hover_text(label);
     changed
+}
+
+/// A fader's knob drawn as a mixing desk's cap: a dark body lit on its upper
+/// half, grip lines above and below, and a bright index line across its
+/// centre, on the level's scale notch.
+fn paint_fader_cap(painter: &Painter, knob: Rect, enabled: bool) {
+    let (lit, body, grip, index) = if enabled {
+        (
+            theme::NEUTRAL_600,
+            theme::NEUTRAL_700,
+            theme::NEUTRAL_900,
+            theme::NEUTRAL_100,
+        )
+    } else {
+        (
+            theme::NEUTRAL_700,
+            theme::NEUTRAL_800,
+            theme::NEUTRAL_900,
+            theme::NEUTRAL_500,
+        )
+    };
+    let centre = knob.center().y;
+    painter.rect_filled(knob, 1.0, body);
+    painter.rect_filled(
+        Rect::from_min_max(knob.min, pos2(knob.right(), centre)),
+        1.0,
+        lit,
+    );
+    // Grip lines every 3 points, clear of the index line and the edges.
+    let inset = knob.width() * 0.2;
+    let mut offset = 3.0;
+    while offset + 1.5 < knob.height() / 2.0 {
+        for y in [centre - offset, centre + offset] {
+            painter.line_segment(
+                [pos2(knob.left() + inset, y), pos2(knob.right() - inset, y)],
+                Stroke::new(1.0, grip),
+            );
+        }
+        offset += 3.0;
+    }
+    painter.line_segment(
+        [pos2(knob.left(), centre), pos2(knob.right(), centre)],
+        Stroke::new(2.0, index),
+    );
+    painter.rect_stroke(
+        knob,
+        1.0,
+        Stroke::new(1.0, theme::NEUTRAL_900),
+        StrokeKind::Outside,
+    );
 }
 
 /// How strongly the waveform's peak outline shows over the background,
