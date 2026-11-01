@@ -173,6 +173,8 @@ jobs:
           scripts/site/compare-screenshots.sh --masks packaging/android/play/screenshot-masks.txt \
             --apply "$new" "$LISTING"
           cp "$LISTING"/en-US/images/phoneScreenshots/*.png "$GUIDE_SHOTS"/
+          # What the stores workflow checks before an upload.
+          scripts/package/play-listing.py check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "$BRANCH"

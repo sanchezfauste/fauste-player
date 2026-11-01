@@ -38,6 +38,10 @@ on:
       - scripts/package/notices.sh
       - scripts/package/play-listing.py
       - scripts/package/tests/**
+      # play-listing.py check reads them: every locale has a listing, and
+      # the guide's copy of the screenshots is the English one.
+      - crates/fp-app/locales/**
+      - docs/images/android/**
       - .github/workflows/stores.yml
   workflow_dispatch:
     inputs:

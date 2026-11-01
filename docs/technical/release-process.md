@@ -237,7 +237,9 @@ building.
   names, the same `SUMMARY.md` entries (targets, order and nesting), the
   English heading ids (`{#id}` after each translated heading), and
   image links one level deeper (`../../images/…`); the committed images are
-  English, and the published site replaces them (see "The screenshots").
+  English, and the published site replaces them (see "The screenshots";
+  the Android page's `<img src="../../images/android/…">` keeps that form,
+  so `guide.py android-images` finds it).
 - **Metadata:** `docs/i18n/<lang>/translation.toml` holds the language tag,
   its name in the language menu, the book title, the menu label,
   `source-commit` (the full hash of the `master` commit whose `docs/user`

@@ -1,1 +1,1 @@
-Irrati-emisioa: player-ak, zerrendak, kateatzeak eta kartutxoak mugikorrean.
+Irrati-emisioa: erreproduzitzaileak, zerrendak eta kartutxoak mugikorrean.

@@ -26,6 +26,8 @@ on:
       - scripts/site/**
       - crates/fp-app/locales/**
       - packaging/icons/fauste-player.svg
+      # The translated guides' Android screenshots.
+      - packaging/android/play/*/images/phoneScreenshots/**
       - .github/workflows/pages.yml
   pull_request:
     paths:
@@ -38,6 +40,8 @@ on:
       - scripts/site/**
       - crates/fp-app/locales/**
       - packaging/icons/fauste-player.svg
+      # The translated guides' Android screenshots.
+      - packaging/android/play/*/images/phoneScreenshots/**
       - .github/workflows/pages.yml
   workflow_dispatch:
   workflow_call:

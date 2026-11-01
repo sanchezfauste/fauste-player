@@ -1,21 +1,21 @@
-Fauste Player posa a l'aire música, falques i anuncis. És una aplicació d'emissió de ràdio: diversos players independents funcionen alhora, cadascun amb les seves llistes, i les pistes s'encadenen amb precisió de mostra en els seus punts MIX. L'app d'Android fa servir el mateix nucli d'emissió que l'aplicació d'escriptori, amb una disposició pensada per al tacte.
+Fauste Player posa a l'aire música, falques i anuncis. És una aplicació d'emissió de ràdio: diversos reproductors independents funcionen alhora, cadascun amb les seves llistes, i les pistes s'encadenen amb precisió de mostra en els seus punts MIX. L'app d'Android fa servir el mateix nucli d'emissió que l'aplicació d'escriptori, amb una disposició pensada per al tacte.
 
-PLAYERS I LLISTES
-• Un o més players, cadascun amb les seves llistes, en mode SINGLE o CONT
-• Encadenats en el punt MIX de cada pista, marcadors de cue-in, intro, outro i cue-out trobats per una anàlisi en segon pla, i marcadors que poses amb una pulsació llarga a la forma d'ona
+REPRODUCTORS I LLISTES
+• Un o més reproductors, cadascun amb les seves llistes, en mode SINGLE o CONT
+• Mescles en el punt MIX de cada pista, marcadors de cue-in, intro, outro i cue-out trobats per una anàlisi en segon pla, i marcadors que poses amb una pulsació llarga a la forma d'ona
 • Preescolta (CUE) en una sortida a part, com uns auriculars
 • Normalització de la sonoritat
-• Mou pistes arrossegant-les, o envia'n una a un altre player just després de la seva pista següent
+• Mou pistes arrossegant-les, o envia'n una a un altre reproductor just després de la seva pista següent
 
 CARTUTXERA
 • Cartutxos instantanis per a falques, efectes i anuncis, en pàgines que passes amb el dit
-• Plega la cartutxera a la pantalla Directe per donar més espai als players
+• Plega la cartutxera a la pantalla Directe per donar més espai als reproductors
 
 PENSADA PER A L'ESTUDI
 • L'emissió continua amb la pantalla apagada o amb una altra app al davant, amb una notificació mentre sona alguna cosa
 • Res no surt a l'aire tot sol després d'un inici, un reinici o una fallada
 • Un cadenat protegeix dels tocs accidentals durant el programa: el transport i els cartutxos continuen funcionant
-• Tria la sortida de cada player, de la cartutxera i del seu CUE: l'altaveu, uns auriculars amb cable, una interfície USB o un altaveu Bluetooth
+• Tria la sortida de cada reproductor, de la cartutxera i del seu CUE: l'altaveu, uns auriculars amb cable, una interfície USB o un altaveu Bluetooth
 • Explora la música del dispositiu per carpeta, artista o àlbum, i cerca-hi
 
 PRIVADA I LLIURE

@@ -294,7 +294,9 @@ shoot() {
     settled_capture "$1/$2.png"
     echo "$1/$2.png"
 }
-# Starts the app again in the interface language $1.
+# Starts the app again in the interface language $1: the host's demo
+# config.json, with that language, replaces the device's (anything the app
+# wrote to it is lost; nothing it writes matters to the screenshots).
 start_in() {
     shell am force-stop "$package"
     python3 - "$home/config/config.json" "$1" <<'EOF2'

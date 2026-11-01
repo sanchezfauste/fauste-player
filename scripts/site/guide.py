@@ -40,6 +40,7 @@ DOCS = os.path.join(ROOT, "docs")
 SOURCE = os.path.join(DOCS, "user")
 PLAY = os.path.join(ROOT, "packaging", "android", "play")
 PLAY_SHOTS = os.path.join("images", "phoneScreenshots")
+LOCALES = os.path.join(ROOT, "crates", "fp-app", "locales")
 I18N = os.path.join(DOCS, "i18n")
 META = "translation.toml"
 ASSETS = "book-assets"
@@ -358,11 +359,16 @@ def own_images(site, lang, folder):
 
 
 def play_listing(lang):
-    """The Google Play listing folder of a guide language (packaging/android/
-    play/<lang> or <lang>-<REGION>), or None."""
-    for name in sorted(os.listdir(PLAY)):
-        if name == lang or name.startswith(lang + "-"):
-            return os.path.join(PLAY, name)
+    """The Google Play listing folder of a guide language: packaging/android/
+    play/<lang>, else the folder of its interface locale (pt -> pt-PT, a tag
+    of crates/fp-app/locales), or None."""
+    candidates = [lang]
+    if os.path.isdir(LOCALES):
+        candidates += sorted(t for t in os.listdir(LOCALES) if t.startswith(lang + "-"))
+    for name in candidates:
+        path = os.path.join(PLAY, name)
+        if os.path.isdir(path):
+            return path
     return None
 
 
