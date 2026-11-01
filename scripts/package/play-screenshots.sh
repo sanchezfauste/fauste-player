@@ -245,9 +245,20 @@ start_app
 timeout=${PLAY_SHOTS_ANALYSIS_TIMEOUT:-180}
 wait_for "$timeout" library_ready || die "the songs were not analysed after $timeout s"
 
+# Whether the status bar (the bottom of the screen, over the navigation
+# bar) shows an alert: its text has the alert colour (theme::ON_AIR_TEXT).
+alert_shown() {
+    local red
+    red=$(convert "$1" -crop "${WIDTH}x80+0+$((HEIGHT - 130))" +repage -fuzz 15% \
+        -fill black +opaque '#ff645f' -fill white -opaque '#ff645f' \
+        -format '%[fx:int(mean*w*h)]' info:)
+    [[ $red -gt 0 ]]
+}
+
 # Saves the screen to $1 once two captures in a row are the same (the
 # image's masks left out) with the app in front, so neither a half-drawn
-# screen nor a dialog over it is kept.
+# screen nor a dialog over it is kept. A dropout alert in the status bar
+# (the emulator's audio stutters now and then) is waited out: it lasts 5 s.
 settled_capture() {
     local file=$1 previous="" now size img rect x y w h draw=()
     while read -r img rect _; do
@@ -263,6 +274,11 @@ settled_capture() {
             continue
         fi
         adb exec-out screencap -p > "$tmp/shot.png"
+        if alert_shown "$tmp/shot.png"; then
+            previous=""
+            sleep 0.5
+            continue
+        fi
         # The pixels only: a PNG written by ImageMagick carries its time.
         now=$(convert "$tmp/shot.png" -fill black "${draw[@]}" RGB:- | md5sum)
         if [[ $now == "$previous" ]]; then
@@ -274,7 +290,7 @@ settled_capture() {
         previous=$now
         sleep 0.5
     done
-    die "the screen kept changing, or the app was not in front, for 30 s ($file)"
+    die "the screen kept changing, showed an alert, or the app was not in front, for 30 s ($file)"
 }
 
 tap() { shell input tap "$1" "$2"; sleep "${3:-1}"; }

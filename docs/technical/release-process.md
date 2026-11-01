@@ -606,7 +606,9 @@ and signal, no notifications), opens each screen with a tap on its
 top-bar button and saves 24-bit PNGs (Play refuses an alpha channel) once
 two captures in a row are the same with the app in front (a slow
 emulator may show another app's "not responding" dialog: the script stops
-that app), after checking the screen's size. The songs are analysed once;
+that app) and the status bar shows no alert (the emulator's audio stutters
+now and then, and a dropout alert lasts 5 s), after checking the screen's
+size. The songs are analysed once;
 then the app starts again in each language (`ui.language` in its
 `config.json`). The
 taps are pixels of that fixed screen: after a change to the top bar or the
