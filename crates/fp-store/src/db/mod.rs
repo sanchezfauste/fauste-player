@@ -3,6 +3,7 @@
 
 mod backup;
 mod schema;
+pub mod snapshot;
 
 use std::fs;
 use std::path::{Path, PathBuf};

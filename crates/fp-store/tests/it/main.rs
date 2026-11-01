@@ -6,6 +6,7 @@
 mod carts;
 mod db_fallback;
 mod db_schema;
+mod db_snapshot;
 mod playlist_io;
 mod session_layout;
 mod store_roundtrip;
