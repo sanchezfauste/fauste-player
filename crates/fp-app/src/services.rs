@@ -15,7 +15,8 @@ use fp_analysis::analyzer::{AnalysisResult, Analyzer, LoudnessResult};
 use fp_analysis::{AnalysisError, WavePeak};
 use fp_engine::conductor::ConductorHandle;
 use fp_model::{
-    AnalysisSettings, AppState, Command, FileState, LOUDNESS_VERSION, PlayerId, TrackId, Transport,
+    AnalysisSettings, AppState, Command, FileState, LOUDNESS_VERSION, Library, PlayerId, TrackId,
+    Transport,
 };
 use fp_store::Store;
 
@@ -353,6 +354,48 @@ impl UnmeasuredCount {
     }
 }
 
+/// What the whole-library walks of a step (the tag, header and loudness
+/// passes and the submission of new tracks) depend on, as of the end of the
+/// last step.
+///
+/// A step walks the library again when any of these changed, or when
+/// `Services::walk_again` says a pass left work behind. The inputs, kept
+/// explicit here so that a new one is not forgotten:
+///
+/// - the library itself (`Library::shares_storage`: O(1));
+/// - what the screen draws: the players' tracks, the cart tracks and the
+///   carts' waveforms (they decide what is `wanted`);
+/// - the flag *analyse outdated*;
+/// - the size of every set of tracks the passes keep (in flight, done,
+///   failed, forced, fresh, urgent, the pass, the tag, bit-rate, header and
+///   loudness jobs), as a backstop for a change made anywhere else.
+///
+/// Events that may create work without changing any of them set
+/// `walk_again`: operator requests, analysis results, probe, tag, header and
+/// loudness answers, a changed analysis setting, and a pass with work left
+/// (a full header queue, a full loudness share).
+struct WalkInputs {
+    library: Library,
+    on_players: HashSet<TrackId>,
+    on_carts: HashSet<TrackId>,
+    carts_drawn: HashSet<TrackId>,
+    wanted: HashSet<TrackId>,
+    analyse_outdated: bool,
+    sizes: [usize; 17],
+}
+
+impl WalkInputs {
+    fn same_as(&self, other: &Self) -> bool {
+        self.library.shares_storage(&other.library)
+            && self.analyse_outdated == other.analyse_outdated
+            && self.sizes == other.sizes
+            && self.on_players == other.on_players
+            && self.on_carts == other.on_carts
+            && self.carts_drawn == other.carts_drawn
+            && self.wanted == other.wanted
+    }
+}
+
 pub struct Services {
     conductor: Arc<ConductorHandle>,
     store: Store,
@@ -412,6 +455,14 @@ pub struct Services {
     urgent: HashSet<TrackId>,
     /// The operator asked for the outdated tracks to be analysed again.
     analyse_outdated: bool,
+    /// The inputs of the library walks as of the end of the last step; `None`
+    /// until the first step, and after a step that panicked.
+    walked: Option<WalkInputs>,
+    /// Something may have created work for the library walks without
+    /// changing `walked`: the next step walks again.
+    walk_again: bool,
+    /// How many steps walked the whole library.
+    library_walks: u64,
     /// Tracks whose result was lost to a panic once already: a second loss
     /// gives up on them (as failed) instead of retrying forever.
     retried: HashSet<TrackId>,
@@ -504,6 +555,9 @@ impl Services {
             gone: HashSet::new(),
             urgent: HashSet::new(),
             analyse_outdated: false,
+            walked: None,
+            walk_again: false,
+            library_walks: 0,
             retried: HashSet::new(),
             seen_analyzed: HashSet::new(),
             settings: None,
@@ -583,7 +637,14 @@ impl Services {
     /// snapshot older than its own answers.
     #[cfg(feature = "test-hooks")]
     pub fn tag_pass_on(&mut self, state: &AppState) {
-        self.tag_pass(state);
+        self.tag_pass(state, true);
+    }
+
+    /// How many steps walked the whole library. Used to test that an
+    /// unchanged library is not walked again.
+    #[cfg(feature = "test-hooks")]
+    pub fn library_walks(&self) -> u64 {
+        self.library_walks
     }
 
     /// How many header reads were sent. Used to test that a track is
@@ -639,6 +700,10 @@ impl Services {
         let saving = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             self.autosave(&state, version, now);
         }));
+        if analysis.is_err() {
+            // Nothing is known about what the failed step did.
+            self.walked = None;
+        }
         for outcome in [analysis, saving] {
             if outcome.is_err() {
                 self.faults.fetch_add(1, Ordering::AcqRel);
@@ -657,6 +722,7 @@ impl Services {
             }
         }
         while let Ok(request) = self.requests.try_recv() {
+            self.walk_again = true;
             match request {
                 ServiceRequest::ReanalyseAll => self.reanalyse_all(state),
                 ServiceRequest::AnalyseOutdated => self.analyse_outdated = true,
@@ -677,12 +743,24 @@ impl Services {
         self.follow_settings(state);
         self.follow_limits(state);
         self.recheck_missing(state, now);
-        self.submit_new(state);
-        self.header_pass(state);
-        self.tag_pass(state);
-        self.loudness_pass(state);
-        let wanted = Self::wanted(state);
+        let now_inputs = self.walk_inputs(state);
+        let walk = std::mem::take(&mut self.walk_again)
+            || !self
+                .walked
+                .as_ref()
+                .is_some_and(|before| before.same_as(&now_inputs));
+        if walk {
+            self.library_walks += 1;
+        }
+        self.submit_new(state, walk);
+        self.header_pass(state, walk);
+        self.tag_pass(state, walk);
+        self.loudness_pass(state, walk);
+        let wanted = now_inputs.wanted.clone();
         let results: Vec<AnalysisResult> = self.analyzer.results().try_iter().collect();
+        if !results.is_empty() {
+            self.walk_again = true;
+        }
         for result in results {
             // A result taken from the analyzer is gone from it: if applying
             // it panics, the track is asked for again (once) instead of
@@ -706,7 +784,42 @@ impl Services {
         if self.in_flight.is_empty() && self.forced.is_empty() {
             self.library_pass.clear();
         }
+        self.walked = Some(self.walk_inputs(state));
         self.publish_activity();
+    }
+
+    /// The inputs of the library walks now (see `WalkInputs`).
+    fn walk_inputs(&self, state: &AppState) -> WalkInputs {
+        let on_players = Self::on_players(state);
+        let mut wanted = on_players.clone();
+        wanted.extend(Self::cart_waveforms(state, true));
+        WalkInputs {
+            library: state.library.clone(),
+            on_players,
+            on_carts: Self::cart_tracks(state),
+            carts_drawn: Self::cart_waveforms(state, false),
+            wanted,
+            analyse_outdated: self.analyse_outdated,
+            sizes: [
+                self.in_flight.len(),
+                self.peaks_only.len(),
+                self.shown_only.len(),
+                self.done.len(),
+                self.failed.len(),
+                self.forced.len(),
+                self.fresh.len(),
+                self.urgent.len(),
+                self.library_pass.len(),
+                self.tags_in_flight.len(),
+                self.tags_answered.len(),
+                self.bitrate_in_flight.len(),
+                self.bitrate_answered.len(),
+                self.loudness_in_flight.len(),
+                self.loudness_answered.len(),
+                self.headers_asked.len(),
+                self.headers_unsent.len() + self.headers_in_flight,
+            ],
+        }
     }
 
     /// Main spec §6.1: stores what the analysis is doing when it changed.
@@ -787,6 +900,7 @@ impl Services {
             // New thresholds change the automatic markers of every track.
             self.analyzer.update_settings(current.clone());
             self.restart_analysis(state, false);
+            self.walk_again = true;
         }
         self.settings = Some(current.clone());
     }
@@ -892,6 +1006,7 @@ impl Services {
             match probe.answers.try_recv() {
                 Ok(answer) => {
                     probe.busy = false;
+                    self.walk_again = true;
                     // One in flight already (Re-analyse all) needs no second
                     // analysis.
                     for id in answer
@@ -1100,7 +1215,7 @@ impl Services {
     /// The bit-rate-only pass rides on the same worker: tracks analysed
     /// before the format carried a bit rate (`needs_bitrate_read`) get it
     /// read from the file's header, once per analysis.
-    fn tag_pass(&mut self, state: &AppState) {
+    fn tag_pass(&mut self, state: &AppState, walk: bool) {
         let Some(worker) = &self.tag_worker else {
             return;
         };
@@ -1114,7 +1229,7 @@ impl Services {
             .retain(|id| state.library.get(*id).is_some());
         self.bitrate_answered
             .retain(|id| state.library.get(*id).is_some_and(|t| !t.bitrate_read));
-        for track in state.library.iter() {
+        for track in state.library.iter().filter(|_| walk) {
             if track.needs_bitrate_read()
                 && !self.bitrate_answered.contains(&track.id)
                 && self.bitrate_in_flight.insert(track.id)
@@ -1146,6 +1261,9 @@ impl Services {
             }
         }
         let outcomes: Vec<TagOutcome> = worker.results().try_iter().collect();
+        if !outcomes.is_empty() {
+            self.walk_again = true;
+        }
         for outcome in outcomes {
             match outcome {
                 TagOutcome::Read { track, tags } => {
@@ -1181,8 +1299,11 @@ impl Services {
     /// too short to measure are recorded too, so they are not retried; a
     /// file gone since its analysis is marked missing instead, and measured
     /// when it comes back. It runs whether normalization is on or off.
-    fn loudness_pass(&mut self, state: &AppState) {
+    fn loudness_pass(&mut self, state: &AppState, walk: bool) {
         let answers: Vec<LoudnessResult> = self.analyzer.loudness_results().try_iter().collect();
+        if !answers.is_empty() {
+            self.walk_again = true;
+        }
         for answer in answers {
             // A job whose track went to a full analysis meanwhile is stale:
             // the analysis's measurement must not be overwritten.
@@ -1258,7 +1379,7 @@ impl Services {
             .analyzer
             .loudness_share()
             .saturating_sub(self.loudness_in_flight.len());
-        if room == 0 {
+        if room == 0 || !walk {
             return;
         }
         let todo: Vec<(TrackId, PathBuf)> = state
@@ -1272,6 +1393,10 @@ impl Services {
             .take(room)
             .map(|t| (t.id, t.path.clone()))
             .collect();
+        // The share is full: there may be more waiting.
+        if todo.len() >= room {
+            self.walk_again = true;
+        }
         for (id, path) in todo {
             self.analyzer.submit_loudness(id, path);
             self.loudness_in_flight.insert(id);
@@ -1290,7 +1415,7 @@ impl Services {
     /// the length their file's header declares, read on the header reader,
     /// the ones on a player first. Each track is read once per session; a
     /// length whose command could not be queued is sent on a later round.
-    fn header_pass(&mut self, state: &AppState) {
+    fn header_pass(&mut self, state: &AppState, walk: bool) {
         let Some(reader) = &self.header_reader else {
             return;
         };
@@ -1307,6 +1432,9 @@ impl Services {
                 })
         });
         let answers: Vec<(TrackId, Option<f64>)> = reader.answers().try_iter().collect();
+        if !answers.is_empty() {
+            self.walk_again = true;
+        }
         for (track, secs) in answers {
             self.headers_in_flight = self.headers_in_flight.saturating_sub(1);
             // A length that comes after the analysis (or after the file was
@@ -1327,6 +1455,9 @@ impl Services {
         }
         self.headers_asked
             .retain(|id| state.library.get(*id).is_some());
+        if !walk {
+            return;
+        }
         let wanted = Self::wanted(state);
         let mut todo: Vec<&fp_model::Track> = state
             .library
@@ -1336,6 +1467,10 @@ impl Services {
         // The tracks on a player first; the sort is stable.
         todo.sort_by_key(|t| !wanted.contains(&t.id));
         let room = HEADER_READS_IN_FLIGHT.saturating_sub(self.headers_in_flight);
+        // Reads wait for room: look again when one is answered.
+        if todo.len() > room {
+            self.walk_again = true;
+        }
         for track in todo.into_iter().take(room) {
             if !reader.submit(track.id, track.path.clone()) {
                 tracing::error!("the header reader stopped; lengths wait for the analysis");
@@ -1348,7 +1483,10 @@ impl Services {
         }
     }
 
-    fn submit_new(&mut self, state: &AppState) {
+    fn submit_new(&mut self, state: &AppState, walk: bool) {
+        if !walk {
+            return;
+        }
         let known: HashSet<TrackId> = state.library.iter().map(|t| t.id).collect();
         for gone in self.in_flight.difference(&known) {
             self.analyzer.cancel(*gone);

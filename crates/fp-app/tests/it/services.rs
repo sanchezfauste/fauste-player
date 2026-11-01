@@ -2211,3 +2211,31 @@ fn a_file_without_a_readable_bit_rate_is_not_asked_again() {
     r.run_until("a quiet period", |r| r.now >= until);
     assert_eq!(r.handle.telemetry.load().model_version, version);
 }
+
+/// Steps over a library that did not change do not walk it again, and an
+/// edited track makes the next step walk it.
+#[test]
+fn an_unchanged_library_is_not_walked_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let mut r = rig(&files, dir);
+    r.run_until("analysed", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    idle_for(&mut r, 300);
+    let walks = r.services.library_walks();
+    assert!(walks > 0);
+    let model = r.handle.model.load_full();
+    let player = model.players[0].id;
+    assert!(r.handle.send(Command::SetVolume(player, 0.3)));
+    idle_for(&mut r, 100);
+    assert_eq!(r.services.library_walks(), walks, "a volume change walks");
+    let track = model.library.iter().next().unwrap().id;
+    assert!(r.handle.send(Command::SetMarker {
+        track,
+        kind: fp_model::MarkerKind::IntroEnd,
+        secs: Some(0.5),
+    }));
+    idle_for(&mut r, 100);
+    assert!(r.services.library_walks() > walks, "an edit walks");
+}

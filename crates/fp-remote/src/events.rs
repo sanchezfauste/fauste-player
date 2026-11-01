@@ -117,10 +117,13 @@ pub fn diff(old: &AppState, new: &AppState, playback: &Playback) -> Vec<Event> {
             out.push(Event::Player(Box::new(d)));
         }
     }
+    // Only the tracks that differ: nothing is walked while the snapshots
+    // share their library.
     let changed_tracks: HashSet<TrackId> = new
         .library
-        .iter()
-        .filter(|t| old.library.get(t.id) != Some(*t))
+        .changes_since(&old.library)
+        .upserted
+        .into_iter()
         .map(|t| t.id)
         .collect();
     for list in new.playlists.iter() {
