@@ -5,9 +5,7 @@
 | File | Document | Content |
 |---|---|---|
 | `config/config.json` | `ConfigDoc` | `schema_version`, `config` |
-| `data/playlists.json` | `PlaylistsDoc` | `schema_version`, `library` (tracks with manual markers and the `analysis_version` of their automatic ones; an older version is analysed again when the operator asks), `playlists` (entries with `played_by`: the players that played each one, and `repeat` / `stop_after` when set), `ids`. Tracks also hold the tags the library shows: `date`, `genre`, `album_artist`, `composer`, `comment` and `tags_read`, all optional on load (a library from an earlier version loads with them empty and the tag-only pass fills them in). Tracks also hold `loudness` (`{ "integrated_lufs": number|null, "true_peak_dbtp": number }`, absent when not measured) and `loudness_pass` (the `LOUDNESS_VERSION` of the last loudness measurement tried, whatever it found), both optional on load: a library from an earlier version loads without them and the loudness-only pass measures its tracks (loudness normalization spec N6, N6b). Each track also holds the operator's `loudness_edit` (`{ "excluded": bool, "trim_db": number }`, default not excluded and 0 dB, absent in older files): exclude it from normalization, or trim its gain within ± `loudness.max_trim_db` (N10). The editor's tag sheet is never persisted: it reads the file each time. Schema 2; a schema 1 file's shared `played: true` is read as played by every player on restore. |
-| `data/carts.json` | `CartsDoc` | `schema_version`, `pages[]` (id, name, rows, cols, `carts[]` with id, name, track, kind, looped, exclusive and `color`, a lower-case name left out when the cart has none; one that does not parse loads as none with a load warning, `store::parse_carts`); cart files are tracks of the `playlists.json` library |
-| `data/session.json` | `SessionDoc` | `schema_version`, `players[]` (playlist, current, next, next_explicit, mode, stop_after_current, position_secs, volume, columns (`ColumnWidths`: fractions keyed by column name, for example `{"fractions": {"title": 0.5, "artist": 0.4, "duration": 0.1}}`; the old `[#, Title, Artist, Duration]` array converts, anything else loads as the default layout, unknown names are dropped), history: the entries the player left, oldest first — loaded leniently: an unparsable history is empty, pending_start: `[entry, secs]`, where Play starts the next entry of a stopped player (rule 3a); kept only while that entry is still the next, loaded leniently (anything that does not parse is none, and the load reports a warning that is logged)), `cartwall` (open, page shown), `layout` (resizable layout spec RL19: `player_shares` `[[player, share], …]`, each player's share of the players' width, a missing, non-finite or not above 0 one counting as the mean of the others; `hidden_players` `[player, …]`; `cartwall` `{ dock: "Bottom" | "Left" | "Right", size, hidden }`, where `size` is the cartwall's share of the middle area's height at the bottom or of its width on a side, clamped to 0.05–0.95, or `null` to fit the content at the bottom; `locked`. An older session has none and gets the default, today's window. It loads leniently, part by part and element by element: what does not parse is its default and the load reports a warning that is logged (`layout_notes`). The restore (`fp_model::settle_layout`) drops shares and hidden flags of players that do not exist, repeated ones and shares that are not finite or not above 0, rescales shares to a mean of 1 when the largest is above 1e6 or the smallest below 1e-6 (ratios kept; a share still below 1e-6, a player dragged to its minimum, is raised to 1e-6 rather than dropped), shows every panel when all are hidden and fits the cartwall's size to its dock, each with a warning) |
+| `data/fauste.db` | SQLite database (`fp-store/src/db/`) | Everything that refers to tracks or playlist entries, so one change is one transaction (see [The database](#the-database)). Replaces `playlists.json`, `carts.json` and `session.json` of earlier versions, which are imported once (see [Import](#import-from-the-json-documents-importrs)) |
 | `data/window.ron` | eframe's `FileStorage` (`persistence` feature, `NativeOptions::persist_window`, desktop only) | `window`: position, size, maximized and full screen; written on close and every 30 s; eframe moves a window whose monitor went away back on screen. No egui memory (`persist_egui_memory` is false); a missing or unreadable file opens the default window |
 
 The paths come from `AppPaths::system()` (`directories::ProjectDirs` for
@@ -29,8 +27,146 @@ concrete folders.
 - **With no playlist**, the second start shows "already running".
 - **Separate `FAUSTE_HOME` folders** have separate locks.
 
-## Writing
+## The database
 
+`data/fauste.db` holds the library (tracks with their manual markers, tags
+and loudness), the playlists and their entries, the cart pages and the
+session (players, history, pending start, the cartwall's state, the
+layout). Only `config.json` (hand-edited, read leniently) and
+`window.ron` stay outside it. The model and the interface do not know about
+SQL: `Store::load` returns the state the model restores from, and
+`Store::save_state` takes the `AppState`.
+
+### Schema (`db/schema.rs`)
+
+`PRAGMA user_version` is the schema version (`SCHEMA_VERSION`, 1), and
+`MIGRATIONS[n - 1]` takes it from *n − 1* to *n*, each in its own
+transaction. The tables:
+
+| Table | Content |
+|---|---|
+| `kv` | Key-value documents: the library's id counter and the other small values |
+| `tracks` | `id`, `path`, and `doc`: the track's JSON (tags, markers and the `analysis_version` of the automatic ones, `analyzed`, `loudness`, `loudness_pass`, `loudness_edit`, `tags_read`) |
+| `playlists`, `entries` | A playlist's `position` and `name`; its entries with `playlist`, `position`, `track` and `doc` (`played_by`, `repeat`, `stop_after`). Deleting a playlist deletes its entries |
+| `cart_pages` | `id`, `position`, and `doc`: the page with its carts (`color` is a lower-case name, left out when the cart has none) |
+| `players` | `id`, `position`, and `doc`: playlist, current, next, `next_explicit`, mode, `stop_after_current`, position, volume, columns, history, `pending_start` |
+
+The session's cartwall state and its layout (`player_shares`,
+`hidden_players`, the cartwall's dock and size, `locked`) are JSON values
+in `kv`. A `doc` column holds the model value's JSON, and the key columns
+win over the same fields inside it. Foreign keys are on.
+
+A new field that loads as its default when it is missing and that older
+builds ignore needs no migration, as before. A new shape is a new migration
+with a test that opens a database of the old schema.
+
+### Opening and fallback (`db/mod.rs`)
+
+`Db::open` looks at an existing file read-only first (a leftover `-wal`
+is not deleted and nothing is written to bytes that cannot be read), runs
+`PRAGMA quick_check` and checks `user_version`, then switches the file to
+WAL and migrates. The connection waits up to five seconds for a lock.
+
+`open_with_fallback` never fails and never destroys data:
+
+- A database that is not one or fails the check is renamed, with its
+  `-wal` and `-shm`, to `fauste.db.corrupt-<stamp>`; one written by a
+  *newer* version (`user_version` above `SCHEMA_VERSION`) is renamed to
+  `fauste.db.newer-<stamp>`, so a later save never destroys it. A second
+  one within the same second gets `-2`, `-3`… The side files move first and
+  the main file last; if a rename fails, the ones done are undone.
+- Then `fauste.db.bak1` … `.bakN` (`limits.backup_count`, 3) are tried in
+  order. A backup is *copied* over the main name, never moved, and a copy
+  that cannot be read in full is deleted again.
+- If nothing is usable, the application starts with an empty database and
+  a warning in the log.
+- A file that another connection holds locked is in use, not damaged: it
+  is left alone and the session runs on an in-memory database.
+
+### The disk is untrusted (`DiskState`)
+
+`Store` tracks whether this session may write the file: `Unopened` (the
+first save opens it), `Open`, or `Disabled`. It becomes `Disabled` when
+the file could not be set aside, when a table could not be read (the file
+is set aside and the backups are tried; if the replacement cannot be read
+either), or when the database is busy. From then on saves go to an
+in-memory stand-in and nothing in this session writes to the file or its
+backups; the log says "changes are not saved this session". A start never
+writes over a database it could not read.
+
+When the read repaired or dropped rows (an unknown enum value, a
+non-finite number, a document that does not parse), each is one warning,
+the other rows are unaffected, and the repaired state is written back.
+
+### Writing (`db/snapshot.rs`)
+
+A `Snapshot` is the part of the `AppState` that is saved. The store keeps
+the last one it wrote, and `write_changes` writes only the rows that differ
+from it, in one transaction, so a marker edit updates one track's row. The
+first save after a load or a failed save writes everything (`write_full`).
+All database work runs on the services thread, never on the interface or
+the audio thread.
+
+### Backups (`db/backup.rs`)
+
+After a successful save, at most once every `tuning.backup_interval_secs`
+(300), `backup_rotating` copies the database with SQLite's online backup
+into `fauste.db.bak-tmp`, then rotates `.bak1` → … → `.bakN` and renames
+the temporary file to `.bak1`. A failure leaves the existing backups as they
+were. A temporary file left by a crash is not a backup and is deleted. An
+in-memory stand-in never rotates, so the real backups are not pushed out.
+
+### Import from the JSON documents (`import.rs`)
+
+Versions before the database kept `playlists.json`, `carts.json` and
+`session.json` (and `.bak1`…`.bakN` of each) in `data/`. They are no longer
+read or written once the database exists. When `fauste.db` does not exist
+(nor a `fauste.db.bakN`) and any of those files does, the start imports
+them once:
+
+1. The documents are read with the earlier loaders (their `.bakN` fallback,
+   migrations and lenient parsing, with the same warnings).
+2. The snapshot is written to `fauste.db.importing`, a database of its own,
+   after deleting any leftover of an earlier attempt, and folded into one
+   file (`wal_checkpoint(TRUNCATE)`).
+3. The marker `fauste.db.import-pending` is created. It lists the JSON files
+   this import consumed, one name per line. Then `fauste.db.importing` is
+   renamed to `fauste.db`: from here the import is committed.
+4. The consumed files are renamed to `*.imported` (`playlists.json.imported`,
+   `playlists.json.bak1.imported`…), the directory is synced and the marker
+   is removed. The `.imported` files are kept so that a downgrade can find
+   them by renaming them back.
+
+Recovery after an interruption:
+
+- **A marker next to `fauste.db`:** the commit happened. The next start only
+  finishes step 4, for the files the marker names (a JSON file that appeared
+  later is not touched).
+- **A marker and no `fauste.db`:** the commit never happened. The marker is
+  deleted and the import starts again, from scratch.
+- **An existing `fauste.db` (or `.bakN`) without a marker always wins.** JSON
+  files that turn up later are never imported.
+- **A JSON file that is left unread blocks the import.** If a file of a
+  document exists but the loader neither read nor quarantined it (it is
+  larger than `limits.max_state_file_bytes`, written by a newer version, or
+  an I/O error), importing the rest would leave it behind a database that
+  does not hold it. Nothing is imported or saved in that session (the state
+  comes from what was read, but `DiskState` stays disabled), the log names
+  the files, and the import is tried again at the next start.
+- **A failure writing the database** has the same effect: the temporary file
+  and the marker are removed, the JSON files stay, the session runs without
+  saving and the next start retries.
+- **Nothing readable** at all starts empty, as the fallback does.
+
+On restore, a playlist or entry whose id is already taken (a hand-edited
+document) gets a new id; the first holder keeps its own
+(`Playlists::normalize`, like `Cartwall::normalize` for carts). The import
+applies the same rule before writing, because the database keys its rows by
+id.
+
+## Atomic files (`atomic.rs`)
+
+`config.json` and the other JSON files are still written with
 `write_atomic(path, bytes, backups)`:
 
 1. writes `<file>.tmp` and `fsync`s it;
@@ -42,8 +178,6 @@ A rename or copy that fails with "permission denied" (on Windows, a
 sharing violation while a scanner or indexer holds the file) is retried up to
 five times, waiting 10 ms and doubling (`retry_locked`).
 
-## Loading
-
 `load_with_fallback` tries the file, then `.bak1`…`.bakN`. A file that
 fails to parse or validate is renamed `*.corrupt-<stamp>` and kept (a
 second one within the same second gets `-2`, `-3`…).
@@ -51,11 +185,7 @@ A document written by a *newer* version of the application is rejected
 (this build cannot know its shape), and a copy is kept as `*.newer-<stamp>`
 so a later save never destroys it. Input larger than `limits.max_state_file_bytes` is refused. If
 everything fails, the store starts from defaults, and the application always
-starts.
-
-On restore, a playlist or entry whose id is already taken (a hand-edited
-`playlists.json`) gets a new id; the first holder keeps its own
-(`Playlists::normalize`, like `Cartwall::normalize` for carts).
+starts. The import uses it for the old documents.
 
 `config.json` is read **leniently** (`lenient.rs`): each field is taken on its
 own, so one bad value falls back to its default instead of discarding the
@@ -94,20 +224,22 @@ warnings, which are logged.
 
 ## Migrations
 
-Each document has a `*_SCHEMA` constant. When a shape changes, bump it and
-append a `vN → vN+1` function in `migrate.rs`, with a test that loads a
-fixture of the old shape.
+The database has numbered migrations (see [The database](#the-database)).
+`config.json` has a `CONFIG_SCHEMA` constant: when its shape changes, bump
+it and append a `vN → vN+1` function in `migrate.rs`, with a test that loads
+a fixture of the old shape. The old documents keep their `*_SCHEMA`
+constants and migrations, because the import reads them.
 A new field that loads as its default when it is missing, and that older
-builds ignore, needs no bump: the session's `layout` (resizable layout
-spec RL19) was added that way.
+builds ignore, needs no bump.
 
 ## Autosave and restore
 
-- The services thread watches `Telemetry::model_version`. It saves config,
-  playlists and session `tuning.save_debounce_ms` (1 s) after the first
+- The services thread watches `Telemetry::model_version`. It saves the
+  config and the database `tuning.save_debounce_ms` (1 s) after the first
   unsaved change. The version is read *before* the snapshot, so a save can
   never record a version newer than the data it wrote.
-- While any player plays, the session (positions) is saved at the same pace.
+- While any player plays, the session (positions) is saved at the same pace:
+  one small update of the players' rows.
 - On shutdown, a final save runs with the positions from the engine,
   before the conductor stops.
 - On start, `AppState::restore` rebuilds players with their current entry

@@ -81,7 +81,7 @@ the workspace, and needs the nightly toolchain:
 |---|---|
 | `m3u`, `pls` | playlist files (`fp_store::playlist_io::parse_playlist`) |
 | `cart_page` | cart page files, parsed and then imported into the model |
-| `store_documents` | the same bytes as `config.json`, `playlists.json`, `session.json` and `carts.json`, then the restore |
+| `store_documents` | the same bytes as `config.json` and as the documents the import reads (`playlists.json`, `session.json`, `carts.json`), then the restore (the parsers of the one-time import, `fp_store::fuzz_documents`) |
 
 ```sh
 rustup toolchain install nightly --profile minimal

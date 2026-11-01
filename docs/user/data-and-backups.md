@@ -5,7 +5,7 @@
 | | Linux | Windows | macOS |
 |---|---|---|---|
 | Settings (`config.json`) | `~/.config/fausteplayer/` | `%APPDATA%\Fauste\Fauste Player\config\` | `~/Library/Application Support/org.Fauste.Fauste-Player/` |
-| Playlists and session | `~/.local/share/fausteplayer/` | `%APPDATA%\Fauste\Fauste Player\data\` | `~/Library/Application Support/org.Fauste.Fauste-Player/` |
+| Library, playlists, carts and session (`fauste.db`) | `~/.local/share/fausteplayer/` | `%APPDATA%\Fauste\Fauste Player\data\` | `~/Library/Application Support/org.Fauste.Fauste-Player/` |
 | Analysis cache | `~/.cache/fausteplayer/` | `%LOCALAPPDATA%\Fauste\Fauste Player\cache\` | `~/Library/Caches/org.Fauste.Fauste-Player/` |
 | Logs and crash reports | `~/.local/share/fausteplayer/logs/` | `%LOCALAPPDATA%\Fauste\Fauste Player\data\logs\` | `~/Library/Application Support/org.Fauste.Fauste-Player/logs/` |
 
@@ -13,7 +13,7 @@ The Linux paths follow the XDG variables (`XDG_CONFIG_HOME` and so on) when
 they are set.
 
 The snap keeps its files in its own folder instead: settings in
-`~/snap/fauste-player/current/.config/fausteplayer/`, playlists, session
+`~/snap/fauste-player/current/.config/fausteplayer/`, the database
 and logs in `~/snap/fauste-player/current/.local/share/fausteplayer/`, and
 the analysis cache in `~/snap/fauste-player/common/.cache/fausteplayer/`.
 `sudo snap remove fauste-player` deletes them too (it keeps a snapshot for
@@ -30,20 +30,54 @@ a USB stick, or to keep separate setups side by side.
 | File | Content |
 |---|---|
 | `config.json` | Settings, outputs, analysis thresholds, advanced tuning |
-| `playlists.json` | Playlists, tracks, played flags, manual markers |
-| `session.json` | For each player: playlist shown, current and next tracks, mode, position, volume, column widths (by column) |
+| `fauste.db` | The library (tracks, manual markers, tags, loudness), the playlists with their played flags, the cart pages and the session: for each player the playlist shown, current and next tracks, mode, position, volume and column widths (by column), and the window layout |
+| `fauste.db.bak1`, `.bak2`, `.bak3` | Copies of the database (see below) |
 | `window.ron` | The main window's size, position and whether it was maximized (computer only; on Wayland the system chooses the position) |
 
 ## Autosave and backups
 
-- Changes are saved about one second after they happen. While anything
-  plays, the session (positions) is refreshed at the same pace.
-- Every save writes a temporary file and then replaces the old one, so a power
-  cut never leaves a half-written file.
-- The previous versions are kept as `.bak1`, `.bak2` and `.bak3`.
-- If a file cannot be read, the newest good backup is used. The unreadable
-  file is kept, renamed `*.corrupt-<time>`, for inspection. The application
-  always starts.
+- Changes are saved about one second after they happen, and only what
+  changed is written. While anything plays, the session (positions) is
+  refreshed at the same pace.
+- The database is written in transactions, so a power cut never leaves a
+  half-saved change.
+- About every five minutes (while changes are being saved) the application
+  copies the database to `fauste.db.bak1` and shifts the older copies up, to
+  `.bak2` and `.bak3`.
+- If the database cannot be read, the newest good backup is used. The
+  unreadable file is kept, renamed `fauste.db.corrupt-<time>`, for
+  inspection. If every copy fails, the application starts empty. It always
+  starts.
+- A database written by a newer version of the application is not opened:
+  it is kept as `fauste.db.newer-<time>` and the application starts empty,
+  so a downgrade never destroys your data.
+- `config.json` is saved the same way as before: a temporary file replaces
+  the old one, and the previous versions are kept as `.bak1`, `.bak2` and
+  `.bak3` beside it.
+- If the database cannot be used at all in a session (for example, it
+  cannot be renamed because the folder is read-only), the application
+  runs without saving until the next start, and the log says so.
+
+## Playlists and session from an earlier version
+
+Earlier versions kept the playlists in `playlists.json`, the cart pages in
+`carts.json` and the session in `session.json`. The first start of this
+version reads them (with their `.bak` copies) once and puts everything in
+`fauste.db`: the library with its markers, tags and loudness, the playlists
+with their played flags, the cart pages and the session. Then the old files
+are renamed with `.imported` at the end (`playlists.json.imported`,
+`playlists.json.bak1.imported`, and so on). They are no longer used and you
+can delete them once you are sure everything is there. To go back to an
+earlier version, close the application, delete `fauste.db`, remove
+`.imported` from the names, and start the older version. Changes made since the import are not in
+those files.
+
+If a start is interrupted during the import, the next one finishes it. If
+one of the old files cannot be read (too large, or written by a newer
+version), the application imports nothing and runs without saving that
+session, so the old files stay where they are; the log names the file. Fix or
+remove it and start again. Once `fauste.db` exists, old JSON files are
+never imported again.
 
 ## Crash recovery
 
