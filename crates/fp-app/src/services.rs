@@ -370,6 +370,10 @@ impl UnmeasuredCount {
 ///   failed, forced, fresh, urgent, the pass, the tag, bit-rate, header and
 ///   loudness jobs), as a backstop for a change made anywhere else.
 ///
+/// Correctness rests on this: every change to a pass set between two steps
+/// must set `walk_again` (or change the library). The sizes only back that
+/// up; they do not catch a swap that keeps the count.
+///
 /// Events that may create work without changing any of them set
 /// `walk_again`: operator requests, analysis results, probe, tag, header and
 /// loudness answers, a changed analysis setting, and a pass with work left
@@ -463,6 +467,8 @@ pub struct Services {
     walk_again: bool,
     /// How many steps walked the whole library.
     library_walks: u64,
+    /// A pass walked the whole library in the current step.
+    walk_counted: bool,
     /// Tracks whose result was lost to a panic once already: a second loss
     /// gives up on them (as failed) instead of retrying forever.
     retried: HashSet<TrackId>,
@@ -558,6 +564,7 @@ impl Services {
             walked: None,
             walk_again: false,
             library_walks: 0,
+            walk_counted: false,
             retried: HashSet::new(),
             seen_analyzed: HashSet::new(),
             settings: None,
@@ -749,9 +756,6 @@ impl Services {
                 .walked
                 .as_ref()
                 .is_some_and(|before| before.same_as(&now_inputs));
-        if walk {
-            self.library_walks += 1;
-        }
         self.submit_new(state, walk);
         self.header_pass(state, walk);
         self.tag_pass(state, walk);
@@ -785,6 +789,9 @@ impl Services {
             self.library_pass.clear();
         }
         self.walked = Some(self.walk_inputs(state));
+        if std::mem::take(&mut self.walk_counted) {
+            self.library_walks += 1;
+        }
         self.publish_activity();
     }
 
@@ -1075,19 +1082,30 @@ impl Services {
                 .get(*id)
                 .is_some_and(|t| t.file_state == FileState::Unreadable)
         });
-        for t in state
-            .library
-            .iter()
-            .filter(|t| t.file_state == FileState::Unreadable && !self.gone.contains(&t.id))
-        {
-            // What the failed analysis read, when it could `stat` the file;
-            // otherwise (and for a playback failure) a first look.
-            match self.failed_at.remove(&t.id) {
-                Some(stamp) => {
-                    self.stamps.insert(t.id, Seen::At(stamp));
-                }
-                None => {
-                    self.stamps.entry(t.id).or_insert(Seen::New);
+        // Depends on the library, `failed_at` (filled when a result is
+        // routed, which sets `walk_again`) and `gone` (changed by a probe
+        // answer, which sets it too): nothing to do while they are as they
+        // were.
+        let library_same = self
+            .walked
+            .as_ref()
+            .is_some_and(|w| w.library.shares_storage(&state.library));
+        if self.walk_again || !library_same {
+            self.walk_counted = true;
+            for t in state
+                .library
+                .iter()
+                .filter(|t| t.file_state == FileState::Unreadable && !self.gone.contains(&t.id))
+            {
+                // What the failed analysis read, when it could `stat` the
+                // file; otherwise (and for a playback failure) a first look.
+                match self.failed_at.remove(&t.id) {
+                    Some(stamp) => {
+                        self.stamps.insert(t.id, Seen::At(stamp));
+                    }
+                    None => {
+                        self.stamps.entry(t.id).or_insert(Seen::New);
+                    }
                 }
             }
         }
@@ -1229,34 +1247,37 @@ impl Services {
             .retain(|id| state.library.get(*id).is_some());
         self.bitrate_answered
             .retain(|id| state.library.get(*id).is_some_and(|t| !t.bitrate_read));
-        for track in state.library.iter().filter(|_| walk) {
-            if track.needs_bitrate_read()
-                && !self.bitrate_answered.contains(&track.id)
-                && self.bitrate_in_flight.insert(track.id)
-            {
-                let job = TagJob::ReadBitrate {
-                    track: track.id,
-                    path: track.path.clone(),
-                };
-                if !worker.submit(job) {
-                    tracing::error!("the tag worker stopped; bit rates stay unread");
-                    self.tag_worker = None;
-                    return;
+        if walk {
+            self.walk_counted = true;
+            for track in state.library.iter() {
+                if track.needs_bitrate_read()
+                    && !self.bitrate_answered.contains(&track.id)
+                    && self.bitrate_in_flight.insert(track.id)
+                {
+                    let job = TagJob::ReadBitrate {
+                        track: track.id,
+                        path: track.path.clone(),
+                    };
+                    if !worker.submit(job) {
+                        tracing::error!("the tag worker stopped; bit rates stay unread");
+                        self.tag_worker = None;
+                        return;
+                    }
                 }
-            }
-            if track.needs_tag_read()
-                && !self.tags_answered.contains(&track.id)
-                && self.tags_in_flight.insert(track.id)
-            {
-                let job = TagJob::Read {
-                    track: track.id,
-                    path: track.path.clone(),
-                    limits: state.config.limits.clone(),
-                };
-                if !worker.submit(job) {
-                    tracing::error!("the tag worker stopped; tags stay unread");
-                    self.tag_worker = None;
-                    return;
+                if track.needs_tag_read()
+                    && !self.tags_answered.contains(&track.id)
+                    && self.tags_in_flight.insert(track.id)
+                {
+                    let job = TagJob::Read {
+                        track: track.id,
+                        path: track.path.clone(),
+                        limits: state.config.limits.clone(),
+                    };
+                    if !worker.submit(job) {
+                        tracing::error!("the tag worker stopped; tags stay unread");
+                        self.tag_worker = None;
+                        return;
+                    }
                 }
             }
         }
@@ -1382,6 +1403,7 @@ impl Services {
         if room == 0 || !walk {
             return;
         }
+        self.walk_counted = true;
         let todo: Vec<(TrackId, PathBuf)> = state
             .library
             .iter()
@@ -1458,6 +1480,7 @@ impl Services {
         if !walk {
             return;
         }
+        self.walk_counted = true;
         let wanted = Self::wanted(state);
         let mut todo: Vec<&fp_model::Track> = state
             .library
@@ -1468,7 +1491,8 @@ impl Services {
         todo.sort_by_key(|t| !wanted.contains(&t.id));
         let room = HEADER_READS_IN_FLIGHT.saturating_sub(self.headers_in_flight);
         // Reads wait for room: look again when one is answered.
-        if todo.len() > room {
+        // (With no room, the answer that frees one asks for the walk.)
+        if room > 0 && todo.len() > room {
             self.walk_again = true;
         }
         for track in todo.into_iter().take(room) {
@@ -1487,6 +1511,7 @@ impl Services {
         if !walk {
             return;
         }
+        self.walk_counted = true;
         let known: HashSet<TrackId> = state.library.iter().map(|t| t.id).collect();
         for gone in self.in_flight.difference(&known) {
             self.analyzer.cancel(*gone);

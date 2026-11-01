@@ -2222,8 +2222,23 @@ fn an_unchanged_library_is_not_walked_again() {
     r.run_until("analysed", |r| {
         r.handle.model.load().library.iter().all(|t| t.analyzed)
     });
-    idle_for(&mut r, 300);
-    let walks = r.services.library_walks();
+    r.run_until("tags and bit rates read", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.tags_read && !t.needs_bitrate_read())
+    });
+    // Late answers may still ask for a walk: wait until none does.
+    let mut walks = r.services.library_walks();
+    let mut quiet = 0;
+    r.run_until("walks to settle", |r| {
+        let now = r.services.library_walks();
+        quiet = if now == walks { quiet + 1 } else { 0 };
+        walks = now;
+        quiet >= 50
+    });
     assert!(walks > 0);
     let model = r.handle.model.load_full();
     let player = model.players[0].id;
