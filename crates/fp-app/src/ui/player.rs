@@ -2126,7 +2126,7 @@ struct FooterLook {
 }
 
 /// A phone's footer tiles: easy to hit, smaller than the transport's.
-const PHONE_FOOTER_TILE: f32 = 32.0;
+const PHONE_FOOTER_TILE: f32 = 26.0;
 
 /// The desktop's slim footer, or a phone's with larger tiles and the
 /// card's even margins (PL37).
@@ -2136,8 +2136,8 @@ fn footer_look(phone: bool) -> FooterLook {
             height: PHONE_FOOTER_TILE + 2.0 * GAP,
             inset: GAP,
             tile: PHONE_FOOTER_TILE,
-            tile_pad: 24.0,
-            font: 12.0,
+            tile_pad: 20.0,
+            font: 11.0,
         }
     } else {
         FooterLook {
@@ -2164,7 +2164,7 @@ fn footer_more(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, playl
                 r.center(),
                 egui::Align2::CENTER_CENTER,
                 icon::DOTS_THREE,
-                font(16.0),
+                font(14.0),
                 c,
             );
         },

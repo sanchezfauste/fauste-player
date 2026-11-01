@@ -2077,7 +2077,7 @@ fn the_playlist_footer_has_larger_tiles() {
     let add = h.get_by_label("Add tracks to this playlist").rect();
     let more = h.get_by_label("More playlist actions").rect();
     let card = h.get_by_label("Play").rect();
-    assert!(add.height() >= 32.0, "{add:?}");
+    assert!(add.height() >= 26.0, "{add:?}");
     assert_eq!(add.height(), more.height(), "{add:?} {more:?}");
     // The card's left margin is 6 points inside its stroke.
     let list_left = card.left() - 6.0 - 1.0;
