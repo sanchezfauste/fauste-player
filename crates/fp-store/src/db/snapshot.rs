@@ -79,7 +79,24 @@ fn doc<T: Serialize>(value: &T) -> Result<String, StoreError> {
 /// Reads the snapshot. A row or document that is unusable is repaired (or
 /// dropped) with one warning; the other rows are never affected.
 pub fn read(db: &Db) -> (Snapshot, Vec<String>) {
-    let mut warnings = Vec::new();
+    let read = read_checked(db);
+    (read.snapshot, read.warnings)
+}
+
+/// What [`read_checked`] found.
+#[derive(Debug)]
+pub struct Read {
+    pub snapshot: Snapshot,
+    pub warnings: Vec<String>,
+    /// False when a whole table or document could not be read (as opposed
+    /// to a row that was repaired or dropped): the snapshot is then missing
+    /// data that is still on disk, and the database must not be written to.
+    pub complete: bool,
+}
+
+/// Like [`read`], and says whether every table could be read.
+pub fn read_checked(db: &Db) -> Read {
+    let mut warnings = Notes::default();
     let conn = &db.conn;
     let snapshot = Snapshot {
         library: read_library(conn, &mut warnings),
@@ -90,7 +107,28 @@ pub fn read(db: &Db) -> (Snapshot, Vec<String>) {
         layout: read_layout(conn, &mut warnings),
         cart_pages: read_cart_pages(conn, &mut warnings),
     };
-    (snapshot, warnings)
+    Read {
+        snapshot,
+        complete: !warnings.unreadable,
+        warnings: warnings.lines,
+    }
+}
+
+/// The warnings of a read, and whether a table could not be read at all.
+#[derive(Default)]
+struct Notes {
+    lines: Vec<String>,
+    unreadable: bool,
+}
+
+impl Notes {
+    fn push(&mut self, line: String) {
+        self.lines.push(line);
+    }
+
+    fn extend(&mut self, lines: impl IntoIterator<Item = String>) {
+        self.lines.extend(lines);
+    }
 }
 
 /// One row as loosely typed values, so a value of the wrong storage type
@@ -119,7 +157,7 @@ fn rows(
     sql: &str,
     columns: usize,
     what: &str,
-    warnings: &mut Vec<String>,
+    warnings: &mut Notes,
 ) -> Vec<Raw> {
     let mut out = Vec::new();
     let result = conn.prepare(sql).and_then(|mut stmt| {
@@ -136,12 +174,13 @@ fn rows(
         Ok(())
     });
     if let Err(e) = result {
+        warnings.unreadable = true;
         warnings.push(format!("database: cannot read {what}: {e}"));
     }
     out
 }
 
-fn read_library(conn: &Connection, warnings: &mut Vec<String>) -> Library {
+fn read_library(conn: &Connection, warnings: &mut Notes) -> Library {
     let rows = rows(
         conn,
         "SELECT id, path, doc FROM tracks ORDER BY id",
@@ -196,7 +235,7 @@ fn parse_doc<T: DeserializeOwned>(doc: &SqlValue) -> Result<T, String> {
     serde_json::from_str(text).map_err(|e| e.to_string())
 }
 
-fn read_playlists(conn: &Connection, warnings: &mut Vec<String>) -> Playlists {
+fn read_playlists(conn: &Connection, warnings: &mut Notes) -> Playlists {
     let lists = rows(
         conn,
         "SELECT id, name FROM playlists ORDER BY position, id",
@@ -261,13 +300,14 @@ fn read_playlists(conn: &Connection, warnings: &mut Vec<String>) -> Playlists {
 
 /// A document of `kv`: a missing key is the default without a warning, one
 /// that does not parse is the default with one.
-fn kv_text(conn: &Connection, name: &str, warnings: &mut Vec<String>) -> Option<String> {
+fn kv_text(conn: &Connection, name: &str, warnings: &mut Notes) -> Option<String> {
     match conn
         .query_row("SELECT value FROM kv WHERE key = ?1", [name], |r| r.get(0))
         .optional()
     {
         Ok(text) => text,
         Err(e) => {
+            warnings.unreadable = true;
             warnings.push(format!("database: cannot read {name}: {e}"));
             None
         }
@@ -278,7 +318,7 @@ fn read_kv<T: DeserializeOwned + Default>(
     conn: &Connection,
     name: &str,
     what: &str,
-    warnings: &mut Vec<String>,
+    warnings: &mut Notes,
 ) -> T {
     let Some(text) = kv_text(conn, name, warnings) else {
         return T::default();
@@ -291,7 +331,7 @@ fn read_kv<T: DeserializeOwned + Default>(
     })
 }
 
-fn read_layout(conn: &Connection, warnings: &mut Vec<String>) -> Layout {
+fn read_layout(conn: &Connection, warnings: &mut Notes) -> Layout {
     let Some(text) = kv_text(conn, KV_LAYOUT, warnings) else {
         return Layout::default();
     };
@@ -308,7 +348,7 @@ fn read_layout(conn: &Connection, warnings: &mut Vec<String>) -> Layout {
     fp_model::layout::lenient_layout(value).unwrap_or_default()
 }
 
-fn read_players(conn: &Connection, warnings: &mut Vec<String>) -> Vec<PlayerSession> {
+fn read_players(conn: &Connection, warnings: &mut Notes) -> Vec<PlayerSession> {
     let rows = rows(
         conn,
         "SELECT id, doc FROM players ORDER BY position, id",
@@ -352,7 +392,7 @@ fn read_players(conn: &Connection, warnings: &mut Vec<String>) -> Vec<PlayerSess
     players
 }
 
-fn read_cart_pages(conn: &Connection, warnings: &mut Vec<String>) -> Vec<CartPage> {
+fn read_cart_pages(conn: &Connection, warnings: &mut Notes) -> Vec<CartPage> {
     let rows = rows(
         conn,
         "SELECT id, doc FROM cart_pages ORDER BY position, id",

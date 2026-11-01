@@ -295,6 +295,19 @@ pub fn open_with_fallback(path: &Path, backups: usize) -> Result<Opened, OpenErr
             }
         }
     }
+    from_backups(path, backups, warnings)
+}
+
+/// The main file is free: restores the first usable backup over it, or
+/// creates a new database.
+fn from_backups(
+    path: &Path,
+    backups: usize,
+    mut warnings: Vec<String>,
+) -> Result<Opened, OpenError> {
+    let fail = |warnings: &mut Vec<String>, what: &str, e: &OpenError| {
+        warnings.push(format!("{}: {what}: {e}", path.display()));
+    };
     for n in 1..=backups {
         let backup = backup_path(path, n);
         if !backup.exists() {
@@ -331,6 +344,22 @@ pub fn open_with_fallback(path: &Path, backups: usize) -> Result<Opened, OpenErr
             in_memory(path, warnings)
         }
     }
+}
+
+/// Called when the open database at `path` (already closed by the caller)
+/// turned out to be unreadable in part: sets the file aside as
+/// `*.corrupt-<stamp>` with its side files and goes on through the
+/// backups, like [`open_with_fallback`]. When the file cannot be set aside
+/// nothing is written over it: the result is an in-memory database.
+pub(crate) fn reopen_after_unreadable(
+    path: &Path,
+    backups: usize,
+    mut warnings: Vec<String>,
+) -> Result<Opened, OpenError> {
+    if !set_aside(path, "corrupt", &mut warnings) {
+        return in_memory(path, warnings);
+    }
+    from_backups(path, backups, warnings)
 }
 
 /// The last resort: an in-memory database that stands for `path`.

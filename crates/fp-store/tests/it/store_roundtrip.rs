@@ -604,3 +604,134 @@ fn a_home_with_only_the_old_json_documents_loads_empty_for_now() {
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
     assert_eq!(loaded.state.playlists.len(), 1);
 }
+
+fn corrupt_aside(s: &Store) -> Vec<PathBuf> {
+    let db = s.paths().database_file();
+    fs::read_dir(db.parent().unwrap())
+        .unwrap()
+        .map(|e| e.unwrap().path())
+        .filter(|p| {
+            p.to_string_lossy().contains(".corrupt-")
+                && !p.to_string_lossy().ends_with("-wal")
+                && !p.to_string_lossy().ends_with("-shm")
+        })
+        .collect()
+}
+
+fn track_rows(path: &std::path::Path) -> i64 {
+    let conn = rusqlite::Connection::open(path).unwrap();
+    conn.query_row("SELECT count(*) FROM tracks", [], |r| r.get(0))
+        .unwrap()
+}
+
+#[test]
+fn a_table_that_cannot_be_read_is_never_written_over() {
+    // Without a backup: the file is set aside with its rows and the session
+    // starts empty; saving does not touch the set-aside file.
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    let tracks = state.library.len() as i64;
+    edit_db(&s, |db| {
+        db.conn().execute("DROP TABLE cart_pages", []).unwrap();
+    });
+    for n in 1..=9 {
+        let _ = fs::remove_file(fp_store::backup_path(&s.paths().database_file(), n));
+    }
+    let loaded = s.load("Main");
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|w| w.contains("cart_pages") || w.contains("cart pages")),
+        "{:?}",
+        loaded.warnings
+    );
+    let aside = corrupt_aside(&s);
+    assert_eq!(aside.len(), 1, "{aside:?}");
+    assert_eq!(track_rows(&aside[0]), tracks, "the rows are kept");
+    s.save_state(&loaded.state, |_| 0.0, std::time::Instant::now())
+        .unwrap();
+    assert_eq!(track_rows(&aside[0]), tracks, "saving leaves it alone");
+}
+
+#[test]
+fn a_table_that_cannot_be_read_falls_back_to_the_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    edit_db(&s, |db| {
+        db.conn().execute("DROP TABLE cart_pages", []).unwrap();
+    });
+    let loaded = s.load("Main");
+    assert_eq!(corrupt_aside(&s).len(), 1);
+    assert_eq!(loaded.state.playlists, state.playlists);
+    assert!(
+        loaded.warnings.iter().any(|w| w.contains("restored from")),
+        "{:?}",
+        loaded.warnings
+    );
+}
+
+#[test]
+fn a_failed_write_back_of_a_repair_is_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    edit_doc(&s, "players", state.players[0].id.0, |doc| {
+        doc["pending_start"] = serde_json::json!("garbage");
+    });
+    edit_db(&s, |db| {
+        db.conn()
+            .execute_batch(
+                "CREATE TRIGGER no_tracks BEFORE INSERT ON tracks \
+                 BEGIN SELECT RAISE(ABORT, 'refused'); END;",
+            )
+            .unwrap();
+    });
+    let loaded = s.load("Main");
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|w| w.contains("write back") || w.contains("written back")),
+        "{:?}",
+        loaded.warnings
+    );
+}
+
+#[test]
+fn a_failed_save_keeps_the_baseline_so_the_next_one_writes_the_difference() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    saved_with_a_played_entry(&mut s);
+    let mut state = s.load("Main").state;
+    let playlist = state.playlists.first_id().unwrap();
+    apply(
+        &mut state,
+        Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths: vec![PathBuf::from("/m/new.flac")],
+        },
+    )
+    .unwrap();
+    edit_db(&s, |db| {
+        db.conn()
+            .execute_batch(
+                "CREATE TRIGGER no_tracks BEFORE INSERT ON tracks \
+                 BEGIN SELECT RAISE(ABORT, 'refused'); END;",
+            )
+            .unwrap();
+    });
+    let now = std::time::Instant::now();
+    assert!(s.save_state(&state, |_| 0.0, now).is_err());
+    edit_db(&s, |db| {
+        db.conn().execute("DROP TRIGGER no_tracks", []).unwrap();
+    });
+    s.save_state(&state, |_| 0.0, now).unwrap();
+    let again = s.load("Main");
+    assert!(again.warnings.is_empty(), "{:?}", again.warnings);
+    assert_eq!(again.state.library, state.library);
+    assert_eq!(again.state.playlists, state.playlists);
+}

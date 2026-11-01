@@ -121,7 +121,7 @@ fn a_cart_page_row_that_does_not_parse_is_dropped_with_a_warning() {
 }
 
 #[test]
-fn missing_carts_file_gives_one_default_page() {
+fn an_empty_database_gives_one_default_cart_page() {
     let dir = tempfile::tempdir().unwrap();
     let loaded = store(&dir).load("Main");
     let wall = &loaded.state.cartwall;

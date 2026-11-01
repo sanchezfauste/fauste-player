@@ -7,7 +7,7 @@ use fp_model::{AppState, EngineAction, Limits, PlayerId, RestoreParts};
 
 use crate::atomic::{ParseError, load_with_fallback, write_atomic};
 use crate::db::snapshot::{self, Snapshot};
-use crate::db::{Db, open_with_fallback};
+use crate::db::{Db, open_with_fallback, reopen_after_unreadable};
 use crate::docs::{CONFIG_MIGRATIONS, CONFIG_SCHEMA, ConfigDoc};
 use crate::error::StoreError;
 use crate::lenient::config_from_value;
@@ -95,7 +95,7 @@ impl Store {
         let snap = match self.open_db(config.limits.backup_count) {
             Ok(opened_warnings) => {
                 warnings.extend(opened_warnings);
-                self.read_baseline(&mut warnings)
+                self.read_baseline(config.limits.backup_count, &mut warnings)
             }
             Err(e) => {
                 warnings.push(format!("database: {e}; starting with the defaults"));
@@ -118,27 +118,64 @@ impl Store {
     }
 
     /// Reads the snapshot of the open database and makes it the baseline
-    /// for the next save. When the read repaired or dropped anything, the
+    /// for the next save. When the read repaired or dropped rows, the
     /// repaired snapshot is written first so disk and baseline agree; if
     /// that fails there is no baseline and the next save writes everything.
-    fn read_baseline(&mut self, warnings: &mut Vec<String>) -> Snapshot {
-        let Some(db) = self.db.as_mut() else {
+    /// When a table could not be read at all, the database is never
+    /// written: the file is set aside and the backups are tried instead.
+    fn read_baseline(&mut self, backups: usize, warnings: &mut Vec<String>) -> Snapshot {
+        let Some(mut db) = self.db.take() else {
             return Snapshot::default();
         };
-        let (snap, read_warnings) = snapshot::read(db);
-        let repaired = !read_warnings.is_empty();
-        warnings.extend(read_warnings);
+        let mut read = snapshot::read_checked(&db);
+        if !read.complete {
+            warnings.append(&mut read.warnings);
+            let path = self.paths.database_file();
+            drop(db);
+            let reopened = reopen_after_unreadable(
+                &path,
+                backups,
+                vec![format!(
+                    "{}: a table could not be read; the file is set aside",
+                    path.display()
+                )],
+            );
+            match reopened {
+                Ok(opened) => {
+                    warnings.extend(opened.warnings);
+                    db = opened.db;
+                    read = snapshot::read_checked(&db);
+                    if !read.complete {
+                        // Even the replacement cannot be read: keep nothing.
+                        warnings.append(&mut read.warnings);
+                        warnings.push("database: not used in this session".to_owned());
+                        return Snapshot::default();
+                    }
+                }
+                Err(e) => {
+                    warnings.push(format!("database: {e}; starting with the defaults"));
+                    return Snapshot::default();
+                }
+            }
+        }
+        let repaired = !read.warnings.is_empty();
+        let snap = read.snapshot;
+        warnings.extend(read.warnings);
         self.saved = if repaired {
-            match snapshot::write_full(db, &snap) {
+            match snapshot::write_full(&mut db, &snap) {
                 Ok(()) => Some(snap.clone()),
                 Err(e) => {
                     tracing::warn!("could not write back the repaired library: {e}");
+                    warnings.push(format!(
+                        "database: could not write back the repaired library: {e}"
+                    ));
                     None
                 }
             }
         } else {
             Some(snap.clone())
         };
+        self.db = Some(db);
         snap
     }
 
