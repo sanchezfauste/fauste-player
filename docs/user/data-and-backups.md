@@ -32,6 +32,7 @@ a USB stick, or to keep separate setups side by side.
 | `config.json` | Settings, outputs, analysis thresholds, advanced tuning |
 | `playlists.json` | Playlists, tracks, played flags, manual markers |
 | `session.json` | For each player: playlist shown, current and next tracks, mode, position, volume, column widths (by column) |
+| `window.ron` | The main window's size, position and whether it was maximized (computer only; on Wayland the system chooses the position) |
 
 ## Autosave and backups
 

@@ -42,6 +42,8 @@ fp-control.workspace = true
 fp-remote.workspace = true
 rfd.workspace = true
 open.workspace = true
+# The window's size, position and maximized state, kept between runs.
+eframe = { workspace = true, features = ["persistence"] }
 
 # eframe runs inside an Android GameActivity (mobile spec §3).
 [target.'cfg(target_os = "android")'.dependencies]
