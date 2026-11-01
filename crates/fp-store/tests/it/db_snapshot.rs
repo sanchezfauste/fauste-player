@@ -382,3 +382,74 @@ fn one_marker_edit_saves_in_under_10_ms_with_20000_tracks() {
     eprintln!("write_changes of one marker edit: {took:?}");
     assert!(took.as_millis() < 10, "took {took:?}");
 }
+
+#[test]
+fn a_blob_doc_loads_as_a_bare_track_and_spares_the_other_rows() {
+    let snap = rich();
+    let (_dir, db) = saved(&snap);
+    db.conn()
+        .execute("UPDATE tracks SET doc = X'00' WHERE id = 2", [])
+        .unwrap();
+    let (back, warnings) = read(&db);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    assert_eq!(back.library.len(), 3);
+    assert_eq!(back.library.get(TrackId(2)), Some(&track(2)));
+    assert_eq!(back.library.get(TrackId(3)), snap.library.get(TrackId(3)));
+}
+
+#[test]
+fn an_entry_with_a_text_track_is_dropped_and_spares_the_other_entries() {
+    let snap = rich();
+    let (_dir, db) = saved(&snap);
+    db.conn()
+        .execute_batch(
+            "PRAGMA foreign_keys = OFF; \
+             UPDATE entries SET track = 'x' WHERE id = 100;",
+        )
+        .unwrap();
+    let (back, warnings) = read(&db);
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+    let main = back.playlists.get(PlaylistId(10)).unwrap();
+    assert_eq!(main.entries.len(), 1);
+    assert_eq!(main.entries[0].id, EntryId(101));
+    assert_eq!(back.playlists.get(PlaylistId(11)).unwrap().entries.len(), 1);
+}
+
+#[test]
+fn players_and_cart_pages_are_added_through_changes() {
+    let a = Snapshot {
+        players: vec![player(1, 10)],
+        cart_pages: vec![rich().cart_pages[0].clone()],
+        ..rich()
+    };
+    let (_dir, mut db) = saved(&a);
+    let mut b = a.clone();
+    b.players.push(player(2, 11));
+    b.cart_pages.push(rich().cart_pages[1].clone());
+    write_changes(&mut db, &a, &b).unwrap();
+    assert_eq!(read(&db).0, b);
+}
+
+#[test]
+fn renaming_a_playlist_in_place_writes_only_its_row() {
+    let a = rich();
+    let (_dir, mut db) = saved(&a);
+    let mut b = a.clone();
+    b.playlists.get_mut(PlaylistId(12)).unwrap().name = "Renamed".into();
+    let before = total(&db);
+    write_changes(&mut db, &a, &b).unwrap();
+    assert_eq!(total(&db) - before, 1);
+    assert_eq!(read(&db).0, b);
+}
+
+#[test]
+fn removing_a_referenced_track_fails_and_leaves_the_previous_state() {
+    let a = rich();
+    let (_dir, mut db) = saved(&a);
+    let mut b = a.clone();
+    b.library.remove(TrackId(1));
+    assert!(write_changes(&mut db, &a, &b).is_err());
+    let (back, warnings) = read(&db);
+    assert!(warnings.is_empty());
+    assert_eq!(back, a);
+}

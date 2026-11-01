@@ -9,6 +9,7 @@ use fp_model::{
     AppState, CartPage, CartwallSession, IdGen, Layout, Library, PlayerId, PlayerSession, Playlist,
     PlaylistEntry, Playlists, Track,
 };
+use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -92,46 +93,80 @@ pub fn read(db: &Db) -> (Snapshot, Vec<String>) {
     (snapshot, warnings)
 }
 
-/// Runs a query; a failure of the query itself is one warning and no rows.
-fn rows<T>(
+/// One row as loosely typed values, so a value of the wrong storage type
+/// spoils only its own row.
+type Raw = Vec<SqlValue>;
+
+fn int(v: &SqlValue) -> Option<i64> {
+    match v {
+        SqlValue::Integer(i) => Some(*i),
+        _ => None,
+    }
+}
+
+fn text(v: &SqlValue) -> Option<&str> {
+    match v {
+        SqlValue::Text(t) => Some(t),
+        _ => None,
+    }
+}
+
+/// Runs a query returning `columns` columns per row. A failure of the query
+/// itself is one warning and no rows; a row that cannot be read is one
+/// warning and is skipped.
+fn rows(
     conn: &Connection,
     sql: &str,
+    columns: usize,
     what: &str,
-    map: impl Fn(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
     warnings: &mut Vec<String>,
-) -> Vec<T> {
+) -> Vec<Raw> {
+    let mut out = Vec::new();
     let result = conn.prepare(sql).and_then(|mut stmt| {
-        let mapped = stmt.query_map([], |r| map(r))?;
-        mapped.collect::<rusqlite::Result<Vec<T>>>()
-    });
-    match result {
-        Ok(rows) => rows,
-        Err(e) => {
-            warnings.push(format!("database: cannot read {what}: {e}"));
-            Vec::new()
+        let mut cursor = stmt.query([])?;
+        while let Some(row) = cursor.next()? {
+            match (0..columns)
+                .map(|i| row.get::<_, SqlValue>(i))
+                .collect::<rusqlite::Result<Raw>>()
+            {
+                Ok(raw) => out.push(raw),
+                Err(e) => warnings.push(format!("database: a row of {what} is unreadable: {e}")),
+            }
         }
+        Ok(())
+    });
+    if let Err(e) = result {
+        warnings.push(format!("database: cannot read {what}: {e}"));
     }
+    out
 }
 
 fn read_library(conn: &Connection, warnings: &mut Vec<String>) -> Library {
     let rows = rows(
         conn,
         "SELECT id, path, doc FROM tracks ORDER BY id",
+        3,
         "the tracks",
-        |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, String>(1)?,
-                r.get::<_, String>(2)?,
-            ))
-        },
         warnings,
     );
     let mut tracks = Vec::with_capacity(rows.len());
-    for (id, path, text) in rows {
+    for row in rows {
+        let [id, path, doc] = row.as_slice() else {
+            continue;
+        };
+        let (Some(id), Some(path)) = (int(id), text(path)) else {
+            warnings.push(format!(
+                "library: a track record with an unusable id or path was dropped ({})",
+                id_text(id)
+            ));
+            continue;
+        };
         let id = fp_model::TrackId(raw(id));
         let path = PathBuf::from(path);
-        let track = match serde_json::from_str::<Track>(&text) {
+        let parsed = text(doc)
+            .ok_or_else(|| "not text".to_owned())
+            .and_then(|t| serde_json::from_str::<Track>(t).map_err(|e| e.to_string()));
+        let track = match parsed {
             Ok(mut track) => {
                 track.id = id;
                 track.path = path;
@@ -150,32 +185,46 @@ fn read_library(conn: &Connection, warnings: &mut Vec<String>) -> Library {
     Library::from(tracks)
 }
 
+fn id_text(v: &SqlValue) -> String {
+    format!("{v:?}")
+}
+
+/// Parses the `doc` column; a value that is not text is as bad as one that
+/// does not parse.
+fn parse_doc<T: DeserializeOwned>(doc: &SqlValue) -> Result<T, String> {
+    let text = text(doc).ok_or_else(|| "not text".to_owned())?;
+    serde_json::from_str(text).map_err(|e| e.to_string())
+}
+
 fn read_playlists(conn: &Connection, warnings: &mut Vec<String>) -> Playlists {
     let lists = rows(
         conn,
         "SELECT id, name FROM playlists ORDER BY position, id",
+        2,
         "the playlists",
-        |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
         warnings,
     );
     let entry_rows = rows(
         conn,
         "SELECT id, playlist, track, doc FROM entries ORDER BY playlist, position, id",
+        4,
         "the playlist entries",
-        |r| {
-            Ok((
-                r.get::<_, i64>(0)?,
-                r.get::<_, i64>(1)?,
-                r.get::<_, i64>(2)?,
-                r.get::<_, String>(3)?,
-            ))
-        },
         warnings,
     );
     let mut by_playlist: HashMap<i64, Vec<PlaylistEntry>> = HashMap::new();
-    for (id, playlist, track, text) in entry_rows {
+    for row in entry_rows {
+        let [id, playlist, track, doc] = row.as_slice() else {
+            continue;
+        };
+        let (Some(id), Some(playlist), Some(track)) = (int(id), int(playlist), int(track)) else {
+            warnings.push(format!(
+                "playlists: an entry record with an unusable id, playlist or track was dropped ({})",
+                id_text(&row[0])
+            ));
+            continue;
+        };
         let (id, track) = (fp_model::EntryId(raw(id)), fp_model::TrackId(raw(track)));
-        let entry = match serde_json::from_str::<PlaylistEntry>(&text) {
+        let entry = match parse_doc::<PlaylistEntry>(doc) {
             Ok(mut entry) => {
                 entry.id = id;
                 entry.track = track;
@@ -192,7 +241,17 @@ fn read_playlists(conn: &Connection, warnings: &mut Vec<String>) -> Playlists {
         by_playlist.entry(playlist).or_default().push(entry);
     }
     let mut playlists = Playlists::default();
-    for (id, name) in lists {
+    for row in lists {
+        let [id, name] = row.as_slice() else {
+            continue;
+        };
+        let (Some(id), Some(name)) = (int(id), text(name)) else {
+            warnings.push(format!(
+                "playlists: a playlist record with an unusable id or name was dropped ({})",
+                id_text(&row[0])
+            ));
+            continue;
+        };
         let mut list = Playlist::new(fp_model::PlaylistId(raw(id)), name);
         list.entries = by_playlist.remove(&id).unwrap_or_default();
         playlists.add(list);
@@ -253,19 +312,28 @@ fn read_players(conn: &Connection, warnings: &mut Vec<String>) -> Vec<PlayerSess
     let rows = rows(
         conn,
         "SELECT id, doc FROM players ORDER BY position, id",
+        2,
         "the players",
-        |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
         warnings,
     );
     let mut players = Vec::with_capacity(rows.len());
-    for (id, text) in rows {
-        let id = PlayerId(raw(id));
-        match serde_json::from_str::<PlayerSession>(&text) {
+    for row in rows {
+        let [id, doc] = row.as_slice() else {
+            continue;
+        };
+        let Some(id) = int(id).map(|i| PlayerId(raw(i))) else {
+            warnings.push(format!(
+                "session: a player record with an unusable id was dropped ({})",
+                id_text(&row[0])
+            ));
+            continue;
+        };
+        match parse_doc::<PlayerSession>(doc) {
             Ok(mut player) => {
                 player.id = id;
                 // The model drops a pending start that does not parse; say so.
-                let had_pending = serde_json::from_str::<Value>(&text)
-                    .ok()
+                let had_pending = text(doc)
+                    .and_then(|t| serde_json::from_str::<Value>(t).ok())
                     .and_then(|v| v.get("pending_start").map(|p| !p.is_null()))
                     .unwrap_or(false);
                 if had_pending && player.pending_start.is_none() {
@@ -288,14 +356,23 @@ fn read_cart_pages(conn: &Connection, warnings: &mut Vec<String>) -> Vec<CartPag
     let rows = rows(
         conn,
         "SELECT id, doc FROM cart_pages ORDER BY position, id",
+        2,
         "the cart pages",
-        |r| Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?)),
         warnings,
     );
     let mut pages = Vec::with_capacity(rows.len());
-    for (id, text) in rows {
-        let id = fp_model::CartPageId(raw(id));
-        match serde_json::from_str::<CartPage>(&text) {
+    for row in rows {
+        let [id, doc] = row.as_slice() else {
+            continue;
+        };
+        let Some(id) = int(id).map(|i| fp_model::CartPageId(raw(i))) else {
+            warnings.push(format!(
+                "carts: a page record with an unusable id was dropped ({})",
+                id_text(&row[0])
+            ));
+            continue;
+        };
+        match parse_doc::<CartPage>(doc) {
             Ok(mut page) => {
                 page.id = id;
                 pages.push(page);
@@ -369,7 +446,15 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
 }
 
 /// Brings the database from `old` to `new` writing only the rows that
-/// differ. `old` must be what the database holds.
+/// differ, in one transaction.
+///
+/// Caller contract:
+/// - `old` must be exactly what the database holds. Rows on disk that `old`
+///   does not know about are never deleted.
+/// - After an `Err` nothing was written: keep `old` as the baseline.
+/// - A baseline that comes from a [`read`] with warnings must first be
+///   written with [`write_full`], so repaired and dropped rows and stale
+///   positions are normalised.
 pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), StoreError> {
     let tx = db
         .conn
@@ -456,17 +541,12 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
 }
 
 fn upsert_track(tx: &Transaction<'_>, track: &Track) -> Result<(), StoreError> {
+    let text = doc(track)?;
     tx.prepare_cached(
         "INSERT INTO tracks (id, path, doc) VALUES (?1, ?2, ?3) \
          ON CONFLICT(id) DO UPDATE SET path = excluded.path, doc = excluded.doc",
     )
-    .and_then(|mut s| {
-        s.execute(params![
-            key(track.id.0),
-            track.path.to_string_lossy(),
-            doc(track).map_err(|e| rusqlite::Error::ToSqlConversionFailure(Box::new(e)))?
-        ])
-    })
+    .and_then(|mut s| s.execute(params![key(track.id.0), track.path.to_string_lossy(), text]))
     .map(drop)
     .map_err(db_error)
 }
