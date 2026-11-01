@@ -565,21 +565,31 @@ credentials; variables hold public identifiers.
 **Google Play**
 
 The listing lives in `packaging/android/play`, in fastlane's layout: per
-language (`en-US`, `es-ES`) `title.txt` (at most 30 characters),
+language (one per interface language of `crates/fp-app/locales`, named
+with Play's code: the locale's tag, or its language alone for `ca`)
+`title.txt` (at most 30 characters),
 `short_description.txt` (80), `full_description.txt` (4000) and
 `changelogs/default.txt` (500, the release notes of every upload), and in
 `en-US/images` the 512 × 512 `icon.png` and the 1024 × 500
-`featureGraphic.png`, rendered by `scripts/package/icons.sh`, and the phone
-screenshots in `phoneScreenshots/` (at least two, at most 2:1).
-`scripts/package/play-listing.py check` checks the limits and sizes.
-The stores workflow uploads the whole listing to Play with every release
-(`en-US` is the default language; Play shows its images for the other
-languages). Other languages are translated with AI before a release, as
-the guide is.
+`featureGraphic.png`, rendered by `scripts/package/icons.sh`, and in each
+language's `images/phoneScreenshots/` the phone screenshots taken in that
+language (at least two, at most 2:1; every language has the same files).
+`scripts/package/play-listing.py check` checks the limits and sizes, that
+every interface language has a listing and that the user guide's copy of
+the English screenshots (`docs/images/android`) is the same. The stores
+workflow uploads the whole listing to Play with every release (`en-US` is
+the default language; Play shows its icon and feature graphic for the
+others). `en-US` and `es-ES` are written with each change; the other
+languages are translated with AI, as the interface is. The Android page of
+each translated guide shows the screenshots of its language
+(`guide.py android-images`, run by `scripts/site/build.sh`; a translation
+without them shows the English ones).
 
 Nobody retakes the screenshots by hand:
-`scripts/package/play-screenshots.sh [--apk <file>] [--out <dir>]` takes
-them on a running emulator. It installs the release APK of
+`scripts/package/play-screenshots.sh [--apk <file>] [--out <dir>] [--lang
+<locale>]...` takes them on a running emulator, in every interface
+language (or the `--lang` ones), into the listing (or
+`<dir>/<language>/images/phoneScreenshots`). It installs the release APK of
 `android.sh release`, generates the screenshot songs and carts
 (`scripts/site/tones.sh`), writes the demo state with
 `examples/demo_session` (players paused mid-track, so two runs give the
@@ -592,12 +602,17 @@ would list it). It fixes the screen at 1080 × 2160 (Play refuses a taller
 ratio) and 420 dpi, puts the status bar in demo mode (9:00, full battery
 and signal, no notifications), opens each screen with a tap on its
 top-bar button and saves 24-bit PNGs (Play refuses an alpha channel) once
-two captures in a row are the same, after checking the screen's size. The
+two captures in a row are the same with the app in front (a slow
+emulator may show another app's "not responding" dialog: the script stops
+that app), after checking the screen's size. The songs are analysed once;
+then the app starts again in each language (`ui.language` in its
+`config.json`). The
 taps are pixels of that fixed screen: after a change to the top bar or the
 Music screen, check them. The app's clock and a paused player's blinking
 Play and Pause buttons change all the time:
-`packaging/android/play/screenshot-masks.txt` lists them, for
-`scripts/site/compare-screenshots.sh` and for that wait.
+`packaging/android/play/screenshot-masks.txt` lists them (patterns
+shared by every language), for `scripts/site/compare-screenshots.sh` and
+for that wait.
 
 The `play-screenshots` workflow (`.github/workflows/play-screenshots.yml`)
 runs it on a push to `master` that touches the UI, its strings, the
@@ -606,7 +621,8 @@ it builds the release APK (signed with the debug key), starts an API 34
 `google_apis` emulator with the `pixel_6` profile
 (`reactivecircus/android-emulator-runner`), takes the screenshots,
 compares them with the committed ones and opens or updates one pull
-request from `docs/retake-play-screenshots` (closing it when nothing
+request from `docs/retake-play-screenshots` with the images that changed
+and the guide's copy of the English ones (closing it when nothing
 differs any more), as the `screenshots` workflow does for `docs/images`,
 with the same one-time setup. A pull request that touches the script, the masks or the
 workflow only takes and compares them; the images are in its

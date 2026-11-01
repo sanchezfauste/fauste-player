@@ -1,0 +1,25 @@
+Fauste Player met à l'antenne la musique, les jingles et les spots. C'est une application de diffusion radio : plusieurs players indépendants fonctionnent côte à côte, chacun avec ses playlists, et les titres s'enchaînent à l'échantillon près à leurs points MIX. L'app Android utilise le même cœur de diffusion que l'application de bureau, avec une disposition pensée pour le tactile.
+
+PLAYERS ET PLAYLISTS
+• Un ou plusieurs players, chacun avec ses playlists, en mode SINGLE ou CONT
+• Enchaînements au point MIX de chaque titre, marqueurs de cue-in, intro, outro et cue-out trouvés par une analyse en arrière-plan, et marqueurs que vous placez d'un appui long sur la forme d'onde
+• Pré-écoute (CUE) sur une sortie séparée, comme un casque
+• Normalisation du loudness
+• Déplacez les titres en les faisant glisser, ou envoyez-en un à un autre player juste après son titre suivant
+
+CARTOUCHES
+• Cartouches instantanées pour les jingles, les effets et les spots, sur des pages que vous faites défiler du doigt
+• Repliez les cartouches sur l'écran Direct pour laisser plus de place aux players
+
+PENSÉE POUR LE STUDIO
+• La diffusion continue écran éteint ou avec une autre app au premier plan, avec une notification tant que quelque chose joue
+• Rien ne passe à l'antenne tout seul après un démarrage, un redémarrage ou un plantage
+• Un cadenas protège des touches accidentelles pendant l'émission : le transport et les cartouches restent utilisables
+• Choisissez la sortie de chaque player, des cartouches et de leur CUE : le haut-parleur, un casque filaire, une interface USB ou une enceinte Bluetooth
+• Parcourez la musique de l'appareil par dossier, artiste ou album, et faites-y des recherches
+
+PRIVÉE ET LIBRE
+Fauste Player n'a ni comptes, ni publicités, ni statistiques, ni pistage, et ne demande pas d'accès au réseau. C'est un logiciel libre sous GNU GPL (version 3 ou ultérieure), et le même projet fonctionne sous Linux, Windows et macOS.
+
+Guide de l'utilisateur : https://sanchezfauste.com/fauste-player/guide/fr/
+Code source et signalements : https://github.com/sanchezfauste/fauste-player

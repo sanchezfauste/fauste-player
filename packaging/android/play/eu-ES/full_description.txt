@@ -1,0 +1,25 @@
+Fauste Player-ek musika, jingle-ak eta iragarkiak airera ateratzen ditu. Irrati-emisiorako aplikazio bat da: player independente batzuk aldi berean dabiltza, bakoitza bere zerrendekin, eta pistak laginaren zehaztasunez kateatzen dira beren MIX puntuetan. Android-eko aplikazioak mahaigaineko aplikazioaren emisio-nukleo bera erabiltzen du, ukimenerako pentsatutako diseinu batekin.
+
+PLAYER-AK ETA ZERRENDAK
+• Player bat edo gehiago, bakoitza bere zerrendekin, SINGLE edo CONT moduan
+• Kateatzeak pista bakoitzaren MIX puntuan, atzeko planoko analisi batek aurkitutako cue-in, intro, outro eta cue-out markak, eta uhin-forman sakatze luze batekin jartzen dituzun markak
+• Aurre-entzutea (CUE) irteera bereizi batean, entzungailu batzuetan adibidez
+• Ozentasunaren normalizazioa
+• Mugitu pistak arrastatuz, edo bidali bat beste player batera, haren hurrengo pistaren ondoren
+
+KARTUTXOAK
+• Berehalako kartutxoak jingle, efektu eta iragarkietarako, hatzarekin pasatzen dituzun orrialdeetan
+• Tolestu kartutxoak Zuzenean pantailan player-ei leku gehiago emateko
+
+ESTUDIORAKO PENTSATUA
+• Emisioak jarraitzen du pantaila itzalita edo beste aplikazio bat aurrean dagoela, jakinarazpen batekin zerbait jotzen ari den bitartean
+• Ezer ez da bere kasa airera ateratzen abiarazte, berrabiarazte edo hutsegite baten ondoren
+• Giltzarrapo batek programan zehar nahi gabeko ukituetatik babesten du: garraioak eta kartutxoek funtzionatzen jarraitzen dute
+• Aukeratu player bakoitzaren, kartutxoen eta beren CUE-aren irteera: bozgorailua, kabledun entzungailuak, USB interfaze bat edo Bluetooth bozgorailu bat
+• Arakatu gailuko musika karpeta, artista edo albumaren arabera, eta bilatu bertan
+
+PRIBATUA ETA LIBREA
+Fauste Player-ek ez du konturik, ez iragarkirik, ez analitikarik, ez jarraipenik, eta ez du sarerako sarbiderik eskatzen. Software librea da GNU GPL lizentziapean (3. bertsioa edo berriagoa), eta proiektu bera Linux, Windows eta macOS sistemetan dabil.
+
+Erabiltzailearen gida: https://sanchezfauste.com/fauste-player/guide/eu/
+Iturburu-kodea eta arazoak: https://github.com/sanchezfauste/fauste-player

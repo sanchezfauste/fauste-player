@@ -1,8 +1,14 @@
 #!/usr/bin/env bash
-# Takes the Google Play phone screenshots (packaging/android/play/en-US/
-# images/phoneScreenshots) on an Android emulator:
+# Takes the Google Play phone screenshots (packaging/android/play/<language>/
+# images/phoneScreenshots) on an Android emulator, in every interface
+# language:
 #
-#   scripts/package/play-screenshots.sh [--apk <file>] [--out <dir>]
+#   scripts/package/play-screenshots.sh [--apk <file>] [--out <dir>] [--lang <locale>]...
+#
+# --out writes <dir>/<language>/images/phoneScreenshots/*.png instead of
+# into the listing; --lang (a tag of crates/fp-app/locales, repeatable)
+# takes only those languages. Each locale goes to the listing folder of
+# the same tag, or of its language alone (ca-ES -> ca), which must exist.
 #
 # It installs the APK (default: the release APK of
 # `scripts/package/android.sh release`), generates the stand-in songs and
@@ -16,7 +22,8 @@
 # (Play refuses a taller ratio) and 420 dpi, puts the status bar in demo
 # mode, opens each screen with a tap on its top-bar button and saves the
 # screenshots as 24-bit PNG (Play refuses an alpha channel) once the
-# screen has stopped changing.
+# screen has stopped changing. The songs are analysed once; then the app
+# starts again in each language (ui.language in its config.json).
 #
 # The taps are in pixels of that fixed screen: after a change to the phone
 # top bar or the Music screen, check them (TABS and music_scene below).
@@ -32,16 +39,39 @@ set -euo pipefail
 
 root=$(cd "$(dirname "$0")/../.." && pwd)
 apk=$root/mobile/android/app/build/outputs/apk/release/app-release.apk
-out=$root/packaging/android/play/en-US/images/phoneScreenshots
+listing=$root/packaging/android/play
+out=$listing
+langs=()
 while [[ $# -gt 0 ]]; do
     case $1 in
         --apk) apk=${2:?--apk needs a file}; shift 2 ;;
         --out) out=${2:?--out needs a folder}; shift 2 ;;
-        *) echo "usage: play-screenshots.sh [--apk <file>] [--out <dir>]" >&2; exit 2 ;;
+        --lang) langs+=("${2:?--lang needs a locale}"); shift 2 ;;
+        *) echo "usage: play-screenshots.sh [--apk <file>] [--out <dir>] [--lang <locale>]..." >&2; exit 2 ;;
     esac
 done
 
 die() { echo "play-screenshots.sh: $*" >&2; exit 1; }
+
+# Every interface language by default.
+if [[ ${#langs[@]} -eq 0 ]]; then
+    for d in "$root"/crates/fp-app/locales/*/; do langs+=("$(basename "$d")"); done
+fi
+# The listing folder of a locale: its tag, else its language alone.
+listing_of() {
+    if [[ -d $listing/$1 ]]; then
+        echo "$1"
+    elif [[ -d $listing/${1%%-*} ]]; then
+        echo "${1%%-*}"
+    else
+        return 1
+    fi
+}
+for lang in "${langs[@]}"; do
+    [[ -f $root/crates/fp-app/locales/$lang/main.ftl ]] \
+        || die "unknown locale $lang (see crates/fp-app/locales)"
+    listing_of "$lang" >/dev/null || die "no Google Play listing for $lang in $listing"
+done
 
 if ! command -v adb >/dev/null; then
     sdk=${ANDROID_HOME:-${ANDROID_SDK_ROOT:-$HOME/Android/Sdk}}
@@ -214,8 +244,6 @@ sys.exit(0 if tracks and all(t.get("analyzed") and t.get("loudness") for t in tr
 start_app
 timeout=${PLAY_SHOTS_ANALYSIS_TIMEOUT:-180}
 wait_for "$timeout" library_ready || die "the songs were not analysed after $timeout s"
-shell am force-stop "$package"
-start_app
 
 # Saves the screen to $1 once two captures in a row are the same (the
 # image's masks left out) with the app in front, so neither a half-drawn
@@ -223,7 +251,8 @@ start_app
 settled_capture() {
     local file=$1 previous="" now size img rect x y w h draw=()
     while read -r img rect _; do
-        [[ $img == "$(basename "$file")" ]] || continue
+        # shellcheck disable=SC2053 # the image is a pattern
+        [[ $file == $img ]] || continue
         IFS=, read -r x y w h <<<"$rect"
         draw+=(-draw "rectangle $x,$y $((x + w - 1)),$((y + h - 1))")
     done < <(grep -v '^[[:space:]]*#' "$masks")
@@ -258,15 +287,37 @@ music_scene() {
     done
 }
 
-mkdir -p "$out"
-# shoot <name> <tab> [scene]
+# shoot <dir> <name> <tab> [scene]
 shoot() {
-    tap "${TABS_X[$2]}" "$TABS_Y" 1
-    [[ -z ${3:-} ]] || "$3"
-    settled_capture "$out/$1.png"
-    echo "$out/$1.png"
+    tap "${TABS_X[$3]}" "$TABS_Y" 1
+    [[ -z ${4:-} ]] || "$4"
+    settled_capture "$1/$2.png"
+    echo "$1/$2.png"
 }
-shoot 1-live live
-shoot 2-carts carts
-shoot 3-playlists playlists
-shoot 4-music music music_scene
+# Starts the app again in the interface language $1.
+start_in() {
+    shell am force-stop "$package"
+    python3 - "$home/config/config.json" "$1" <<'EOF2'
+import json, sys
+path, lang = sys.argv[1:]
+with open(path) as f:
+    c = json.load(f)
+c.setdefault("ui", {})["language"] = lang
+with open(path, "w") as f:
+    json.dump(c, f, indent=2)
+EOF2
+    adb push "$home/config/config.json" "$files/config/config.json" >/dev/null
+    shell chown "$uid:$uid" "$files/config/config.json"
+    shell restorecon "$files/config/config.json" >/dev/null
+    start_app
+}
+for lang in "${langs[@]}"; do
+    dir=$out/$(listing_of "$lang")/images/phoneScreenshots
+    mkdir -p "$dir"
+    echo "Screenshots in $lang" >&2
+    start_in "$lang"
+    shoot "$dir" 1-live live
+    shoot "$dir" 2-carts carts
+    shoot "$dir" 3-playlists playlists
+    shoot "$dir" 4-music music music_scene
+done

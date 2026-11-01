@@ -1,0 +1,25 @@
+Fauste Player zet muziek, jingles en spots in de lucht. Het is een radio-playoutapplicatie: meerdere onafhankelijke players draaien naast elkaar, elk met eigen playlists, en nummers gaan samplenauwkeurig in elkaar over op hun MIX-punten. De Android-app gebruikt dezelfde playoutkern als de desktopapplicatie, met een indeling gemaakt voor aanraking.
+
+PLAYERS EN PLAYLISTS
+• Een of meer players, elk met zijn playlists, in de modus SINGLE of CONT
+• Overgangen op het MIX-punt van elk nummer, cue-in-, intro-, outro- en cue-outmarkeringen gevonden door een analyse op de achtergrond, en markeringen die je zet door lang op de golfvorm te drukken
+• Voorbeluisteren (CUE) op een aparte uitgang, zoals een koptelefoon
+• Loudness-normalisatie
+• Verplaats nummers door ze te slepen, of stuur er een naar een andere player, direct na diens volgende nummer
+
+CARTWALL
+• Directe carts voor jingles, effecten en spots, op pagina's waar je doorheen veegt
+• Klap de cartwall in op het Live-scherm om de players meer ruimte te geven
+
+GEMAAKT VOOR DE STUDIO
+• De playout gaat door met het scherm uit of een andere app op de voorgrond, met een melding zolang er iets speelt
+• Niets gaat vanzelf de lucht in na een start, een herstart of een crash
+• Een hangslot beschermt tijdens een uitzending tegen per ongeluk aanraken: het transport en de carts blijven werken
+• Kies de uitgang van elke player, de cartwall en hun CUE: de luidspreker, een bedrade koptelefoon, een USB-interface of een Bluetooth-speaker
+• Blader door de muziek op je apparaat per map, artiest of album, en doorzoek die
+
+PRIVÉ EN VRIJ
+Fauste Player heeft geen accounts, geen advertenties, geen analyses en geen tracking, en vraagt geen netwerktoegang. Het is vrije software onder de GNU GPL (versie 3 of later), en hetzelfde project draait op Linux, Windows en macOS.
+
+Gebruikershandleiding: https://sanchezfauste.com/fauste-player/guide/nl/
+Broncode en meldingen: https://github.com/sanchezfauste/fauste-player

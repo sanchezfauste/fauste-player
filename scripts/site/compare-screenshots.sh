@@ -16,7 +16,8 @@
 #   --fuzz       colour tolerance in percent (default 5)
 #   --threshold  differing pixels tolerated (default 50)
 #   --masks      regions that change on every run (the clock, elapsed times,
-#                meters, the cart sweep): lines "<image> <x>,<y>,<w>,<h>"
+#                meters, the cart sweep): lines "<image> <x>,<y>,<w>,<h>",
+#                <image> a path relative to the folder or a pattern of one
 #                (default scripts/site/screenshot-masks.txt; "#" comments).
 #                The rectangles are painted on both images before comparing.
 #   --apply      copy the changed and added images into <ref-dir>
@@ -75,7 +76,8 @@ while IFS= read -r rel; do
     draw=()
     if [[ -f $masks ]]; then
         while read -r img rect _; do
-            [[ $img == "$rel" ]] || continue
+            # shellcheck disable=SC2053 # the image may be a pattern
+            [[ $rel == $img ]] || continue
             IFS=, read -r mx my mw mh <<<"$rect"
             draw+=(-draw "rectangle $mx,$my $((mx + mw - 1)),$((my + mh - 1))")
         done < <(grep -v '^[[:space:]]*#' "$masks")

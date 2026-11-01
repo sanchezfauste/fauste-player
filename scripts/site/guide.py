@@ -17,6 +17,9 @@ the strings of the AI-translation notice (see docs/technical/release-process.md)
                                         (<shots>/<lang>/guide/*.png) into the
                                         site; each translated book links its
                                         own, else the English ones
+    guide.py android-images <site-dir>  each translated book links the
+                                        Google Play screenshots of its
+                                        language (packaging/android/play)
     guide.py changed [<lang>...]        English pages changed since each
                                         translation's source commit
 
@@ -35,6 +38,8 @@ import tomllib
 ROOT = os.path.realpath(os.path.join(os.path.dirname(__file__), "..", ".."))
 DOCS = os.path.join(ROOT, "docs")
 SOURCE = os.path.join(DOCS, "user")
+PLAY = os.path.join(ROOT, "packaging", "android", "play")
+PLAY_SHOTS = os.path.join("images", "phoneScreenshots")
 I18N = os.path.join(DOCS, "i18n")
 META = "translation.toml"
 ASSETS = "book-assets"
@@ -318,27 +323,67 @@ def images(site, shots):
         if lang not in languages():
             fail(f"{src}: {lang} is not a translation in docs/i18n")
         shutil.copytree(src, os.path.join(pictures, lang), dirs_exist_ok=True)
-        book = os.path.join(site, "guide", lang)
-        for d, _, files in os.walk(book):
-            for f in files:
-                if not f.endswith(".html"):
-                    continue
-                path = os.path.join(d, f)
-                html = read(path)
-
-                def own(m):
-                    name = m.group(2)
-                    if os.path.isfile(os.path.join(pictures, lang, "guide", name)):
-                        return f"{m.group(1)}images/{lang}/guide/{name}"
-                    return m.group(0)
-
-                new = re.sub(r'((?:\.\./)+)images/guide/([^"\'#?)\s]+)', own, html)
-                if new != html:
-                    rewritten += 1
-                    with open(path, "w", encoding="utf-8") as fh:
-                        fh.write(new)
+        rewritten += own_images(site, lang, "guide")
     print(f"screenshots in {len(os.listdir(shots))} language(s); "
           f"{rewritten} translated page(s) use their own")
+
+
+def own_images(site, lang, folder):
+    """Points the translated book <lang> at its own copies of the images in
+    <site>/images/<lang>/<folder>: a link ../../images/<folder>/<name> is
+    rewritten only when that copy exists, so a missing one keeps the
+    English image. Returns the number of pages rewritten."""
+    pictures = os.path.join(site, "images")
+    link = re.compile(r'((?:\.\./)+)images/' + re.escape(folder) + r'/([^"\'#?)\s]+)')
+
+    def own(m):
+        name = m.group(2)
+        if os.path.isfile(os.path.join(pictures, lang, folder, name)):
+            return f"{m.group(1)}images/{lang}/{folder}/{name}"
+        return m.group(0)
+
+    rewritten = 0
+    for d, _, files in os.walk(os.path.join(site, "guide", lang)):
+        for f in files:
+            if not f.endswith(".html"):
+                continue
+            path = os.path.join(d, f)
+            html = read(path)
+            new = link.sub(own, html)
+            if new != html:
+                rewritten += 1
+                with open(path, "w", encoding="utf-8") as fh:
+                    fh.write(new)
+    return rewritten
+
+
+def play_listing(lang):
+    """The Google Play listing folder of a guide language (packaging/android/
+    play/<lang> or <lang>-<REGION>), or None."""
+    for name in sorted(os.listdir(PLAY)):
+        if name == lang or name.startswith(lang + "-"):
+            return os.path.join(PLAY, name)
+    return None
+
+
+def android_images(site):
+    """Copies each translation's Google Play phone screenshots (taken in its
+    language by scripts/package/play-screenshots.sh) into <site>/images/
+    <lang>/android/ and points its book at them; the English guide uses
+    the copies in docs/images/android."""
+    rewritten = 0
+    for lang in languages():
+        listing = play_listing(lang)
+        shots = os.path.join(listing, PLAY_SHOTS) if listing else None
+        if not shots or not os.path.isdir(shots):
+            continue
+        dest = os.path.join(site, "images", lang, "android")
+        os.makedirs(dest, exist_ok=True)
+        for name in sorted(os.listdir(shots)):
+            if name.endswith(".png"):
+                shutil.copy(os.path.join(shots, name), dest)
+        rewritten += own_images(site, lang, "android")
+    print(f"Android screenshots: {rewritten} translated page(s) use their own")
 
 
 # --- changed ---------------------------------------------------------------
@@ -365,6 +410,8 @@ def main(argv):
         check(argv[1] if len(argv) == 2 else None)
     elif len(argv) == 3 and argv[0] == "images":
         images(argv[1], argv[2])
+    elif len(argv) == 2 and argv[0] == "android-images":
+        android_images(argv[1])
     elif len(argv) >= 1 and argv[0] == "changed":
         changed(argv[1:])
     else:

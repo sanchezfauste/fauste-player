@@ -40,6 +40,13 @@ and About). The clock shows when there is room for it. Turned sideways,
 the Playlists screen puts its player chips (P1, P2…) in the top bar, and
 the status bar at the bottom shows only when it has something to say.
 
+<p>
+<img src="../images/android/1-live.png" width="180" alt="Live on a phone: two players as cards, one whole and the start of the next, and the cartwall below">
+<img src="../images/android/2-carts.png" width="180" alt="Carts on a phone: the General page turned upright, two carts per row">
+<img src="../images/android/3-playlists.png" width="180" alt="Playlists on a phone: the P1 to P4 chips, the playlist tabs, the track list and the player's card at the bottom">
+<img src="../images/android/4-music.png" width="180" alt="Music on a phone: the Demo folder with three songs ticked and the bar to add them to P1's Morning playlist">
+</p>
+
 - *Live:* every player as a card, and the cartwall. Each card has, top
   to bottom, the player's name, status, Single/Cont and CUE; the cover,
   the title and artist and the next track; the waveform (a tap seeks);

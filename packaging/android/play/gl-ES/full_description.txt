@@ -1,0 +1,25 @@
+Fauste Player pon no aire música, cuñas e anuncios. É unha aplicación de emisión de radio: varios players independentes funcionan á vez, cada un coas súas listas, e as pistas encadéanse con precisión de mostra nos seus puntos MIX. A app de Android usa o mesmo núcleo de emisión que a aplicación de escritorio, cunha disposición pensada para o tacto.
+
+PLAYERS E LISTAS
+• Un ou máis players, cada un coas súas listas, en modo SINGLE ou CONT
+• Encadeados no punto MIX de cada pista, marcadores de cue-in, intro, outro e cue-out atopados por unha análise en segundo plano, e marcadores que pos cunha pulsación longa na forma de onda
+• Preescoita (CUE) nunha saída á parte, como uns auriculares
+• Normalización da sonoridade
+• Move pistas arrastrándoas, ou manda unha a outro player xusto despois da súa seguinte pista
+
+CARTUCHEIRA
+• Cartuchos instantáneos para cuñas, efectos e anuncios, en páxinas que pasas co dedo
+• Prega a cartucheira na pantalla Directo para lles dar máis sitio aos players
+
+PENSADA PARA O ESTUDIO
+• A emisión segue coa pantalla apagada ou con outra app diante, cunha notificación mentres algo soa
+• Nada sae ao aire por si só tras un arranque, un reinicio ou unha falla
+• Un cadeado protexe de toques accidentais durante o programa: o transporte e os cartuchos seguen funcionando
+• Escolle a saída de cada player, da cartucheira e do seu CUE: o altofalante, uns auriculares con cable, unha interface USB ou un altofalante Bluetooth
+• Explora a música do dispositivo por cartafol, artista ou álbum, e busca nela
+
+PRIVADA E LIBRE
+Fauste Player non ten contas, nin anuncios, nin analítica, nin rastrexo, e non pide acceso á rede. É software libre baixo a GNU GPL (versión 3 ou posterior), e o mesmo proxecto funciona en Linux, Windows e macOS.
+
+Guía do usuario: https://sanchezfauste.com/fauste-player/guide/gl/
+Código fonte e incidencias: https://github.com/sanchezfauste/fauste-player
