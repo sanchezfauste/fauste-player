@@ -23,6 +23,18 @@ pub struct LoadedState {
     pub warnings: Vec<String>,
 }
 
+/// Whether this session may use the database file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DiskState {
+    /// Not opened yet: the first `save_state` opens it.
+    Unopened,
+    Open,
+    /// The file or its backups were judged unusable (or could not be set
+    /// aside): nothing in this session writes to them. Saves go to an
+    /// in-memory database.
+    Disabled,
+}
+
 pub struct Store {
     paths: AppPaths,
     /// Limits used to read `config.json` itself; the loaded config's limits apply afterwards.
@@ -32,6 +44,7 @@ pub struct Store {
     /// What the database holds, as far as this store knows. None means
     /// unknown: the next save writes everything.
     saved: Option<Snapshot>,
+    disk: DiskState,
     /// When the last backup of the database was made.
     last_backup: Option<Instant>,
 }
@@ -55,6 +68,7 @@ impl Store {
             limits,
             db: None,
             saved: None,
+            disk: DiskState::Unopened,
             last_backup: None,
         }
     }
@@ -73,6 +87,7 @@ impl Store {
         let mut warnings = Vec::new();
         self.db = None;
         self.saved = None;
+        self.disk = DiskState::Unopened;
 
         // Read leniently: a hand-edited value of the wrong type falls back to its
         // default (with a warning) instead of discarding the whole file.
@@ -113,6 +128,11 @@ impl Store {
         std::fs::create_dir_all(&self.paths.data_dir)?;
         let opened = open_with_fallback(&self.paths.database_file(), backups)
             .map_err(|e| StoreError::Io(std::io::Error::other(e.to_string())))?;
+        self.disk = if opened.db.is_in_memory() {
+            DiskState::Disabled
+        } else {
+            DiskState::Open
+        };
         self.db = Some(opened.db);
         Ok(opened.warnings)
     }
@@ -146,14 +166,19 @@ impl Store {
                     db = opened.db;
                     read = snapshot::read_checked(&db);
                     if !read.complete {
-                        // Even the replacement cannot be read: keep nothing.
+                        // Even the replacement cannot be read.
                         warnings.append(&mut read.warnings);
-                        warnings.push("database: not used in this session".to_owned());
+                        self.disable_disk(path.as_path(), warnings);
+                        return Snapshot::default();
+                    }
+                    if db.is_in_memory() {
+                        self.disable_disk(path.as_path(), warnings);
                         return Snapshot::default();
                     }
                 }
                 Err(e) => {
                     warnings.push(format!("database: {e}; starting with the defaults"));
+                    self.disable_disk(path.as_path(), warnings);
                     return Snapshot::default();
                 }
             }
@@ -179,6 +204,18 @@ impl Store {
         snap
     }
 
+    /// From now on this session never touches the database file or its
+    /// backups; saves go to an in-memory stand-in.
+    fn disable_disk(&mut self, path: &Path, warnings: &mut Vec<String>) {
+        self.disk = DiskState::Disabled;
+        self.saved = None;
+        self.db = Db::in_memory(path).ok();
+        warnings.push(format!(
+            "{}: changes are not saved this session",
+            path.display()
+        ));
+    }
+
     pub fn save_config(&self, state: &AppState) -> Result<(), StoreError> {
         let doc = ConfigDoc {
             schema_version: CONFIG_SCHEMA,
@@ -202,7 +239,7 @@ impl Store {
         now: Instant,
     ) -> Result<(), StoreError> {
         let backups = state.config.limits.backup_count;
-        if self.db.is_none() {
+        if self.disk == DiskState::Unopened {
             for w in self.open_db(backups)? {
                 tracing::warn!("{w}");
             }

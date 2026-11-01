@@ -735,3 +735,78 @@ fn a_failed_save_keeps_the_baseline_so_the_next_one_writes_the_difference() {
     assert_eq!(again.state.library, state.library);
     assert_eq!(again.state.playlists, state.playlists);
 }
+
+fn drop_table_in(file: &std::path::Path, table: &str) {
+    let db = fp_store::Db::open(file).unwrap();
+    db.conn()
+        .execute(&format!("DROP TABLE {table}"), [])
+        .unwrap();
+}
+
+fn bak(s: &Store, n: usize) -> PathBuf {
+    fp_store::backup_path(&s.paths().database_file(), n)
+}
+
+#[test]
+fn an_unreadable_backup_is_skipped_for_the_next_one() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    fs::copy(bak(&s, 1), bak(&s, 2)).unwrap();
+    drop_table_in(&bak(&s, 1), "cart_pages");
+    edit_db(&s, |db| {
+        db.conn().execute("DROP TABLE cart_pages", []).unwrap();
+    });
+    let before = fs::read(bak(&s, 1)).unwrap();
+    let loaded = s.load("Main");
+    assert_eq!(loaded.state.playlists, state.playlists);
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|w| w.contains("bak2") && w.contains("restored")),
+        "{:?}",
+        loaded.warnings
+    );
+    assert_eq!(
+        fs::read(bak(&s, 1)).unwrap(),
+        before,
+        "the bad backup is untouched"
+    );
+}
+
+#[test]
+fn when_no_backup_is_readable_the_disk_is_left_alone_for_the_session() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    fs::copy(bak(&s, 1), bak(&s, 2)).unwrap();
+    drop_table_in(&bak(&s, 1), "cart_pages");
+    drop_table_in(&bak(&s, 2), "players");
+    edit_db(&s, |db| {
+        db.conn().execute("DROP TABLE cart_pages", []).unwrap();
+    });
+    let backups_before: Vec<Vec<u8>> = (1..=3)
+        .map(|n| fs::read(bak(&s, n)).unwrap_or_default())
+        .collect();
+    let loaded = s.load("Main");
+    assert!(
+        loaded.warnings.iter().any(|w| w.contains("not saved")),
+        "{:?}",
+        loaded.warnings
+    );
+    let now = std::time::Instant::now();
+    s.save_state(&state, |_| 0.0, now).unwrap();
+    s.save_state(&state, |_| 0.0, now + std::time::Duration::from_secs(1000))
+        .unwrap();
+    let aside = corrupt_aside(&s);
+    assert_eq!(aside.len(), 1, "{aside:?}");
+    assert!(
+        !s.paths().database_file().exists(),
+        "nothing was written to the main path"
+    );
+    let backups_after: Vec<Vec<u8>> = (1..=3)
+        .map(|n| fs::read(bak(&s, n)).unwrap_or_default())
+        .collect();
+    assert_eq!(backups_before, backups_after);
+}

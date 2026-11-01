@@ -17,7 +17,9 @@ impl Db {
     /// they were and never a partial `bak1`. With `backups == 0` it does
     /// nothing.
     pub fn backup_rotating(&self, backups: usize) -> Result<(), StoreError> {
-        if backups == 0 {
+        // The stand-in for the file has nothing to back up, and rotating it
+        // in would push the real backups out.
+        if backups == 0 || self.in_memory {
             return Ok(());
         }
         let tmp = sibling(&self.path, "bak-tmp");
@@ -50,4 +52,23 @@ fn rotate(path: &Path, tmp: &Path, backups: usize) -> io::Result<()> {
         }
     }
     fs::rename(tmp, backup_path(path, 1))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_in_memory_database_never_rotates_the_real_backups() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fauste.db");
+        let bak1 = backup_path(&path, 1);
+        fs::write(&bak1, b"real backup").unwrap();
+        let db = Db::in_memory(&path).unwrap();
+        db.backup_rotating(3).unwrap();
+        assert_eq!(fs::read(&bak1).unwrap(), b"real backup");
+        assert!(!backup_path(&path, 2).exists());
+        assert!(!sibling(&path, "bak-tmp").exists());
+    }
 }

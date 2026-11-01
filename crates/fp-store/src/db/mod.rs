@@ -73,6 +73,8 @@ const BUSY_TIMEOUT: Duration = Duration::from_millis(50);
 pub struct Db {
     pub(crate) conn: Connection,
     pub(crate) path: PathBuf,
+    /// Not a file: nothing persists and `path` is only a name.
+    in_memory: bool,
 }
 
 impl Db {
@@ -97,7 +99,7 @@ impl Db {
 
     /// A new in-memory database (nothing persists), for when no file can be
     /// used. `path` is only the name the database stands for.
-    fn in_memory(path: &Path) -> Result<Db, OpenError> {
+    pub(crate) fn in_memory(path: &Path) -> Result<Db, OpenError> {
         let conn = Connection::open_in_memory().map_err(classify)?;
         Self::prepare(conn, path, false)
     }
@@ -133,7 +135,13 @@ impl Db {
         Ok(Db {
             conn,
             path: path.to_path_buf(),
+            in_memory: !wal,
         })
+    }
+
+    /// Whether this is the in-memory stand-in for the file at its path.
+    pub fn is_in_memory(&self) -> bool {
+        self.in_memory
     }
 
     /// The connection (tests).
@@ -308,6 +316,9 @@ fn from_backups(
     let fail = |warnings: &mut Vec<String>, what: &str, e: &OpenError| {
         warnings.push(format!("{}: {what}: {e}", path.display()));
     };
+    // A backup that opened but cannot be read in full: the data may be
+    // there, so the session must not start a new database over it.
+    let mut incomplete = false;
     for n in 1..=backups {
         let backup = backup_path(path, n);
         if !backup.exists() {
@@ -319,6 +330,15 @@ fn from_backups(
             continue;
         }
         match Db::open(path) {
+            Ok(db) if !snapshot::read_checked(&db).complete => {
+                drop(db);
+                incomplete = true;
+                warnings.push(format!(
+                    "{}: backup unusable: a table cannot be read",
+                    backup.display()
+                ));
+                discard_copy(path);
+            }
             Ok(db) => {
                 warnings.push(format!("restored from {}", backup.display()));
                 return Ok(Opened {
@@ -332,6 +352,9 @@ fn from_backups(
                 discard_copy(path);
             }
         }
+    }
+    if incomplete {
+        return in_memory(path, warnings);
     }
     match Db::open(path) {
         Ok(db) => Ok(Opened {
