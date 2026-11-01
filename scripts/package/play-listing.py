@@ -3,7 +3,8 @@
 
     scripts/package/play-listing.py check
         Checks every language's texts against Play's limits and the images
-        against Play's sizes, that every interface language
+        against Play's sizes, that every language has the default
+        language's screenshot files, that every interface language
         (crates/fp-app/locales) has a listing, and that the user guide's
         Android screenshots (docs/images/android) are the default
         language's. CI runs it on the stores dry run.
@@ -127,9 +128,11 @@ def check(listing, locales=None, guide=None):
     for lang in langs:
         problems += screenshot_problems(listing, lang)
         own = [p.name for p in screenshots(listing, lang)]
-        if lang != DEFAULT_LANGUAGE and own and own != names:
+        # Play would show a language without its own the default
+        # language's, in English.
+        if lang != DEFAULT_LANGUAGE and own != names:
             problems.append(
-                f"{lang}: phone screenshots {', '.join(own)}, not those of "
+                f"{lang}: phone screenshots {', '.join(own) or '(none)'}, not those of "
                 f"{DEFAULT_LANGUAGE} ({', '.join(names)})"
             )
     if locales is not None:
