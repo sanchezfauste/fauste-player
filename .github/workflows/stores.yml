@@ -3,7 +3,8 @@ name: stores
 # Publishes a release to the app stores and package repositories:
 #   - Microsoft Store: an MSIX package, submitted with the Store CLI;
 #   - Snap Store: a snap for amd64 and arm64;
-#   - Google Play: the release's signed Android App Bundle;
+#   - Google Play: the release's signed Android App Bundle and the store
+#     listing (texts and images of packaging/android/play);
 #   - Flathub: a pull request to flathub/com.sanchezfauste.FaustePlayer with the
 #     release's manifest and cargo sources (Flathub builds and publishes it);
 #   - WinGet: a pull request to microsoft/winget-pkgs with the release's MSI;
@@ -261,6 +262,41 @@ jobs:
           track: ${{ vars.GOOGLE_PLAY_TRACK || 'internal' }}
           status: ${{ vars.GOOGLE_PLAY_STATUS || 'completed' }}
           whatsNewDirectory: play/whatsnew
+      # The listing (texts, icon, feature graphic, phone screenshots) from
+      # packaging/android/play, in an edit of its own after the release:
+      # fastlane's supply reads that layout as it is, and
+      # --sync_image_upload sends only the images that changed. The release
+      # notes went with the bundle above. The play-screenshots workflow
+      # keeps the screenshots current. Every gem it runs is pinned by
+      # packaging/android/fastlane/Gemfile.lock and installed in a step
+      # without the key; supply needs the release's track and versionCode
+      # to find the release the listing goes with.
+      - name: Install fastlane
+        if: needs.plan.outputs.googleplay == 'true' && steps.listing.outputs.present == 'true'
+        env:
+          BUNDLE_GEMFILE: packaging/android/fastlane/Gemfile
+          BUNDLE_DEPLOYMENT: "true"
+        run: bundle install --jobs 4
+      - name: Update the Google Play listing
+        if: needs.plan.outputs.googleplay == 'true' && steps.listing.outputs.present == 'true'
+        env:
+          BUNDLE_GEMFILE: packaging/android/fastlane/Gemfile
+          BUNDLE_DEPLOYMENT: "true"
+          FASTLANE_SKIP_UPDATE_CHECK: "1"
+          FASTLANE_OPT_OUT_USAGE: "1"
+          LC_ALL: C.UTF-8
+          SUPPLY_JSON_KEY_DATA: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          TRACK: ${{ vars.GOOGLE_PLAY_TRACK || 'internal' }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          code=$(scripts/package/android.sh --version-code "${VERSION}")
+          bundle exec fastlane supply \
+            --package_name com.sanchezfauste.FaustePlayer \
+            --metadata_path packaging/android/play \
+            --track "${TRACK}" \
+            --version_code "${code}" \
+            --skip_upload_apk true --skip_upload_aab true \
+            --skip_upload_changelogs true --sync_image_upload true
 
   flathub:
     name: Flathub
