@@ -173,10 +173,19 @@ demo network -e wifi show -e level 4 -e fully true -e mobile show -e level 4 -e 
 demo notifications -e visible false
 
 in_front() { [[ $(shell dumpsys window | grep mCurrentFocus) == *"$activity"* ]]; }
-# Starts the app and waits until its window has the focus.
+# What is on the screen and what the app logged, for a start that failed.
+start_report() {
+    {
+        shell dumpsys window | grep -E 'mCurrentFocus|mFocusedApp' || true
+        shell pidof "$package" || echo "$package is not running"
+        shell logcat -d -t 300 | grep -E -i 'fauste|AndroidRuntime|libc|DEBUG|ActivityManager|ActivityTaskManager' | tail -80 || true
+    } >&2
+}
+# Starts the app and waits until its window has the focus (a cold
+# emulator on a CI runner can take a while).
 start_app() {
     shell am start -n "$activity" >/dev/null
-    wait_for 30 in_front || die "the app did not come to the front"
+    wait_for 90 in_front || { start_report; die "the app did not come to the front"; }
 }
 
 # The first start analyses the songs (waveforms, durations, loudness) and
