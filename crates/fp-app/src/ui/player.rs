@@ -117,7 +117,7 @@ fn playlist_area(
     scroll_to_next_once(scene, view_state, id);
     follow_current(scene, view_state, id, playlist);
     tabs(ui, scene, view_state, id, playlist);
-    let footer_top = ui.max_rect().bottom() - FOOTER_HEIGHT;
+    let footer_top = ui.max_rect().bottom() - footer_look(view_state.phone_active).height;
     let table_rect = Rect::from_min_max(
         ui.available_rect_before_wrap().min,
         pos2(ui.max_rect().right(), footer_top),
@@ -2062,18 +2062,19 @@ fn footer(
         0.0,
         theme::NEUTRAL_800,
     );
-    ui.add_space(10.0);
+    let look = footer_look(view_state.phone_active);
+    ui.add_space(look.inset);
     ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
     let add = t.tr("footer-add");
     let add_width = ui
         .painter()
-        .layout_no_wrap(add.clone(), font(10.0), theme::NEUTRAL_300)
+        .layout_no_wrap(add.clone(), font(look.font), theme::NEUTRAL_300)
         .size()
         .x
-        + 26.0;
+        + look.tile_pad;
     if widgets::tile(
         ui,
-        vec2(add_width, 18.0),
+        vec2(add_width, look.tile),
         &t.tr("tip-add"),
         true,
         TileStyle::plain(),
@@ -2082,7 +2083,7 @@ fn footer(
                 r.center(),
                 egui::Align2::CENTER_CENTER,
                 format!("{} {add}", icon::PLUS),
-                font(10.0),
+                font(look.font),
                 c,
             );
         },
@@ -2103,7 +2104,41 @@ fn footer(
     } else {
         reset_played_tile(ui, scene, view_state, playlist);
     }
-    footer_totals(ui, scene, id, playlist);
+    footer_totals(ui, scene, id, playlist, look);
+}
+
+/// The sizes of a playlist's footer.
+#[derive(Debug, Clone, Copy)]
+struct FooterLook {
+    height: f32,
+    /// The room before the first tile and after the totals.
+    inset: f32,
+    tile: f32,
+    /// What a text tile adds to its text's width.
+    tile_pad: f32,
+    font: f32,
+}
+
+/// The desktop's slim footer, or a phone's with finger-sized tiles and the
+/// card's even margins (PL37).
+fn footer_look(phone: bool) -> FooterLook {
+    if phone {
+        FooterLook {
+            height: PHONE_BUTTON + 2.0 * GAP,
+            inset: GAP,
+            tile: PHONE_BUTTON,
+            tile_pad: 32.0,
+            font: 13.0,
+        }
+    } else {
+        FooterLook {
+            height: FOOTER_HEIGHT,
+            inset: 10.0,
+            tile: 18.0,
+            tile_pad: 26.0,
+            font: 10.0,
+        }
+    }
 }
 
 /// The footer's ⋯ tile on a phone and its menu (PL11).
@@ -2111,7 +2146,7 @@ fn footer_more(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, playl
     let t = scene.i18n;
     let response = widgets::tile(
         ui,
-        vec2(32.0, 18.0),
+        vec2(PHONE_BUTTON, PHONE_BUTTON),
         &t.tr("tip-footer-more"),
         true,
         TileStyle::plain(),
@@ -2120,7 +2155,7 @@ fn footer_more(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, playl
                 r.center(),
                 egui::Align2::CENTER_CENTER,
                 icon::DOTS_THREE,
-                font(14.0),
+                font(18.0),
                 c,
             );
         },
@@ -2187,7 +2222,13 @@ fn reset_played_tile(
 }
 
 /// The footer's entry count and times, at the right.
-fn footer_totals(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: PlaylistId) {
+fn footer_totals(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    id: PlayerId,
+    playlist: PlaylistId,
+    look: FooterLook,
+) {
     let t = scene.i18n;
     let len = scene
         .state
@@ -2197,7 +2238,7 @@ fn footer_totals(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: Playlis
     ui.add(
         egui::Label::new(
             RichText::new(t.tr_args("footer-count", &[("count", len.into())]))
-                .font(font(11.0))
+                .font(font(look.font + 1.0))
                 .color(theme::NEUTRAL_500),
         )
         .selectable(false)
@@ -2211,18 +2252,18 @@ fn footer_totals(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, playlist: Playlis
         .collect();
     let times = view::playlist_times(scene.state, id, playlist, &positions);
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-        ui.add_space(10.0);
+        ui.add_space(look.inset);
         ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
         widgets::tabular_label(
             ui,
             &format::clock(times.total),
-            &font(11.0),
+            &font(look.font + 1.0),
             theme::NEUTRAL_300,
         );
         ui.add(
             egui::Label::new(
                 RichText::new(t.tr("footer-total"))
-                    .font(font(11.0))
+                    .font(font(look.font + 1.0))
                     .color(theme::NEUTRAL_500),
             )
             .selectable(false),

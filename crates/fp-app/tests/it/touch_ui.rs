@@ -2067,3 +2067,22 @@ fn the_times_sit_under_the_waveform() {
     let times = h.get_by_label("00:00 / —").rect();
     assert!(times.top() - wave.bottom() <= 8.0, "{wave:?} {times:?}");
 }
+
+/// PL37: a phone's playlist footer has finger-sized tiles with the card's
+/// even margin above, below and before them.
+#[test]
+fn the_playlist_footer_has_finger_sized_tiles() {
+    let (mut h, _fake) = touch(1, A56);
+    tab(&mut h, "Playlists");
+    let add = h.get_by_label("Add tracks to this playlist").rect();
+    let more = h.get_by_label("More playlist actions").rect();
+    let card = h.get_by_label("Play").rect();
+    assert!(add.height() >= 47.0, "{add:?}");
+    assert_eq!(add.height(), more.height(), "{add:?} {more:?}");
+    // The card's left margin is 6 points inside its stroke.
+    let list_left = card.left() - 6.0 - 1.0;
+    assert!(
+        (add.left() - (list_left + 6.0)).abs() <= 1.5,
+        "{add:?} {card:?}"
+    );
+}

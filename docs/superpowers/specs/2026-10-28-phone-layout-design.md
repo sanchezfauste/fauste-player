@@ -337,7 +337,11 @@ cartwall folds ("ok pero que se pueda plegar la cartwall").
   waveform as the seek bar; then the time row over the transport, with
   the meter and fader beside both (as tall as the two). The card's margins and the space between its rows are
   the gap between its buttons. A phone's Play glyph and caption grow with
-  the button.
+  the button. The elapsed time and the total sit at the top of the time
+  row, right under the waveform. The volume fader's knob is a mixing
+  desk's cap (grip lines and a bright index line on the level), on the
+  desktop too. A phone's playlist footer has finger-sized Add and ⋯ tiles
+  with the same margins.
 - PL38. **Buttons under a second finger.** A tap on a player's transport
   (card and mini card) works while another finger is on the screen (for
   example holding the fader down, then Next, then the fader up), and a
