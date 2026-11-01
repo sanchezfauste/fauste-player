@@ -301,10 +301,10 @@ start_in() {
 import json, sys
 path, lang = sys.argv[1:]
 with open(path) as f:
-    c = json.load(f)
-c.setdefault("ui", {})["language"] = lang
+    doc = json.load(f)
+doc["config"].setdefault("ui", {})["language"] = lang
 with open(path, "w") as f:
-    json.dump(c, f, indent=2)
+    json.dump(doc, f, indent=2)
 EOF2
     adb push "$home/config/config.json" "$files/config/config.json" >/dev/null
     shell chown "$uid:$uid" "$files/config/config.json"
