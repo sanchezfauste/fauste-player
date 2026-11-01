@@ -319,3 +319,4 @@ Every value is read while the application runs (live settings spec §7): a new v
 | `gain_smoothing_ms` | 20 | volume smoothing |
 | `save_debounce_ms` | 1000 | autosave delay |
 | `missing_recheck_ms` | 30000 | how often files not found are looked for again |
+| `backup_interval_secs` | 300 | how often the library database is copied to a rotating backup (30 to 86400) |

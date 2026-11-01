@@ -4,6 +4,7 @@
 //! tracing subscriber) keep their own binary next to this directory.
 
 mod carts;
+mod db_schema;
 mod playlist_io;
 mod session_layout;
 mod store_roundtrip;
