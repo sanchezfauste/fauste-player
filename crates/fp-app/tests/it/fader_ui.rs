@@ -40,7 +40,7 @@ fn fader_rect(h: &H) -> egui::Rect {
 
 /// The pixels the knob travels over the whole fader.
 fn travel_px(h: &H) -> f32 {
-    fader_rect(h).height() - 6.0
+    fader_rect(h).height() - fp_app::ui::widgets::FADER_KNOB_HEIGHT
 }
 
 fn travel(fake: &Fake) -> f32 {

@@ -241,9 +241,11 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
             // First, so that they are always at the right end and always
             // whole; the title, tabs and hint take what is left of the row.
             // Hide, then Maximize (RL16), as in a player's header.
-            ui.scope(|ui| {
-                super::panels::header_buttons(ui, scene, view_state, Panel::Cartwall);
-            });
+            if !view_state.phone_active {
+                ui.scope(|ui| {
+                    super::panels::header_buttons(ui, scene, view_state, Panel::Cartwall);
+                });
+            }
             stop_all(ui, scene);
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 ui.spacing_mut().item_spacing = vec2(HEADER_SPACING, 0.0);

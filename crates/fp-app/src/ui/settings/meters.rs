@@ -2,13 +2,23 @@
 //! standard, true peak, the scale and the loudness readout. Changes apply at
 //! once.
 
-use egui::{Color32, Ui, vec2};
+use egui::{Color32, Ui, pos2, vec2};
 use fp_model::{LoudnessReadout, MeterBallistics};
 
 use super::{column_width, row, slider, toggle, update};
 use crate::ui::app::Scene;
 use crate::ui::theme;
 use crate::ui::widgets::{self, TileStyle, font};
+
+/// The room between a loudness readout tile's name and its border.
+const LOUDNESS_TILE_PAD: f32 = 6.0;
+
+/// A loudness readout's name, centred and wrapped to `wrap` points.
+fn name_job(text: &str, wrap: f32, colour: Color32) -> egui::text::LayoutJob {
+    let mut job = egui::text::LayoutJob::simple(text.to_owned(), font(12.0), colour, wrap);
+    job.halign = egui::Align::Center;
+    job
+}
 
 const PRESETS: [(MeterBallistics, &str); 8] = [
     (MeterBallistics::DigitalPeak, "meter-digital-peak"),
@@ -173,13 +183,27 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
             ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
             // Three to a line, narrower on a phone (PL33).
             let width = (column_width(ui) / 3.0).min(130.0);
-            for (readout, key) in [
+            let options = [
                 (LoudnessReadout::Off, "loudness-off"),
                 (LoudnessReadout::Momentary, "loudness-momentary"),
                 (LoudnessReadout::ShortTerm, "loudness-short-term"),
-            ] {
+            ];
+            // A name too long for its tile wraps, and every tile grows to
+            // the tallest name, so no two names run into each other.
+            let texts: Vec<String> = options.iter().map(|(_, key)| t.tr(key)).collect();
+            let wrap = width - 2.0 * LOUDNESS_TILE_PAD;
+            let height = texts
+                .iter()
+                .map(|text| {
+                    ui.painter()
+                        .layout_job(name_job(text, wrap, theme::TEXT))
+                        .size()
+                        .y
+                        + 2.0 * LOUDNESS_TILE_PAD
+                })
+                .fold(30.0, f32::max);
+            for ((readout, _), text) in options.into_iter().zip(texts) {
                 let on = m.loudness == readout;
-                let text = t.tr(key);
                 let style = TileStyle {
                     fill: if on {
                         theme::NEUTRAL_700
@@ -189,12 +213,11 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>) {
                     content: if on { theme::TEXT } else { theme::NEUTRAL_400 },
                     ..TileStyle::plain()
                 };
-                if widgets::tile(ui, vec2(width, 30.0), &text, true, style, |p, r, c| {
-                    p.text(
-                        r.center(),
-                        egui::Align2::CENTER_CENTER,
-                        &text,
-                        font(12.0),
+                if widgets::tile(ui, vec2(width, height), &text, true, style, |p, r, c| {
+                    let galley = p.layout_job(name_job(&text, wrap, c));
+                    p.galley(
+                        pos2(r.center().x, r.center().y - galley.size().y / 2.0),
+                        galley,
                         c,
                     );
                 })
