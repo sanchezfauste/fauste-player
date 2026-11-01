@@ -49,7 +49,7 @@ impl AppSession {
         backends: Vec<Arc<dyn AudioBackend>>,
         report_cap: Option<ReportCap>,
     ) -> Result<Self, Box<dyn std::error::Error>> {
-        let store = Store::new(paths.clone(), fp_model::Limits::default());
+        let mut store = Store::new(paths.clone(), fp_model::Limits::default());
         let default_name = I18n::new(None).tr("default-playlist-name");
         let loaded = store.load(&default_name);
         for warning in &loaded.warnings {

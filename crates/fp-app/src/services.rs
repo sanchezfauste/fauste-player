@@ -874,7 +874,7 @@ impl Services {
     /// Final save, with the positions the engine reports right now.
     pub fn shutdown(&mut self) {
         let state = self.conductor.model.load_full();
-        self.save_all(&state);
+        self.save_all(&state, Instant::now());
     }
 
     /// Runs on its own thread until the handle is shut down or dropped.
@@ -1728,7 +1728,7 @@ impl Services {
         {
             // Recorded only once the files are written: a failed save is
             // retried on the next step.
-            self.save_all(state);
+            self.save_all(state, now);
             self.saved_version = version;
             self.dirty_since = None;
             self.last_session_save = Some(now);
@@ -1742,25 +1742,22 @@ impl Services {
             .last_session_save
             .is_none_or(|last| now.saturating_duration_since(last) >= debounce);
         if playing && session_due {
-            self.save_session(state);
+            self.save_session(state, now);
             self.last_session_save = Some(now);
         }
     }
 
-    fn save_all(&self, state: &AppState) {
+    fn save_all(&mut self, state: &AppState, now: Instant) {
         if let Err(e) = self.store.save_config(state) {
             tracing::error!(error = %e, "saving the configuration failed");
         }
-        if let Err(e) = self.store.save_playlists(state) {
-            tracing::error!(error = %e, "saving the playlists failed");
-        }
-        if let Err(e) = self.store.save_carts(state) {
-            tracing::error!(error = %e, "saving the cart pages failed");
-        }
-        self.save_session(state);
+        self.save_session(state, now);
     }
 
-    fn save_session(&self, state: &AppState) {
+    /// Saves the playlists, library, carts, players and layout through the
+    /// database: only the rows that changed are written. A failure is
+    /// logged and the next autosave step retries.
+    fn save_session(&mut self, state: &AppState, now: Instant) {
         let telemetry = self.conductor.telemetry.load();
         let position_of = |player: PlayerId| {
             telemetry
@@ -1770,8 +1767,8 @@ impl Services {
                 .and_then(|(_, t)| t.position_secs)
                 .unwrap_or(0.0)
         };
-        if let Err(e) = self.store.save_session(state, position_of) {
-            tracing::error!(error = %e, "saving the session failed");
+        if let Err(e) = self.store.save_state(state, position_of, now) {
+            tracing::error!(error = %e, "saving the state failed");
         }
     }
 }

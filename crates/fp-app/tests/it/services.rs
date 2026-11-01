@@ -22,6 +22,7 @@ use fp_engine::conductor::{Conductor, ConductorHandle};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::file_opener;
 use fp_model::{Command, EngineAction, FileState, Transport};
+use fp_store::db::{Db, snapshot};
 use fp_store::{AppPaths, Store};
 
 fn wav(dir: &Path, name: &str, secs: u32) -> PathBuf {
@@ -127,7 +128,7 @@ fn rig_cached(
 ) -> Rig {
     let cache = cached.then(|| fp_analysis::cache::AnalysisCache::new(dir.path().join("cache")));
     let paths = AppPaths::under(dir.path());
-    let store = Store::new(paths.clone(), Default::default());
+    let mut store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
     loaded.state.config.outputs.backend = Some("offline".into());
     loaded.state.config.outputs.buffer_frames = 480;
@@ -295,17 +296,19 @@ fn changes_are_saved_after_the_debounce() {
     });
     r.conductor.tick(r.now);
     r.services.step(r.now);
-    let file = r.paths.playlists_file();
-    let saved = |p: &Path| {
-        std::fs::read_to_string(p)
-            .unwrap_or_default()
-            .contains("Night")
+    let saved = |r: &Rig| {
+        let db = Db::open(&r.paths.database_file()).unwrap();
+        snapshot::read(&db)
+            .0
+            .playlists
+            .iter()
+            .any(|p| p.name == "Night")
     };
-    assert!(!saved(&file), "not before the debounce");
+    assert!(!saved(&r), "not before the debounce");
     r.now += Duration::from_millis(1_100);
     r.conductor.tick(r.now);
     r.services.step(r.now);
-    assert!(saved(&file));
+    assert!(saved(&r));
 }
 
 #[test]
@@ -330,6 +333,50 @@ fn shutdown_saves_the_session_with_positions() {
         a,
         EngineAction::LoadPaused { player, request } if *player == p && request.from_secs > 0.3
     )));
+}
+
+/// The `doc` of every row of `table`, ordered by id.
+fn docs(paths: &AppPaths, table: &str) -> Vec<String> {
+    let db = Db::open(&paths.database_file()).unwrap();
+    let mut stmt = db
+        .conn()
+        .prepare(&format!("SELECT doc FROM {table} ORDER BY id"))
+        .unwrap();
+    stmt.query_map([], |row| row.get::<_, String>(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect()
+}
+
+#[test]
+fn while_playing_only_the_players_rows_are_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 5);
+    let mut r = rig(&[a], dir);
+    let p = r.handle.model.load().players[0].id;
+    r.handle.send(Command::Play(p));
+    r.run_until("playback", |r| {
+        r.handle
+            .telemetry
+            .load()
+            .players
+            .iter()
+            .any(|(id, t)| *id == p && t.position_secs.is_some_and(|s| s > 0.3))
+    });
+    // The first autosave writes the whole state.
+    r.now += Duration::from_millis(1_100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    let tracks = docs(&r.paths, "tracks");
+    let players = docs(&r.paths, "players");
+    assert!(!tracks.is_empty());
+    let until = r.now + Duration::from_millis(300);
+    r.run_until("more playback", |r| r.now >= until);
+    r.now += Duration::from_millis(1_100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    assert_eq!(docs(&r.paths, "tracks"), tracks, "tracks rows untouched");
+    assert_ne!(docs(&r.paths, "players"), players, "the position moved");
 }
 
 #[test]
@@ -395,8 +442,8 @@ fn a_panicking_step_does_not_stop_autosave() {
     r.now += Duration::from_millis(1_100);
     r.conductor.tick(r.now);
     r.services.step(r.now);
-    let saved = std::fs::read_to_string(r.paths.playlists_file()).unwrap_or_default();
-    assert!(saved.contains("After"));
+    let saved = snapshot::read(&Db::open(&r.paths.database_file()).unwrap()).0;
+    assert!(saved.playlists.iter().any(|p| p.name == "After"));
 }
 
 #[test]
@@ -411,8 +458,8 @@ fn cart_pages_are_saved_after_the_debounce() {
     r.now += Duration::from_millis(1_100);
     r.conductor.tick(r.now);
     r.services.step(r.now);
-    let saved = std::fs::read_to_string(r.paths.carts_file()).unwrap_or_default();
-    assert!(saved.contains("Sports"), "{saved}");
+    let saved = snapshot::read(&Db::open(&r.paths.database_file()).unwrap()).0;
+    assert!(saved.cart_pages.iter().any(|p| p.name == "Sports"));
 }
 
 #[test]

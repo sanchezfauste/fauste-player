@@ -237,11 +237,13 @@ write_home() {
     touch "$home/.screenshots-home"
     FAUSTE_HOME=$home "$root/target/release/examples/demo_session" "$media/music" "$media/carts" >&2
     python3 - "$home" "$port" "$lang" <<'EOF'
-import json, sys
+import json, sqlite3, sys
 home, port, lang = sys.argv[1], int(sys.argv[2]), sys.argv[3]
 path = f"{home}/config/config.json"
 doc = json.load(open(path))
-players = [p["id"] for p in json.load(open(f"{home}/data/session.json"))["players"]]
+db = sqlite3.connect(f"{home}/data/fauste.db")
+players = [r[0] for r in db.execute("SELECT id FROM players ORDER BY position")]
+db.close()
 c = doc["config"]
 null = lambda ch: {"backend": "null", "device": "null", "first_channel": ch}
 c["outputs"]["backend"] = "null"
@@ -347,16 +349,21 @@ player_tracks() {
 }
 
 # saved_measured <track id>...: succeeds when the saved library
-# (data/playlists.json under the home; its "library" is the array of tracks)
-# has a loudness measurement for every given track. A missing or unreadable
-# file is "not yet".
+# (the tracks table of data/fauste.db under the home; the loudness is in each
+# row's JSON doc) has a loudness measurement for every given track. A missing
+# or unreadable database is "not yet".
 saved_measured() {
-    python3 - "$home/data/playlists.json" "$@" <<'PY'
-import json, sys
+    python3 - "$home/data/fauste.db" "$@" <<'PY'
+import sqlite3, sys
 try:
-    with open(sys.argv[1]) as f:
-        library = json.load(f)["library"]
-    saved = {str(t["id"]): t.get("loudness") for t in library}
+    db = sqlite3.connect(sys.argv[1], timeout=5)
+    saved = {
+        str(i): m
+        for i, m in db.execute(
+            "SELECT id, json_extract(doc, '$.loudness') FROM tracks"
+        )
+    }
+    db.close()
 except Exception:
     sys.exit(1)
 sys.exit(0 if all(saved.get(t) is not None for t in sys.argv[2:]) else 1)
@@ -474,7 +481,7 @@ tracks=$(player_tracks) || die "cannot read the players' tracks"
 [[ -n $tracks ]] || die "no tracks on the players"
 # shellcheck disable=SC2086 # one argument per track id
 wait_for 30 saved_measured $tracks \
-    || die "the saved library ($home/data/playlists.json) has no loudness for the players' tracks after 30 s"
+    || die "the saved library ($home/data/fauste.db) has no loudness for the players' tracks after 30 s"
 stop_app
 start_app
 log "app on display :$display, API on port $port, home $home"

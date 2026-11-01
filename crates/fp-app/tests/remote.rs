@@ -82,7 +82,7 @@ fn serve(
     prepare: impl FnOnce(&mut fp_model::AppState),
 ) -> Served {
     let paths = AppPaths::under(dir.path());
-    let store = Store::new(paths.clone(), Default::default());
+    let mut store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
     let port = TcpListener::bind("127.0.0.1:0")
         .unwrap()
