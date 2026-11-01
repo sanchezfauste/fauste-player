@@ -8,7 +8,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use rusqlite::{Connection, ErrorCode, TransactionBehavior};
+use rusqlite::{Connection, ErrorCode, OpenFlags, TransactionBehavior};
 
 use crate::atomic::{backup_path, unused_sibling};
 
@@ -24,9 +24,31 @@ pub enum OpenError {
     /// The file is not a database or fails the integrity check.
     #[error("the database is corrupt: {0}")]
     Corrupt(String),
+    /// Another connection holds the file locked: it is in use, not damaged,
+    /// so it must not be set aside.
+    #[error("the database is busy: {0}")]
+    Busy(String),
     /// The database was written by a newer version of the application.
     #[error("the database has schema {0}, newer than this version supports")]
     Newer(u32),
+}
+
+/// Runs the integrity check and returns the schema version, refusing a
+/// newer one. It does not write to the database.
+fn check(conn: &Connection) -> Result<u32, OpenError> {
+    let result: String = conn
+        .query_row("PRAGMA quick_check", [], |r| r.get(0))
+        .map_err(classify)?;
+    if result != "ok" {
+        return Err(OpenError::Corrupt(result));
+    }
+    let version: u32 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .map_err(classify)?;
+    if version > SCHEMA_VERSION {
+        return Err(OpenError::Newer(version));
+    }
+    Ok(version)
 }
 
 fn classify(e: rusqlite::Error) -> OpenError {
@@ -34,12 +56,17 @@ fn classify(e: rusqlite::Error) -> OpenError {
         Some(ErrorCode::NotADatabase | ErrorCode::DatabaseCorrupt) => {
             OpenError::Corrupt(e.to_string())
         }
+        Some(ErrorCode::DatabaseBusy | ErrorCode::DatabaseLocked) => OpenError::Busy(e.to_string()),
         _ => OpenError::Io(e.to_string()),
     }
 }
 
 /// How long a connection waits for a lock held by another one.
+#[cfg(not(test))]
 const BUSY_TIMEOUT: Duration = Duration::from_secs(5);
+/// Short in unit tests, which hold locks on purpose.
+#[cfg(test)]
+const BUSY_TIMEOUT: Duration = Duration::from_millis(50);
 
 /// An open library database.
 pub struct Db {
@@ -51,6 +78,18 @@ impl Db {
     /// Opens (creating it when missing) the database at `path`, checks its
     /// integrity and brings its schema up to [`SCHEMA_VERSION`].
     pub fn open(path: &Path) -> Result<Db, OpenError> {
+        if path.exists() {
+            // Look at the file read-only first: opening it for writing can
+            // already delete a leftover `-wal`, and bytes we cannot read must
+            // reach `open_with_fallback` unchanged.
+            let probe = Connection::open_with_flags(
+                path,
+                OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+            )
+            .map_err(classify)?;
+            probe.busy_timeout(BUSY_TIMEOUT).map_err(classify)?;
+            check(&probe)?;
+        }
         let conn = Connection::open(path).map_err(classify)?;
         Self::prepare(conn, path, true)
     }
@@ -66,6 +105,12 @@ impl Db {
         // Wait this long for another connection's lock instead of failing
         // at once with "database is locked".
         conn.busy_timeout(BUSY_TIMEOUT).map_err(classify)?;
+        conn.pragma_update(None, "foreign_keys", true)
+            .map_err(classify)?;
+        conn.pragma_update(None, "synchronous", "NORMAL")
+            .map_err(classify)?;
+        let version = check(&conn)?;
+        // Only now, with the file known to be ours, may it be written to.
         if wal {
             let mode: String = conn
                 .query_row("PRAGMA journal_mode=WAL", [], |r| r.get(0))
@@ -73,22 +118,6 @@ impl Db {
             if !mode.eq_ignore_ascii_case("wal") {
                 return Err(OpenError::Io(format!("journal mode is {mode}, not wal")));
             }
-        }
-        conn.pragma_update(None, "foreign_keys", true)
-            .map_err(classify)?;
-        conn.pragma_update(None, "synchronous", "NORMAL")
-            .map_err(classify)?;
-        let check: String = conn
-            .query_row("PRAGMA quick_check", [], |r| r.get(0))
-            .map_err(classify)?;
-        if check != "ok" {
-            return Err(OpenError::Corrupt(check));
-        }
-        let version: u32 = conn
-            .query_row("PRAGMA user_version", [], |r| r.get(0))
-            .map_err(classify)?;
-        if version > SCHEMA_VERSION {
-            return Err(OpenError::Newer(version));
         }
         for (index, sql) in MIGRATIONS.iter().enumerate().skip(version as usize) {
             let target = u32::try_from(index + 1).unwrap_or(u32::MAX);
@@ -163,29 +192,56 @@ fn side_files(path: &Path) -> [PathBuf; 2] {
     })
 }
 
-/// Renames `path` and its side files to `<path>.<kind>-<stamp>`. Returns
-/// whether `path` is now free; nothing is ever deleted.
+/// Renames `path` and its side files to `<path>.<kind>-<stamp>`. The side
+/// files move first and the main file last, so a crash never leaves a
+/// sidecar beside a missing main file; if any rename fails the ones already
+/// done are undone. Returns whether `path` is now free; nothing is ever
+/// deleted or overwritten.
 fn set_aside(path: &Path, kind: &str, warnings: &mut Vec<String>) -> bool {
-    let target = unused_sibling(path, kind);
-    if let Err(e) = fs::rename(path, &target) {
-        warnings.push(format!("{}: could not set aside: {e}", path.display()));
-        return false;
+    let target = free_target(path, kind);
+    let mut moves: Vec<(PathBuf, PathBuf)> = side_files(path)
+        .into_iter()
+        .zip(side_files(&target))
+        .filter(|(from, _)| from.exists())
+        .collect();
+    moves.push((path.to_path_buf(), target.clone()));
+    let mut done: Vec<&(PathBuf, PathBuf)> = Vec::new();
+    for pair in &moves {
+        if let Err(e) = fs::rename(&pair.0, &pair.1) {
+            warnings.push(format!("{}: could not set aside: {e}", pair.0.display()));
+            for (from, to) in done.into_iter().rev() {
+                if let Err(e) = fs::rename(to, from) {
+                    warnings.push(format!("{}: could not restore: {e}", from.display()));
+                }
+            }
+            return false;
+        }
+        done.push(pair);
     }
     warnings.push(format!(
         "{}: set aside as {}",
         path.display(),
         target.display()
     ));
-    let mut ok = true;
-    for (from, to) in side_files(path).into_iter().zip(side_files(&target)) {
-        if from.exists()
-            && let Err(e) = fs::rename(&from, &to)
-        {
-            warnings.push(format!("{}: could not set aside: {e}", from.display()));
-            ok = false;
-        }
+    true
+}
+
+/// A name for `path` with a `<kind>-<stamp>` suffix such that neither it nor
+/// its side files exist.
+fn free_target(path: &Path, kind: &str) -> PathBuf {
+    let first = unused_sibling(path, kind);
+    let free = |t: &Path| !t.exists() && side_files(t).iter().all(|s| !s.exists());
+    if free(&first) {
+        return first;
     }
-    ok
+    (2u32..)
+        .map(|n| {
+            let mut name = first.as_os_str().to_owned();
+            name.push(format!("-{n}"));
+            PathBuf::from(name)
+        })
+        .find(|t| free(t))
+        .unwrap_or(first)
 }
 
 /// Deletes the copy of a backup that `open_with_fallback` made at `path`.
@@ -221,6 +277,10 @@ pub fn open_with_fallback(path: &Path, backups: usize) -> Result<Opened, OpenErr
         }
         Err(e) => {
             fail(&mut warnings, "unusable", &e);
+            if matches!(e, OpenError::Busy(_)) {
+                // In use by someone else: leave it alone, write nothing.
+                return in_memory(path, warnings);
+            }
             if path.exists() {
                 // Corrupt, newer or unreadable: keep the bytes, free the name.
                 let kind = if matches!(e, OpenError::Newer(_)) {
@@ -284,4 +344,43 @@ fn in_memory(path: &Path, mut warnings: Vec<String>) -> Result<Opened, OpenError
         source: DbSource::Fresh,
         warnings,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn busy_and_locked_are_not_damage() {
+        for code in [rusqlite::ffi::SQLITE_BUSY, rusqlite::ffi::SQLITE_LOCKED] {
+            let e = rusqlite::Error::SqliteFailure(rusqlite::ffi::Error::new(code), None);
+            assert!(matches!(classify(e), OpenError::Busy(_)));
+        }
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn a_locked_database_is_left_alone() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fauste.db");
+        drop(Db::open(&path).unwrap());
+        let holder = Connection::open(&path).unwrap();
+        holder
+            .execute_batch(
+                "PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE; \
+                 INSERT INTO kv (key, value) VALUES ('a', 'b');",
+            )
+            .unwrap();
+        let before = fs::read(&path).unwrap();
+        let opened = open_with_fallback(&path, 3).unwrap();
+        assert_eq!(opened.source, DbSource::Fresh);
+        assert!(!opened.warnings.is_empty());
+        assert_eq!(fs::read(&path).unwrap(), before);
+        assert!(fs::read_dir(dir.path()).unwrap().all(|e| {
+            !e.unwrap()
+                .file_name()
+                .to_string_lossy()
+                .contains(".corrupt-")
+        }));
+    }
 }

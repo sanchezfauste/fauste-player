@@ -164,3 +164,78 @@ fn a_stale_temporary_backup_is_replaced() {
     assert!(Db::open(&backup_path(&path, 1)).is_ok());
     assert!(!dir.path().join("fauste.db.bak-tmp").exists());
 }
+
+#[test]
+fn side_files_travel_with_the_main_file_and_keep_their_bytes() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("fauste.db");
+    fs::write(&path, vec![0xAB; 4096]).unwrap();
+    fs::write(dir.path().join("fauste.db-wal"), vec![0x11; 64]).unwrap();
+    fs::write(dir.path().join("fauste.db-shm"), vec![0x22; 64]).unwrap();
+    let opened = open_with_fallback(&path, 0).unwrap();
+    assert_eq!(opened.source, DbSource::Fresh);
+    let aside = names(dir.path())
+        .into_iter()
+        .find(|n| {
+            n.starts_with("fauste.db.corrupt-") && !n.ends_with("-wal") && !n.ends_with("-shm")
+        })
+        .unwrap();
+    assert_eq!(fs::read(dir.path().join(&aside)).unwrap(), vec![0xAB; 4096]);
+    assert_eq!(
+        fs::read(dir.path().join(format!("{aside}-wal"))).unwrap(),
+        vec![0x11; 64]
+    );
+    // The -shm is SQLite's rebuildable shared-memory index, which it
+    // rewrites when it looks at a file: it only has to travel along.
+    assert!(dir.path().join(format!("{aside}-shm")).exists());
+}
+
+#[test]
+fn an_existing_side_file_target_is_never_overwritten() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("fauste.db");
+    fs::write(&path, vec![0xAB; 4096]).unwrap();
+    fs::write(dir.path().join("fauste.db-wal"), vec![0x11; 64]).unwrap();
+    // Occupy the wal name of every candidate stamp the next second or two.
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    for s in stamp - 1..=stamp + 2 {
+        fs::write(
+            dir.path().join(format!("fauste.db.corrupt-{s}-wal")),
+            b"precious",
+        )
+        .unwrap();
+    }
+    open_with_fallback(&path, 0).unwrap();
+    for s in stamp - 1..=stamp + 2 {
+        assert_eq!(
+            fs::read(dir.path().join(format!("fauste.db.corrupt-{s}-wal"))).unwrap(),
+            b"precious"
+        );
+    }
+    assert!(
+        names(dir.path())
+            .iter()
+            .any(|n| n.ends_with("-wal") && fs::read(dir.path().join(n)).unwrap() == vec![0x11; 64])
+    );
+}
+
+#[test]
+fn a_newer_database_in_rollback_journal_mode_is_not_modified() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("fauste.db");
+    {
+        let conn = rusqlite::Connection::open(&path).unwrap();
+        conn.execute_batch("CREATE TABLE t (x); PRAGMA user_version = 2;")
+            .unwrap();
+    }
+    let before = fs::read(&path).unwrap();
+    open_with_fallback(&path, 0).unwrap();
+    let kept = names(dir.path())
+        .into_iter()
+        .find(|n| n.starts_with("fauste.db.newer-"))
+        .unwrap();
+    assert_eq!(fs::read(dir.path().join(kept)).unwrap(), before);
+}
