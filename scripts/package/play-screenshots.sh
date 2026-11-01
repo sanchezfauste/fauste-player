@@ -249,7 +249,7 @@ wait_for "$timeout" library_ready || die "the songs were not analysed after $tim
 # bar) shows an alert: its text has the alert colour (theme::ON_AIR_TEXT).
 alert_shown() {
     local red
-    red=$(convert "$1" -crop "${WIDTH}x80+0+$((HEIGHT - 130))" +repage -fuzz 15% \
+    red=$(convert "$1" -alpha off -crop "${WIDTH}x80+0+$((HEIGHT - 130))" +repage -fuzz 15% \
         -fill black +opaque '#ff645f' -fill white -opaque '#ff645f' \
         -format '%[fx:int(mean*w*h)]' info:)
     [[ $red -gt 0 ]]
