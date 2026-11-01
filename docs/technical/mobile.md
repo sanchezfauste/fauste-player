@@ -338,7 +338,9 @@ name, and with the debug key without them; some of them without the
 others fail the build. The `versionCode` comes from
 the workspace version (`android.sh --self-test` checks the formula).
 `release-build.yml`'s `android` job publishes the APK and AAB with a
-release once the key is a secret (see the release process).
+release once the key is a secret, and `stores.yml`'s `google-play` job
+uploads that AAB to Google Play once its service account is set up (see
+the release process, "Stores"; the listing is in `packaging/android/play`).
 
 A release build ships the third-party notices (PL22):
 `NOTICES_MANIFEST=crates/fp-mobile/Cargo.toml scripts/package/notices.sh`

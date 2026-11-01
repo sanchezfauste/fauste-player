@@ -3,6 +3,7 @@ name: stores
 # Publishes a release to the app stores and package repositories:
 #   - Microsoft Store: an MSIX package, submitted with the Store CLI;
 #   - Snap Store: a snap for amd64 and arm64;
+#   - Google Play: the release's signed Android App Bundle;
 #   - Flathub: a pull request to flathub/com.sanchezfauste.FaustePlayer with the
 #     release's manifest and cargo sources (Flathub builds and publishes it);
 #   - WinGet: a pull request to microsoft/winget-pkgs with the release's MSI;
@@ -12,7 +13,8 @@ name: stores
 # are configured (see docs/technical/release-process.md, "Stores"), and
 # pre-releases go only to the Snap Store's beta channel. Pull requests that
 # touch the store packaging run it as a dry run: they build the MSIX and the
-# snaps and lint the Flathub manifest, and publish nothing.
+# snaps, lint the Flathub manifest and check the Google Play listing, and
+# publish nothing.
 
 on:
   workflow_call:
@@ -33,6 +35,8 @@ on:
       - scripts/package/flatpak-cargo-sources.sh
       - scripts/package/metainfo.sh
       - scripts/package/notices.sh
+      - scripts/package/play-listing.py
+      - scripts/package/tests/**
       - .github/workflows/stores.yml
   workflow_dispatch:
     inputs:
@@ -67,6 +71,7 @@ jobs:
       publish: ${{ steps.plan.outputs.publish }}
       msstore: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.MSSTORE_CLIENT_SECRET != '' && vars.MSSTORE_PRODUCT_ID != '' && vars.MSSTORE_IDENTITY_NAME != '' && vars.MSSTORE_PUBLISHER != '' }}
       snap: ${{ steps.plan.outputs.publish == 'true' && secrets.SNAPCRAFT_STORE_CREDENTIALS != '' }}
+      googleplay: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' }}
       flathub: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.FLATHUB_TOKEN != '' }}
       winget: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.WINGET_TOKEN != '' }}
       aur: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.AUR_SSH_PRIVATE_KEY != '' }}
@@ -203,6 +208,59 @@ jobs:
         run: |
           command -v snapcraft >/dev/null || sudo snap install snapcraft --classic
           snapcraft upload-metadata "${SNAP_FILE}" --force
+
+  google-play:
+    name: Google Play
+    needs: plan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+      # Tags made before the Google Play listing have nothing to upload.
+      - name: Check the listing
+        id: listing
+        run: |
+          if [ ! -f scripts/package/play-listing.py ]; then
+            echo "This tag predates the Google Play listing: nothing to do"
+            exit 0
+          fi
+          python3 -m unittest discover -s scripts/package/tests -p 'test_*.py'
+          scripts/package/play-listing.py check
+          echo "present=true" >> "$GITHUB_OUTPUT"
+      # The bundle is the one release-build.yml signed with the release key
+      # and attached to the release (the `binaries` job runs first): a
+      # rebuild here would be another build of the same versionCode.
+      - name: Download the release's App Bundle
+        if: needs.plan.outputs.googleplay == 'true' && steps.listing.outputs.present == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          VERSION: ${{ needs.plan.outputs.version }}
+        run: |
+          aab="fauste-player-${VERSION}-android.aab"
+          if ! gh release download "${TAG}" --repo "${GITHUB_REPOSITORY}" \
+              --pattern "${aab}" --pattern "${aab}.sha256" --dir play; then
+            echo "::error::${TAG} has no ${aab}: the release was built without the Android release key"
+            exit 1
+          fi
+          (cd play && sha256sum -c "${aab}.sha256")
+          scripts/package/play-listing.py whatsnew play/whatsnew
+      # Pinned by commit: the step holds the service account's key. Every
+      # release goes to one track (GOOGLE_PLAY_TRACK, default internal);
+      # GOOGLE_PLAY_STATUS is draft until Play has reviewed the app once,
+      # since Play refuses any other status for an app never published.
+      - name: Upload to Google Play
+        if: needs.plan.outputs.googleplay == 'true' && steps.listing.outputs.present == 'true'
+        uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.sanchezfauste.FaustePlayer
+          releaseFiles: play/fauste-player-${{ needs.plan.outputs.version }}-android.aab
+          releaseName: ${{ needs.plan.outputs.version }}
+          track: ${{ vars.GOOGLE_PLAY_TRACK || 'internal' }}
+          status: ${{ vars.GOOGLE_PLAY_STATUS || 'completed' }}
+          whatsNewDirectory: play/whatsnew
 
   flathub:
     name: Flathub
