@@ -40,13 +40,15 @@ and About). The clock shows when there is room for it. Turned sideways,
 the Playlists screen puts its player chips (P1, P2…) in the top bar, and
 the status bar at the bottom shows only when it has something to say.
 
-- *Live:* every player as a card, and the cartwall. Each card has the
-  player's waveform on top (a tap seeks), the elapsed time and the
-  track's length with the time left in large digits, its name, status,
-  Single/Cont and CUE, the title and artist and the next track, the
+- *Live:* every player as a card, and the cartwall. Each card has, top
+  to bottom, the player's name, status, Single/Cont and CUE; the cover,
+  the title and artist and the next track; the waveform (a tap seeks);
+  the elapsed time and the track's length with the time left in large
+  digits; then the
   transport (Play/Next, Previous, Pause, Stop, Restart, Fade stop, Stop
   after current) with buttons a finger's size, and a slim meter with the
-  volume fader (no scales; the fader's level shows under it). Held
+  volume fader (no scales; the fader's level shows under it). The
+  buttons work while another finger holds the fader. Held
   upright the cards are on top, one whole card and the start of the next
   (scroll for more), and the cartwall below. Turned sideways each player
   is one row on the left (its name and status, the title, the time left,

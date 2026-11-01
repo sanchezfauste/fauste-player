@@ -149,12 +149,17 @@ is at least `CLOCK_MIN_WIDTH` (400 points) wide. `PhoneView` is view state
 only (the screen, the Playlists screen's player): nothing a view hides
 stops or changes playout.
 
-- *Live* (`touch::live`, PL4–PL6): a card per player (`player::card`: the
-  waveform `CARD_WAVE_HEIGHT` tall with no marker editing, the time row
-  `phone_time_row` with elapsed / total and the countdown, the header and
-  `top_block` at `BlockSize::PhoneCompact`: no cover, title and artist on
-  one line, 48-point transport buttons (`PHONE_BUTTON`), and the compact
-  meter and fader `widgets::vu_compact` / `fader_compact`, PL28–PL30) in a
+- *Live* (`touch::live`, PL4–PL6, PL37): a card per player (`player::card`:
+  the header, `info_row` compact (a 40-point cover, title and artist on
+  one line, the next track), the waveform `CARD_WAVE_HEIGHT` tall with no
+  marker editing, the time row `phone_time_row` with elapsed / total and
+  the countdown, then `top_block` at `BlockSize::PhoneCompact` (the
+  transport alone): 48-point transport buttons (`PHONE_BUTTON`), and the compact
+  meter and fader `widgets::vu_compact` / `fader_compact`, PL28–PL30; the
+  card's margins and rows are `GAP` apart, as its buttons). egui follows
+  one finger as its pointer, so `touch::tapped` also reads a second
+  finger's tap from its `Event::Touch`es (PL38): the transport works while
+  a finger holds the fader) in a
   vertical scroll area, and `cartwall::strip` filling
   the rest. Portrait puts the cards on top, as tall as they were in the
   last frame up to `LIVE_CARDS_SHARE` (0.66) of the height; landscape puts

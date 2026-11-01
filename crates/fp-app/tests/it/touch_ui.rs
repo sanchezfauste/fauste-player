@@ -312,6 +312,79 @@ fn a_drag_on_a_card_fader_moves_it() {
     assert!(volume_sent(&fake), "the fader did not move");
 }
 
+fn finger(id: u64, phase: egui::TouchPhase, pos: egui::Pos2) -> egui::Event {
+    egui::Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(id),
+        phase,
+        pos,
+        force: None,
+    }
+}
+
+/// A tap on a card's buttons works while another finger holds the fader:
+/// egui follows one finger only, so the second one's tap is read from its
+/// touch events.
+#[test]
+fn a_second_finger_taps_play_while_one_holds_the_fader() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+    let play = h.get_by_label("Play").rect().center();
+    // The first finger lands on the fader and stays.
+    h.event(finger(0, egui::TouchPhase::Start, fader.center()));
+    h.event(egui::Event::PointerMoved(fader.center()));
+    h.event(egui::Event::PointerButton {
+        pos: fader.center(),
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    fake.take_sent();
+    // The second taps Play: touch events only.
+    h.event(finger(1, egui::TouchPhase::Start, play));
+    h.step();
+    h.event(finger(1, egui::TouchPhase::End, play));
+    h.run_steps(2);
+    let sent = fake.take_sent();
+    assert!(
+        sent.iter().any(|c| matches!(c, fp_model::Command::Play(_))),
+        "no play command: {sent:?}"
+    );
+}
+
+/// The first finger's own touch events send nothing twice: its tap is the
+/// pointer's click.
+#[test]
+fn a_single_finger_tap_sends_play_once() {
+    let (mut h, fake) = touch(1, PORTRAIT);
+    let play = h.get_by_label("Play").rect().center();
+    fake.take_sent();
+    h.event(finger(0, egui::TouchPhase::Start, play));
+    h.event(egui::Event::PointerMoved(play));
+    h.event(egui::Event::PointerButton {
+        pos: play,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.step();
+    h.event(finger(0, egui::TouchPhase::End, play));
+    h.event(egui::Event::PointerButton {
+        pos: play,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(2);
+    let plays = fake
+        .take_sent()
+        .iter()
+        .filter(|c| matches!(c, fp_model::Command::Play(_)))
+        .count();
+    assert_eq!(plays, 1);
+}
+
 /// A scroll of the cards that starts on a title moves nothing.
 #[test]
 fn a_scroll_of_the_cards_sends_nothing() {
