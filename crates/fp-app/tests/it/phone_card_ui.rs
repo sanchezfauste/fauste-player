@@ -14,7 +14,7 @@ use egui_kittest::Harness;
 use egui_kittest::kittest::Queryable;
 use fp_app::ui::app::AppUi;
 use fp_app::ui::widgets;
-use support::{harness_sized, state};
+use support::{harness_device, state};
 
 /// A narrow phone, a Samsung A56, a common phone and a large one, upright,
 /// in dp.
@@ -37,7 +37,7 @@ fn card_with(size: Vec2, secs: f64, meter: fp_model::MeterBallistics) -> Harness
     }
     // The meter's node is named "Level meter" without a loudness line.
     s.config.meter.loudness = fp_model::LoudnessReadout::Off;
-    let (mut h, _fake) = harness_sized(s, size, |ui| ui.with_touch());
+    let (mut h, _fake) = harness_device(s, size, |ui| ui.with_touch());
     h.run_steps(3);
     h
 }
@@ -109,13 +109,39 @@ fn a_large_phone_shows_both_scales() {
     assert!(fader_width(&h) > widgets::COMPACT_FADER_WIDTH);
 }
 
-/// PL39: a common phone (412 dp) has room for the meter's scale but not
-/// for the fader's as well: the meter's comes first.
+/// PL39: a 400 dp phone, and the A56 (384 dp) with the meter closer to
+/// the fader, have room for the meter's scale but not for the fader's as
+/// well: the meter's comes first.
 #[test]
-fn a_common_phone_shows_the_meter_scale_only() {
+fn a_mid_sized_phone_shows_the_meter_scale_only() {
+    for size in [A56, vec2(400.0, 860.0)] {
+        let h = card(size, 180.0);
+        assert!(meter_width(&h) > widgets::COMPACT_METER_WIDTH, "{size:?}");
+        assert_eq!(fader_width(&h), widgets::COMPACT_FADER_WIDTH, "{size:?}");
+    }
+}
+
+/// PL39: a common phone (412 dp) shows both scales.
+#[test]
+fn a_common_phone_shows_both_scales() {
     let h = card(PORTRAIT, 180.0);
     assert!(meter_width(&h) > widgets::COMPACT_METER_WIDTH);
-    assert_eq!(fader_width(&h), widgets::COMPACT_FADER_WIDTH);
+    assert!(fader_width(&h) > widgets::COMPACT_FADER_WIDTH);
+}
+
+/// PL39: the meter and the fader keep a gap between them, with the
+/// divider in it, however tight the column is.
+#[test]
+fn the_meter_and_fader_keep_a_gap() {
+    for size in [NARROW, A56, PORTRAIT, LARGE] {
+        let h = card(size, 180.0);
+        let meter = rect(&h, "Level meter");
+        let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();
+        assert!(
+            fader.left() - meter.right() >= 4.0,
+            "{size:?}: {meter:?} {fader:?}"
+        );
+    }
 }
 
 /// The rects of the texts a frame drew.
@@ -144,7 +170,7 @@ fn the_scale_labels_stay_in_their_column() {
         fp_model::MeterBallistics::DigitalPeak,
         fp_model::MeterBallistics::EbuPpm,
     ] {
-        for size in [PORTRAIT, LARGE] {
+        for size in [A56, PORTRAIT, LARGE] {
             let h = card_with(size, 180.0, meter);
             let meter_rect = rect(&h, "Level meter");
             let fader = h.get_all_by_label_contains("Volume").next().unwrap().rect();

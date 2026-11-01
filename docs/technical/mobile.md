@@ -159,7 +159,8 @@ stops or changes playout.
   `phone_split` shares the width (PL39): the time row is as wide as the
   buttons, so the countdown ends with them, and the meter's ruler and the
   fader's numbers show only when they fit beside 48-point buttons (the
-  meter's first); too narrow for the bare column, the buttons shrink
+  meter's first, with the meter `TIGHT_METER_FADER_GAP` (4) from the fader
+  when that is what makes it fit); too narrow for the bare column, the buttons shrink
   down to `PHONE_BUTTON_MIN` (36); the
   card's margins and rows are `GAP` apart, as its buttons). egui follows
   one finger as its pointer, so `touch::tapped` also reads a second

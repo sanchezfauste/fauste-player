@@ -352,7 +352,9 @@ cartwall folds ("ok pero que se pueda plegar la cartwall").
 
 Decided: the countdown ends where the transport ends, smaller when it
 does not fit; the meter's and the fader's scales show when they fit
-beside the buttons and not otherwise ("que aparezca si puede caber bien").
+beside the buttons and not otherwise ("que aparezca si puede caber bien");
+the A56 should show the meter's scale with the meter closer to the fader,
+and the buttons may shrink on a phone too narrow for them.
 
 - PL39. **The card's width** (replaces PL30's "lose their scale legends"):
   the transport keeps its 48 dp buttons; the time row above it is as wide
@@ -361,6 +363,9 @@ beside the buttons and not otherwise ("que aparezca si puede caber bien").
   without reaching the elapsed time. The width left right of the buttons
   goes to the meter and fader column: the meter's scale (one ruler, left
   of the bars) shows when it fits, then the fader's numbers (right of the
-  knob) when both fit; the meter's comes first. On a phone too narrow for
+  knob) when both fit; the meter's comes first, and to fit it the meter
+  may move closer to the fader (a 4 dp gap instead of 10 dp; the fader's
+  numbers never get that). Upright, the meter's scale shows from about
+  384 dp (the A56) and both from about 406 dp. On a phone too narrow for
   48 dp buttons beside the bare meter and fader, the buttons shrink (down
   to 36 dp) so they never run into the meter, and no scale shows.

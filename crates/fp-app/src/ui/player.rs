@@ -1065,42 +1065,48 @@ struct PhoneSplit {
     /// The meter's ruler and the fader's numbers.
     meter_scale: bool,
     fader_scale: bool,
+    /// The gap between the meter and the fader, which holds their divider.
+    gap: f32,
     /// The meter and fader column's width.
     column: f32,
 }
 
+/// The gap between a phone's meter and fader when the meter's scale needs
+/// the room: the divider and a little air on each side.
+const TIGHT_METER_FADER_GAP: f32 = 4.0;
+
 /// The split of a phone card `width` wide for meter `c`: finger-sized
 /// buttons, then the meter's scale and the fader's, each only if it fits
-/// beside them. Too narrow for the buttons, they shrink (down to
-/// [`PHONE_BUTTON_MIN`]) and no scale shows.
+/// beside them, the meter's first. The meter's scale may bring the meter
+/// closer to the fader to fit; the fader's never does. Too narrow for the
+/// buttons, they shrink (down to [`PHONE_BUTTON_MIN`]) and no scale shows.
 fn phone_split(width: f32, c: &fp_model::MeterConfig) -> PhoneSplit {
-    let column = |meter_scale: bool, fader_scale: bool| {
-        widgets::compact_meter_width(c, meter_scale)
-            + METER_FADER_GAP
-            + widgets::compact_fader_width(fader_scale)
+    let split = |meter_scale: bool, fader_scale: bool, gap: f32| PhoneSplit {
+        button: PHONE_BUTTON,
+        meter_scale,
+        fader_scale,
+        gap,
+        column: widgets::compact_meter_width(c, meter_scale)
+            + gap
+            + widgets::compact_fader_width(fader_scale),
     };
     let room = width - phone_transport_width(PHONE_BUTTON) - METER_COLUMN_GAP;
-    let fits = [(true, true), (true, false), (false, false)]
-        .into_iter()
-        .find(|&(m, f)| column(m, f) <= room);
-    match fits {
-        Some((meter_scale, fader_scale)) => PhoneSplit {
-            button: PHONE_BUTTON,
-            meter_scale,
-            fader_scale,
-            column: column(meter_scale, fader_scale),
-        },
-        None => {
-            let column = column(false, false);
-            let left = width - column - METER_COLUMN_GAP;
-            PhoneSplit {
-                button: ((left - 4.0 * GAP) / 5.0).clamp(PHONE_BUTTON_MIN, PHONE_BUTTON),
-                meter_scale: false,
-                fader_scale: false,
-                column,
-            }
+    let fits = [
+        split(true, true, METER_FADER_GAP),
+        split(true, false, METER_FADER_GAP),
+        split(true, false, TIGHT_METER_FADER_GAP),
+        split(false, false, METER_FADER_GAP),
+    ]
+    .into_iter()
+    .find(|s| s.column <= room);
+    fits.unwrap_or_else(|| {
+        let bare = split(false, false, METER_FADER_GAP);
+        let left = width - bare.column - METER_COLUMN_GAP;
+        PhoneSplit {
+            button: ((left - 4.0 * GAP) / 5.0).clamp(PHONE_BUTTON_MIN, PHONE_BUTTON),
+            ..bare
         }
-    }
+    })
 }
 /// How much a phone's Play glyph and caption grow at most: less than the
 /// button, which is wide enough for longer captions.
@@ -1207,7 +1213,8 @@ fn meter_column(
     phone: Option<PhoneSplit>,
 ) {
     let t = scene.i18n;
-    ui.spacing_mut().item_spacing = vec2(METER_FADER_GAP, 0.0);
+    let gap = phone.map_or(METER_FADER_GAP, |p| p.gap);
+    ui.spacing_mut().item_spacing = vec2(gap, 0.0);
     let meter = &scene.state.config.meter;
     let name = widgets::loudness_line(&telemetry.meter, meter)
         .map(|(value, _)| t.tr_args("meter-loudness", &[("value", value.into())]))
@@ -1236,9 +1243,9 @@ fn meter_column(
     // a phone's narrow readout stays clear of it, so it runs the whole
     // height, past the meter's own bottom line.
     let fader_left = ui.cursor().left();
-    let meter_right = fader_left - METER_FADER_GAP;
+    let meter_right = fader_left - gap;
     let divider_x = if phone.is_some() {
-        meter_right + (METER_FADER_GAP - DIVIDER_WIDTH) / 2.0
+        meter_right + (gap - DIVIDER_WIDTH) / 2.0
     } else {
         (meter_right + widgets::fader_knob_left(fader_left) - DIVIDER_WIDTH) / 2.0
     };

@@ -194,6 +194,36 @@ fn harness_built(
     (harness, fake)
 }
 
+/// As `harness_sized`, with the interface drawn over the whole of `size`
+/// as eframe draws it on a device. The other harnesses keep kittest's
+/// 8-point margin around the interface, so their screen is 16 points
+/// narrower and shorter than `size`.
+pub fn harness_device(
+    state: AppState,
+    size: egui::Vec2,
+    build: impl FnOnce(AppUi) -> AppUi,
+) -> (Harness<'static, AppUi>, Arc<Fake>) {
+    let fake = Fake::new(state);
+    let ui = build(AppUi::new(
+        fake.clone(),
+        I18n::new(Some("en-US")),
+        MediaCache::default(),
+    ));
+    let mut harness = Harness::builder()
+        .with_size(size)
+        .with_step_dt(0.02)
+        .build_ui_state(
+            |ui, app: &mut AppUi| {
+                app.guard_close(ui.ctx());
+                let screen = ui.ctx().content_rect();
+                ui.scope_builder(egui::UiBuilder::new().max_rect(screen), |ui| app.ui(ui));
+            },
+            ui,
+        );
+    harness.run_steps(2);
+    (harness, fake)
+}
+
 /// As `harness_sized`, the interface drawn inside `size` less `top` and
 /// `bottom` points, as a phone's shell leaves its system bars out.
 pub fn harness_inset(
