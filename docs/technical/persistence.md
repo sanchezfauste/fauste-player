@@ -135,7 +135,7 @@ them once:
 4. The consumed files are renamed to `*.imported` (`playlists.json.imported`,
    `playlists.json.bak1.imported`…), the directory is synced and the marker
    is removed. The `.imported` files are kept so that a downgrade can find
-   them by renaming them back.
+   them by renaming them back (see below).
 
 Recovery after an interruption:
 
@@ -158,6 +158,16 @@ Recovery after an interruption:
   saving and the next start retries.
 - **Nothing readable** at all starts empty, as the fallback does.
 
+Downgrade: the older version reads the JSON files again, so the operator
+closes the application, moves `fauste.db`, `-wal`, `-shm` and every
+`fauste.db.bak*` out of the data folder (never deletes them), removes
+`.imported` from the old names and starts the older version. What was saved
+since the update stays only in the moved copy. Upgrading again imports the
+JSON files again, but only while no `fauste.db` or `fauste.db.bakN` is in the
+data folder, because an existing database or backup always wins. Deleting
+`fauste.db` alone is not enough: a left-over `.bakN` would be restored and
+the JSON files ignored.
+
 On restore, a playlist or entry whose id is already taken (a hand-edited
 document) gets a new id; the first holder keeps its own
 (`Playlists::normalize`, like `Cartwall::normalize` for carts). The import
@@ -166,7 +176,7 @@ id.
 
 ## Atomic files (`atomic.rs`)
 
-`config.json` and the other JSON files are still written with
+`config.json` is the only file still written with
 `write_atomic(path, bytes, backups)`:
 
 1. writes `<file>.tmp` and `fsync`s it;

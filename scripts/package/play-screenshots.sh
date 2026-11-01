@@ -233,12 +233,13 @@ start_app() {
 # The first start analyses the songs (waveforms, durations, loudness) and
 # saves them; the second shows them from the start.
 library_ready() {
-    # The database with its write-ahead log and shared-memory files, copied
-    # to the host: the saved rows may still be in the log.
+    # The database and its write-ahead log, copied to the host (the log
+    # first, so no change is lost between the two copies): the saved rows may
+    # still be in the log. SQLite rebuilds the shared-memory file from it.
     local dir=$tmp/library suffix
     rm -rf "$dir"
     mkdir -p "$dir"
-    for suffix in "" -wal -shm; do
+    for suffix in -wal ""; do
         adb exec-out "cat '$files/data/fauste.db$suffix' 2>/dev/null" > "$dir/fauste.db$suffix" || true
     done
     python3 - "$dir/fauste.db" <<'PY'

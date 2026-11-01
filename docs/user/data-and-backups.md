@@ -41,16 +41,18 @@ a USB stick, or to keep separate setups side by side.
   refreshed at the same pace.
 - The database is written in transactions, so a power cut never leaves a
   half-saved change.
-- About every five minutes (while changes are being saved) the application
-  copies the database to `fauste.db.bak1` and shifts the older copies up, to
-  `.bak2` and `.bak3`.
+- At the first save of each session, and then about every five minutes
+  while changes are being saved, the application copies the database to
+  `fauste.db.bak1` and shifts the older copies up, to `.bak2` and `.bak3`.
+  Restarting several times in a row therefore pushes the older backups out.
 - If the database cannot be read, the newest good backup is used. The
   unreadable file is kept, renamed `fauste.db.corrupt-<time>`, for
   inspection. If every copy fails, the application starts empty. It always
   starts.
 - A database written by a newer version of the application is not opened:
-  it is kept as `fauste.db.newer-<time>` and the application starts empty,
-  so a downgrade never destroys your data.
+  it is kept as `fauste.db.newer-<time>`, and the application starts from
+  the newest backup it can read, or empty when there is none, so opening
+  the data with an older version never destroys it.
 - `config.json` is saved the same way as before: a temporary file replaces
   the old one, and the previous versions are kept as `.bak1`, `.bak2` and
   `.bak3` beside it.
@@ -67,10 +69,20 @@ version reads them (with their `.bak` copies) once and puts everything in
 with their played flags, the cart pages and the session. Then the old files
 are renamed with `.imported` at the end (`playlists.json.imported`,
 `playlists.json.bak1.imported`, and so on). They are no longer used and you
-can delete them once you are sure everything is there. To go back to an
-earlier version, close the application, delete `fauste.db`, remove
-`.imported` from the names, and start the older version. Changes made since the import are not in
-those files.
+can delete them once you are sure everything is there.
+
+To go back to an earlier version:
+
+1. Close the application.
+2. Move `fauste.db`, `fauste.db-wal`, `fauste.db-shm` and every
+   `fauste.db.bak*` to a folder outside the data folder. Do not delete them.
+3. Remove `.imported` from the names of the old files.
+4. Start the older version.
+
+Everything saved since the update stays only in the folder you moved the
+files to: the old files do not have it. If you upgrade again later, the
+old files are imported again, as long as no `fauste.db` or `fauste.db.bak*`
+is in the data folder.
 
 If a start is interrupted during the import, the next one finishes it. If
 one of the old files cannot be read (too large, or written by a newer
