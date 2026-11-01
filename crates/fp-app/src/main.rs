@@ -143,6 +143,10 @@ fn run(
     let options = eframe::NativeOptions {
         viewport,
         event_loop_builder: event_loop_hook(window_system),
+        // The window's size, position and maximized state come back at the
+        // next start (eframe keeps them on screen if a monitor went away).
+        persist_window: true,
+        persistence_path: Some(paths.data_dir.join("window.ron")),
         ..Default::default()
     };
     let result = eframe::run_native(

@@ -127,4 +127,10 @@ impl eframe::App for Shell {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         Shell::ui(self, ui);
     }
+
+    /// Only the window is kept between runs (`NativeOptions::persist_window`):
+    /// the interface's state lives in the session.
+    fn persist_egui_memory(&self) -> bool {
+        false
+    }
 }
