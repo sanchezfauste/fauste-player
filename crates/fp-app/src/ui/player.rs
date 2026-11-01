@@ -33,7 +33,7 @@ const CARD_WAVE_HEIGHT: f32 = 44.0;
 const PLAYLISTS_WAVE_HEIGHT: f32 = 72.0;
 const PLAYLISTS_CARD_HEIGHT: f32 = 330.0;
 /// The shortest a compact card's waveform gets (PL28).
-const MIN_WAVE_HEIGHT: f32 = 28.0;
+const MIN_WAVE_HEIGHT: f32 = 20.0;
 const PLAYLISTS_CARD_SHARE: f32 = 0.55;
 const TABS_HEIGHT: f32 = 30.0;
 /// Width of the "+" (new playlist) button at the right end of the tabs.
@@ -222,8 +222,8 @@ pub(crate) fn playlists_screen(
 }
 
 /// A player's card on a phone's Live screen (phone layout spec PL4): the
-/// waveform as the seek bar first, away from the buttons, then the header
-/// and the player block (titles, transport, meter and fader); no playlist.
+/// header, the titles with the cover, the waveform as the seek bar and its
+/// times, then the transport with the meter and fader; no playlist.
 pub(crate) fn card(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -265,15 +265,16 @@ fn card_sized(
     egui::Frame::new()
         .fill(theme::SURFACE)
         .stroke(Stroke::new(1.0, theme::NEUTRAL_800))
-        // Tight vertical room, so the whole card fits a phone on its side
-        // between the system bars (PL28).
-        .inner_margin(egui::Margin::symmetric(10, 4))
+        // The same room on every side and between rows as between the
+        // buttons.
+        .inner_margin(egui::Margin::same(GAP as i8))
         .show(ui, |ui| {
-            ui.spacing_mut().item_spacing = vec2(6.0, 4.0);
+            ui.spacing_mut().item_spacing = vec2(GAP, GAP);
             let locked = super::touch::locked(scene, view_state);
+            header(ui, scene, view_state, id, index, &pv);
+            info_row(ui, scene, covers, id, &pv, &telemetry, true);
             wave_sized(ui, scene, view_state, id, &pv, wave_height, markers, locked);
             phone_time_row(ui, scene, &pv);
-            header(ui, scene, view_state, id, index, &pv);
             // A drag that starts on the fader moves it (PL14), unless
             // locked (PL12); one that starts elsewhere scrolls the cards.
             top_block(
@@ -308,7 +309,7 @@ fn card_view(
 }
 
 /// A mini card's height: a finger-sized row and its margins (PL36).
-const MINI_CARD_HEIGHT: f32 = PHONE_BUTTON + 8.0;
+const MINI_CARD_HEIGHT: f32 = PHONE_BUTTON + 2.0 * GAP;
 
 /// A player as one row on a phone held on its side (PL36): its name and
 /// status over the title, the remaining time, then Play/Next, Pause and
@@ -336,7 +337,7 @@ pub(crate) fn mini_card(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewSta
     );
     let mut row = ui.new_child(
         UiBuilder::new()
-            .max_rect(rect.shrink2(vec2(8.0, 4.0)))
+            .max_rect(rect.shrink(GAP))
             .layout(Layout::right_to_left(Align::Center)),
     );
     row.spacing_mut().item_spacing = vec2(GAP, 0.0);
@@ -345,16 +346,15 @@ pub(crate) fn mini_card(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewSta
     let paint = |action: TransportAction| {
         move |p: &egui::Painter, r: Rect, c: Color32| glyphs::paint(p, r, action, 16.0, c)
     };
-    if widgets::tile(
+    let tile = widgets::tile(
         &mut row,
         button,
         &t.tr("tip-stop"),
         available.stop,
         TileStyle::plain(),
         paint(TransportAction::Stop),
-    )
-    .clicked()
-    {
+    );
+    if super::touch::tapped(&row, &tile) {
         scene.ctl.send(Command::Stop(id));
     }
     let paused = pv.status == PlayerStatus::Paused;
@@ -363,16 +363,15 @@ pub(crate) fn mini_card(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewSta
     } else {
         TileStyle::plain()
     };
-    if widgets::tile(
+    let tile = widgets::tile(
         &mut row,
         button,
         &t.tr("tip-pause"),
         available.pause,
         pause_style,
         paint(TransportAction::Pause),
-    )
-    .clicked()
-    {
+    );
+    if super::touch::tapped(&row, &tile) {
         scene.ctl.send(Command::Pause(id));
     }
     let playing = pv.status == PlayerStatus::OnAir;
@@ -386,16 +385,15 @@ pub(crate) fn mini_card(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewSta
     } else {
         TransportAction::Play
     };
-    if widgets::tile(
+    let tile = widgets::tile(
         &mut row,
         button,
         &play_label(scene, id, playing),
         available.play,
         play_style,
         move |p, r, c| glyphs::paint(p, r, action, 22.0, c),
-    )
-    .clicked()
-    {
+    );
+    if super::touch::tapped(&row, &tile) {
         scene.ctl.send(Command::Play(id));
     }
     let (main, tenths) = format::countdown(pv.remaining);
@@ -971,8 +969,9 @@ fn cover(
     scene: &Scene<'_>,
     covers: &mut HashMap<TrackId, TextureHandle>,
     track: Option<TrackId>,
+    side: f32,
 ) {
-    let (rect, _) = ui.allocate_exact_size(vec2(64.0, 64.0), Sense::hover());
+    let (rect, _) = ui.allocate_exact_size(vec2(side, side), Sense::hover());
     let painter = ui.painter();
     painter.rect_filled(rect, 0.0, theme::NEUTRAL_900);
     let texture = track.and_then(|track| {
@@ -1006,7 +1005,7 @@ fn cover(
             ui.painter(),
             rect,
             icon::VINYL_RECORD,
-            28.0,
+            side * 0.44,
             theme::TEXT.gamma_multiply(0.35),
             false,
         ),
@@ -1036,7 +1035,8 @@ const COUNTDOWN_MIN_SCALE: f32 = 10.5 / 38.0;
 enum BlockSize {
     /// The desktop and tablet column.
     Desktop,
-    /// A phone's card (PL28–PL30): no cover, a lower info row.
+    /// A phone's card (PL28–PL30): the transport alone, the info row
+    /// being above the waveform.
     PhoneCompact,
 }
 
@@ -1044,6 +1044,10 @@ enum BlockSize {
 const PHONE_BUTTON: f32 = super::touch::TARGET;
 /// A phone's Play button: as tall as two rows of small buttons.
 const PHONE_PLAY_SIZE: f32 = PHONE_BUTTON * 2.0 + GAP;
+/// How much a phone's Play glyph and caption grow at most: less than the
+/// button, which is wide enough for longer captions.
+const PHONE_PLAY_GLYPH_SCALE: f32 = 1.4;
+const PHONE_PLAY_CAPTION_SCALE: f32 = 1.35;
 /// The height of the info row.
 const INFO_HEIGHT: f32 = 64.0;
 /// The height of a compact card's info row: two lines, no cover.
@@ -1065,13 +1069,8 @@ fn top_block(
     size: BlockSize,
 ) {
     let phone = size != BlockSize::Desktop;
-    let info_height = if size == BlockSize::PhoneCompact {
-        COMPACT_INFO_HEIGHT
-    } else {
-        INFO_HEIGHT
-    };
     let height = if phone {
-        info_height + ROW_GAP + PHONE_PLAY_SIZE
+        PHONE_PLAY_SIZE
     } else {
         PLAY_SIZE * 2.0 + ROW_GAP
     };
@@ -1093,8 +1092,9 @@ fn top_block(
             .layout(Layout::top_down(Align::Min)),
     );
     left_ui.spacing_mut().item_spacing = vec2(6.0, ROW_GAP);
-    let cover = size != BlockSize::PhoneCompact;
-    info_row(&mut left_ui, scene, covers, id, pv, telemetry, cover);
+    if !phone {
+        info_row(&mut left_ui, scene, covers, id, pv, telemetry, false);
+    }
     transport(&mut left_ui, scene, id, pv, phone);
     let mut right_ui = ui.new_child(
         UiBuilder::new()
@@ -1253,7 +1253,7 @@ fn info_row(
     id: PlayerId,
     pv: &PlayerView,
     telemetry: &fp_engine::engine::PlayerTelemetry,
-    with_cover: bool,
+    compact: bool,
 ) {
     let t = scene.i18n;
     let current_track = view::shown_entry(scene.state, id)
@@ -1262,18 +1262,21 @@ fn info_row(
     ui.allocate_ui_with_layout(
         vec2(
             ui.available_width(),
-            if with_cover {
-                INFO_HEIGHT
-            } else {
+            if compact {
                 COMPACT_INFO_HEIGHT
+            } else {
+                INFO_HEIGHT
             },
         ),
         Layout::left_to_right(Align::Center),
         |ui| {
             ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
-            if with_cover {
-                cover(ui, scene, covers, current_track);
-            }
+            let side = if compact {
+                COMPACT_INFO_HEIGHT
+            } else {
+                INFO_HEIGHT
+            };
+            cover(ui, scene, covers, current_track, side);
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = vec2(6.0, 2.0);
                 let title = pv.title.clone().unwrap_or_else(|| t.tr("no-track"));
@@ -1282,7 +1285,7 @@ fn info_row(
                     (Some(_), None) => t.tr("unknown-artist"),
                     (None, None) => t.tr("placeholder-none"),
                 };
-                if with_cover {
+                if !compact {
                     ui.add(
                         egui::Label::new(
                             RichText::new(title)
@@ -1499,7 +1502,7 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView, phon
             } else {
                 TransportAction::Play
             };
-            if widgets::tile(
+            let play = widgets::tile(
                 ui,
                 vec2(play_size, play_size),
                 &play_label,
@@ -1511,18 +1514,25 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView, phon
                         // fade: the countdown must stay visible.
                         p.rect_filled(sweep_band(r, left), 0.0, theme::play_sweep());
                     }
-                    glyphs::paint(p, r.translate(vec2(0.0, -6.0)), play_action, 28.0, c);
+                    // The glyph and the caption grow with the button.
+                    let scale = play_size / PLAY_SIZE;
+                    glyphs::paint(
+                        p,
+                        r.translate(vec2(0.0, -6.0 * scale)),
+                        play_action,
+                        28.0 * scale.min(PHONE_PLAY_GLYPH_SCALE),
+                        c,
+                    );
                     p.text(
-                        pos2(r.center().x, r.bottom() - 12.0),
+                        pos2(r.center().x, r.bottom() - 12.0 * scale),
                         egui::Align2::CENTER_CENTER,
                         &caption,
-                        font_semibold(8.0),
+                        font_semibold(8.0 * scale.min(PHONE_PLAY_CAPTION_SCALE)),
                         c,
                     );
                 },
-            )
-            .clicked()
-            {
+            );
+            if super::touch::tapped(ui, &play) {
                 scene.ctl.send(Command::Play(id));
             }
             let small = vec2((play_size - GAP) / 2.0, (play_size - GAP) / 2.0);
@@ -1629,11 +1639,11 @@ fn transport(ui: &mut Ui, scene: &Scene<'_>, id: PlayerId, pv: &PlayerView, phon
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing = vec2(GAP, GAP);
                         for b in row {
-                            if widgets::tile(ui, small, &b.tip, b.enabled, b.style, |p, r, c| {
-                                (b.paint)(p, r, c);
-                            })
-                            .clicked()
-                            {
+                            let tile =
+                                widgets::tile(ui, small, &b.tip, b.enabled, b.style, |p, r, c| {
+                                    (b.paint)(p, r, c);
+                                });
+                            if super::touch::tapped(ui, &tile) {
                                 scene.ctl.send(b.command);
                             }
                         }

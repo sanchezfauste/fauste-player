@@ -89,6 +89,82 @@ pub fn swipe_direction(delta: Vec2) -> Option<bool> {
     (delta.x.abs() > SWIPE_DISTANCE && delta.x.abs() > 2.0 * delta.y.abs()).then_some(delta.x < 0.0)
 }
 
+/// The fingers on the screen and this frame's taps of a second finger,
+/// worked out once a frame.
+#[derive(Clone, Default)]
+struct Fingers {
+    frame: u64,
+    /// Each finger down: where it started and whether another was down then.
+    down: Vec<(egui::TouchId, egui::Pos2, bool)>,
+    /// This frame's taps of a finger that was not the first: start and end.
+    taps: Vec<(egui::Pos2, egui::Pos2)>,
+}
+
+/// Whether `response` was clicked, by the pointer or by a finger that came
+/// down while another was on the screen: egui follows the first finger
+/// only, so a tap on Next while a fader is held would be lost (PL38).
+pub(crate) fn tapped(ui: &Ui, response: &egui::Response) -> bool {
+    response.clicked()
+        || (response.sense.senses_click() && second_finger_tap(ui, response.interact_rect))
+}
+
+fn second_finger_tap(ui: &Ui, rect: Rect) -> bool {
+    let frame = ui.ctx().cumulative_frame_nr();
+    let key = egui::Id::unique("second-finger-taps");
+    let seen = ui
+        .ctx()
+        .data(|d| d.get_temp::<Fingers>(key).is_some_and(|f| f.frame == frame));
+    if !seen {
+        let (touching, events): (bool, Vec<(egui::TouchId, egui::TouchPhase, egui::Pos2)>) = ui
+            .input(|i| {
+                (
+                    i.any_touches(),
+                    i.events
+                        .iter()
+                        .filter_map(|e| match e {
+                            egui::Event::Touch { id, phase, pos, .. } => Some((*id, *phase, *pos)),
+                            _ => None,
+                        })
+                        .collect(),
+                )
+            });
+        ui.ctx().data_mut(|d| {
+            let f = d.get_temp_mut_or_default::<Fingers>(key);
+            f.frame = frame;
+            f.taps.clear();
+            for (id, phase, pos) in events {
+                match phase {
+                    egui::TouchPhase::Start => {
+                        let second = !f.down.is_empty();
+                        f.down.retain(|(d, _, _)| *d != id);
+                        f.down.push((id, pos, second));
+                    }
+                    egui::TouchPhase::Move => {}
+                    egui::TouchPhase::End | egui::TouchPhase::Cancel => {
+                        if let Some(at) = f.down.iter().position(|(d, _, _)| *d == id) {
+                            let (_, start, second) = f.down.swap_remove(at);
+                            if second && phase == egui::TouchPhase::End {
+                                f.taps.push((start, pos));
+                            }
+                        }
+                    }
+                }
+            }
+            // A frame that drew no transport missed its touches' ends.
+            if !touching {
+                f.down.clear();
+            }
+        });
+    }
+    ui.ctx().data(|d| {
+        d.get_temp::<Fingers>(key).is_some_and(|f| {
+            f.taps
+                .iter()
+                .any(|(a, b)| rect.contains(*a) && rect.contains(*b))
+        })
+    })
+}
+
 /// How far from a widget a finger still hits it: the desktop's tiles are
 /// smaller than a fingertip.
 const INTERACT_RADIUS: f32 = 12.0;

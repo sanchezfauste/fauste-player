@@ -328,3 +328,16 @@ cartwall folds ("ok pero que se pueda plegar la cartwall").
   sweep is left out). A tap on the row outside its buttons opens that
   player on the Playlists screen. The rows scroll when the players do
   not fit. Portrait keeps the full cards.
+
+## 17. Card order and two fingers (maintainer, 2026-11-01)
+
+- PL37. **The card's order** (replaces PL4's): the header line (name,
+  status, Single/Cont, CUE); the cover (40 dp, in the info row's height,
+  so the card grows by nothing), title and artist, the next track; the
+  waveform as the seek bar; the time row; then the transport with the
+  meter and fader. The card's margins and the space between its rows are
+  the gap between its buttons. A phone's Play glyph and caption grow with
+  the button.
+- PL38. **Buttons under a second finger.** A tap on a player's transport
+  (card and mini card) works while another finger is on the screen (for
+  example holding the fader down, then Next, then the fader up).
