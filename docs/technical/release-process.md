@@ -578,7 +578,9 @@ to the device's `Music` folder): `adb shell wm size 1080x2160` (Play
 refuses a taller ratio), the status bar in demo mode
 (`settings put global sysui_demo_allowed 1`, then the
 `com.android.systemui.demo` broadcasts `enter`, `clock`, `notifications
--e visible false`), then `adb exec-out screencap -p`. Retake them after a
+-e visible false`), then `adb exec-out screencap -p`, saved without alpha
+(`magick shot.png -alpha off PNG24:shot.png`; Play refuses 32-bit
+screenshots). Retake them after a
 visible change to the phone layout. Play
 Console does not read these files: copy them in by hand when they change
 (`en-US` is the default language). Other languages are translated with AI
@@ -615,11 +617,13 @@ before a release, as the guide is.
      the form is skipped.
    - *Foreground service permissions:* `FOREGROUND_SERVICE_MEDIA_PLAYBACK`,
      task *Media playback*. Description: "Fauste Player is a radio playout
-     app. While playout is active (a player playing or holding the next
-     track to put on air, or a cart playing), the foreground service keeps
-     the audio going with the screen off or another app in front, so a live
-     broadcast is never cut. It starts when the user loads or plays a
-     track and stops when playout ends." Play asks for a link to a short
+     app. The foreground service runs while playout is active: a player
+     playing or holding a track ready to go on air (including one restored
+     when the app is reopened, which never starts playing by itself), or a
+     cart playing. It keeps the audio going with the screen off or another
+     app in front, so a live broadcast is never cut, and it stops when no
+     player holds a track and no cart plays. The app takes audio focus only
+     while something actually sounds." Play asks for a link to a short
      video (unlisted on YouTube is enough): start a track, show the
      notification, go home and turn the screen off and on with the track
      still going, then come back and stop it.

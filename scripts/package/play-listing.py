@@ -24,10 +24,15 @@ LIMITS = {
     "full_description.txt": 4000,
     "changelogs/default.txt": 500,
 }
-# Exact sizes of the default language's images.
+# PNG colour types (the IHDR byte): Play wants the icon as a 32-bit PNG
+# and the feature graphic and screenshots without alpha.
+RGB, RGBA = 2, 6
+COLOUR_NAMES = {RGB: "RGB", RGBA: "RGBA"}
+COLOUR_KINDS = {RGB: "24-bit PNG", RGBA: "32-bit PNG"}
+# Exact sizes and colour types of the default language's images.
 IMAGES = {
-    "images/icon.png": (512, 512),
-    "images/featureGraphic.png": (1024, 500),
+    "images/icon.png": ((512, 512), RGBA),
+    "images/featureGraphic.png": ((1024, 500), RGB),
 }
 # Phone screenshots: at least two, each side 320 to 3840 px, the long side
 # at most twice the short one.
@@ -44,11 +49,20 @@ def text(path):
     return path.read_text(encoding="utf-8").rstrip("\n")
 
 
-def png_size(path):
-    head = path.read_bytes()[:24]
-    if head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
+def png_header(path):
+    """The (width, height) and colour type of a PNG, or None."""
+    with path.open("rb") as f:
+        head = f.read(26)
+    if len(head) < 26 or head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
         return None
-    return struct.unpack(">II", head[16:24])
+    return struct.unpack(">II", head[16:24]), head[25]
+
+
+def colour_problem(name, colour, want):
+    if colour == want:
+        return None
+    shown = COLOUR_NAMES.get(colour, f"colour type {colour}")
+    return f"{DEFAULT_LANGUAGE}: {name} is {shown}, not {COLOUR_NAMES[want]} ({COLOUR_KINDS[want]})"
 
 
 def check(listing):
@@ -67,12 +81,16 @@ def check(listing):
                 problems.append(f"{lang}: {name} is empty")
             elif len(value) > limit:
                 problems.append(f"{lang}: {name} has {len(value)} characters (at most {limit})")
-    for name, size in IMAGES.items():
+    for name, (size, colour) in IMAGES.items():
         path = listing / DEFAULT_LANGUAGE / name
+        header = png_header(path) if path.is_file() else None
         if not path.is_file():
             problems.append(f"{DEFAULT_LANGUAGE}: missing {name}")
-        elif png_size(path) != size:
-            problems.append(f"{DEFAULT_LANGUAGE}: {name} is {png_size(path)}, not {size}")
+        elif header is None or header[0] != size:
+            shown = "not a PNG" if header is None else header[0]
+            problems.append(f"{DEFAULT_LANGUAGE}: {name} is {shown}, not {size}")
+        elif problem := colour_problem(name, header[1], colour):
+            problems.append(problem)
     shots = sorted((listing / DEFAULT_LANGUAGE / SCREENSHOTS).glob("*.png"))
     if len(shots) < MIN_SCREENSHOTS:
         problems.append(
@@ -80,13 +98,16 @@ def check(listing):
             f"(at least {MIN_SCREENSHOTS})"
         )
     for path in shots:
-        size = png_size(path)
-        if size is None or not screenshot_fits(*size):
-            shown = "not a PNG" if size is None else f"{size[0]} × {size[1]}"
+        name = f"{SCREENSHOTS}/{path.name}"
+        header = png_header(path)
+        if header is None or not screenshot_fits(*header[0]):
+            shown = "not a PNG" if header is None else f"{header[0][0]} × {header[0][1]}"
             problems.append(
-                f"{DEFAULT_LANGUAGE}: {SCREENSHOTS}/{path.name} is {shown} "
+                f"{DEFAULT_LANGUAGE}: {name} is {shown} "
                 f"(at most 2:1, {SIDE[0]} to {SIDE[1]} px)"
             )
+        elif problem := colour_problem(name, header[1], RGB):
+            problems.append(problem)
     return problems
 
 

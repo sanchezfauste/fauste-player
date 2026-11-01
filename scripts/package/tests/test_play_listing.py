@@ -13,9 +13,10 @@ play_listing = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(play_listing)
 
 
-def png(path, width, height):
-    """A minimal PNG header: enough for the size check."""
-    ihdr = struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0)
+def png(path, width, height, colour=2):
+    """A minimal PNG header: enough for the size and colour type checks
+    (2 is RGB, 6 is RGBA)."""
+    ihdr = struct.pack(">IIBBBBB", width, height, 8, colour, 0, 0, 0)
     chunk = b"IHDR" + ihdr
     data = struct.pack(">I", len(ihdr)) + chunk + struct.pack(">I", zlib.crc32(chunk))
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -36,7 +37,7 @@ class CheckTest(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
         language(self.root, "en-US")
-        png(self.root / "en-US/images/icon.png", 512, 512)
+        png(self.root / "en-US/images/icon.png", 512, 512, colour=6)
         png(self.root / "en-US/images/featureGraphic.png", 1024, 500)
         png(self.root / "en-US/images/phoneScreenshots/1-live.png", 1080, 2160)
         png(self.root / "en-US/images/phoneScreenshots/2-carts.png", 1080, 2160)
@@ -80,6 +81,34 @@ class CheckTest(unittest.TestCase):
         self.assertEqual(
             play_listing.check(self.root),
             ["en-US: images/featureGraphic.png is (1024, 512), not (1024, 500)"],
+        )
+
+    def test_the_icon_is_a_32_bit_png(self):
+        png(self.root / "en-US/images/icon.png", 512, 512, colour=2)
+        self.assertEqual(
+            play_listing.check(self.root),
+            ["en-US: images/icon.png is RGB, not RGBA (32-bit PNG)"],
+        )
+
+    def test_a_screenshot_with_alpha_fails(self):
+        png(self.root / "en-US/images/phoneScreenshots/2-carts.png", 1080, 2160, colour=6)
+        self.assertEqual(
+            play_listing.check(self.root),
+            ["en-US: images/phoneScreenshots/2-carts.png is RGBA, not RGB (24-bit PNG)"],
+        )
+
+    def test_a_feature_graphic_with_alpha_fails(self):
+        png(self.root / "en-US/images/featureGraphic.png", 1024, 500, colour=6)
+        self.assertEqual(
+            play_listing.check(self.root),
+            ["en-US: images/featureGraphic.png is RGBA, not RGB (24-bit PNG)"],
+        )
+
+    def test_a_file_that_is_not_a_png_fails(self):
+        (self.root / "en-US/images/phoneScreenshots/2-carts.png").write_bytes(b"JFIF")
+        self.assertEqual(
+            play_listing.check(self.root),
+            ["en-US: images/phoneScreenshots/2-carts.png is not a PNG (at most 2:1, 320 to 3840 px)"],
         )
 
     def test_two_phone_screenshots_are_required(self):

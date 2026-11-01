@@ -217,15 +217,22 @@ jobs:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
+      # Tags made before the Google Play listing have nothing to upload.
       - name: Check the listing
+        id: listing
         run: |
+          if [ ! -f scripts/package/play-listing.py ]; then
+            echo "This tag predates the Google Play listing: nothing to do"
+            exit 0
+          fi
           python3 -m unittest discover -s scripts/package/tests -p 'test_*.py'
           scripts/package/play-listing.py check
+          echo "present=true" >> "$GITHUB_OUTPUT"
       # The bundle is the one release-build.yml signed with the release key
       # and attached to the release (the `binaries` job runs first): a
       # rebuild here would be another build of the same versionCode.
       - name: Download the release's App Bundle
-        if: needs.plan.outputs.googleplay == 'true'
+        if: needs.plan.outputs.googleplay == 'true' && steps.listing.outputs.present == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
@@ -244,7 +251,7 @@ jobs:
       # GOOGLE_PLAY_STATUS is draft until Play has reviewed the app once,
       # since Play refuses any other status for an app never published.
       - name: Upload to Google Play
-        if: needs.plan.outputs.googleplay == 'true'
+        if: needs.plan.outputs.googleplay == 'true' && steps.listing.outputs.present == 'true'
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}

@@ -1,21 +1,21 @@
-Fauste Player pone en el aire música, cuñas y anuncios. Es una aplicación de emisión de radio: varios reproductores independientes funcionan a la vez, cada uno con sus listas, y las pistas se encadenan con precisión de muestra en sus puntos MIX. La app de Android usa el mismo núcleo de emisión que la aplicación de escritorio, con una disposición pensada para el tacto.
+Fauste Player pone en el aire música, cuñas y anuncios. Es una aplicación de emisión de radio: varios players independientes funcionan a la vez, cada uno con sus playlists, y las pistas se encadenan con precisión de muestra en sus puntos MIX. La app de Android usa el mismo núcleo de emisión que la aplicación de escritorio, con una disposición pensada para el tacto.
 
-REPRODUCTORES Y LISTAS
-• Uno o más reproductores, cada uno con sus listas, en modo SINGLE o CONT
+PLAYERS Y PLAYLISTS
+• Uno o más players, cada uno con sus playlists, en modo SINGLE o CONT
 • Encadenados en el punto MIX de cada pista, marcadores de cue-in, intro, outro y cue-out hallados por un análisis en segundo plano, y marcadores que pones con una pulsación larga en la forma de onda
 • Preescucha (CUE) en una salida aparte, como unos auriculares
 • Normalización de sonoridad
-• Mueve pistas arrastrándolas, o manda una a otro reproductor justo después de su siguiente pista
+• Mueve pistas arrastrándolas, o manda una a otro player justo después de su siguiente pista
 
 CARTUCHERA
 • Cartuchos instantáneos para cuñas, efectos y anuncios, en páginas que pasas con el dedo
-• Pliega la cartuchera en la pantalla Directo para dar más sitio a los reproductores
+• Pliega la cartuchera en la pantalla Directo para dar más sitio a los players
 
 PENSADA PARA EL ESTUDIO
 • La emisión sigue con la pantalla apagada o con otra app delante, con una notificación mientras algo suena
 • Nada sale al aire por sí solo tras un arranque, un reinicio o un fallo
 • Un candado protege de toques accidentales durante el programa: el transporte y los cartuchos siguen funcionando
-• Elige la salida de cada reproductor, de la cartuchera y de su CUE: el altavoz, unos auriculares con cable, una interfaz USB o un altavoz Bluetooth
+• Elige la salida de cada player, de la cartuchera y de su CUE: el altavoz, unos auriculares con cable, una interfaz USB o un altavoz Bluetooth
 • Explora la música del dispositivo por carpeta, artista o álbum, y busca en ella
 
 PRIVADA Y LIBRE

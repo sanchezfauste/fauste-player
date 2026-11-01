@@ -57,13 +57,13 @@ inkscape "${play}/icon-full.svg" --export-type=png --export-width=556 --export-h
   --export-filename="${play}/icon-full.png" >/dev/null 2>&1
 magick -size 512x512 gradient:'#2a2645'-'#16151f' \
   \( "${play}/icon-full.png" -gravity center -crop 512x512+0+0 +repage \) \
-  -composite -depth 8 -strip "${play}/icon.png"
+  -composite -depth 8 -strip PNG32:"${play}/icon.png"
 rm "${play}/icon-full.svg" "${play}/icon-full.png"
 render 300 "${play}/feature-icon.png"
 magick -size 1024x500 gradient:'#2a2645'-'#16151f' \
   "${play}/feature-icon.png" -gravity west -geometry +90+0 -composite \
   -font "${root}/crates/fp-app/assets/fonts/Inter-600.ttf" -pointsize 84 \
   -fill '#f0eff7' -gravity west -annotate +430+0 'Fauste Player' \
-  -alpha off -depth 8 -strip "${play}/featureGraphic.png"
+  -alpha off -depth 8 -strip PNG24:"${play}/featureGraphic.png"
 rm "${play}/feature-icon.png"
 echo "icons written to ${dir}, ${msix} and ${play}"
