@@ -84,16 +84,18 @@ footer-guide-languages = "(also in ten other languages, translated with AI)"
 title = "Privacy policy — Fauste Player"
 description = "Fauste Player collects no personal data, sends no telemetry and makes no network connections of its own."
 heading = "Privacy policy"
-updated = """Last updated: 24 October 2026. This policy covers the Fauste Player
-    desktop application in every distribution: the Microsoft Store, the Snap
-    Store, the packages on the GitHub releases page, and builds from source."""
+updated = """Last updated: 1 November 2026. This policy covers Fauste Player in
+    every distribution: the desktop application (the Microsoft Store, the
+    Snap Store, the packages on the GitHub releases page, and builds from
+    source) and the Android app (Google Play and the APK on the GitHub
+    releases page)."""
 no-data-heading = "No data is collected"
 no-data = """Fauste Player collects no personal data. It has no accounts, no
     analytics, no advertising and no telemetry, and it never sends anything
-    about you, your computer or your music to the author or to anyone else."""
-local-heading = "What stays on your computer"
+    about you, your device or your music to the author or to anyone else."""
+local-heading = "What stays on your device"
 local-before = """To work, the application keeps these files in its own folders on your
-    computer (see"""
+    computer or phone (see"""
 local-link = "Data and backups"
 local-after = """in the user guide for where they are):"""
 local-settings = "your settings, playlists, cart pages and session;"
@@ -101,10 +103,16 @@ local-cache = """an analysis cache with the tags, markers, loudness and waveform
         the audio files you load;"""
 local-logs = """log files and crash reports, which may contain file paths and device
         names."""
-local-leave = """These files never leave your computer unless you choose to share them,
+local-leave = """These files never leave your device unless you choose to share them,
     for example by attaching a log to a bug report. You can delete them at any
     time; uninstalling the application, or deleting its folders, removes
     them."""
+android-heading = "On Android"
+android = """The Android app asks for two permissions: to read the audio files on
+    the device, only to list them in its music browser and play the ones you
+    choose, and to show notifications, for the notice that keeps playout
+    running while the screen is off or another app is in front. It has no
+    remote control and does not ask for access to the network."""
 network-heading = "Network"
 network = """The application opens no outgoing network connections of its own.
     The optional remote control (an HTTP/JSON API and OSC) is off by default.
@@ -116,7 +124,7 @@ network = """The application opens no outgoing network connections of its own.
     applies."""
 stores-heading = "Store distribution"
 stores = """The stores that distribute Fauste Player (for example the Microsoft
-    Store or the Snap Store) may collect data about downloads, installs and
+    Store, the Snap Store or Google Play) may collect data about downloads, installs and
     crashes under their own privacy policies. The author has no control over
     that data."""
 changes-heading = "Changes and contact"
