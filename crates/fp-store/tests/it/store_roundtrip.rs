@@ -756,11 +756,12 @@ fn an_unreadable_backup_is_skipped_for_the_next_one() {
         "{:?}",
         loaded.warnings
     );
-    assert_eq!(
-        fs::read(bak(&s, 1)).unwrap(),
-        before,
-        "the bad backup is untouched"
-    );
+    assert!(!bak(&s, 1).exists(), "the bad backup's name is free");
+    let kept = corrupt_aside(&s)
+        .into_iter()
+        .find(|p| p.to_string_lossy().contains(".bak1.corrupt-"))
+        .expect("the bad backup is set aside");
+    assert_eq!(fs::read(kept).unwrap(), before, "its bytes are kept");
 }
 
 #[test]

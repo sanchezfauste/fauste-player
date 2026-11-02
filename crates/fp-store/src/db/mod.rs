@@ -387,6 +387,10 @@ fn from_backups(
                 unusable.push(backup);
             }
             Ok(db) => {
+                // The ones skipped on the way would be rotated away.
+                for bad in &unusable {
+                    set_aside(bad, "corrupt", &mut warnings);
+                }
                 warnings.push(format!("restored from {}", backup.display()));
                 return Ok(Opened {
                     db,

@@ -68,7 +68,7 @@ fn a_corrupt_database_falls_back_to_its_newest_backup() {
 }
 
 #[test]
-fn an_unusable_backup_is_skipped_and_left_untouched() {
+fn an_unusable_backup_is_skipped_and_set_aside() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("fauste.db");
     fs::write(backup_path(&path, 1), vec![0xCD; 4096]).unwrap();
@@ -77,10 +77,16 @@ fn an_unusable_backup_is_skipped_and_left_untouched() {
     let opened = open_with_fallback(&path, 3).unwrap();
     assert_eq!(opened.source, DbSource::Backup(2));
     assert_eq!(marker(&opened.db).as_deref(), Some("older"));
+    assert!(!backup_path(&path, 1).exists(), "its name is free");
+    let aside: Vec<_> = names(dir.path())
+        .into_iter()
+        .filter(|n| n.starts_with("fauste.db.bak1.corrupt-"))
+        .collect();
+    assert_eq!(aside.len(), 1, "{aside:?}");
     assert_eq!(
-        fs::read(backup_path(&path, 1)).unwrap(),
+        fs::read(dir.path().join(&aside[0])).unwrap(),
         vec![0xCD; 4096],
-        "the fallback never modifies a backup"
+        "the bytes are kept"
     );
 }
 
