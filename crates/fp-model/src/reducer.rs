@@ -319,7 +319,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             insert_paths(state, id, 0, paths)?;
         }
         Command::MoveTracksToCategory { tracks, category } => {
-            crate::library_rules::move_tracks(state, tracks, category)?
+            crate::library_rules::move_tracks(state, tracks, category, &mut out)?
         }
         Command::SetTracksKind { tracks, kind } => {
             crate::library_rules::set_tracks_kind(state, tracks, kind)?

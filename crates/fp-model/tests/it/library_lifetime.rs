@@ -387,3 +387,40 @@ fn an_implicit_removal_is_reported_and_an_explicit_one_is_not() {
     assert!(left(&out).is_empty(), "{out:?}");
     assert!(s.library.get(d).is_none() && s.library.get(e).is_none());
 }
+
+/// LB17c: a missing, unused track taken out of its category leaves.
+#[test]
+fn a_missing_unused_track_taken_out_of_its_category_leaves() {
+    let mut s = state();
+    let gold = make_category(&mut s, "Gold", TrackKind::Music);
+    apply(
+        &mut s,
+        Command::AddToLibrary {
+            paths: vec![p("/m/a.wav"), p("/m/b.wav")],
+            category: Some(gold),
+        },
+    )
+    .unwrap();
+    let a = s.library.track_at(&p("/m/a.wav")).unwrap();
+    let b = s.library.track_at(&p("/m/b.wav")).unwrap();
+    apply(
+        &mut s,
+        Command::SetFileState {
+            track: a,
+            state: FileState::Missing,
+        },
+    )
+    .unwrap();
+    assert!(s.library.get(a).is_some());
+    let out = apply(
+        &mut s,
+        Command::MoveTracksToCategory {
+            tracks: vec![a, b],
+            category: None,
+        },
+    )
+    .unwrap();
+    assert_eq!(left(&out), vec![(a, p("/m/a.wav"))]);
+    assert!(s.library.get(a).is_none());
+    assert!(s.library.get(b).is_some_and(|t| t.category.is_none()));
+}

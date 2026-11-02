@@ -252,6 +252,8 @@ Where the implementation knowingly differs from, or settles, the text above:
 - The model cannot log: it reports each LB17c removal as an engine action
   (`TrackLeftLibrary`, with the path), which the engine logs. Explicit
   removals (LB11, LB17) are not reported.
+- LB17c is also checked when a track is taken out of its category (moved
+  to *uncategorised*): a missing, unused track then leaves.
 - An unknown category on a track loads as uncategorised; a category with an
   unknown parent or in a cycle loads at the root, each with a warning.
 

@@ -77,7 +77,8 @@ MediaStore paths are not canonicalised.
 **Tracks stay.** A track is no longer forgotten when its last playlist entry
 or cart goes (LB15). The one implicit removal (LB17c) is a track that is
 uncategorised, `Missing` and used by nothing (`release_tracks`, called when the
-file is found missing and when its last use goes). The model cannot log, so
+file is found missing, when its last use goes and when it is taken out of its
+category). The model cannot log, so
 `release_tracks` returns `EngineAction::TrackLeftLibrary` with the track and
 its path, and the engine, which executes the actions on the conductor thread,
 logs `track left the library (file missing, uncategorised, unused)` with the

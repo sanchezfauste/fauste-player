@@ -236,10 +236,13 @@ fn tracks_in(state: &AppState, categories: &[CategoryId]) -> Vec<TrackId> {
 }
 
 /// LB12, LB13: files the tracks under `category` and gives them its kind.
+/// Taken out of every category (`None`), a missing, unused track leaves
+/// the library (LB17c).
 pub(crate) fn move_tracks(
     state: &mut AppState,
     tracks: Vec<TrackId>,
     category: Option<CategoryId>,
+    out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
     let kind = match category {
         Some(c) => Some(
@@ -251,13 +254,16 @@ pub(crate) fn move_tracks(
         ),
         None => None,
     };
-    for id in tracks {
-        if let Some(t) = state.library.get_mut(id) {
+    for id in &tracks {
+        if let Some(t) = state.library.get_mut(*id) {
             t.category = category;
             if let Some(kind) = kind {
                 t.kind = kind;
             }
         }
+    }
+    if category.is_none() {
+        release_tracks(state, tracks, out);
     }
     Ok(())
 }
