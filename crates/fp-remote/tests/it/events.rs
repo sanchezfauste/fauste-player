@@ -92,6 +92,28 @@ fn a_marker_change_announces_the_track() {
     assert!(names(&diff(&old, &new, &Playback::default())).contains(&"track"));
 }
 
+/// Snapshots that share their library announce no track; one edited track
+/// announces exactly itself.
+#[test]
+fn track_events_follow_library_changes_only() {
+    let old = demo_state();
+    let shared = old.clone();
+    let tracks = |events: &[Event]| names(events).iter().filter(|n| **n == "track").count();
+    assert_eq!(tracks(&diff(&old, &shared, &Playback::default())), 0);
+    let mut new = old.clone();
+    let t = new.playlists.iter().next().unwrap().entries[0].track;
+    fp_model::apply(
+        &mut new,
+        Command::SetMarker {
+            track: t,
+            kind: MarkerKind::IntroEnd,
+            secs: Some(9.0),
+        },
+    )
+    .unwrap();
+    assert_eq!(tracks(&diff(&old, &new, &Playback::default())), 1);
+}
+
 #[test]
 fn firing_a_cart_changes_the_cartwall() {
     let old = demo_state();

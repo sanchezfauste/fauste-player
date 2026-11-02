@@ -28,6 +28,7 @@ mod header_duration;
 mod history;
 mod intro_column;
 mod layout;
+mod library_storage;
 mod live;
 mod loudness;
 mod loudness_config;

@@ -172,7 +172,8 @@ fn plan(s: &AppState, p: PlayerId) -> Option<TransitionPlan> {
 }
 
 fn with_segue(state: &mut AppState, secs: f64) {
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.markers.set_auto(MarkerKind::SegueStart, Some(secs));
     }
 }

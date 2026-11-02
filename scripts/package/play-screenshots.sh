@@ -134,13 +134,27 @@ mkdir -p "$work"
 rm -rf "$home"
 FAUSTE_HOME=$home "$root/target/release/examples/demo_session" "$work/music" "$work/carts" >&2
 python3 - "$home/data" "$work/music" "$device_music" "$work/carts" "$device_carts" <<'EOF'
-import pathlib, sys
+import pathlib, sqlite3, sys
 data, *pairs = sys.argv[1:]
-for f in pathlib.Path(data).glob("*.json"):
-    s = f.read_text()
-    for host, device in zip(pairs[::2], pairs[1::2]):
-        s = s.replace(host + "/", device + "/")
-    f.write_text(s)
+pairs = [(h + "/", d + "/") for h, d in zip(pairs[::2], pairs[1::2])]
+# The state lives in fauste.db: every text column of every table, in the
+# database and its backups (each closed, so its log is folded back in).
+for f in sorted(pathlib.Path(data).glob("fauste.db*")):
+    if f.name.endswith(("-wal", "-shm")):
+        continue
+    db = sqlite3.connect(f)
+    tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
+    for table in tables:
+        for col in db.execute(f'PRAGMA table_info("{table}")').fetchall():
+            if col[2].upper() != "TEXT":
+                continue
+            for host, device in pairs:
+                db.execute(
+                    f'UPDATE "{table}" SET "{col[1]}" = replace("{col[1]}", ?, ?)',
+                    (host, device),
+                )
+    db.commit()
+    db.close()
 EOF
 
 echo "Installing $apk" >&2
@@ -233,13 +247,25 @@ start_app() {
 # The first start analyses the songs (waveforms, durations, loudness) and
 # saves them; the second shows them from the start.
 library_ready() {
-    shell cat "$files/data/playlists.json" 2>/dev/null | python3 -c '
-import json, sys
+    # The database and its write-ahead log, copied to the host (the log
+    # first, so no change is lost between the two copies): the saved rows may
+    # still be in the log. SQLite rebuilds the shared-memory file from it.
+    local dir=$tmp/library suffix
+    rm -rf "$dir"
+    mkdir -p "$dir"
+    for suffix in -wal ""; do
+        adb exec-out "cat '$files/data/fauste.db$suffix' 2>/dev/null" > "$dir/fauste.db$suffix" || true
+    done
+    python3 - "$dir/fauste.db" <<'PY'
+import json, sqlite3, sys
 try:
-    tracks = json.load(sys.stdin)["library"]
-except (ValueError, KeyError):
+    db = sqlite3.connect(sys.argv[1], timeout=5)
+    docs = [json.loads(r[0]) for r in db.execute("SELECT doc FROM tracks")]
+    db.close()
+except Exception:
     sys.exit(1)
-sys.exit(0 if tracks and all(t.get("analyzed") and t.get("loudness") for t in tracks) else 1)'
+sys.exit(0 if docs and all(t.get("analyzed") and t.get("loudness") for t in docs) else 1)
+PY
 }
 start_app
 timeout=${PLAY_SHOTS_ANALYSIS_TIMEOUT:-180}

@@ -22,6 +22,7 @@ use fp_engine::conductor::{Conductor, ConductorHandle};
 use fp_engine::engine::{Engine, EngineSettings};
 use fp_engine::worker::file_opener;
 use fp_model::{Command, EngineAction, FileState, Transport};
+use fp_store::db::{Db, snapshot};
 use fp_store::{AppPaths, Store};
 
 fn wav(dir: &Path, name: &str, secs: u32) -> PathBuf {
@@ -127,7 +128,7 @@ fn rig_cached(
 ) -> Rig {
     let cache = cached.then(|| fp_analysis::cache::AnalysisCache::new(dir.path().join("cache")));
     let paths = AppPaths::under(dir.path());
-    let store = Store::new(paths.clone(), Default::default());
+    let mut store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
     loaded.state.config.outputs.backend = Some("offline".into());
     loaded.state.config.outputs.buffer_frames = 480;
@@ -295,17 +296,61 @@ fn changes_are_saved_after_the_debounce() {
     });
     r.conductor.tick(r.now);
     r.services.step(r.now);
-    let file = r.paths.playlists_file();
-    let saved = |p: &Path| {
-        std::fs::read_to_string(p)
-            .unwrap_or_default()
-            .contains("Night")
+    let saved = |r: &Rig| {
+        let db = Db::open(&r.paths.database_file()).unwrap();
+        snapshot::read(&db)
+            .0
+            .playlists
+            .iter()
+            .any(|p| p.name == "Night")
     };
-    assert!(!saved(&file), "not before the debounce");
+    assert!(!saved(&r), "not before the debounce");
     r.now += Duration::from_millis(1_100);
     r.conductor.tick(r.now);
     r.services.step(r.now);
-    assert!(saved(&file));
+    assert!(saved(&r));
+}
+
+#[test]
+fn a_failed_save_is_retried_at_the_next_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = rig(&[], dir);
+    let refuse = |sql: &str| {
+        let db = Db::open(&r.paths.database_file()).unwrap();
+        db.conn().execute_batch(sql).unwrap();
+    };
+    refuse(
+        "CREATE TRIGGER refuse BEFORE INSERT ON playlists \
+         BEGIN SELECT RAISE(ABORT, 'refused'); END;",
+    );
+    r.handle.send(Command::CreatePlaylist {
+        name: "Night".into(),
+    });
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    r.now += Duration::from_millis(1_100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    let saved = |r: &Rig| {
+        let db = Db::open(&r.paths.database_file()).unwrap();
+        snapshot::read(&db)
+            .0
+            .playlists
+            .iter()
+            .any(|p| p.name == "Night")
+    };
+    assert!(!saved(&r), "the save was refused");
+    refuse("DROP TRIGGER refuse");
+    // Inside the debounce interval of the failed attempt: no new attempt.
+    r.now += Duration::from_millis(100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    assert!(!saved(&r), "retries wait for the debounce interval");
+    // No new change: the retry comes from the autosave step alone.
+    r.now += Duration::from_millis(1_100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    assert!(saved(&r), "retried without waiting for another change");
 }
 
 #[test]
@@ -330,6 +375,66 @@ fn shutdown_saves_the_session_with_positions() {
         a,
         EngineAction::LoadPaused { player, request } if *player == p && request.from_secs > 0.3
     )));
+}
+
+/// The `doc` of every row of `table`, ordered by id.
+fn docs(paths: &AppPaths, table: &str) -> Vec<String> {
+    let db = Db::open(&paths.database_file()).unwrap();
+    let mut stmt = db
+        .conn()
+        .prepare(&format!("SELECT doc FROM {table} ORDER BY id"))
+        .unwrap();
+    stmt.query_map([], |row| row.get::<_, String>(0))
+        .unwrap()
+        .map(Result::unwrap)
+        .collect()
+}
+
+#[test]
+fn while_playing_only_the_players_rows_are_written() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "a.wav", 5);
+    let mut r = rig(&[a], dir);
+    let p = r.handle.model.load().players[0].id;
+    r.handle.send(Command::Play(p));
+    r.run_until("playback", |r| {
+        r.handle
+            .telemetry
+            .load()
+            .players
+            .iter()
+            .any(|(id, t)| *id == p && t.position_secs.is_some_and(|s| s > 0.3))
+    });
+    // The first autosave writes the whole state.
+    r.now += Duration::from_millis(1_100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    let tracks = docs(&r.paths, "tracks");
+    let players = docs(&r.paths, "players");
+    assert!(!tracks.is_empty());
+    // Count every write to the tracks table from now on.
+    let counted = Db::open(&r.paths.database_file()).unwrap();
+    counted
+        .conn()
+        .execute_batch(
+            "CREATE TABLE touched (n INTEGER); \
+             CREATE TRIGGER t_ins AFTER INSERT ON tracks BEGIN INSERT INTO touched VALUES (1); END; \
+             CREATE TRIGGER t_upd AFTER UPDATE ON tracks BEGIN INSERT INTO touched VALUES (1); END; \
+             CREATE TRIGGER t_del AFTER DELETE ON tracks BEGIN INSERT INTO touched VALUES (1); END;",
+        )
+        .unwrap();
+    let until = r.now + Duration::from_millis(300);
+    r.run_until("more playback", |r| r.now >= until);
+    r.now += Duration::from_millis(1_100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    assert_eq!(docs(&r.paths, "tracks"), tracks, "tracks rows untouched");
+    let touched: i64 = counted
+        .conn()
+        .query_row("SELECT COUNT(*) FROM touched", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(touched, 0, "no track row was written, not even unchanged");
+    assert_ne!(docs(&r.paths, "players"), players, "the position moved");
 }
 
 #[test]
@@ -395,8 +500,8 @@ fn a_panicking_step_does_not_stop_autosave() {
     r.now += Duration::from_millis(1_100);
     r.conductor.tick(r.now);
     r.services.step(r.now);
-    let saved = std::fs::read_to_string(r.paths.playlists_file()).unwrap_or_default();
-    assert!(saved.contains("After"));
+    let saved = snapshot::read(&Db::open(&r.paths.database_file()).unwrap()).0;
+    assert!(saved.playlists.iter().any(|p| p.name == "After"));
 }
 
 #[test]
@@ -411,8 +516,8 @@ fn cart_pages_are_saved_after_the_debounce() {
     r.now += Duration::from_millis(1_100);
     r.conductor.tick(r.now);
     r.services.step(r.now);
-    let saved = std::fs::read_to_string(r.paths.carts_file()).unwrap_or_default();
-    assert!(saved.contains("Sports"), "{saved}");
+    let saved = snapshot::read(&Db::open(&r.paths.database_file()).unwrap()).0;
+    assert!(saved.cart_pages.iter().any(|p| p.name == "Sports"));
 }
 
 #[test]
@@ -436,7 +541,8 @@ fn resetting_markers_analyses_the_track_again() {
 /// A library analysed by an older version: analysed, `older` says how.
 fn outdated_rig(files: &[PathBuf], dir: tempfile::TempDir, older: fn(&mut fp_model::Track)) -> Rig {
     rig_with(files, dir, Duration::ZERO, move |state| {
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.duration_secs = 1.0;
             track.format = Some(fp_model::AudioFormat {
@@ -528,7 +634,8 @@ fn a_cart_track_without_a_format_is_analysed_even_when_the_operator_said_later()
             },
         )
         .unwrap();
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.duration_secs = 1.0;
             track.format = None;
@@ -580,7 +687,8 @@ fn a_cart_track_that_has_its_format_is_left_alone() {
             },
         )
         .unwrap();
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.duration_secs = 1.0;
             // An older version's analysis, but with its format: it waits.
@@ -620,7 +728,8 @@ fn a_cart_track_whose_file_is_missing_is_not_analysed() {
             },
         )
         .unwrap();
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.format = None;
             track.file_state = FileState::Missing;
@@ -871,7 +980,8 @@ fn a_track_whose_tags_cannot_be_read_is_not_asked_again() {
     // Analysed already, with its tags still unread (and its loudness
     // measured, so the loudness pass sends nothing during the count).
     let mut r = rig_with(&[junk], dir, Duration::ZERO, |state| {
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.apply_loudness(None, fp_model::LOUDNESS_VERSION);
             track.format = Some(fp_model::AudioFormat {
@@ -914,7 +1024,8 @@ fn a_missing_track_is_not_read() {
         dir,
         Duration::ZERO,
         |state| {
-            for track in state.library.iter_mut() {
+            for track_id in state.library.ids() {
+                let track = state.library.get_mut(track_id).unwrap();
                 track.analyzed = true;
                 track.file_state = FileState::Missing;
             }
@@ -956,7 +1067,8 @@ fn a_stale_snapshot_does_not_read_a_track_twice() {
     let junk = dir.path().join("Band - Junk.wav");
     std::fs::write(&junk, b"this is not audio").unwrap();
     let mut r = rig_with(&[junk], dir, Duration::ZERO, |state| {
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.format = Some(fp_model::AudioFormat {
                 sample_rate: 44_100,
@@ -1485,7 +1597,8 @@ fn off_screen(state: &mut fp_model::AppState) {
 /// length known, no loudness measured yet; no track on screen.
 fn analysed_before_loudness(state: &mut fp_model::AppState) {
     off_screen(state);
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.analyzed = true;
         t.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
         t.tags_read = true;
@@ -1529,7 +1642,11 @@ fn the_pass_waits_for_normal_analysis() {
     let old_path = old.clone();
     let mut r = rig_with(&[old, new], dir, Duration::from_millis(300), move |s| {
         off_screen(s);
-        for t in s.library.iter_mut().filter(|t| t.path == old_path) {
+        for track_id in s.library.ids() {
+            let t = s.library.get_mut(track_id).unwrap();
+            if t.path != old_path {
+                continue;
+            }
             t.analyzed = true;
             t.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
             t.tags_read = true;
@@ -1609,7 +1726,8 @@ fn n6b_a_newer_loudness_version_measures_again() {
     let a = wav(dir.path(), "a.wav", 1);
     let mut r = rig_with(&[a], dir, Duration::ZERO, |s| {
         analysed_before_loudness(s);
-        for t in s.library.iter_mut() {
+        for track_id in s.library.ids() {
+            let t = s.library.get_mut(track_id).unwrap();
             t.apply_loudness(None, fp_model::LOUDNESS_VERSION - 1);
         }
     });
@@ -1774,7 +1892,8 @@ fn cart_rig(
             },
         )
         .unwrap();
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.duration_secs = 1.0;
             track.format = Some(fp_model::AudioFormat {
@@ -2131,7 +2250,8 @@ fn the_activity_is_rebuilt_only_when_something_changed() {
 /// A track analysed before the format carried a bit rate: analysed, tags and
 /// loudness done, the format known but with no bit rate.
 fn analysed_without_bitrate(state: &mut fp_model::AppState) {
-    for track in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let track = state.library.get_mut(track_id).unwrap();
         track.analyzed = true;
         track.tags_read = true;
         track.apply_loudness(None, fp_model::LOUDNESS_VERSION);
@@ -2195,4 +2315,47 @@ fn a_file_without_a_readable_bit_rate_is_not_asked_again() {
     let until = r.now + Duration::from_millis(500);
     r.run_until("a quiet period", |r| r.now >= until);
     assert_eq!(r.handle.telemetry.load().model_version, version);
+}
+
+/// Steps over a library that did not change do not walk it again, and an
+/// edited track makes the next step walk it.
+#[test]
+fn an_unchanged_library_is_not_walked_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let mut r = rig(&files, dir);
+    r.run_until("analysed", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    r.run_until("tags and bit rates read", |r| {
+        r.handle
+            .model
+            .load()
+            .library
+            .iter()
+            .all(|t| t.tags_read && !t.needs_bitrate_read())
+    });
+    // Late answers may still ask for a walk: wait until none does.
+    let mut walks = r.services.library_walks();
+    let mut quiet = 0;
+    r.run_until("walks to settle", |r| {
+        let now = r.services.library_walks();
+        quiet = if now == walks { quiet + 1 } else { 0 };
+        walks = now;
+        quiet >= 50
+    });
+    assert!(walks > 0);
+    let model = r.handle.model.load_full();
+    let player = model.players[0].id;
+    assert!(r.handle.send(Command::SetVolume(player, 0.3)));
+    idle_for(&mut r, 100);
+    assert_eq!(r.services.library_walks(), walks, "a volume change walks");
+    let track = model.library.iter().next().unwrap().id;
+    assert!(r.handle.send(Command::SetMarker {
+        track,
+        kind: fp_model::MarkerKind::IntroEnd,
+        secs: Some(0.5),
+    }));
+    idle_for(&mut r, 100);
+    assert!(r.services.library_walks() > walks, "an edit walks");
 }

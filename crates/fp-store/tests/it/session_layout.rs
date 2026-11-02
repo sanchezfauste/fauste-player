@@ -1,13 +1,13 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! Resizable layout spec RL19: the layout in `session.json`.
-
-use std::fs;
+//! Resizable layout spec RL19: the layout in the database (the `layout` document of `kv`).
 
 use fp_model::{
     AppState, Command, Config, DEFAULT_SIDE_SHARE, Dock, Layout, MAX_CARTWALL_SHARE, Panel, apply,
 };
 use fp_store::{AppPaths, Store};
 use serde_json::json;
+
+use crate::support::{edit_db, edit_kv, save_all};
 
 fn store(dir: &tempfile::TempDir) -> Store {
     Store::new(AppPaths::under(dir.path()), Config::default().limits)
@@ -16,7 +16,7 @@ fn store(dir: &tempfile::TempDir) -> Store {
 /// Saves a state whose first player is at half volume and whose layout is
 /// not the default: P1 wider than P2, P3 hidden, the cartwall on the
 /// left, locked, the touch lock on.
-fn saved(s: &Store) -> AppState {
+fn saved(s: &mut Store) -> AppState {
     let mut state = AppState::new(Config::default(), "Main");
     let p = state.player_ids();
     apply(&mut state, Command::SetVolume(p[0], 0.5)).unwrap();
@@ -39,17 +39,12 @@ fn saved(s: &Store) -> AppState {
     apply(&mut state, Command::SetCartwallDock(Dock::Left)).unwrap();
     apply(&mut state, Command::SetLayoutLocked(true)).unwrap();
     apply(&mut state, Command::SetTouchLocked(true)).unwrap();
-    s.save_config(&state).unwrap();
-    s.save_playlists(&state).unwrap();
-    s.save_session(&state, |_| 0.0).unwrap();
+    save_all(s, &state, 0.0);
     state
 }
 
-fn edit_session(s: &Store, edit: impl FnOnce(&mut serde_json::Value)) {
-    let path = s.paths().session_file();
-    let mut doc: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-    edit(&mut doc);
-    fs::write(&path, serde_json::to_vec(&doc).unwrap()).unwrap();
+fn edit_layout(s: &Store, edit: impl FnOnce(&mut serde_json::Value)) {
+    edit_kv(s, "layout", edit);
 }
 
 /// The rest of the session was kept: same players, same volume.
@@ -61,8 +56,8 @@ fn session_kept(loaded: &AppState, saved: &AppState) {
 #[test]
 fn rl19_the_layout_round_trips() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let state = saved(&s);
+    let mut s = store(&dir);
+    let state = saved(&mut s);
     let loaded = s.load("Main");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
     assert_eq!(loaded.state.layout, state.layout);
@@ -71,10 +66,12 @@ fn rl19_the_layout_round_trips() {
 #[test]
 fn rl19_an_older_session_without_a_layout_loads_the_default() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let state = saved(&s);
-    edit_session(&s, |doc| {
-        doc.as_object_mut().unwrap().remove("layout");
+    let mut s = store(&dir);
+    let state = saved(&mut s);
+    edit_db(&s, |db| {
+        db.conn()
+            .execute("DELETE FROM kv WHERE key = 'layout'", [])
+            .unwrap();
     });
     let loaded = s.load("Main");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
@@ -85,9 +82,9 @@ fn rl19_an_older_session_without_a_layout_loads_the_default() {
 #[test]
 fn rl19_a_malformed_layout_keeps_the_rest_of_the_session() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let state = saved(&s);
-    edit_session(&s, |doc| doc["layout"] = json!("wide"));
+    let mut s = store(&dir);
+    let state = saved(&mut s);
+    edit_layout(&s, |doc| *doc = json!("wide"));
     let loaded = s.load("Main");
     assert_eq!(loaded.state.layout, Layout::default());
     session_kept(&loaded.state, &state);
@@ -102,12 +99,12 @@ fn rl19_a_malformed_layout_keeps_the_rest_of_the_session() {
 #[test]
 fn rl19_a_malformed_part_keeps_the_other_parts() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let state = saved(&s);
-    edit_session(&s, |doc| {
-        doc["layout"]["cartwall"]["dock"] = json!("Top");
-        doc["layout"]["locked"] = json!("yes");
-        doc["layout"]["player_shares"][0] = json!("x");
+    let mut s = store(&dir);
+    let state = saved(&mut s);
+    edit_layout(&s, |doc| {
+        doc["cartwall"]["dock"] = json!("Top");
+        doc["locked"] = json!("yes");
+        doc["player_shares"][0] = json!("x");
     });
     let loaded = s.load("Main");
     let layout = &loaded.state.layout;
@@ -130,14 +127,14 @@ fn rl19_a_malformed_part_keeps_the_other_parts() {
 #[test]
 fn rl19_players_that_no_longer_exist_are_dropped_with_a_note() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let state = saved(&s);
+    let mut s = store(&dir);
+    let state = saved(&mut s);
     // The session has four players; the configuration now wants three.
     let mut fewer = state.clone();
     fewer.config.players.count = 3;
     s.save_config(&fewer).unwrap();
-    edit_session(&s, |doc| {
-        let layout = &mut doc["layout"];
+    edit_layout(&s, |doc| {
+        let layout = doc;
         layout["player_shares"]
             .as_array_mut()
             .unwrap()
@@ -170,12 +167,12 @@ fn rl19_players_that_no_longer_exist_are_dropped_with_a_note() {
 #[test]
 fn rl19_everything_hidden_is_shown_with_a_note() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let state = saved(&s);
+    let mut s = store(&dir);
+    let state = saved(&mut s);
     let all: Vec<u64> = state.player_ids().iter().map(|p| p.0).collect();
-    edit_session(&s, |doc| {
-        doc["layout"]["hidden_players"] = json!(all);
-        doc["layout"]["cartwall"]["hidden"] = json!(true);
+    edit_layout(&s, |doc| {
+        doc["hidden_players"] = json!(all);
+        doc["cartwall"]["hidden"] = json!(true);
     });
     let loaded = s.load("Main");
     assert!(loaded.state.layout.hidden_players.is_empty());
@@ -187,15 +184,15 @@ fn rl19_everything_hidden_is_shown_with_a_note() {
 #[test]
 fn rl19_a_side_dock_gets_a_usable_size_with_a_note() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    saved(&s);
-    edit_session(&s, |doc| doc["layout"]["cartwall"]["size"] = json!(null));
+    let mut s = store(&dir);
+    saved(&mut s);
+    edit_layout(&s, |doc| doc["cartwall"]["size"] = json!(null));
     let loaded = s.load("Main");
     assert_eq!(loaded.state.layout.cartwall.size, Some(DEFAULT_SIDE_SHARE));
     assert_eq!(loaded.warnings.len(), 1, "{:?}", loaded.warnings);
 
-    saved(&s);
-    edit_session(&s, |doc| doc["layout"]["cartwall"]["size"] = json!(5.0));
+    saved(&mut s);
+    edit_layout(&s, |doc| doc["cartwall"]["size"] = json!(5.0));
     let loaded = s.load("Main");
     assert_eq!(loaded.state.layout.cartwall.size, Some(MAX_CARTWALL_SHARE));
     assert_eq!(loaded.warnings.len(), 1, "{:?}", loaded.warnings);
@@ -204,11 +201,9 @@ fn rl19_a_side_dock_gets_a_usable_size_with_a_note() {
 #[test]
 fn rl19_a_field_from_a_newer_build_is_ignored() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    let state = saved(&s);
-    edit_session(&s, |doc| {
-        doc["layout"]["named"] = json!([{"name": "Night"}])
-    });
+    let mut s = store(&dir);
+    let state = saved(&mut s);
+    edit_layout(&s, |doc| doc["named"] = json!([{"name": "Night"}]));
     let loaded = s.load("Main");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
     assert_eq!(loaded.state.layout, state.layout);
@@ -219,14 +214,11 @@ fn rl19_a_field_from_a_newer_build_is_ignored() {
 #[test]
 fn pl12_the_touch_lock_round_trips_and_defaults_off() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    saved(&s);
+    let mut s = store(&dir);
+    saved(&mut s);
     assert!(s.load("Main").state.layout.touch_locked);
-    edit_session(&s, |doc| {
-        doc["layout"]
-            .as_object_mut()
-            .unwrap()
-            .remove("touch_locked");
+    edit_layout(&s, |doc| {
+        doc.as_object_mut().unwrap().remove("touch_locked");
     });
     let loaded = s.load("Main");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);

@@ -20,7 +20,8 @@ use support::{harness, state};
 fn on_air() -> AppState {
     let mut s = state(1, 3);
     s.config.loudness.normalize = true;
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.analyzed = true;
         t.duration_secs = 180.0;
         t.loudness = Some(LoudnessMeasurement {
@@ -75,7 +76,8 @@ fn n18_the_header_shows_the_gain_and_says_why() {
 #[test]
 fn n18_a_track_not_measured_says_so() {
     let mut s = on_air();
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.loudness = None;
     }
     // Start again so that the source on air is the unmeasured one.
@@ -288,7 +290,8 @@ fn excluding_sends_the_trim_in_use() {
     // trim the gain uses (N7), as the slider shows it.
     let mut s = on_air();
     s.config.loudness.max_trim_db = 6.0;
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.loudness_edit.trim_db = 10.0;
     }
     let (mut h, fake) = harness(s);
@@ -508,7 +511,8 @@ fn n22_the_sliders_keep_their_ranges() {
 #[test]
 fn n22_it_counts_the_tracks_still_waiting_for_a_measurement() {
     let mut s = state(1, 3);
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.analyzed = true;
     }
     let (mut h, _fake) = open_loudness_tab(s);
@@ -519,7 +523,8 @@ fn n22_it_counts_the_tracks_still_waiting_for_a_measurement() {
 #[test]
 fn n22_no_count_once_every_track_is_measured() {
     let mut s = state(1, 1);
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.loudness_pass = Some(fp_model::LOUDNESS_VERSION);
     }
     let (mut h, _fake) = open_loudness_tab(s);
@@ -537,7 +542,7 @@ fn n22_the_unmeasured_count_is_worked_out_once_per_snapshot() {
     }
     assert_eq!(count.scans(), 1);
     let mut s = state(1, 3);
-    s.library.iter_mut().next().unwrap().loudness_pass = Some(fp_model::LOUDNESS_VERSION);
+    s.library.get_mut(s.library.ids()[0]).unwrap().loudness_pass = Some(fp_model::LOUDNESS_VERSION);
     let second = Arc::new(s);
     assert_eq!(count.get(&second), 2);
     assert_eq!(count.scans(), 2);

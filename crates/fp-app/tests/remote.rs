@@ -82,7 +82,7 @@ fn serve(
     prepare: impl FnOnce(&mut fp_model::AppState),
 ) -> Served {
     let paths = AppPaths::under(dir.path());
-    let store = Store::new(paths.clone(), Default::default());
+    let mut store = Store::new(paths.clone(), Default::default());
     let mut loaded = store.load("Main");
     let port = TcpListener::bind("127.0.0.1:0")
         .unwrap()
@@ -177,7 +177,8 @@ fn the_peaks_of_an_outdated_track_are_available() {
         })
         .collect();
     let served = serve(dir, files, |state| {
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.duration_secs = 3.0;
             track.format = None;
@@ -212,7 +213,8 @@ fn the_peaks_of_an_undecodable_file_are_not_found() {
     let junk = dir.path().join("junk.wav");
     std::fs::write(&junk, b"this is not audio").unwrap();
     let served = serve(dir, vec![junk], |state| {
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.format = None;
         }
@@ -243,7 +245,8 @@ fn two_requests_at_once_both_get_the_peaks() {
         })
         .collect();
     let served = serve(dir, files, |state| {
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.analyzed = true;
             track.duration_secs = 3.0;
             track.format = None;

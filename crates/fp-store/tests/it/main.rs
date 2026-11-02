@@ -4,6 +4,11 @@
 //! tracing subscriber) keep their own binary next to this directory.
 
 mod carts;
+mod db_fallback;
+mod db_schema;
+mod db_snapshot;
+mod import;
 mod playlist_io;
 mod session_layout;
 mod store_roundtrip;
+mod support;

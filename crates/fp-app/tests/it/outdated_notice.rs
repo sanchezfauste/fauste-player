@@ -18,7 +18,8 @@ use support::{harness_from, state};
 /// `tracks` tracks, `outdated` of them analysed by an earlier version.
 fn library(tracks: usize, outdated: usize) -> fp_model::AppState {
     let mut s = state(1, tracks);
-    for (n, t) in s.library.iter_mut().enumerate() {
+    for (n, track_id) in s.library.ids().into_iter().enumerate() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.analyzed = true;
         t.format = Some(fp_model::AudioFormat {
             sample_rate: 44_100,
@@ -163,7 +164,7 @@ fn the_notice_follows_the_library_while_it_is_open() {
 #[test]
 fn version_9_tracks_are_outdated_only_when_their_downmix_changed() {
     let mut s = library(1, 0);
-    let t = s.library.iter_mut().next().unwrap();
+    let t = s.library.get_mut(s.library.ids()[0]).unwrap();
     t.analysis_version = 9;
     for (channels, outdated) in [(1, false), (2, false), (6, false), (4, true), (8, true)] {
         if let Some(f) = t.format.as_mut() {

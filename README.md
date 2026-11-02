@@ -144,7 +144,7 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   - if an output device is lost, the timeline keeps running on a virtual
     clock and the device reconnects on its own;
   - decoder, analysis, services and interface panics are contained;
-  - saves are atomic with rotating backups;
+  - saves are transactions in a SQLite database, with rotating backups;
   - after a crash, players come back paused at their positions, and nothing
     goes on air by itself.
 - **Fast, dense interface** (egui). Virtualised track tables handle
@@ -281,7 +281,7 @@ mode). Without it, the OS locations are used; see
 | Crate | Role |
 |---|---|
 | [`fp-model`](crates/fp-model) | Pure domain state and player rules: commands in, engine actions out |
-| [`fp-store`](crates/fp-store) | Atomic JSON persistence, backups, migrations |
+| [`fp-store`](crates/fp-store) | SQLite persistence, backups, migrations, config |
 | [`fp-decode`](crates/fp-decode) | File decoding (symphonia) to stereo `f32` |
 | [`fp-dsp`](crates/fp-dsp) | Signal processing shared by the meters and the analysis: K-weighting, true peak, BS.1770 loudness |
 | [`fp-backends`](crates/fp-backends) | Audio backends: system through cpal, Null, Offline for tests |

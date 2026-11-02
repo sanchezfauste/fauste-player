@@ -20,6 +20,7 @@ fp-engine = { path = "crates/fp-engine" }
 fp-store = { path = "crates/fp-store" }
 fp-control = { path = "crates/fp-control" }
 fp-remote = { path = "crates/fp-remote" }
+imbl = "7.0.2"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
 thiserror = "2.0.21"
@@ -57,6 +58,7 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 fluent-bundle = "0.16.0"
 fluent-syntax = "0.12.0"
 ttf-parser = "0.25.1"
+rusqlite = { version = "0.41.1", features = ["bundled", "backup"] }
 unic-langid = "0.9.6"
 sys-locale = "0.3.2"
 tracing-subscriber = { version = "0.3.23", features = ["fmt", "env-filter"] }

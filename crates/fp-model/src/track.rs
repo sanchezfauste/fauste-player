@@ -1,7 +1,7 @@
 //! Tracks (audio files with metadata and cue markers) and the library that owns them.
 
-use std::collections::BTreeMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
@@ -606,49 +606,101 @@ impl Track {
 }
 
 /// All known tracks, keyed by id. Serialised as a JSON array.
+///
+/// The tracks live in a persistent map of shared tracks, so cloning the
+/// library (and so a state snapshot) copies nothing, and a clone that edits a
+/// track copies only that track and the path to it.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(from = "Vec<Track>", into = "Vec<Track>")]
 pub struct Library {
-    tracks: BTreeMap<TrackId, Track>,
+    tracks: imbl::OrdMap<TrackId, Arc<Track>>,
+}
+
+/// What differs between two versions of a [`Library`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct LibraryChanges<'a> {
+    /// Tracks added or edited.
+    pub upserted: Vec<&'a Track>,
+    /// Tracks that are gone.
+    pub removed: Vec<TrackId>,
 }
 
 impl From<Vec<Track>> for Library {
     fn from(tracks: Vec<Track>) -> Self {
         Self {
-            tracks: tracks.into_iter().map(|t| (t.id, t)).collect(),
+            tracks: tracks.into_iter().map(|t| (t.id, Arc::new(t))).collect(),
         }
     }
 }
 
 impl From<Library> for Vec<Track> {
     fn from(library: Library) -> Self {
-        library.tracks.into_values().collect()
+        library
+            .tracks
+            .into_iter()
+            .map(|(_, t)| Arc::unwrap_or_clone(t))
+            .collect()
     }
 }
 
 impl Library {
     pub fn insert(&mut self, track: Track) {
-        self.tracks.insert(track.id, track);
+        self.tracks.insert(track.id, Arc::new(track));
     }
 
     pub fn get(&self, id: TrackId) -> Option<&Track> {
-        self.tracks.get(&id)
+        self.tracks.get(&id).map(Arc::as_ref)
     }
 
     pub fn get_mut(&mut self, id: TrackId) -> Option<&mut Track> {
-        self.tracks.get_mut(&id)
+        self.tracks.get_mut(&id).map(Arc::make_mut)
     }
 
     pub fn remove(&mut self, id: TrackId) -> Option<Track> {
-        self.tracks.remove(&id)
+        self.tracks.remove(&id).map(Arc::unwrap_or_clone)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Track> {
-        self.tracks.values()
+        self.tracks.values().map(Arc::as_ref)
     }
 
-    pub fn iter_mut(&mut self) -> impl Iterator<Item = &mut Track> {
-        self.tracks.values_mut()
+    /// The ids of every track, in order. Edit them one by one with
+    /// [`Library::get_mut`], which unshares only the track it changes.
+    pub fn ids(&self) -> Vec<TrackId> {
+        self.tracks.keys().copied().collect()
+    }
+
+    /// True when both libraries are clones of each other with no edit since.
+    pub fn shares_storage(&self, other: &Library) -> bool {
+        self.tracks.ptr_eq(&other.tracks)
+    }
+
+    /// The tracks added or edited, and the ids removed, since `old`. Tracks
+    /// shared with `old` are skipped without being compared.
+    pub fn changes_since<'a>(&'a self, old: &'a Library) -> LibraryChanges<'a> {
+        use imbl::ordmap::DiffItem;
+        let mut changes = LibraryChanges {
+            upserted: Vec::new(),
+            removed: Vec::new(),
+        };
+        if self.shares_storage(old) {
+            return changes;
+        }
+        for item in old.tracks.diff(&self.tracks) {
+            match item {
+                DiffItem::Add(_, track) => changes.upserted.push(track),
+                DiffItem::Update {
+                    old: (_, before),
+                    new: (_, after),
+                } => {
+                    if !Arc::ptr_eq(before, after) {
+                        changes.upserted.push(after);
+                    }
+                }
+                DiffItem::Remove(id, _) => changes.removed.push(*id),
+            }
+        }
+        changes
     }
 
     pub fn len(&self) -> usize {

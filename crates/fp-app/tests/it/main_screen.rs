@@ -667,7 +667,8 @@ fn at_the_minimum_player_width_the_countdown_still_fits() {
 #[test]
 fn an_hour_long_countdown_fits_between_the_grid_and_the_meter() {
     let mut state = quiet_meter(state(1, 3));
-    for track in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let track = state.library.get_mut(track_id).unwrap();
         track.duration_secs = 3700.0;
     }
     let p = state.players[0].id;
@@ -713,7 +714,8 @@ fn the_meter_with_its_rulers_fits_the_minimum_player_width() {
 /// `size`.
 fn countdowns(players: usize, size: egui::Vec2) -> Vec<egui::Rect> {
     let mut state = state(players, 3);
-    for track in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let track = state.library.get_mut(track_id).unwrap();
         track.duration_secs = 205.0;
     }
     let ids: Vec<_> = state.players.iter().map(|p| p.id).collect();
@@ -962,7 +964,8 @@ fn a_ten_hour_countdown_fits_between_the_grid_and_the_meter() {
     ] {
         let mut state = quiet_meter(state(1, 3));
         state.config.meter.ballistics = ballistics;
-        for track in state.library.iter_mut() {
+        for track_id in state.library.ids() {
+            let track = state.library.get_mut(track_id).unwrap();
             track.duration_secs = 36_100.0;
         }
         let p = state.players[0].id;

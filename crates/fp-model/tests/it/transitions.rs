@@ -10,7 +10,8 @@ use fp_model::{
 };
 
 fn with_segue(state: &mut AppState, secs: f64) {
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.markers.set_auto(MarkerKind::SegueStart, Some(secs));
     }
 }
@@ -283,7 +284,8 @@ fn a_failing_next_source_moves_next_forward_on_every_player() {
 fn playlist_of_unreadable_entries_never_starts() {
     let mut state = fixture(3);
     let e = entries(&state);
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.file_state = FileState::Unreadable;
     }
     for pl in &mut state.players {

@@ -870,6 +870,9 @@ pub struct Tuning {
     /// How often files not found (a drive not mounted yet) are looked for
     /// again.
     pub missing_recheck_ms: f64,
+    /// How often, in seconds, the library database is copied to a rotating
+    /// backup while the application runs (default 300, range 30 to 86400).
+    pub backup_interval_secs: u64,
 }
 
 impl Default for Tuning {
@@ -892,6 +895,7 @@ impl Default for Tuning {
             gain_smoothing_ms: 20.0,
             save_debounce_ms: 1000.0,
             missing_recheck_ms: 30_000.0,
+            backup_interval_secs: 300,
         }
     }
 }
@@ -1339,6 +1343,13 @@ impl Config {
             "tuning.missing_recheck_ms",
             &mut w,
         );
+        clamp_to(
+            &mut t.backup_interval_secs,
+            30,
+            86_400,
+            "tuning.backup_interval_secs",
+            &mut w,
+        );
 
         // One chord per action and one action per chord; the first wins.
         let mut chords = std::collections::HashSet::new();
@@ -1567,6 +1578,24 @@ mod tests {
         assert!(fields.contains(&"analysis.segue_drop_db"));
         assert!(fields.contains(&"tuning.prebuffer_secs"));
         assert!(warnings[0].to_string().contains("using"));
+    }
+
+    #[test]
+    fn backup_interval_defaults_to_300_and_is_clamped_to_30_86400() {
+        assert_eq!(Tuning::default().backup_interval_secs, 300);
+        let c: Config = serde_json::from_str(r#"{"tuning":{}}"#).unwrap();
+        assert_eq!(c.tuning.backup_interval_secs, 300);
+        for (set, kept) in [(1, 30), (10_000_000, 86_400)] {
+            let mut c = Config::default();
+            c.tuning.backup_interval_secs = set;
+            let warnings = c.validate();
+            assert_eq!(c.tuning.backup_interval_secs, kept);
+            assert!(
+                warnings
+                    .iter()
+                    .any(|w| w.field == "tuning.backup_interval_secs")
+            );
+        }
     }
 
     #[test]

@@ -48,7 +48,8 @@ fn model(players: usize, tracks: u64) -> AppState {
         },
     )
     .unwrap();
-    for t in state.library.iter_mut() {
+    for track_id in state.library.ids() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.duration_secs = TRACK_FRAMES as f64 / 48_000.0;
     }
     state

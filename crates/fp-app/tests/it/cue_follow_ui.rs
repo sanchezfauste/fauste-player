@@ -97,7 +97,8 @@ fn setup(players: usize) -> (AppState, PlaylistId) {
     )
     .unwrap();
     let other = s.playlists.iter().find(|l| l.name == "Other").unwrap().id;
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = 180.0;
     }
     s.config.outputs.routes = s

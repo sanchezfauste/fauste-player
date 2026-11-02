@@ -21,6 +21,10 @@ fn a_session_starts_and_stops_on_the_null_backend() {
     let _ui = session.app_ui();
     session.shutdown();
     assert!(dir.path().join("config").join("config.json").exists());
+    let paths = AppPaths::under(dir.path());
+    let db = fp_store::db::Db::open(&paths.database_file()).unwrap();
+    let saved = fp_store::db::snapshot::read(&db).0;
+    assert!(!saved.players.is_empty(), "the shutdown saved the players");
 }
 
 /// Closing the Android app with nothing on air stops the services after

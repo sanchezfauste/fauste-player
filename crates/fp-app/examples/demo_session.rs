@@ -132,12 +132,14 @@ fn main() -> ExitCode {
             name: "Effects".into(),
         },
     );
-    let store = Store::new(paths, Limits::default());
-    let saved = store
-        .save_config(&state)
-        .and_then(|()| store.save_playlists(&state))
-        .and_then(|()| store.save_carts(&state))
-        .and_then(|()| store.save_session(&state, |p| 8.0 + f64::from(p.0 as u32 % 4) * 3.0));
+    let mut store = Store::new(paths, Limits::default());
+    let saved = store.save_config(&state).and_then(|()| {
+        store.save_state(
+            &state,
+            |p| 8.0 + f64::from(p.0 as u32 % 4) * 3.0,
+            std::time::Instant::now(),
+        )
+    });
     match saved {
         Ok(()) => ExitCode::SUCCESS,
         Err(e) => {

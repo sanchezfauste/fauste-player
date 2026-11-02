@@ -205,7 +205,8 @@ fn r26_toggling_repeat_while_playing_re_plans() {
 #[test]
 fn r26_an_entry_of_unknown_length_restarts_at_the_source_end() {
     let (mut s, p, [a, _, _]) = three();
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.duration_secs = 0.0;
     }
     apply(&mut s, Command::ToggleEntryRepeat(a)).unwrap();

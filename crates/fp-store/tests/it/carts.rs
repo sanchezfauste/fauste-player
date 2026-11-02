@@ -1,11 +1,12 @@
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
-//! Phase 2 spec P2.7: carts.json and the cartwall part of the session.
+//! Phase 2 spec P2.7: the cart pages and the cartwall part of the session, in the database.
 
-use std::fs;
 use std::path::PathBuf;
 
 use fp_model::{AppState, CartColor, CartEdit, CartKind, Command, Config, apply};
 use fp_store::{AppPaths, Store};
+
+use crate::support::{edit_db, edit_doc, save_all};
 
 fn store(dir: &tempfile::TempDir) -> Store {
     Store::new(AppPaths::under(dir.path()), Config::default().limits)
@@ -51,21 +52,14 @@ fn edited_state() -> AppState {
     state
 }
 
-fn save_all(s: &Store, state: &AppState) {
-    s.save_config(state).unwrap();
-    s.save_playlists(state).unwrap();
-    s.save_carts(state).unwrap();
-    s.save_session(state, |_| 0.0).unwrap();
-}
-
 #[test]
 fn carts_round_trip() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     let mut state = edited_state();
     let cart = state.cartwall.pages[1].carts[3].id;
     apply(&mut state, Command::FireCart(cart)).unwrap();
-    save_all(&s, &state);
+    save_all(&mut s, &state, 0.0);
     let loaded = s.load("Main");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
     let wall = &loaded.state.cartwall;
@@ -101,15 +95,24 @@ fn carts_round_trip() {
 }
 
 #[test]
-fn a_corrupt_carts_file_falls_back_to_the_backup() {
+fn a_cart_page_row_that_does_not_parse_is_dropped_with_a_warning() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     let state = edited_state();
-    save_all(&s, &state);
-    s.save_carts(&state).unwrap(); // the previous version becomes .bak1
-    fs::write(s.paths().carts_file(), b"{ not json").unwrap();
+    save_all(&mut s, &state, 0.0);
+    let (first, second) = (state.cartwall.pages[0].id.0, state.cartwall.pages[1].id.0);
+    edit_db(&s, |db| {
+        db.conn()
+            .execute(
+                "UPDATE cart_pages SET doc = '{ not json' WHERE id = ?1",
+                [second as i64],
+            )
+            .unwrap();
+    });
     let loaded = s.load("Main");
-    assert_eq!(loaded.state.cartwall.pages, state.cartwall.pages);
+    let ids: Vec<u64> = loaded.state.cartwall.pages.iter().map(|p| p.id.0).collect();
+    assert!(ids.contains(&first), "the other page is kept");
+    assert!(!ids.contains(&second));
     assert!(
         loaded.warnings.iter().any(|w| w.contains("carts")),
         "{:?}",
@@ -118,7 +121,7 @@ fn a_corrupt_carts_file_falls_back_to_the_backup() {
 }
 
 #[test]
-fn missing_carts_file_gives_one_default_page() {
+fn an_empty_database_gives_one_default_cart_page() {
     let dir = tempfile::tempdir().unwrap();
     let loaded = store(&dir).load("Main");
     let wall = &loaded.state.cartwall;
@@ -128,15 +131,15 @@ fn missing_carts_file_gives_one_default_page() {
 }
 
 #[test]
-fn session_without_cartwall_fields_still_loads() {
+fn a_database_without_a_cartwall_session_still_loads() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
-    fs::create_dir_all(&s.paths().data_dir).unwrap();
-    fs::write(
-        s.paths().session_file(),
-        br#"{ "schema_version": 1, "players": [] }"#,
-    )
-    .unwrap();
+    let mut s = store(&dir);
+    save_all(&mut s, &edited_state(), 0.0);
+    edit_db(&s, |db| {
+        db.conn()
+            .execute("DELETE FROM kv WHERE key = 'cartwall_session'", [])
+            .unwrap();
+    });
     let loaded = s.load("Main");
     assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
     assert!(loaded.state.cartwall.open);
@@ -145,12 +148,13 @@ fn session_without_cartwall_fields_still_loads() {
 #[test]
 fn carts_pointing_at_unknown_tracks_become_empty() {
     let dir = tempfile::tempdir().unwrap();
-    let s = store(&dir);
+    let mut s = store(&dir);
     let state = edited_state();
-    save_all(&s, &state);
-    // A playlists.json from elsewhere, without the cart's track.
-    let fresh = AppState::new(Config::default(), "Main");
-    s.save_playlists(&fresh).unwrap();
+    save_all(&mut s, &state, 0.0);
+    // The cart's track is gone from the library.
+    edit_db(&s, |db| {
+        db.conn().execute("DELETE FROM tracks", []).unwrap();
+    });
     let loaded = s.load("Main");
     assert!(loaded.state.cartwall.pages[1].carts[3].track.is_none());
     assert!(
@@ -161,22 +165,22 @@ fn carts_pointing_at_unknown_tracks_become_empty() {
 }
 
 /// Cart colour spec CC3: a hand edit that breaks a colour costs only that
-/// colour, with a warning; the cart and the rest of the file load.
+/// colour, with a warning; the cart and the rest of the page load.
 #[test]
-fn cc3_an_unknown_colour_in_carts_json_loads_as_none_with_a_warning() {
+fn cc3_an_unknown_colour_in_a_cart_page_row_loads_as_none_with_a_warning() {
     for bad in [r#""magenta""#, "7"] {
         let dir = tempfile::tempdir().unwrap();
-        let s = store(&dir);
+        let mut s = store(&dir);
         let state = edited_state();
-        save_all(&s, &state);
-        let file = s.paths().carts_file();
-        let text = fs::read_to_string(&file).unwrap();
-        assert_eq!(
-            text.matches("\"color\"").count(),
-            1,
-            "only the coloured cart: {text}"
-        );
-        fs::write(&file, text.replace(r#""teal""#, bad)).unwrap();
+        save_all(&mut s, &state, 0.0);
+        let page = state.cartwall.pages[1].id.0;
+        edit_doc(&s, "cart_pages", page, |doc| {
+            let carts = doc["carts"].as_array_mut().unwrap();
+            let coloured: Vec<_> = carts.iter_mut().filter(|c| !c["color"].is_null()).collect();
+            assert_eq!(coloured.len(), 1, "only the coloured cart");
+            let bad: serde_json::Value = serde_json::from_str(bad).unwrap();
+            coloured.into_iter().for_each(|c| c["color"] = bad.clone());
+        });
         let loaded = s.load("Main");
         let cart = &loaded.state.cartwall.pages[1].carts[3];
         assert_eq!(cart.color, None, "{bad}");

@@ -38,7 +38,8 @@ fn state(tracks: usize) -> (AppState, Vec<EntryId>, PlayerId) {
         },
     )
     .unwrap();
-    for (i, t) in state.library.iter_mut().enumerate() {
+    for (i, track_id) in state.library.ids().into_iter().enumerate() {
+        let t = state.library.get_mut(track_id).unwrap();
         t.duration_secs = 200.0;
         t.title = format!("Song {i}");
         t.artist = "Artist".into();
@@ -749,7 +750,8 @@ fn the_format_line_leaves_out_what_is_unknown() {
 #[test]
 fn tag_edit_availability_combines_the_rule_and_the_extension() {
     let (mut s, entries, p) = state(2);
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.analyzed = true;
         t.tags_read = true;
     }
@@ -1233,7 +1235,8 @@ fn n18_a_bit_perfect_player_says_nothing_while_normalization_is_off() {
 fn n18_the_player_view_shows_the_gain_on_air_only_while_not_stopped() {
     let (mut s, _entries, p) = state(2);
     s.config.loudness.normalize = true;
-    for t in s.library.iter_mut() {
+    for track_id in s.library.ids() {
+        let t = s.library.get_mut(track_id).unwrap();
         t.loudness = Some(fp_model::LoudnessMeasurement {
             integrated_lufs: Some(-20.0),
             true_peak_dbtp: -10.0,
