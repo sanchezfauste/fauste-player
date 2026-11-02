@@ -15,6 +15,7 @@ use std::sync::atomic::Ordering;
 
 use egui::accesskit::Role;
 use egui_kittest::kittest::Queryable;
+use fp_app::ui::files::canonical_path;
 use fp_model::Command;
 use support::{FakePlatform, harness_from, state};
 
@@ -23,7 +24,9 @@ const FOCUS_LOST: &str = "Another app took the audio focus — playout continues
 #[test]
 fn add_asks_the_platform_for_files_and_adds_them() {
     let dir = tempfile::tempdir().unwrap();
-    let files = vec![dir.path().join("a.flac"), dir.path().join("b.mp3")];
+    // The paths come back canonical (macOS temp dirs are symlinks).
+    let base = canonical_path(dir.path());
+    let files = vec![base.as_path().join("a.flac"), base.as_path().join("b.mp3")];
     for f in &files {
         std::fs::write(f, b"").unwrap();
     }

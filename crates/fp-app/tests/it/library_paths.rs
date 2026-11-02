@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use fp_app::ui::files::{audio_paths, canonical_path};
+use fp_app::ui::files::canonical_path;
 
 #[cfg(unix)]
 #[test]
@@ -13,11 +13,14 @@ fn audio_paths_are_canonical() {
     std::fs::write(&a, b"x").unwrap();
     let link = real.join("link.wav");
     std::os::unix::fs::symlink(&a, &link).unwrap();
-    assert_eq!(audio_paths(std::slice::from_ref(&link)), vec![a.clone()]);
+    assert_eq!(
+        fp_app::ui::files::audio_paths(std::slice::from_ref(&link)),
+        vec![a.clone()]
+    );
 
     std::fs::create_dir(real.join("sub")).unwrap();
     let dotted = real.join("sub").join("..").join("a.wav");
-    assert_eq!(audio_paths(&[dotted]), vec![a]);
+    assert_eq!(fp_app::ui::files::audio_paths(&[dotted]), vec![a]);
 }
 
 #[test]

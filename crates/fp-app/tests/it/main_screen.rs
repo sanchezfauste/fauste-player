@@ -15,7 +15,7 @@ use fp_app::i18n::I18n;
 use fp_app::services::MediaCache;
 use fp_app::ui::app::AppUi;
 use fp_app::ui::controller::Controller;
-use fp_app::ui::files::audio_paths;
+use fp_app::ui::files::{audio_paths, canonical_path};
 use fp_model::Command;
 use support::{Fake, harness, state};
 
@@ -102,20 +102,22 @@ fn large_playlists_build_only_visible_rows() {
 #[test]
 fn dropped_paths_keep_only_audio_files() {
     let dir = tempfile::tempdir().unwrap();
-    let folder = dir.path().join("folder");
+    // The paths come back canonical (macOS temp dirs are symlinks).
+    let base = canonical_path(dir.path());
+    let folder = base.as_path().join("folder");
     std::fs::create_dir_all(folder.join("nested")).unwrap();
     for name in ["b.flac", "a.MP3", "notes.txt", "nested/deep.wav"] {
         std::fs::write(folder.join(name), b"x").unwrap();
     }
-    let song = dir.path().join("song.ogg");
-    let image = dir.path().join("cover.jpg");
+    let song = base.as_path().join("song.ogg");
+    let image = base.as_path().join("cover.jpg");
     std::fs::write(&song, b"x").unwrap();
     std::fs::write(&image, b"x").unwrap();
     let got = audio_paths(&[
         song.clone(),
         image,
         folder.clone(),
-        dir.path().join("gone.mp3"),
+        base.as_path().join("gone.mp3"),
     ]);
     assert_eq!(got, vec![song, folder.join("a.MP3"), folder.join("b.flac")]);
 }
@@ -190,7 +192,9 @@ fn drop_file(h: &mut egui_kittest::Harness<'static, AppUi>, path: &std::path::Pa
 #[test]
 fn files_dropped_on_a_row_are_inserted_there() {
     let dir = tempfile::tempdir().unwrap();
-    let file = dir.path().join("new.wav");
+    // The paths come back canonical (macOS temp dirs are symlinks).
+    let base = canonical_path(dir.path());
+    let file = base.as_path().join("new.wav");
     std::fs::write(&file, b"x").unwrap();
     let (mut h, fake) = harness(state(1, 3));
     let row = h.get_by_label("Song 2").rect();
@@ -326,13 +330,15 @@ fn new_formats_are_accepted_as_audio_files() {
 #[test]
 fn a_dropped_folder_inserts_its_audio_files() {
     let dir = tempfile::tempdir().unwrap();
+    // The paths come back canonical (macOS temp dirs are symlinks).
+    let base = canonical_path(dir.path());
     for name in ["b.flac", "a.mp3", "notes.txt"] {
-        std::fs::write(dir.path().join(name), b"x").unwrap();
+        std::fs::write(base.as_path().join(name), b"x").unwrap();
     }
     let (mut h, fake) = harness(state(1, 1));
     h.remove_cursor();
     h.step();
-    drop_file(&mut h, dir.path());
+    drop_file(&mut h, base.as_path());
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
     let mut inserted = None;
     while inserted.is_none() && std::time::Instant::now() < deadline {
@@ -345,7 +351,10 @@ fn a_dropped_folder_inserts_its_audio_files() {
     }
     assert_eq!(
         inserted,
-        Some(vec![dir.path().join("a.mp3"), dir.path().join("b.flac")])
+        Some(vec![
+            base.as_path().join("a.mp3"),
+            base.as_path().join("b.flac")
+        ])
     );
 }
 
