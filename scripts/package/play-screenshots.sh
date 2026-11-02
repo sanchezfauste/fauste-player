@@ -134,13 +134,27 @@ mkdir -p "$work"
 rm -rf "$home"
 FAUSTE_HOME=$home "$root/target/release/examples/demo_session" "$work/music" "$work/carts" >&2
 python3 - "$home/data" "$work/music" "$device_music" "$work/carts" "$device_carts" <<'EOF'
-import pathlib, sys
+import pathlib, sqlite3, sys
 data, *pairs = sys.argv[1:]
-for f in pathlib.Path(data).glob("*.json"):
-    s = f.read_text()
-    for host, device in zip(pairs[::2], pairs[1::2]):
-        s = s.replace(host + "/", device + "/")
-    f.write_text(s)
+pairs = [(h + "/", d + "/") for h, d in zip(pairs[::2], pairs[1::2])]
+# The state lives in fauste.db: every text column of every table, in the
+# database and its backups (each closed, so its log is folded back in).
+for f in sorted(pathlib.Path(data).glob("fauste.db*")):
+    if f.name.endswith(("-wal", "-shm")):
+        continue
+    db = sqlite3.connect(f)
+    tables = [r[0] for r in db.execute("SELECT name FROM sqlite_master WHERE type = 'table'")]
+    for table in tables:
+        for col in db.execute(f'PRAGMA table_info("{table}")').fetchall():
+            if col[2].upper() != "TEXT":
+                continue
+            for host, device in pairs:
+                db.execute(
+                    f'UPDATE "{table}" SET "{col[1]}" = replace("{col[1]}", ?, ?)',
+                    (host, device),
+                )
+    db.commit()
+    db.close()
 EOF
 
 echo "Installing $apk" >&2
