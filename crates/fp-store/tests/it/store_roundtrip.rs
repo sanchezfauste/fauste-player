@@ -899,3 +899,48 @@ fn an_unreadable_track_row_does_not_stop_later_saves() {
     assert_eq!(again.state.playlists, loaded.state.playlists);
     assert_eq!(again.state.library, loaded.state.library);
 }
+
+#[test]
+fn a_stale_wal_beside_a_missing_database_is_set_aside() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    // Another database's `-wal`, written in a second home and kept
+    // readable by holding a connection open while copying it.
+    let other_dir = tempfile::tempdir().unwrap();
+    let mut other = store(&other_dir);
+    let mut other_state = AppState::new(Config::default(), "Other");
+    let playlist = other_state.playlists.first_id().unwrap();
+    apply(
+        &mut other_state,
+        Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths: vec![PathBuf::from("/o/x.flac")],
+        },
+    )
+    .unwrap();
+    save_all(&mut other, &other_state, 0.0);
+    let other_wal = {
+        let mut n = other.paths().database_file().into_os_string();
+        n.push("-wal");
+        PathBuf::from(n)
+    };
+    let wal_bytes = fs::read(&other_wal).unwrap();
+    assert!(!wal_bytes.is_empty());
+    remove_main_database(&s);
+    let main = s.paths().database_file();
+    let mut wal = main.clone().into_os_string();
+    wal.push("-wal");
+    let wal = PathBuf::from(wal);
+    fs::write(&wal, &wal_bytes).unwrap();
+    let loaded = s.load("Main");
+    assert_eq!(loaded.state.library, state.library);
+    assert_eq!(loaded.state.playlists, state.playlists);
+    let aside: Vec<_> = fs::read_dir(main.parent().unwrap())
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .filter(|n| n.contains("-wal") && n.contains("corrupt-"))
+        .collect();
+    assert_eq!(aside.len(), 1, "{aside:?}");
+}

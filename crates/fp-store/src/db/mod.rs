@@ -224,7 +224,9 @@ fn set_aside(path: &Path, kind: &str, warnings: &mut Vec<String>) -> bool {
         .zip(side_files(&target))
         .filter(|(from, _)| from.exists())
         .collect();
-    moves.push((path.to_path_buf(), target.clone()));
+    if path.exists() {
+        moves.push((path.to_path_buf(), target.clone()));
+    }
     let mut done: Vec<&(PathBuf, PathBuf)> = Vec::new();
     for pair in &moves {
         if let Err(e) = fs::rename(&pair.0, &pair.1) {
@@ -293,6 +295,12 @@ pub fn open_with_fallback(path: &Path, backups: usize) -> Result<Opened, OpenErr
             "{}: the database file is missing; restoring from a backup",
             path.display()
         ));
+        // A `-wal` or `-shm` left beside the missing file belongs to some
+        // other database and would be replayed onto the restored copy.
+        if side_files(path).iter().any(|f| f.exists()) && !set_aside(path, "corrupt", &mut warnings)
+        {
+            return in_memory(path, warnings);
+        }
         return from_backups(path, backups, warnings);
     }
     match Db::open(path) {
