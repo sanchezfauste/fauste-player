@@ -66,16 +66,6 @@ a USB stick, or to keep separate setups side by side.
   cannot be renamed because the folder is read-only), the application
   runs without saving until the next start, and the log says so.
 
-## Updating from the previous version
-
-This version stores the library in a newer database format (it adds the
-categories for tracks). It reads the old database and keeps everything, and
-tracks no longer disappear from the library when their last playlist entry or
-cart goes. Going back to the previous version is safe, but it cannot read the
-new format: it keeps the new database as `fauste.db.newer-<time>` and starts
-from the newest backup it can read, as described above. Copy the data folder
-first if you may want to go back with everything you saved since.
-
 ## Playlists and session from an earlier version
 
 Earlier versions kept the playlists in `playlists.json`, the cart pages in
