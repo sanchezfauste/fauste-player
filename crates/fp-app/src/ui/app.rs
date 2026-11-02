@@ -59,6 +59,14 @@ pub(crate) struct DragEntry {
     pub entry: EntryId,
 }
 
+/// The payload of library rows being dragged (track library spec §7.4):
+/// the selected tracks, in the table's order. A playlist inserts them, a
+/// cart takes the first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DragTracks {
+    pub tracks: Vec<TrackId>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DropTarget {
     /// The player whose table shows the target: only that table draws the
@@ -1792,15 +1800,23 @@ impl AppUi {
             return;
         }
         // Over the library window: the files join the selected category
-        // (track library spec §7.4).
-        let over_library = self.view.library.drawn.is_some_and(|window| {
-            ctx.input(|i| i.pointer.hover_pos().or_else(|| i.pointer.interact_pos()))
-                .is_some_and(|p| window.contains(p))
-        });
-        if over_library {
-            let target = PickTarget::Library(super::library::added_category(&state.library_view));
-            self.read_dropped(ctx, target, dropped);
-            return;
+        // (track library spec §7.4). A window or a dialog over it hides
+        // it: there the files go nowhere (as over a covered table, Q4.6).
+        let pointer = ctx.input(|i| i.pointer.hover_pos().or_else(|| i.pointer.interact_pos()));
+        match (
+            self.view.library.drawn,
+            self.view.library.drawn_layer,
+            pointer,
+        ) {
+            (Some(window), Some(layer), Some(p)) if window.contains(p) => {
+                if ctx.layer_id_at(p) == Some(layer) {
+                    let target =
+                        PickTarget::Library(super::library::added_category(&state.library_view));
+                    self.read_dropped(ctx, target, dropped);
+                }
+                return;
+            }
+            _ => {}
         }
         // Over a table but not on a target: nothing is inserted (Q4.6).
         if self.view.file_drop.is_none() && self.view.file_drop_refused {

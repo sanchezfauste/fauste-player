@@ -829,3 +829,18 @@ library-whole-library = Whole library
 library-add-files = Add files
 library-col-category = Category
 library-col-kind = Kind
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } track selected
+   *[other] { $count } tracks selected
+}
+library-menu-add-to = Add to
+library-menu-add-to-cart = Add to cart
+library-menu-cart = Cart { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } track did not fit: the page has no more empty carts.
+   *[other] { $count } tracks did not fit: the page has no more empty carts.
+}
+library-menu-move-to-category = Move to category
+library-menu-show-file = Show file location
+library-menu-remove = Remove from library…

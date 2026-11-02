@@ -829,3 +829,18 @@ library-whole-library = Liburutegi osoa
 library-add-files = Gehitu fitxategiak
 library-col-category = Kategoria
 library-col-kind = Mota
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] Pista { $count } hautatuta
+   *[other] { $count } pista hautatuta
+}
+library-menu-add-to = Gehitu hona
+library-menu-add-to-cart = Gehitu kartutxo batera
+library-menu-cart = { $n }. kartutxoa
+library-cart-left-out = { $count ->
+    [one] Pista { $count } ez da sartu: orrian ez dago kartutxo huts gehiago.
+   *[other] { $count } pista ez dira sartu: orrian ez dago kartutxo huts gehiago.
+}
+library-menu-move-to-category = Eraman kategoriara
+library-menu-show-file = Erakutsi fitxategiaren kokapena
+library-menu-remove = Kendu liburutegitik…

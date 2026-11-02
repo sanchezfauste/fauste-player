@@ -20,10 +20,6 @@ use super::state::{LibraryDialog, RemovalStep};
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum Removal {
     /// Tracks, from the table.
-    #[expect(
-        dead_code,
-        reason = "the table's row menu (plan 3, task 6) removes tracks"
-    )]
     Tracks(Vec<TrackId>),
     /// A category with its subcategories and their tracks.
     Category(CategoryId),

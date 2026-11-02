@@ -829,3 +829,18 @@ library-whole-library = Hele bibliotheek
 library-add-files = Bestanden toevoegen
 library-col-category = Categorie
 library-col-kind = Soort
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } nummer geselecteerd
+   *[other] { $count } nummers geselecteerd
+}
+library-menu-add-to = Toevoegen aan
+library-menu-add-to-cart = Toevoegen aan cart
+library-menu-cart = Cart { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } nummer paste niet: de pagina heeft geen lege carts meer.
+   *[other] { $count } nummers pasten niet: de pagina heeft geen lege carts meer.
+}
+library-menu-move-to-category = Verplaatsen naar categorie
+library-menu-show-file = Bestandslocatie tonen
+library-menu-remove = Uit de bibliotheek verwijderen…

@@ -829,3 +829,18 @@ library-whole-library = Tutta la libreria
 library-add-files = Aggiungi file
 library-col-category = Categoria
 library-col-kind = Tipo
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } traccia selezionata
+   *[other] { $count } tracce selezionate
+}
+library-menu-add-to = Aggiungi a
+library-menu-add-to-cart = Aggiungi a un cart
+library-menu-cart = Cart { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } traccia non è entrata: la pagina non ha altri cart vuoti.
+   *[other] { $count } tracce non sono entrate: la pagina non ha altri cart vuoti.
+}
+library-menu-move-to-category = Sposta nella categoria
+library-menu-show-file = Mostra la posizione del file
+library-menu-remove = Rimuovi dalla libreria…

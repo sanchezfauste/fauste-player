@@ -829,3 +829,18 @@ library-whole-library = Toda la biblioteca
 library-add-files = Añadir archivos
 library-col-category = Categoría
 library-col-kind = Tipo
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } pista seleccionada
+   *[other] { $count } pistas seleccionadas
+}
+library-menu-add-to = Añadir a
+library-menu-add-to-cart = Añadir a un botón
+library-menu-cart = Botón { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } pista no ha cabido: la página no tiene más botones vacíos.
+   *[other] { $count } pistas no han cabido: la página no tiene más botones vacíos.
+}
+library-menu-move-to-category = Mover a la categoría
+library-menu-show-file = Mostrar la ubicación del archivo
+library-menu-remove = Quitar de la biblioteca…

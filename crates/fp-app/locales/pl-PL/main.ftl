@@ -860,3 +860,20 @@ library-whole-library = Cała biblioteka
 library-add-files = Dodaj pliki
 library-col-category = Kategoria
 library-col-kind = Rodzaj
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } utwór zaznaczony
+    [few] { $count } utwory zaznaczone
+   *[many] { $count } utworów zaznaczonych
+}
+library-menu-add-to = Dodaj do
+library-menu-add-to-cart = Dodaj do cartu
+library-menu-cart = Cart { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } utwór się nie zmieścił: strona nie ma więcej pustych cartów.
+    [few] { $count } utwory się nie zmieściły: strona nie ma więcej pustych cartów.
+   *[many] { $count } utworów się nie zmieściło: strona nie ma więcej pustych cartów.
+}
+library-menu-move-to-category = Przenieś do kategorii
+library-menu-show-file = Pokaż lokalizację pliku
+library-menu-remove = Usuń z biblioteki…

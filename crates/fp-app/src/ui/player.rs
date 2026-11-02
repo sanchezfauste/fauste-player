@@ -11,7 +11,7 @@ use egui_phosphor::regular as icon;
 use fp_model::layout::Panel;
 use fp_model::{Command, PlayMode, PlayerId, PlaylistId, TrackId};
 
-use super::app::{DragEntry, FollowScroll, Scene, ViewState};
+use super::app::{DragEntry, DragTracks, FollowScroll, Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
 use super::header_layout;
@@ -1960,12 +1960,22 @@ fn tabs(
             .on_hover_text(&pl.name);
         let name = pl.name.clone();
         response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone()));
-        let dropping = response.dnd_hover_payload::<DragEntry>().is_some();
+        let dropping = response.dnd_hover_payload::<DragEntry>().is_some()
+            || response.dnd_hover_payload::<DragTracks>().is_some();
         if let Some(payload) = response.dnd_release_payload::<DragEntry>() {
             scene.ctl.send(Command::MoveEntry {
                 entry: payload.entry,
                 to: pl.id,
                 index: pl.entries.len(),
+            });
+            view_state.drop = None;
+        }
+        // Library rows join the playlist at its end (track library spec §7.4).
+        if let Some(payload) = response.dnd_release_payload::<DragTracks>() {
+            scene.ctl.send(Command::InsertTracks {
+                playlist: pl.id,
+                index: pl.entries.len(),
+                tracks: payload.tracks.clone(),
             });
             view_state.drop = None;
         }

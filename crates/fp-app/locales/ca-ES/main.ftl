@@ -829,3 +829,18 @@ library-whole-library = Tota la biblioteca
 library-add-files = Afegeix fitxers
 library-col-category = Categoria
 library-col-kind = Tipus
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } pista seleccionada
+   *[other] { $count } pistes seleccionades
+}
+library-menu-add-to = Afegeix a
+library-menu-add-to-cart = Afegeix a un cartutx
+library-menu-cart = Cartutx { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } pista no hi ha cabut: la pàgina no té més cartutxos buits.
+   *[other] { $count } pistes no hi han cabut: la pàgina no té més cartutxos buits.
+}
+library-menu-move-to-category = Mou a la categoria
+library-menu-show-file = Mostra la ubicació del fitxer
+library-menu-remove = Treu de la biblioteca…

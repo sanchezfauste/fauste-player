@@ -8,7 +8,7 @@ use egui_phosphor::regular as icon;
 use fp_model::layout::{Dock, Panel};
 use fp_model::{CartKind, CartPageId, Command};
 
-use super::app::{Scene, ViewState};
+use super::app::{DragTracks, Scene, ViewState};
 use super::cart_view::{
     self, BUTTON_HEIGHT, CartStatus, CartSweep, GAP, MIN_BUTTON_HEIGHT, MIN_BUTTON_WIDTH,
     button_height, cart_look, cart_view, filled_button_height, page_on_air,
@@ -676,6 +676,25 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                 } else {
                     response.clone()
                 };
+                // Library rows dropped on a cart: it takes the first (a
+                // cart holds one file; plan 3 rulings).
+                if menu_on.dnd_hover_payload::<DragTracks>().is_some() {
+                    ui.painter().rect_stroke(
+                        menu_on.rect,
+                        0.0,
+                        Stroke::new(2.0, theme::ACCENT),
+                        StrokeKind::Inside,
+                    );
+                }
+                if let Some(payload) = menu_on.dnd_release_payload::<DragTracks>()
+                    && let Some(&track) = payload.tracks.first()
+                {
+                    scene.ctl.send(Command::AssignCartTrack {
+                        page: page_id,
+                        index,
+                        track,
+                    });
+                }
                 {
                     menu_on.context_menu(|ui| {
                         ui.set_min_width(200.0);

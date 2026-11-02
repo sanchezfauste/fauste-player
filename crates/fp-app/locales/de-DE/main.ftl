@@ -829,3 +829,18 @@ library-whole-library = Ganze Bibliothek
 library-add-files = Dateien hinzufügen
 library-col-category = Kategorie
 library-col-kind = Art
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } Titel ausgewählt
+   *[other] { $count } Titel ausgewählt
+}
+library-menu-add-to = Hinzufügen zu
+library-menu-add-to-cart = Zu Cart hinzufügen
+library-menu-cart = Cart { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } Titel passte nicht: Die Seite hat keine leeren Carts mehr.
+   *[other] { $count } Titel passten nicht: Die Seite hat keine leeren Carts mehr.
+}
+library-menu-move-to-category = In Kategorie verschieben
+library-menu-show-file = Dateispeicherort anzeigen
+library-menu-remove = Aus der Bibliothek entfernen…

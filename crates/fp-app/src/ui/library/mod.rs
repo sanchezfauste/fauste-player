@@ -7,6 +7,7 @@
 
 mod category_dialog;
 pub(crate) mod confirm;
+mod menu;
 pub(crate) mod state;
 mod table;
 pub(crate) mod tree;
@@ -160,6 +161,7 @@ fn settle(library: &mut LibraryUi, saved: &LibraryView) {
 /// Draws the library window while it is open (never on a phone).
 pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
     view_state.library.drawn = None;
+    view_state.library.drawn_layer = None;
     let saved = &scene.state.library_view;
     let area = match view_state.middle {
         Some(area) if saved.open && !view_state.phone_active => area,
@@ -218,7 +220,8 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
                 edges(ui, scene, &mut view_state.library, shown, area);
             }
         });
-    view_state.library.drawn = response.map(|r| r.response.rect);
+    view_state.library.drawn = response.as_ref().map(|r| r.response.rect);
+    view_state.library.drawn_layer = response.map(|r| r.response.layer_id);
 }
 
 /// The title bar: the title, then minimise, maximise or restore, and close

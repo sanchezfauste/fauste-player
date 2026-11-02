@@ -12,12 +12,15 @@ use egui_phosphor::regular as icon;
 use fp_model::library_view::{LibraryColumn, LibraryColumnWidth, LibrarySort, LibraryView};
 use fp_model::{TableColumn, Track, TrackId};
 
-use super::super::app::{PickTarget, Scene, ViewState};
+use super::super::app::{DragTracks, PickTarget, Scene, ViewState};
+use super::super::table::RowMenuOutcome;
 use super::super::table_layout;
 use super::super::theme;
 use super::super::track_cells::{self, RowColours};
 use super::super::widgets::{self, TileStyle, font};
-use super::state::{LibraryUi, LiveColumns};
+use super::confirm::{Removal, ask_removal};
+use super::menu::{self, MenuOutcome};
+use super::state::{LibraryUi, LiveColumns, selected_among};
 use super::{added_category, current_view, send};
 
 const TOOLBAR_HEIGHT: f32 = 36.0;
@@ -123,7 +126,7 @@ pub(crate) fn table(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) 
             .layout(Layout::top_down(Align::Min)),
     );
     body_ui.set_clip_rect(body.intersect(ui.clip_rect()));
-    rows(&mut body_ui, scene, &mut view_state.library, &columns, &px);
+    rows(&mut body_ui, scene, view_state, &columns, &px);
     ui.advance_cursor_after_rect(area);
 }
 
@@ -360,29 +363,47 @@ fn resize_handles(
 }
 
 /// The rows in sight (LB28): click selects, Ctrl (Cmd) click adds and
-/// Shift click extends from the anchor.
+/// Shift click extends from the anchor. A right-click opens the row menu
+/// and a drag carries the selection to a playlist or a cart (track library
+/// spec §7.4); on a row outside the selection both act on that row alone.
 fn rows(
     ui: &mut Ui,
     scene: &Scene<'_>,
-    library: &mut LibraryUi,
+    view_state: &mut ViewState,
     columns: &[LibraryColumn],
     px: &[f32],
 ) {
+    let library = &mut view_state.library;
     let count = library.rows(scene.state).len();
     let mut clicked: Option<(TrackId, egui::Modifiers)> = None;
+    // A right-click or a drag on a row outside the selection selects it.
+    let mut taken: Option<TrackId> = None;
+    let mut outcome: Option<MenuOutcome> = None;
+    // On touch a finger drag scrolls the table instead.
+    let sense = if view_state.touch {
+        Sense::click()
+    } else {
+        Sense::click_and_drag()
+    };
     {
         let rows = library.rows.as_ref().map_or(&[][..], |c| c.rows.as_slice());
         let selected = &library.selected;
+        // What a menu or a drag on the row of `id` acts on.
+        let targets = |id: TrackId| {
+            if selected.contains(&id) {
+                selected_among(rows, selected)
+            } else {
+                vec![id]
+            }
+        };
         ui.spacing_mut().item_spacing = Vec2::ZERO;
         ScrollArea::vertical()
             .id_salt("library-table-scroll")
             .auto_shrink([false, false])
             .show_rows(ui, ROW_HEIGHT, count, |ui, range| {
                 for i in range {
-                    let (rect, response) = ui.allocate_exact_size(
-                        vec2(ui.available_width(), ROW_HEIGHT),
-                        Sense::click(),
-                    );
+                    let (rect, response) =
+                        ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), sense);
                     let Some(&id) = rows.get(i) else { continue };
                     let Some(track) = scene.state.library.get(id) else {
                         continue;
@@ -394,6 +415,23 @@ fn rows(
                     if response.clicked() {
                         clicked = Some((id, click_modifiers(ui)));
                     }
+                    if response.drag_started() {
+                        egui::DragAndDrop::set_payload(
+                            ui.ctx(),
+                            DragTracks {
+                                tracks: targets(id),
+                            },
+                        );
+                        taken = Some(id);
+                    }
+                    if response.secondary_clicked() {
+                        taken = Some(id);
+                    }
+                    response.context_menu(|ui| {
+                        if let Some(o) = menu::row_menu(ui, scene, &targets(id)) {
+                            outcome = Some(o);
+                        }
+                    });
                     if ui.is_rect_visible(rect) {
                         row(ui, scene, track, rect, columns, px, is_selected);
                     }
@@ -405,6 +443,20 @@ fn rows(
         let rows = cache.as_ref().map_or(&[][..], |c| c.rows.as_slice());
         library.click(rows, id, modifiers);
         library.rows = cache;
+    }
+    if let Some(id) = taken {
+        library.take_row(id);
+    }
+    match outcome {
+        Some(MenuOutcome::Row(RowMenuOutcome::EditTags(id))) => view_state.edit_tags = Some(id),
+        Some(MenuOutcome::Row(RowMenuOutcome::Loudness(id))) => {
+            view_state.loudness_popup = Some((id, None));
+        }
+        Some(MenuOutcome::Remove(tracks)) => {
+            ask_removal(scene, view_state, Removal::Tracks(tracks));
+        }
+        Some(MenuOutcome::Notice(text)) => view_state.set_notice(text, scene.time),
+        None => {}
     }
 }
 

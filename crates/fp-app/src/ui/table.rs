@@ -6,7 +6,9 @@ use egui_extras::{Column, TableBuilder};
 use egui_phosphor::regular as icon;
 use fp_model::{ColumnWidths, Command, EntryId, PlayerId, PlaylistId, TableColumn, Transport};
 
-use super::app::{DragColumn, DragEntry, DropTarget, FollowScroll, PickTarget, Scene, ViewState};
+use super::app::{
+    DragColumn, DragEntry, DragTracks, DropTarget, FollowScroll, PickTarget, Scene, ViewState,
+};
 use super::format;
 use super::glyphs::{self, TransportAction};
 use super::table_layout;
@@ -77,7 +79,7 @@ impl TableScroll {
 fn drag_scroll_offset(ui: &mut Ui, last: Option<TableScroll>, files_pointed: bool) -> Option<f32> {
     let ctx = ui.ctx().clone();
     let last = last?.current(ctx.cumulative_pass_nr())?;
-    let entry_drag = egui::DragAndDrop::has_payload_of_type::<DragEntry>(&ctx);
+    let entry_drag = rows_dragged(&ctx);
     let file_drag = files_pointed && ui.input(|i| !i.raw.hovered_files.is_empty());
     if !entry_drag && !file_drag {
         return None;
@@ -632,7 +634,7 @@ pub(crate) fn track_table(
         .filter(on_table_layer)
         .filter(|p| !table_layout::on_column_edge(&px, area.left(), grab, p.x))
         .and_then(|p| table_layout::drop_index(body_rect, drawn_y, ROW_HEIGHT, entries.len(), p));
-    if egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx()) {
+    if rows_dragged(ui.ctx()) {
         match target {
             Some(index) => {
                 view_state.drop = Some(DropTarget {
@@ -668,13 +670,21 @@ pub(crate) fn track_table(
         }
         if ui.input(|i| i.pointer.any_released())
             && let Some(index) = target
-            && let Some(payload) = egui::DragAndDrop::payload::<DragEntry>(ui.ctx())
         {
-            scene.ctl.send(Command::MoveEntry {
-                entry: payload.entry,
-                to: playlist,
-                index,
-            });
+            if let Some(payload) = egui::DragAndDrop::payload::<DragEntry>(ui.ctx()) {
+                scene.ctl.send(Command::MoveEntry {
+                    entry: payload.entry,
+                    to: playlist,
+                    index,
+                });
+            } else if let Some(payload) = egui::DragAndDrop::payload::<DragTracks>(ui.ctx()) {
+                // Library rows (track library spec §7.4): new entries.
+                scene.ctl.send(Command::InsertTracks {
+                    playlist,
+                    index,
+                    tracks: payload.tracks.clone(),
+                });
+            }
             view_state.drop = None;
         }
     }
@@ -712,7 +722,7 @@ pub(crate) fn track_table(
     // The operator is using the table: scrolling it (wheel or scroll bar),
     // pressing in it, dragging an entry (for as long as the drag lasts), or
     // with a row menu open. Following waits (feedback spec F18).
-    let entry_drag = egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx());
+    let entry_drag = rows_dragged(ui.ctx());
     if wheel_over_table || pressed_in_table || menu_open || dragged.is_some() || entry_drag {
         view_state.table_touched.insert(player, scene.time);
     }
@@ -789,7 +799,7 @@ fn header_menu(ui: &mut Ui, scene: &Scene<'_>, columns: &[TableColumn]) {
 }
 
 /// What a row's context menu asks the table to open.
-enum RowMenuOutcome {
+pub(crate) enum RowMenuOutcome {
     EditTags(fp_model::TrackId),
     Loudness(fp_model::TrackId),
 }
@@ -1062,6 +1072,13 @@ fn phone_moves(
         .response
         .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, enabled, text.clone()));
     });
+}
+
+/// Whether rows a table accepts are being dragged: a playlist entry, or
+/// library rows (track library spec §7.4).
+pub(crate) fn rows_dragged(ctx: &egui::Context) -> bool {
+    egui::DragAndDrop::has_payload_of_type::<DragEntry>(ctx)
+        || egui::DragAndDrop::has_payload_of_type::<DragTracks>(ctx)
 }
 
 /// Where a drag would drop. A finger lifted from a touch screen ends its

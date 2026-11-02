@@ -2,6 +2,8 @@
 //! (track library spec §7): the search text, the selected rows, the rows
 //! cache and a move, resize or split drag in progress.
 
+use std::collections::HashSet;
+
 use egui::{Pos2, Rect};
 use fp_model::library_search::{CategoryCounts, SearchIndex, library_rows, sort_rows};
 use fp_model::library_view::{
@@ -42,6 +44,9 @@ pub(crate) struct LibraryUi {
     pub(crate) pending_tree: Option<Pending<f32>>,
     /// Where the window was drawn in the last frame; `None` while closed.
     pub(crate) drawn: Option<Rect>,
+    /// The window's layer in the last frame: only a pointer on it is over
+    /// the window (another window or a dialog may cover part of it).
+    pub(crate) drawn_layer: Option<egui::LayerId>,
 }
 
 /// The table's rows and what they were computed from.
@@ -77,17 +82,13 @@ impl LibraryUi {
     /// in the saved order. Computed again only when the library, the
     /// categories, the selection, the scope, the search or the order
     /// changed; the search index follows the library's changes. Selected
-    /// rows whose track left the library are dropped.
+    /// rows no longer listed are dropped from the selection.
     pub(crate) fn rows(&mut self, state: &AppState) -> &[TrackId] {
         let fresh = self
             .rows
             .as_ref()
             .is_some_and(|c| c.holds(state, &self.search));
         if !fresh {
-            let library_changed = self
-                .rows
-                .as_ref()
-                .is_none_or(|c| !c.library.shares_storage(&state.library));
             let index = match self.rows.take() {
                 Some(RowsCache {
                     library, mut index, ..
@@ -109,11 +110,17 @@ impl LibraryUi {
             if let Some(sort) = view.sort {
                 sort_rows(&mut rows, &state.library, &state.categories, sort);
             }
-            if library_changed {
-                self.selected.retain(|id| state.library.get(*id).is_some());
-                if self.anchor.is_some_and(|a| state.library.get(a).is_none()) {
+            // The selection keeps only the rows listed: what a category,
+            // scope or search change hides, or the library lost, leaves it
+            // (a menu or a drag acts on what the operator sees).
+            if !self.selected.is_empty() {
+                let listed: HashSet<TrackId> = rows.iter().copied().collect();
+                self.selected.retain(|id| listed.contains(id));
+                if self.anchor.is_some_and(|a| !listed.contains(&a)) {
                     self.anchor = None;
                 }
+            } else if self.anchor.is_some_and(|a| !rows.contains(&a)) {
+                self.anchor = None;
             }
             self.rows = Some(RowsCache {
                 library: state.library.clone(),
@@ -127,6 +134,23 @@ impl LibraryUi {
             });
         }
         self.rows.as_ref().map_or(&[], |c| c.rows.as_slice())
+    }
+
+    /// The selected tracks in the table's order.
+    pub(crate) fn selected_in_order(&self) -> Vec<TrackId> {
+        let rows = self.rows.as_ref().map_or(&[][..], |c| c.rows.as_slice());
+        selected_among(rows, &self.selected)
+    }
+
+    /// What a right-click or a drag on the row of `track` acts on: the
+    /// selection when the row is in it; else the row alone, which becomes
+    /// the selection.
+    pub(crate) fn take_row(&mut self, track: TrackId) -> Vec<TrackId> {
+        if !self.selected.contains(&track) {
+            self.selected = vec![track];
+            self.anchor = Some(track);
+        }
+        self.selected_in_order()
     }
 
     /// A click on the row of `track` among `rows` (track library spec §7.4):
@@ -165,6 +189,18 @@ impl LibraryUi {
         }
         self.anchor = Some(track);
     }
+}
+
+/// The tracks of `rows` that are in `selected`, in the order of `rows`.
+pub(crate) fn selected_among(rows: &[TrackId], selected: &[TrackId]) -> Vec<TrackId> {
+    if selected.is_empty() {
+        return Vec::new();
+    }
+    let selected: HashSet<TrackId> = selected.iter().copied().collect();
+    rows.iter()
+        .copied()
+        .filter(|r| selected.contains(r))
+        .collect()
 }
 
 /// A drag of an edge of the table's columns.
