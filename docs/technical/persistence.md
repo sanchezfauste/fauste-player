@@ -102,10 +102,21 @@ the other rows are unaffected, and the repaired state is written back.
 
 A `Snapshot` is the part of the `AppState` that is saved. The store keeps
 the last one it wrote, and `write_changes` writes only the rows that differ
-from it, in one transaction, so a marker edit updates one track's row. The
-first save after a load or a failed save writes everything (`write_full`).
-All database work runs on the services thread, never on the interface or
-the audio thread.
+from it, in one transaction, so a marker edit updates one track's row.
+`write_full` runs only when there is no baseline: an unopened store, a repair
+at load that could not be written back, or a disabled disk. After a load the
+baseline is the snapshot just read, and a failed save keeps the old baseline,
+so the next save writes the difference. `Store::load` (import, check, read)
+runs on the start-up thread before the interface loop; every save runs on the
+services thread. Neither runs on the interface or the audio thread while
+playing. A failed save leaves the state dirty and the services thread retries
+it at its next autosave step.
+
+A database file that is missing while a backup exists is not recreated: the
+open restores the first usable backup (with a warning), so the next backup
+rotation cannot push the real backups out. A track row that cannot be read is
+dropped together with the playlist entries that pointed to it (one warning per
+playlist), so the repaired snapshot is consistent when it is written back.
 
 ### Backups (`db/backup.rs`)
 
