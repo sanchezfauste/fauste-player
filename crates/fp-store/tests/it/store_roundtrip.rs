@@ -798,3 +798,59 @@ fn when_no_backup_is_readable_the_disk_is_left_alone_for_the_session() {
         .collect();
     assert_eq!(backups_before, backups_after);
 }
+
+/// The main file and its side files, removed.
+fn remove_main_database(s: &Store) {
+    let main = s.paths().database_file();
+    for suffix in ["", "-wal", "-shm"] {
+        let mut name = main.as_os_str().to_owned();
+        name.push(suffix);
+        let _ = fs::remove_file(PathBuf::from(name));
+    }
+}
+
+#[test]
+fn a_missing_database_is_restored_from_its_backup() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    assert!(bak(&s, 1).exists());
+    let kept = fs::read(bak(&s, 1)).unwrap();
+    remove_main_database(&s);
+    let loaded = s.load("Main");
+    assert_eq!(loaded.state.library, state.library);
+    assert_eq!(loaded.state.playlists, state.playlists);
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|w| w.contains("missing") && w.contains("backup")),
+        "{:?}",
+        loaded.warnings
+    );
+    // A save in this session rotates the backups; the restored content
+    // must still be among them, not pushed out by an empty database.
+    let now = std::time::Instant::now();
+    s.save_state(&loaded.state, |_| 0.0, now).unwrap();
+    let still_there = (1..=3).any(|n| fs::read(bak(&s, n)).is_ok_and(|b| b == kept));
+    assert!(still_there, "the old backup was rotated away");
+}
+
+#[test]
+fn a_database_that_could_not_be_opened_is_never_created_by_a_later_save() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    // The data directory cannot be created: a file is in its way.
+    let data_dir = s.paths().data_dir.clone();
+    fs::create_dir_all(data_dir.parent().unwrap()).unwrap();
+    fs::write(&data_dir, b"in the way").unwrap();
+    let loaded = s.load("Main");
+    assert!(!loaded.warnings.is_empty());
+    fs::remove_file(&data_dir).unwrap();
+    let state = AppState::new(Config::default(), "Main");
+    let _ = s.save_state(&state, |_| 0.0, std::time::Instant::now());
+    assert!(
+        !s.paths().database_file().exists(),
+        "a save reopened the database after a failed open"
+    );
+}

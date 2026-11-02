@@ -141,6 +141,9 @@ impl Store {
             }
             Err(e) => {
                 warnings.push(format!("database: {e}; starting with the defaults"));
+                // Never reopen it later: a save would write the defaults
+                // over whatever is at the main path.
+                self.disk = DiskState::Disabled;
                 Snapshot::default()
             }
         }

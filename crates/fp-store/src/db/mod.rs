@@ -81,6 +81,7 @@ impl Db {
     /// Opens (creating it when missing) the database at `path`, checks its
     /// integrity and brings its schema up to [`SCHEMA_VERSION`].
     pub fn open(path: &Path) -> Result<Db, OpenError> {
+        let mut checked = None;
         if path.exists() {
             // Look at the file read-only first: opening it for writing can
             // already delete a leftover `-wal`, and bytes we cannot read must
@@ -91,20 +92,27 @@ impl Db {
             )
             .map_err(classify)?;
             probe.busy_timeout(BUSY_TIMEOUT).map_err(classify)?;
-            check(&probe)?;
+            checked = Some(check(&probe)?);
         }
         let conn = Connection::open(path).map_err(classify)?;
-        Self::prepare(conn, path, true)
+        Self::prepare(conn, path, true, checked)
     }
 
     /// A new in-memory database (nothing persists), for when no file can be
     /// used. `path` is only the name the database stands for.
     pub(crate) fn in_memory(path: &Path) -> Result<Db, OpenError> {
         let conn = Connection::open_in_memory().map_err(classify)?;
-        Self::prepare(conn, path, false)
+        Self::prepare(conn, path, false, None)
     }
 
-    fn prepare(mut conn: Connection, path: &Path, wal: bool) -> Result<Db, OpenError> {
+    /// `checked` is the schema version when the file was already checked
+    /// (by the read-only probe of [`Db::open`]); otherwise it is checked here.
+    fn prepare(
+        mut conn: Connection,
+        path: &Path,
+        wal: bool,
+        checked: Option<u32>,
+    ) -> Result<Db, OpenError> {
         // Wait this long for another connection's lock instead of failing
         // at once with "database is locked".
         conn.busy_timeout(BUSY_TIMEOUT).map_err(classify)?;
@@ -112,7 +120,10 @@ impl Db {
             .map_err(classify)?;
         conn.pragma_update(None, "synchronous", "NORMAL")
             .map_err(classify)?;
-        let version = check(&conn)?;
+        let version = match checked {
+            Some(version) => version,
+            None => check(&conn)?,
+        };
         // Only now, with the file known to be ours, may it be written to.
         if wal {
             let mode: String = conn
@@ -276,6 +287,14 @@ pub fn open_with_fallback(path: &Path, backups: usize) -> Result<Opened, OpenErr
     let fail = |warnings: &mut Vec<String>, what: &str, e: &OpenError| {
         warnings.push(format!("{}: {what}: {e}", path.display()));
     };
+    if !path.exists() && (1..=backups).any(|n| backup_path(path, n).exists()) {
+        // A new file here would rotate the backups away: restore instead.
+        warnings.push(format!(
+            "{}: the database file is missing; restoring from a backup",
+            path.display()
+        ));
+        return from_backups(path, backups, warnings);
+    }
     match Db::open(path) {
         Ok(db) => {
             return Ok(Opened {
@@ -388,7 +407,7 @@ pub(crate) fn reopen_after_unreadable(
 /// The last resort: an in-memory database that stands for `path`.
 fn in_memory(path: &Path, mut warnings: Vec<String>) -> Result<Opened, OpenError> {
     warnings.push(format!(
-        "{}: using a temporary in-memory database; nothing will be saved",
+        "{}: using a temporary in-memory database; changes are not saved this session",
         path.display()
     ));
     let db = Db::in_memory(path)?;
