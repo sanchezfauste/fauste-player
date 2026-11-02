@@ -19,7 +19,7 @@ use super::app::{Scene, ViewState};
 use super::panels;
 use super::theme;
 use super::widgets::{self, font, font_semibold};
-use state::{Grip, LibraryUi, LiveRect, LiveTree};
+use state::{Grip, LibraryUi, LiveRect, LiveTree, Pending};
 
 /// The height of the window's title bar.
 pub(crate) const TITLE_BAR_HEIGHT: f32 = 28.0;
@@ -46,8 +46,8 @@ pub(crate) fn default_rect(area: Rect) -> Rect {
 /// `rect` brought inside `area`: at least the least size (but no larger
 /// than the area), then moved in until no part of it is outside.
 pub(crate) fn clamp_rect(rect: Rect, area: Rect) -> Rect {
-    let w = rect.width().max(MIN_SIZE.x).min(area.width());
-    let h = rect.height().max(MIN_SIZE.y).min(area.height());
+    let w = rect.width().max(MIN_SIZE.x).min(area.width().max(0.0));
+    let h = rect.height().max(MIN_SIZE.y).min(area.height().max(0.0));
     let x = rect.left().min(area.right() - w).max(area.left());
     let y = rect.top().min(area.bottom() - h).max(area.top());
     Rect::from_min_size(pos2(x, y), vec2(w, h))
@@ -108,31 +108,48 @@ fn send(scene: &Scene<'_>, view: LibraryView) {
     scene.ctl.send(Command::SetLibraryView(Box::new(view)));
 }
 
+/// The view to build a send on: the snapshot's, with the rectangle and
+/// tree width of a finished drag the snapshot does not hold yet, so that a
+/// second view sent meanwhile keeps it.
+pub(crate) fn current_view(saved: &LibraryView, library: &LibraryUi) -> LibraryView {
+    let mut view = saved.clone();
+    if let Some(pending) = &library.pending_rect {
+        view.rect = Some(to_saved(pending.value));
+    }
+    if let Some(pending) = &library.pending_tree {
+        view.tree_width = Some(pending.value);
+    }
+    view
+}
+
 /// Opens the window, or closes it (the top bar's Library tile, LB24).
-pub(crate) fn toggle(scene: &Scene<'_>) {
-    let saved = &scene.state.library_view;
+pub(crate) fn toggle(scene: &Scene<'_>, library: &LibraryUi) {
+    let view = current_view(&scene.state.library_view, library);
     send(
         scene,
         LibraryView {
-            open: !saved.open,
-            ..saved.clone()
+            open: !view.open,
+            ..view
         },
     );
 }
 
-/// Forgets a released drag once the snapshot holds what it sent.
+/// Forgets a finished drag's value once the snapshot has moved on from the view
+/// it was sent against (it then holds the drag's view, or a later one).
 fn settle(library: &mut LibraryUi, saved: &LibraryView) {
     if library
-        .live
-        .is_some_and(|l| l.released && saved.rect == Some(to_saved(l.rect)))
+        .pending_rect
+        .as_ref()
+        .is_some_and(|p| *p.sent_against != *saved)
     {
-        library.live = None;
+        library.pending_rect = None;
     }
     if library
-        .live_tree
-        .is_some_and(|t| t.released && saved.tree_width == Some(t.width))
+        .pending_tree
+        .as_ref()
+        .is_some_and(|p| *p.sent_against != *saved)
     {
-        library.live_tree = None;
+        library.pending_tree = None;
     }
 }
 
@@ -143,20 +160,24 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
     let area = match view_state.middle {
         Some(area) if saved.open && !view_state.phone_active => area,
         _ => {
-            view_state.library.live = None;
-            view_state.library.live_tree = None;
+            let library = &mut view_state.library;
+            library.live = None;
+            library.live_tree = None;
+            library.pending_rect = None;
+            library.pending_tree = None;
             return;
         }
     };
     settle(&mut view_state.library, saved);
     // LB26: the saved rectangle is drawn inside the area, whatever it says.
-    let normal = match view_state.library.live {
-        Some(live) => live.rect,
-        None => clamp_rect(
-            saved.rect.map_or_else(|| default_rect(area), from_saved),
-            area,
-        ),
-    };
+    let normal = clamp_rect(
+        match (&view_state.library.live, &view_state.library.pending_rect) {
+            (Some(live), _) => live.rect,
+            (None, Some(pending)) => pending.value,
+            (None, None) => saved.rect.map_or_else(|| default_rect(area), from_saved),
+        },
+        area,
+    );
     let base = if saved.maximised { area } else { normal };
     let shown = if saved.minimised {
         Rect::from_min_size(base.min, vec2(base.width(), TITLE_BAR_HEIGHT))
@@ -209,7 +230,7 @@ fn title_bar(
     title: &str,
     movable: bool,
 ) {
-    let saved = &scene.state.library_view;
+    let saved = &current_view(&scene.state.library_view, &view_state.library);
     let bar = Rect::from_min_size(shown.min, vec2(shown.width(), TITLE_BAR_HEIGHT));
     let painter = ui.painter();
     painter.rect_filled(bar, 0.0, theme::NEUTRAL_900);
@@ -393,15 +414,10 @@ fn grip_drag(
                 start: normal,
                 origin,
                 rect: normal,
-                released: false,
             });
         }
     }
-    let Some(live) = library
-        .live
-        .as_mut()
-        .filter(|l| l.grip == grip && !l.released)
-    else {
+    let Some(live) = library.live.as_mut().filter(|l| l.grip == grip) else {
         return;
     };
     if !(response.dragged() || response.drag_stopped()) {
@@ -415,18 +431,17 @@ fn grip_drag(
     }
     if response.drag_stopped() {
         // A press without a move (a click) changes nothing.
-        if live.rect == live.start {
-            library.live = None;
+        let (rect, start) = (live.rect, live.start);
+        library.live = None;
+        if rect == start {
             return;
         }
-        live.released = true;
-        send(
-            scene,
-            LibraryView {
-                rect: Some(to_saved(live.rect)),
-                ..scene.state.library_view.clone()
-            },
-        );
+        let saved = &scene.state.library_view;
+        library.pending_rect = Some(Pending {
+            value: rect,
+            sent_against: Box::new(saved.clone()),
+        });
+        send(scene, current_view(saved, library));
     }
 }
 
@@ -445,6 +460,7 @@ fn split(
         .library
         .live_tree
         .map(|t| t.width)
+        .or(view_state.library.pending_tree.as_ref().map(|p| p.value))
         .or(saved.tree_width)
         .unwrap_or(DEFAULT_TREE_WIDTH);
     let width = tree_width(wanted, body.width());
@@ -497,10 +513,9 @@ fn splitter(ui: &mut Ui, scene: &Scene<'_>, library: &mut LibraryUi, body: Rect,
             start: width,
             origin: origin.x,
             width,
-            released: false,
         });
     }
-    let Some(live) = library.live_tree.as_mut().filter(|t| !t.released) else {
+    let Some(live) = library.live_tree.as_mut() else {
         return;
     };
     if !(response.dragged() || response.drag_stopped()) {
@@ -513,18 +528,17 @@ fn splitter(ui: &mut Ui, scene: &Scene<'_>, library: &mut LibraryUi, body: Rect,
         live.width = tree_width(live.start + pointer.x - live.origin, body.width());
     }
     if response.drag_stopped() {
-        if live.width == live.start {
-            library.live_tree = None;
+        let (width, start) = (live.width, live.start);
+        library.live_tree = None;
+        if width == start {
             return;
         }
-        live.released = true;
-        send(
-            scene,
-            LibraryView {
-                tree_width: Some(live.width),
-                ..scene.state.library_view.clone()
-            },
-        );
+        let saved = &scene.state.library_view;
+        library.pending_tree = Some(Pending {
+            value: width,
+            sent_against: Box::new(saved.clone()),
+        });
+        send(scene, current_view(saved, library));
     }
 }
 

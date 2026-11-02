@@ -6,6 +6,7 @@ use std::sync::Arc;
 
 use egui::{Pos2, Rect};
 use fp_model::library_search::SearchIndex;
+use fp_model::library_view::LibraryView;
 use fp_model::{Library, TrackId};
 
 /// The library window's runtime state, in `ViewState::library`.
@@ -26,11 +27,16 @@ pub(crate) struct LibraryUi {
     /// The dialog the window has open, if any.
     #[expect(dead_code, reason = "the tree and the table (plan 3) read it")]
     pub dialog: Option<LibraryDialog>,
-    /// A move or a resize of the window being dragged, or just released
-    /// and waiting for the snapshot to hold its rectangle.
+    /// A move or a resize of the window being dragged.
     pub(crate) live: Option<LiveRect>,
-    /// The tree's width while its splitter is dragged or just released.
+    /// The tree's splitter being dragged.
     pub(crate) live_tree: Option<LiveTree>,
+    /// The rectangle a finished move or resize sent, until the snapshot
+    /// holds it.
+    pub(crate) pending_rect: Option<Pending<Rect>>,
+    /// The tree width a finished splitter drag sent, until the snapshot
+    /// holds it.
+    pub(crate) pending_tree: Option<Pending<f32>>,
     /// Where the window was drawn in the last frame; `None` while closed.
     pub(crate) drawn: Option<Rect>,
 }
@@ -72,8 +78,6 @@ pub(crate) struct LiveRect {
     pub origin: Pos2,
     /// The rectangle drawn now.
     pub rect: Rect,
-    /// The drag ended and its view was sent.
-    pub released: bool,
 }
 
 /// A drag of the splitter between the tree and the table.
@@ -84,5 +88,14 @@ pub(crate) struct LiveTree {
     /// Where the pointer was pressed, across.
     pub origin: f32,
     pub width: f32,
-    pub released: bool,
+}
+
+/// A value a finished drag sent, drawn and built on until the snapshot
+/// holds it.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Pending<T> {
+    pub value: T,
+    /// The snapshot's view when the value was sent: once the snapshot
+    /// differs from it, the snapshot has caught up.
+    pub sent_against: Box<LibraryView>,
 }

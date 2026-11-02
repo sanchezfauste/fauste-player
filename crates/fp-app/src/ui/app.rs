@@ -2032,7 +2032,7 @@ fn top_bar(
     }
     // RL15: the panel tiles and the layout menu, on the left, 12 points
     // clear of the right-hand block.
-    panels::layout_controls(ui, scene, right_edge - 12.0);
+    panels::layout_controls(ui, scene, &view_state.library, right_edge - 12.0);
 }
 
 /// The top bar's right-hand block, laid out from the right end: the clock,

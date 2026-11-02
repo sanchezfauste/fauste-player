@@ -768,4 +768,4 @@ library-window-minimise = Minimize library
 library-window-expand = Expand library
 library-window-maximise = Maximize library
 library-window-restore = Restore library
-library-window-close = Close library
+library-window-close = Close the library

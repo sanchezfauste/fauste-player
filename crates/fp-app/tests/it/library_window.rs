@@ -25,7 +25,7 @@ const MINIMISE: &str = "Minimize library";
 const EXPAND: &str = "Expand library";
 const MAXIMISE: &str = "Maximize library";
 const RESTORE: &str = "Restore library";
-const CLOSE: &str = "Close library";
+const CLOSE: &str = "Close the library";
 /// The title bar's height.
 const TITLE_BAR: f32 = 28.0;
 
@@ -41,6 +41,21 @@ fn open() -> LibraryView {
         open: true,
         ..LibraryView::default()
     }
+}
+
+/// The window's Close button (the open tile reads the same).
+fn close_button<'a>(h: &'a Harness<'_, AppUi>) -> egui_kittest::Node<'a> {
+    let window = h.state().library_rect().unwrap();
+    h.query_all_by_label(CLOSE)
+        .find(|n| window.contains_rect(n.rect()))
+        .expect("the window's Close button")
+}
+
+/// The Library tile while the window is open.
+fn open_tile<'a>(h: &'a Harness<'_, AppUi>) -> egui_kittest::Node<'a> {
+    h.query_all_by_label(CLOSE_TILE)
+        .find(|n| n.rect().top() < 42.0)
+        .expect("the Library tile")
 }
 
 /// The library views sent since the last call.
@@ -97,7 +112,7 @@ fn the_library_tile_opens_and_closes_the_window() {
         "the window shows its title"
     );
     assert!(h.query_by_label(OPEN).is_none(), "the tile now closes it");
-    h.get_by_label(CLOSE_TILE).click();
+    open_tile(&h).click();
     h.run_steps(2);
     let sent = views(&fake);
     assert_eq!(sent.len(), 1, "{sent:?}");
@@ -111,7 +126,7 @@ fn the_tile_is_not_on_a_phone() {
     assert!(h.query_by_label(OPEN).is_none());
     assert!(h.query_by_label(CLOSE_TILE).is_none());
     assert!(h.query_by_label(TITLE).is_none(), "no window on a phone");
-    assert!(h.query_by_label(CLOSE).is_none());
+    assert!(h.query_all_by_label(CLOSE).next().is_none());
 }
 
 #[test]
@@ -195,7 +210,7 @@ fn the_default_placement_is_centred_at_seventy_percent() {
 #[test]
 fn close_closes_the_window() {
     let (mut h, fake) = harness(with_view(open()));
-    h.get_by_label(CLOSE).click();
+    close_button(&h).click();
     h.run_steps(2);
     let sent = views(&fake);
     assert_eq!(sent.len(), 1, "{sent:?}");
@@ -273,4 +288,52 @@ fn dragging_the_splitter_sends_the_tree_width() {
     let sent = views(&fake);
     assert_eq!(sent.len(), 1, "{sent:?}");
     assert_eq!(sent[0].tree_width, Some(270.0));
+}
+
+#[test]
+fn a_view_sent_before_the_snapshot_catches_up_keeps_the_moved_rect() {
+    let view = LibraryView {
+        rect: Some([100.0, 100.0, 500.0, 360.0]),
+        ..open()
+    };
+    let (mut h, fake) = harness(with_view(view));
+    fake.take_sent();
+    // The snapshot lags behind every command from here on.
+    fake.hold.store(true, std::sync::atomic::Ordering::SeqCst);
+    let window = h.state().library_rect().unwrap();
+    let from = pos2(window.left() + 200.0, window.top() + TITLE_BAR / 2.0);
+    drag(&mut h, from, from + vec2(60.0, 40.0));
+    assert_eq!(h.state().library_rect().unwrap().min, pos2(160.0, 140.0));
+    h.get_by_label(MINIMISE).click();
+    h.run_steps(2);
+    let sent = views(&fake);
+    assert_eq!(sent.len(), 2, "{sent:?}");
+    assert_eq!(sent[1].rect, Some([160.0, 140.0, 500.0, 360.0]));
+    assert!(sent[1].minimised);
+}
+
+#[test]
+fn a_view_sent_before_the_snapshot_catches_up_keeps_the_tree_width() {
+    let (mut h, fake) = harness(with_view(open()));
+    fake.take_sent();
+    fake.hold.store(true, std::sync::atomic::Ordering::SeqCst);
+    let window = h.state().library_rect().unwrap();
+    let from = pos2(window.left() + 1.0 + 223.0, window.center().y);
+    drag(&mut h, from, from + vec2(50.0, 0.0));
+    h.get_by_label(MAXIMISE).click();
+    h.run_steps(2);
+    let sent = views(&fake);
+    assert_eq!(sent.len(), 2, "{sent:?}");
+    assert_eq!(sent[1].tree_width, Some(270.0));
+    assert!(sent[1].maximised);
+}
+
+#[test]
+fn a_main_window_smaller_than_the_least_size_holds_the_window() {
+    let (h, _) = harness_sized(with_view(open()), vec2(420.0, 300.0), |ui| ui);
+    // 420 × 300 less kittest's 8-point margin, less the top bar (34) and
+    // the status bar (24).
+    let middle = Rect::from_min_max(pos2(8.0, 42.0), pos2(412.0, 268.0));
+    let window = h.state().library_rect().unwrap();
+    assert!(middle.contains_rect(window), "{window:?} in {middle:?}");
 }

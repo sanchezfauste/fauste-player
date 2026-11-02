@@ -232,7 +232,12 @@ const LAYOUT_BUTTON_ROOM: f32 = 4.0 + 4.0 + 24.0;
 /// menu. The tiles never reach `right` (where the clock and the buttons on
 /// the right begin): past it they scroll sideways, and the layout button
 /// stays outside the scroll, always reachable.
-pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>, right: f32) {
+pub(crate) fn layout_controls(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    library: &super::library::state::LibraryUi,
+    right: f32,
+) {
     // Centred on the bar's middle line, as the buttons on the right: the
     // tiles are not placed at the cursor's top.
     let bar = ui.max_rect();
@@ -265,7 +270,7 @@ pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>, right: f32) {
                     }
                     let name = t.tr("layout-panel-carts");
                     panel_tile(ui, scene, &context, Panel::Cartwall, &name);
-                    library_tile(ui, scene);
+                    library_tile(ui, scene, library);
                 });
             });
         ui.add_space(4.0);
@@ -366,7 +371,7 @@ fn tile_width(ui: &Ui, name: &str) -> f32 {
 
 /// LB24: the Library tile opens and closes the library window; it is lit
 /// while the window is open. The layout lock does not apply to it.
-fn library_tile(ui: &mut Ui, scene: &Scene<'_>) {
+fn library_tile(ui: &mut Ui, scene: &Scene<'_>, library: &super::library::state::LibraryUi) {
     let t = scene.i18n;
     let open = scene.state.library_view.open;
     let name = t.tr("top-library");
@@ -381,7 +386,7 @@ fn library_tile(ui: &mut Ui, scene: &Scene<'_>) {
     })
     .clicked()
     {
-        super::library::toggle(scene);
+        super::library::toggle(scene, library);
     }
 }
 
