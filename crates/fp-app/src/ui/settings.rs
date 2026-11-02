@@ -17,7 +17,7 @@ use fp_model::{
 
 use super::app::Scene;
 
-mod carts;
+pub(crate) mod carts;
 mod columns;
 mod devices;
 mod keys;

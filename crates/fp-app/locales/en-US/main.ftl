@@ -769,3 +769,56 @@ library-window-expand = Expand library
 library-window-maximise = Maximize library
 library-window-restore = Restore library
 library-window-close = Close the library
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categories
+library-tree-new = New category
+library-tree-all = All tracks
+library-tree-uncategorised = Uncategorised
+library-tree-expand = Expand { $name }
+library-tree-collapse = Collapse { $name }
+library-menu-new-subcategory = New subcategory…
+library-menu-rename = Rename…
+library-menu-colour = Colour
+library-menu-kind = Kind
+library-menu-delete = Delete…
+kind-music = Music
+kind-jingle = Jingle
+kind-effect = Effect
+kind-ad = Ad
+kind-voice = Voice
+library-dialog-new-title = New category
+library-dialog-new-sub-title = New subcategory of “{ $parent }”
+library-dialog-rename-title = Rename “{ $name }”
+library-dialog-name = Name
+library-dialog-colour = Colour
+library-dialog-kind = Kind
+library-dialog-kind-hint = The kind is what tracks take when they join the category; changing it later leaves the tracks already in it as they are.
+library-dialog-cancel = Cancel
+library-dialog-create = Create
+library-dialog-rename = Rename
+library-delete-title = Delete “{ $name }”?
+library-delete-subcategories = { $count ->
+    [one] Its { $count } subcategory is deleted with it.
+   *[other] Its { $count } subcategories are deleted with it.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } track is removed from the library.
+   *[other] { $count } tracks are removed from the library.
+}
+library-delete-no-tracks = No track is removed from the library.
+library-delete-files-kept = The files themselves are not deleted.
+library-delete-confirm = Delete
+library-remove-title = { $count ->
+    [one] Remove { $count } track from the library?
+   *[other] Remove { $count } tracks from the library?
+}
+library-remove-confirm = Remove
+library-used-title = These tracks are in use
+library-used-body = { $entries ->
+    [one] { $entries } playlist entry
+   *[other] { $entries } playlist entries
+} and { $carts ->
+    [one] { $carts } cart
+   *[other] { $carts } carts
+} use these tracks. The entries are removed from their playlists and the carts are emptied.
+library-used-confirm = Remove anyway

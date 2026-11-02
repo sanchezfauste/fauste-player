@@ -769,3 +769,56 @@ library-window-expand = Expandir a biblioteca
 library-window-maximise = Maximizar a biblioteca
 library-window-restore = Restaurar a biblioteca
 library-window-close = Fechar a biblioteca
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categorias
+library-tree-new = Nova categoria
+library-tree-all = Todas as faixas
+library-tree-uncategorised = Sem categoria
+library-tree-expand = Expandir { $name }
+library-tree-collapse = Recolher { $name }
+library-menu-new-subcategory = Nova subcategoria…
+library-menu-rename = Mudar o nome…
+library-menu-colour = Cor
+library-menu-kind = Tipo
+library-menu-delete = Eliminar…
+kind-music = Música
+kind-jingle = Jingle
+kind-effect = Efeito
+kind-ad = Anúncio
+kind-voice = Voz
+library-dialog-new-title = Nova categoria
+library-dialog-new-sub-title = Nova subcategoria de «{ $parent }»
+library-dialog-rename-title = Mudar o nome de «{ $name }»
+library-dialog-name = Nome
+library-dialog-colour = Cor
+library-dialog-kind = Tipo
+library-dialog-kind-hint = As faixas assumem o tipo da categoria quando entram nela; alterá-lo depois não muda as faixas que já lá estão.
+library-dialog-cancel = Cancelar
+library-dialog-create = Criar
+library-dialog-rename = Mudar o nome
+library-delete-title = Eliminar «{ $name }»?
+library-delete-subcategories = { $count ->
+    [one] A sua { $count } subcategoria é eliminada com ela.
+   *[other] As suas { $count } subcategorias são eliminadas com ela.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } faixa é removida da biblioteca.
+   *[other] { $count } faixas são removidas da biblioteca.
+}
+library-delete-no-tracks = Nenhuma faixa é removida da biblioteca.
+library-delete-files-kept = Os ficheiros não são apagados.
+library-delete-confirm = Eliminar
+library-remove-title = { $count ->
+    [one] Remover { $count } faixa da biblioteca?
+   *[other] Remover { $count } faixas da biblioteca?
+}
+library-remove-confirm = Remover
+library-used-title = Estas faixas estão em uso
+library-used-body = { $entries ->
+    [one] { $entries } entrada de lista
+   *[other] { $entries } entradas de listas
+} e { $carts ->
+    [one] { $carts } cart usam
+   *[other] { $carts } carts usam
+} estas faixas. As entradas são removidas das suas listas e os carts são esvaziados.
+library-used-confirm = Remover mesmo assim

@@ -769,3 +769,56 @@ library-window-expand = Desplegar la biblioteca
 library-window-maximise = Maximizar la biblioteca
 library-window-restore = Restaurar la biblioteca
 library-window-close = Cerrar la biblioteca
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categorías
+library-tree-new = Nueva categoría
+library-tree-all = Todas las pistas
+library-tree-uncategorised = Sin categoría
+library-tree-expand = Desplegar { $name }
+library-tree-collapse = Plegar { $name }
+library-menu-new-subcategory = Nueva subcategoría…
+library-menu-rename = Cambiar nombre…
+library-menu-colour = Color
+library-menu-kind = Tipo
+library-menu-delete = Eliminar…
+kind-music = Música
+kind-jingle = Jingle
+kind-effect = Efecto
+kind-ad = Anuncio
+kind-voice = Voz
+library-dialog-new-title = Nueva categoría
+library-dialog-new-sub-title = Nueva subcategoría de «{ $parent }»
+library-dialog-rename-title = Cambiar el nombre de «{ $name }»
+library-dialog-name = Nombre
+library-dialog-colour = Color
+library-dialog-kind = Tipo
+library-dialog-kind-hint = Las pistas toman el tipo de la categoría al entrar en ella; si lo cambias después, las pistas que ya están en ella no cambian.
+library-dialog-cancel = Cancelar
+library-dialog-create = Crear
+library-dialog-rename = Cambiar nombre
+library-delete-title = ¿Eliminar «{ $name }»?
+library-delete-subcategories = { $count ->
+    [one] Su { $count } subcategoría se elimina con ella.
+   *[other] Sus { $count } subcategorías se eliminan con ella.
+}
+library-delete-tracks = { $count ->
+    [one] Se quita { $count } pista de la biblioteca.
+   *[other] Se quitan { $count } pistas de la biblioteca.
+}
+library-delete-no-tracks = No se quita ninguna pista de la biblioteca.
+library-delete-files-kept = Los archivos no se borran.
+library-delete-confirm = Eliminar
+library-remove-title = { $count ->
+    [one] ¿Quitar { $count } pista de la biblioteca?
+   *[other] ¿Quitar { $count } pistas de la biblioteca?
+}
+library-remove-confirm = Quitar
+library-used-title = Estas pistas se están usando
+library-used-body = { $entries ->
+    [one] { $entries } entrada de lista
+   *[other] { $entries } entradas de listas
+} y { $carts ->
+    [one] { $carts } cart usan
+   *[other] { $carts } carts usan
+} estas pistas. Las entradas se quitan de sus listas y los carts se vacían.
+library-used-confirm = Quitar igualmente

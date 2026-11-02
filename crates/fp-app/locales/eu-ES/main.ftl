@@ -769,3 +769,56 @@ library-window-expand = Zabaldu liburutegia
 library-window-maximise = Maximizatu liburutegia
 library-window-restore = Leheneratu liburutegia
 library-window-close = Itxi liburutegia
+# The library's category tree (track library spec §7.3)
+library-tree-title = Kategoriak
+library-tree-new = Kategoria berria
+library-tree-all = Pista guztiak
+library-tree-uncategorised = Kategoriarik gabe
+library-tree-expand = Zabaldu { $name }
+library-tree-collapse = Tolestu { $name }
+library-menu-new-subcategory = Azpikategoria berria…
+library-menu-rename = Aldatu izena…
+library-menu-colour = Kolorea
+library-menu-kind = Mota
+library-menu-delete = Ezabatu…
+kind-music = Musika
+kind-jingle = Jingle
+kind-effect = Efektua
+kind-ad = Iragarkia
+kind-voice = Ahotsa
+library-dialog-new-title = Kategoria berria
+library-dialog-new-sub-title = «{ $parent }» kategoriaren azpikategoria berria
+library-dialog-rename-title = Aldatu «{ $name }» kategoriaren izena
+library-dialog-name = Izena
+library-dialog-colour = Kolorea
+library-dialog-kind = Mota
+library-dialog-kind-hint = Pistek kategoriaren mota hartzen dute bertan sartzean; geroago aldatzen baduzu, lehendik dauden pistak ez dira aldatzen.
+library-dialog-cancel = Utzi
+library-dialog-create = Sortu
+library-dialog-rename = Aldatu izena
+library-delete-title = «{ $name }» ezabatu?
+library-delete-subcategories = { $count ->
+    [one] Bere { $count } azpikategoria ere ezabatzen da.
+   *[other] Bere { $count } azpikategoriak ere ezabatzen dira.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } pista kentzen da liburutegitik.
+   *[other] { $count } pista kentzen dira liburutegitik.
+}
+library-delete-no-tracks = Ez da pistarik kentzen liburutegitik.
+library-delete-files-kept = Fitxategiak ez dira ezabatzen.
+library-delete-confirm = Ezabatu
+library-remove-title = { $count ->
+    [one] { $count } pista kendu liburutegitik?
+   *[other] { $count } pista kendu liburutegitik?
+}
+library-remove-confirm = Kendu
+library-used-title = Pista hauek erabiltzen ari dira
+library-used-body = { $entries ->
+    [one] Zerrendetako { $entries } sarrerak
+   *[other] Zerrendetako { $entries } sarrerek
+} eta { $carts ->
+    [one] { $carts } cart-ek
+   *[other] { $carts } cart-ek
+} erabiltzen dituzte pista hauek. Sarrerak beren zerrendetatik kentzen dira eta cart-ak hustu egiten dira.
+library-used-confirm = Kendu hala ere

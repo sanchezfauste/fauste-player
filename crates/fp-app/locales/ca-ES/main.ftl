@@ -769,3 +769,56 @@ library-window-expand = Desplega la biblioteca
 library-window-maximise = Maximitza la biblioteca
 library-window-restore = Restaura la biblioteca
 library-window-close = Tanca la biblioteca
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categories
+library-tree-new = Nova categoria
+library-tree-all = Totes les pistes
+library-tree-uncategorised = Sense categoria
+library-tree-expand = Desplega { $name }
+library-tree-collapse = Plega { $name }
+library-menu-new-subcategory = Nova subcategoria…
+library-menu-rename = Canvia el nom…
+library-menu-colour = Color
+library-menu-kind = Tipus
+library-menu-delete = Elimina…
+kind-music = Música
+kind-jingle = Jingle
+kind-effect = Efecte
+kind-ad = Anunci
+kind-voice = Veu
+library-dialog-new-title = Nova categoria
+library-dialog-new-sub-title = Nova subcategoria de «{ $parent }»
+library-dialog-rename-title = Canvia el nom de «{ $name }»
+library-dialog-name = Nom
+library-dialog-colour = Color
+library-dialog-kind = Tipus
+library-dialog-kind-hint = Les pistes prenen el tipus de la categoria quan hi entren; si el canvies després, les pistes que ja hi són no canvien.
+library-dialog-cancel = Cancel·la
+library-dialog-create = Crea
+library-dialog-rename = Canvia el nom
+library-delete-title = Vols eliminar «{ $name }»?
+library-delete-subcategories = { $count ->
+    [one] La seva { $count } subcategoria s'elimina amb ella.
+   *[other] Les seves { $count } subcategories s'eliminen amb ella.
+}
+library-delete-tracks = { $count ->
+    [one] Es treu { $count } pista de la biblioteca.
+   *[other] Es treuen { $count } pistes de la biblioteca.
+}
+library-delete-no-tracks = No es treu cap pista de la biblioteca.
+library-delete-files-kept = Els fitxers no s'esborren.
+library-delete-confirm = Elimina
+library-remove-title = { $count ->
+    [one] Vols treure { $count } pista de la biblioteca?
+   *[other] Vols treure { $count } pistes de la biblioteca?
+}
+library-remove-confirm = Treu
+library-used-title = Aquestes pistes s'estan fent servir
+library-used-body = { $entries ->
+    [one] { $entries } entrada de llista
+   *[other] { $entries } entrades de llistes
+} i { $carts ->
+    [one] { $carts } cart fan servir
+   *[other] { $carts } carts fan servir
+} aquestes pistes. Les entrades es treuen de les llistes i els carts es buiden.
+library-used-confirm = Treu igualment

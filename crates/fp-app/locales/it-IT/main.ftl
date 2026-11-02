@@ -769,3 +769,56 @@ library-window-expand = Espandi la libreria
 library-window-maximise = Ingrandisci la libreria
 library-window-restore = Ripristina la libreria
 library-window-close = Chiudi la libreria
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categorie
+library-tree-new = Nuova categoria
+library-tree-all = Tutti i brani
+library-tree-uncategorised = Senza categoria
+library-tree-expand = Espandi { $name }
+library-tree-collapse = Comprimi { $name }
+library-menu-new-subcategory = Nuova sottocategoria…
+library-menu-rename = Rinomina…
+library-menu-colour = Colore
+library-menu-kind = Tipo
+library-menu-delete = Elimina…
+kind-music = Musica
+kind-jingle = Jingle
+kind-effect = Effetto
+kind-ad = Pubblicità
+kind-voice = Voce
+library-dialog-new-title = Nuova categoria
+library-dialog-new-sub-title = Nuova sottocategoria di «{ $parent }»
+library-dialog-rename-title = Rinomina «{ $name }»
+library-dialog-name = Nome
+library-dialog-colour = Colore
+library-dialog-kind = Tipo
+library-dialog-kind-hint = I brani prendono il tipo della categoria quando vi entrano; cambiarlo in seguito non modifica i brani già presenti.
+library-dialog-cancel = Annulla
+library-dialog-create = Crea
+library-dialog-rename = Rinomina
+library-delete-title = Eliminare «{ $name }»?
+library-delete-subcategories = { $count ->
+    [one] La sua { $count } sottocategoria viene eliminata con essa.
+   *[other] Le sue { $count } sottocategorie vengono eliminate con essa.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } brano viene rimosso dalla libreria.
+   *[other] { $count } brani vengono rimossi dalla libreria.
+}
+library-delete-no-tracks = Nessun brano viene rimosso dalla libreria.
+library-delete-files-kept = I file non vengono cancellati.
+library-delete-confirm = Elimina
+library-remove-title = { $count ->
+    [one] Rimuovere { $count } brano dalla libreria?
+   *[other] Rimuovere { $count } brani dalla libreria?
+}
+library-remove-confirm = Rimuovi
+library-used-title = Questi brani sono in uso
+library-used-body = { $entries ->
+    [one] { $entries } voce di playlist
+   *[other] { $entries } voci di playlist
+} e { $carts ->
+    [one] { $carts } cart usano
+   *[other] { $carts } cart usano
+} questi brani. Le voci vengono rimosse dalle loro playlist e i cart vengono svuotati.
+library-used-confirm = Rimuovi comunque

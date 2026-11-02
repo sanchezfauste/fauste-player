@@ -5,9 +5,11 @@
 use std::sync::Arc;
 
 use egui::{Pos2, Rect};
-use fp_model::library_search::SearchIndex;
+use fp_model::library_search::{CategoryCounts, SearchIndex};
 use fp_model::library_view::LibraryView;
-use fp_model::{Library, TrackId};
+use fp_model::{CartColor, Categories, CategoryId, Library, TrackId, TrackKind};
+
+use super::confirm::Removal;
 
 /// The library window's runtime state, in `ViewState::library`.
 #[derive(Default)]
@@ -25,8 +27,11 @@ pub(crate) struct LibraryUi {
     #[expect(dead_code, reason = "the table (plan 3, task 5) reads it")]
     pub rows: Option<RowsCache>,
     /// The dialog the window has open, if any.
-    #[expect(dead_code, reason = "the tree and the table (plan 3) read it")]
     pub dialog: Option<LibraryDialog>,
+    /// The tree's counts, kept until the library or the categories change.
+    pub(crate) counts: Option<CountsCache>,
+    /// The category being dragged in the tree.
+    pub(crate) tree_drag: Option<CategoryId>,
     /// A move or a resize of the window being dragged.
     pub(crate) live: Option<LiveRect>,
     /// The tree's splitter being dragged.
@@ -50,9 +55,45 @@ pub(crate) struct RowsCache {
     pub rows: Vec<TrackId>,
 }
 
+/// The tree's counts and what they were computed from
+/// (`category_counts` walks every category's subtree: not every frame).
+pub(crate) struct CountsCache {
+    pub library: Library,
+    pub categories: Categories,
+    pub counts: CategoryCounts,
+}
+
 /// The dialogs of the library window.
 #[derive(Debug, Clone, PartialEq)]
-pub(crate) enum LibraryDialog {}
+pub(crate) enum LibraryDialog {
+    /// A new category under `parent` (`None`: the top level).
+    NewCategory {
+        parent: Option<CategoryId>,
+        name: String,
+        color: Option<CartColor>,
+        kind: TrackKind,
+        /// The dialog has just opened: its name field takes the focus.
+        fresh: bool,
+    },
+    /// A new name for `category`.
+    RenameCategory {
+        category: CategoryId,
+        name: String,
+        /// The dialog has just opened: the name is selected.
+        fresh: bool,
+    },
+    /// A removal waiting for the operator's answer (LB11, LB17).
+    Removal { removal: Removal, step: RemovalStep },
+}
+
+/// The two questions of a removal (LB11).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RemovalStep {
+    /// The subcategories and the tracks that go.
+    First,
+    /// The playlist entries and the carts that lose their tracks.
+    Second,
+}
 
 /// What a drag on the window's frame does.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

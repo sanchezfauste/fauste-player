@@ -650,7 +650,7 @@ fn grid_slider(ui: &mut Ui, value: &mut u16, max: u16) -> egui::Response {
     )
 }
 
-fn color_key(color: Option<CartColor>) -> &'static str {
+pub(crate) fn color_key(color: Option<CartColor>) -> &'static str {
     match color {
         None => "cart-color-none",
         Some(CartColor::Red) => "cart-color-red",
@@ -667,7 +667,7 @@ fn color_key(color: Option<CartColor>) -> &'static str {
 /// One swatch of the colour row (CC5): a square of the colour, or a
 /// crossed-out square for no colour; the chosen one is outlined. Its name
 /// is the tooltip and the accessible label. Returns whether it was clicked.
-fn swatch(ui: &mut Ui, color: Option<CartColor>, chosen: bool, name: &str) -> bool {
+pub(crate) fn swatch(ui: &mut Ui, color: Option<CartColor>, chosen: bool, name: &str) -> bool {
     const SIZE: f32 = 22.0;
     let (rect, response) = ui.allocate_exact_size(vec2(SIZE, SIZE), egui::Sense::click());
     let label = name.to_owned();

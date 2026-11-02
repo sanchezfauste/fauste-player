@@ -5,7 +5,10 @@
 //! or split drag is drawn here and sent as one `Command::SetLibraryView`
 //! when it ends.
 
+mod category_dialog;
+pub(crate) mod confirm;
 pub(crate) mod state;
+pub(crate) mod tree;
 
 use egui::{
     Align, Align2, CursorIcon, Frame, Id, Layout, Rect, Response, Sense, Stroke, Ui, UiBuilder,
@@ -543,7 +546,16 @@ fn splitter(ui: &mut Ui, scene: &Scene<'_>, library: &mut LibraryUi, body: Rect,
 }
 
 /// The category tree (track library spec §7.3).
-fn tree(_ui: &mut Ui, _scene: &Scene<'_>, _view_state: &mut ViewState) {}
+fn tree(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+    tree::category_tree(ui, scene, view_state, tree::TreeMode::Window);
+}
+
+/// The library's dialogs (a category's name, colour and kind) and its
+/// removal questions, over everything else.
+pub(crate) fn dialogs(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
+    category_dialog::draw(ctx, scene, view_state);
+    confirm::draw_confirmations(ctx, scene, view_state);
+}
 
 /// The search field, the Whole library toggle and the table (track library
 /// spec §7.4, §7.5).

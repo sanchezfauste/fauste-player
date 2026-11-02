@@ -220,6 +220,14 @@ pub(crate) struct ViewState {
     dropouts: Dropouts,
 }
 
+impl ViewState {
+    /// Shows `text` in the status bar for a few seconds from `time`, as a
+    /// rejected command's error is shown.
+    pub(crate) fn set_notice(&mut self, text: String, time: f64) {
+        self.notice = Some((text, time + NOTICE_SECS));
+    }
+}
+
 /// Where a dropout was counted.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum DropoutSource {
@@ -627,6 +635,7 @@ impl AppUi {
         if v.exit_guard.take().is_some()
             || v.tag_editor.take().is_some()
             || v.confirm_reset.take().is_some()
+            || v.library.dialog.take().is_some()
             || v.loudness_popup.take().is_some()
         {
             return true;
@@ -1179,6 +1188,9 @@ impl AppUi {
                 }
             }
         }
+        // The library's category dialogs and removal questions (track
+        // library spec §7.3), from its window or from Settings.
+        super::library::dialogs(&ctx, &scene, &mut self.view);
         // O22: Reset played asks before it clears the marks of a playlist.
         if let Some(playlist) = self.view.confirm_reset {
             if state.playlists.get(playlist).is_none() {
@@ -1540,6 +1552,15 @@ impl AppUi {
                 } else {
                     self.view.pending_open = false;
                 }
+            }
+            return;
+        }
+        // A library dialog or question owns the keyboard: Esc cancels it
+        // (consumed, so nothing under it closes on the same press) and no
+        // shortcut acts.
+        if self.view.library.dialog.is_some() {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {
+                self.view.library.dialog = None;
             }
             return;
         }

@@ -769,3 +769,56 @@ library-window-expand = Bibliotheek uitklappen
 library-window-maximise = Bibliotheek maximaliseren
 library-window-restore = Bibliotheek herstellen
 library-window-close = Bibliotheek sluiten
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categorieën
+library-tree-new = Nieuwe categorie
+library-tree-all = Alle nummers
+library-tree-uncategorised = Zonder categorie
+library-tree-expand = { $name } uitklappen
+library-tree-collapse = { $name } inklappen
+library-menu-new-subcategory = Nieuwe subcategorie…
+library-menu-rename = Naam wijzigen…
+library-menu-colour = Kleur
+library-menu-kind = Soort
+library-menu-delete = Verwijderen…
+kind-music = Muziek
+kind-jingle = Jingle
+kind-effect = Effect
+kind-ad = Reclame
+kind-voice = Stem
+library-dialog-new-title = Nieuwe categorie
+library-dialog-new-sub-title = Nieuwe subcategorie van ‘{ $parent }’
+library-dialog-rename-title = Naam van ‘{ $name }’ wijzigen
+library-dialog-name = Naam
+library-dialog-colour = Kleur
+library-dialog-kind = Soort
+library-dialog-kind-hint = Nummers krijgen de soort van de categorie wanneer ze erin komen; wijzig je die later, dan blijven de nummers die er al in zitten ongewijzigd.
+library-dialog-cancel = Annuleren
+library-dialog-create = Maken
+library-dialog-rename = Naam wijzigen
+library-delete-title = ‘{ $name }’ verwijderen?
+library-delete-subcategories = { $count ->
+    [one] De { $count } subcategorie wordt mee verwijderd.
+   *[other] De { $count } subcategorieën worden mee verwijderd.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } nummer wordt uit de bibliotheek gehaald.
+   *[other] { $count } nummers worden uit de bibliotheek gehaald.
+}
+library-delete-no-tracks = Er wordt geen nummer uit de bibliotheek gehaald.
+library-delete-files-kept = De bestanden zelf worden niet verwijderd.
+library-delete-confirm = Verwijderen
+library-remove-title = { $count ->
+    [one] { $count } nummer uit de bibliotheek halen?
+   *[other] { $count } nummers uit de bibliotheek halen?
+}
+library-remove-confirm = Uit bibliotheek halen
+library-used-title = Deze nummers zijn in gebruik
+library-used-body = { $entries ->
+    [one] { $entries } item in een afspeellijst
+   *[other] { $entries } items in afspeellijsten
+} en { $carts ->
+    [one] { $carts } cart gebruiken
+   *[other] { $carts } carts gebruiken
+} deze nummers. De items worden uit hun afspeellijsten verwijderd en de carts worden leeggemaakt.
+library-used-confirm = Toch verwijderen

@@ -790,3 +790,66 @@ library-window-expand = Rozwiń bibliotekę
 library-window-maximise = Maksymalizuj bibliotekę
 library-window-restore = Przywróć bibliotekę
 library-window-close = Zamknij bibliotekę
+# The library's category tree (track library spec §7.3)
+library-tree-title = Kategorie
+library-tree-new = Nowa kategoria
+library-tree-all = Wszystkie utwory
+library-tree-uncategorised = Bez kategorii
+library-tree-expand = Rozwiń { $name }
+library-tree-collapse = Zwiń { $name }
+library-menu-new-subcategory = Nowa podkategoria…
+library-menu-rename = Zmień nazwę…
+library-menu-colour = Kolor
+library-menu-kind = Rodzaj
+library-menu-delete = Usuń…
+kind-music = Muzyka
+kind-jingle = Jingiel
+kind-effect = Efekt
+kind-ad = Reklama
+kind-voice = Głos
+library-dialog-new-title = Nowa kategoria
+library-dialog-new-sub-title = Nowa podkategoria „{ $parent }”
+library-dialog-rename-title = Zmień nazwę „{ $name }”
+library-dialog-name = Nazwa
+library-dialog-colour = Kolor
+library-dialog-kind = Rodzaj
+library-dialog-kind-hint = Utwory przyjmują rodzaj kategorii, gdy do niej trafiają; późniejsza zmiana nie zmienia utworów, które już w niej są.
+library-dialog-cancel = Anuluj
+library-dialog-create = Utwórz
+library-dialog-rename = Zmień nazwę
+library-delete-title = Usunąć „{ $name }”?
+library-delete-subcategories = { $count ->
+    [one] Jej { $count } podkategoria zostanie usunięta razem z nią.
+    [few] Jej { $count } podkategorie zostaną usunięte razem z nią.
+    [many] Jej { $count } podkategorii zostanie usuniętych razem z nią.
+   *[other] Jej { $count } podkategorii zostanie usuniętych razem z nią.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } utwór zostanie usunięty z biblioteki.
+    [few] { $count } utwory zostaną usunięte z biblioteki.
+    [many] { $count } utworów zostanie usuniętych z biblioteki.
+   *[other] { $count } utworu zostanie usuniętych z biblioteki.
+}
+library-delete-no-tracks = Żaden utwór nie zostanie usunięty z biblioteki.
+library-delete-files-kept = Same pliki nie są usuwane.
+library-delete-confirm = Usuń
+library-remove-title = { $count ->
+    [one] Usunąć { $count } utwór z biblioteki?
+    [few] Usunąć { $count } utwory z biblioteki?
+    [many] Usunąć { $count } utworów z biblioteki?
+   *[other] Usunąć { $count } utworu z biblioteki?
+}
+library-remove-confirm = Usuń
+library-used-title = Te utwory są używane
+library-used-body = Te utwory są używane przez { $entries ->
+    [one] { $entries } pozycję na playliście
+    [few] { $entries } pozycje na playlistach
+    [many] { $entries } pozycji na playlistach
+   *[other] { $entries } pozycji na playlistach
+} i { $carts ->
+    [one] { $carts } cart
+    [few] { $carts } carty
+    [many] { $carts } cartów
+   *[other] { $carts } cartu
+}. Pozycje zostaną usunięte z playlist, a carty opróżnione.
+library-used-confirm = Usuń mimo to
