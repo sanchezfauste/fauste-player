@@ -182,7 +182,11 @@ pub fn removal_impact(state: &AppState, tracks: &[TrackId]) -> RemovalImpact {
     for entry in state.playlists.iter().flat_map(|p| p.entries.iter()) {
         if set.contains(&entry.track) {
             impact.entries += 1;
-            if state.is_on_air(entry.id) {
+            let cued = state
+                .players
+                .iter()
+                .any(|p| p.cue.is_some_and(|c| c.entry == entry.id));
+            if state.is_on_air(entry.id) || cued {
                 impact.on_air.entries.push(entry.id);
             }
         }

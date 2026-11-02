@@ -242,3 +242,19 @@ fn deleting_a_category_removes_its_subtree_and_tracks() {
     assert_eq!(s.library.ids(), vec![t[2]]);
     assert_eq!(entries(&s).len(), 1);
 }
+
+#[test]
+fn a_pre_listened_entry_refuses_removal() {
+    let mut s = fixture(2);
+    let t = tracks_of(&s);
+    let e = entries(&s);
+    let p = p0(&s);
+    apply(&mut s, Command::CueEntry(p, e[1]));
+    assert!(s.players[0].cue.is_some());
+    let before = s.clone();
+    match fp_model::apply(&mut s, Command::RemoveTracks(vec![t[1]])) {
+        Err(ModelError::LibraryOnAir(h)) => assert_eq!(h.entries, vec![e[1]]),
+        other => panic!("expected LibraryOnAir, got {other:?}"),
+    }
+    assert_eq!(s, before);
+}
