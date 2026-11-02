@@ -98,9 +98,10 @@ pub struct Read {
 pub fn read_checked(db: &Db) -> Read {
     let mut warnings = Notes::default();
     let conn = &db.conn;
+    let library = read_library(conn, &mut warnings);
     let snapshot = Snapshot {
-        library: read_library(conn, &mut warnings),
-        playlists: read_playlists(conn, &mut warnings),
+        playlists: read_playlists(conn, &library, &mut warnings),
+        library,
         ids: read_kv(conn, KV_IDS, "ids", &mut warnings),
         players: read_players(conn, &mut warnings),
         cartwall: read_kv(conn, KV_CARTWALL, "the cartwall session", &mut warnings),
@@ -235,7 +236,10 @@ fn parse_doc<T: DeserializeOwned>(doc: &SqlValue) -> Result<T, String> {
     serde_json::from_str(text).map_err(|e| e.to_string())
 }
 
-fn read_playlists(conn: &Connection, warnings: &mut Notes) -> Playlists {
+/// Reads the playlists. An entry whose track is not in `library` (its row
+/// was unreadable) is dropped, so the snapshot written back is consistent;
+/// so is an entry whose playlist is missing. One warning per playlist.
+fn read_playlists(conn: &Connection, library: &Library, warnings: &mut Notes) -> Playlists {
     let lists = rows(
         conn,
         "SELECT id, name FROM playlists ORDER BY position, id",
@@ -293,7 +297,24 @@ fn read_playlists(conn: &Connection, warnings: &mut Notes) -> Playlists {
         };
         let mut list = Playlist::new(fp_model::PlaylistId(raw(id)), name);
         list.entries = by_playlist.remove(&id).unwrap_or_default();
+        let before = list.entries.len();
+        list.entries.retain(|e| library.get(e.track).is_some());
+        let dropped = before - list.entries.len();
+        if dropped > 0 {
+            warnings.push(format!(
+                "playlists: {dropped} entries of \"{}\" were dropped: their track cannot be read",
+                list.name
+            ));
+        }
         playlists.add(list);
+    }
+    let mut orphans: Vec<(i64, usize)> =
+        by_playlist.into_iter().map(|(k, v)| (k, v.len())).collect();
+    orphans.sort_unstable();
+    for (playlist, count) in orphans {
+        warnings.push(format!(
+            "playlists: {count} entries of the missing playlist {playlist} were dropped"
+        ));
     }
     playlists
 }

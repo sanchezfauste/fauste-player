@@ -854,3 +854,48 @@ fn a_database_that_could_not_be_opened_is_never_created_by_a_later_save() {
         "a save reopened the database after a failed open"
     );
 }
+
+#[test]
+fn an_unreadable_track_row_does_not_stop_later_saves() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    let track = state.library.ids()[0].0;
+    edit_db(&s, |db| {
+        db.conn()
+            .execute(
+                "UPDATE tracks SET path = X'FF00FE' WHERE id = ?1",
+                [track as i64],
+            )
+            .unwrap();
+    });
+    let mut loaded = s.load("Main");
+    assert!(!loaded.warnings.is_empty());
+    let playlist = loaded.state.playlists.first_id().unwrap();
+    assert!(
+        loaded
+            .state
+            .playlists
+            .get(playlist)
+            .unwrap()
+            .entries
+            .iter()
+            .all(|e| e.track.0 != track),
+        "the dangling entry is gone"
+    );
+    apply(
+        &mut loaded.state,
+        Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths: vec![PathBuf::from("/m/c.flac")],
+        },
+    )
+    .unwrap();
+    s.save_state(&loaded.state, |_| 0.0, std::time::Instant::now())
+        .unwrap();
+    let again = s.load("Main");
+    assert!(again.warnings.is_empty(), "{:?}", again.warnings);
+    assert_eq!(again.state.playlists, loaded.state.playlists);
+    assert_eq!(again.state.library, loaded.state.library);
+}
