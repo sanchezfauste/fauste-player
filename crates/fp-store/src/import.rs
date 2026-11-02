@@ -387,6 +387,7 @@ fn read_documents(paths: &AppPaths, limits: &Limits, warnings: &mut Vec<String>)
     Read {
         snapshot: Snapshot {
             library,
+            categories: Vec::new(),
             playlists,
             ids,
             players,

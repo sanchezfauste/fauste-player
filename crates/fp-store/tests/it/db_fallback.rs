@@ -91,7 +91,7 @@ fn a_newer_database_is_kept_aside() {
     make_db(&path, "future");
     {
         let conn = rusqlite::Connection::open(&path).unwrap();
-        conn.pragma_update(None, "user_version", 2).unwrap();
+        conn.pragma_update(None, "user_version", 3).unwrap();
     }
     let before = fs::read(&path).unwrap();
     let opened = open_with_fallback(&path, 3).unwrap();
@@ -113,7 +113,7 @@ fn without_anything_readable_it_starts_fresh() {
     fs::write(backup_path(&path, 1), vec![0xCD; 4096]).unwrap();
     let opened = open_with_fallback(&path, 3).unwrap();
     assert_eq!(opened.source, DbSource::Fresh);
-    assert_eq!(opened.db.pragma_i64("user_version"), 1);
+    assert_eq!(opened.db.pragma_i64("user_version"), 2);
     assert!(path.exists());
 }
 
@@ -123,7 +123,7 @@ fn an_unopenable_directory_gives_an_in_memory_database() {
     let path = dir.path().join("missing/fauste.db");
     let opened = open_with_fallback(&path, 3).unwrap();
     assert_eq!(opened.source, DbSource::Fresh);
-    assert_eq!(opened.db.pragma_i64("user_version"), 1);
+    assert_eq!(opened.db.pragma_i64("user_version"), 2);
     assert!(!opened.warnings.is_empty());
     assert!(!path.exists());
 }
@@ -228,7 +228,7 @@ fn a_newer_database_in_rollback_journal_mode_is_not_modified() {
     let path = dir.path().join("fauste.db");
     {
         let conn = rusqlite::Connection::open(&path).unwrap();
-        conn.execute_batch("CREATE TABLE t (x); PRAGMA user_version = 2;")
+        conn.execute_batch("CREATE TABLE t (x); PRAGMA user_version = 3;")
             .unwrap();
     }
     let before = fs::read(&path).unwrap();

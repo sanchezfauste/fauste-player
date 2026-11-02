@@ -6,8 +6,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use fp_model::{
-    AppState, CartPage, CartwallSession, IdGen, Layout, Library, PlayerId, PlayerSession, Playlist,
-    PlaylistEntry, Playlists, Track,
+    AppState, CartPage, CartwallSession, Categories, Category, CategoryId, IdGen, Layout, Library,
+    PlayerId, PlayerSession, Playlist, PlaylistEntry, Playlists, Track,
 };
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
@@ -26,6 +26,8 @@ const KV_LAYOUT: &str = "layout";
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Snapshot {
     pub library: Library,
+    /// The category tree, in display order.
+    pub categories: Vec<Category>,
     pub playlists: Playlists,
     pub ids: IdGen,
     pub players: Vec<PlayerSession>,
@@ -40,6 +42,7 @@ impl Snapshot {
     pub fn of(state: &AppState, position_of: impl Fn(PlayerId) -> f64) -> Snapshot {
         Snapshot {
             library: state.library.clone(),
+            categories: state.categories.clone().into_vec(),
             playlists: state.playlists.clone(),
             ids: state.ids.clone(),
             players: state.sessions(position_of),
@@ -98,8 +101,10 @@ pub struct Read {
 pub fn read_checked(db: &Db) -> Read {
     let mut warnings = Notes::default();
     let conn = &db.conn;
-    let library = read_library(conn, &mut warnings);
+    let categories = read_categories(conn, &mut warnings);
+    let library = read_library(conn, &categories, &mut warnings);
     let snapshot = Snapshot {
+        categories,
         playlists: read_playlists(conn, &library, &mut warnings),
         library,
         ids: read_kv(conn, KV_IDS, "ids", &mut warnings),
@@ -181,17 +186,54 @@ fn rows(
     out
 }
 
-fn read_library(conn: &Connection, warnings: &mut Notes) -> Library {
+/// Reads the category tree in `position` order and repairs it.
+fn read_categories(conn: &Connection, warnings: &mut Notes) -> Vec<Category> {
     let rows = rows(
         conn,
-        "SELECT id, path, doc FROM tracks ORDER BY id",
-        3,
+        "SELECT id, doc FROM categories ORDER BY position, id",
+        2,
+        "the categories",
+        warnings,
+    );
+    let mut list = Vec::with_capacity(rows.len());
+    for row in rows {
+        let [id, doc] = row.as_slice() else {
+            continue;
+        };
+        let Some(id) = int(id).map(|i| CategoryId(raw(i))) else {
+            warnings.push(format!(
+                "categories: a category record with an unusable id was dropped ({})",
+                id_text(&row[0])
+            ));
+            continue;
+        };
+        match parse_doc::<Category>(doc) {
+            Ok(mut category) => {
+                category.id = id;
+                list.push(category);
+            }
+            Err(e) => warnings.push(format!(
+                "categories: the record of category {} is not valid ({e}); dropped",
+                id.0
+            )),
+        }
+    }
+    let (fixed, notes) = Categories::from(list).repaired();
+    warnings.extend(notes);
+    fixed.into_vec()
+}
+
+fn read_library(conn: &Connection, categories: &[Category], warnings: &mut Notes) -> Library {
+    let rows = rows(
+        conn,
+        "SELECT id, path, doc, category FROM tracks ORDER BY id",
+        4,
         "the tracks",
         warnings,
     );
     let mut tracks = Vec::with_capacity(rows.len());
     for row in rows {
-        let [id, path, doc] = row.as_slice() else {
+        let [id, path, doc, category] = row.as_slice() else {
             continue;
         };
         let (Some(id), Some(path)) = (int(id), text(path)) else {
@@ -206,7 +248,7 @@ fn read_library(conn: &Connection, warnings: &mut Notes) -> Library {
         let parsed = text(doc)
             .ok_or_else(|| "not text".to_owned())
             .and_then(|t| serde_json::from_str::<Track>(t).map_err(|e| e.to_string()));
-        let track = match parsed {
+        let mut track = match parsed {
             Ok(mut track) => {
                 track.id = id;
                 track.path = path;
@@ -218,6 +260,23 @@ fn read_library(conn: &Connection, warnings: &mut Notes) -> Library {
                     id.0
                 ));
                 Track::new(id, path)
+            }
+        };
+        // The column wins over the document; a category that does not exist
+        // (or a column that is not an integer) leaves the track uncategorised.
+        track.category = match category {
+            SqlValue::Null => None,
+            other => {
+                let known = int(other)
+                    .map(|c| CategoryId(raw(c)))
+                    .filter(|c| categories.iter().any(|k| k.id == *c));
+                if known.is_none() {
+                    warnings.push(format!(
+                        "library: track {} is in an unknown category; loaded uncategorised",
+                        track.id.0
+                    ));
+                }
+                known
             }
         };
         tracks.push(track);
@@ -487,6 +546,7 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
         "entries",
         "playlists",
         "tracks",
+        "categories",
         "cart_pages",
         "players",
         "kv",
@@ -500,6 +560,9 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
     for (index, list) in snap.playlists.iter().enumerate() {
         upsert_playlist(&tx, list, index)?;
         insert_entries(&tx, list)?;
+    }
+    for (index, category) in snap.categories.iter().enumerate() {
+        upsert_doc(&tx, "categories", category.id.0, index, category)?;
     }
     for (index, page) in snap.cart_pages.iter().enumerate() {
         upsert_doc(&tx, "cart_pages", page.id.0, index, page)?;
@@ -591,6 +654,9 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
         }
     }
 
+    sync_docs(&tx, "categories", &old.categories, &new.categories, |c| {
+        c.id.0
+    })?;
     sync_docs(&tx, "cart_pages", &old.cart_pages, &new.cart_pages, |p| {
         p.id.0
     })?;
@@ -611,10 +677,18 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
 fn upsert_track(tx: &Transaction<'_>, track: &Track) -> Result<(), StoreError> {
     let text = doc(track)?;
     tx.prepare_cached(
-        "INSERT INTO tracks (id, path, doc) VALUES (?1, ?2, ?3) \
-         ON CONFLICT(id) DO UPDATE SET path = excluded.path, doc = excluded.doc",
+        "INSERT INTO tracks (id, path, doc, category) VALUES (?1, ?2, ?3, ?4) \
+         ON CONFLICT(id) DO UPDATE SET path = excluded.path, doc = excluded.doc, \
+         category = excluded.category",
     )
-    .and_then(|mut s| s.execute(params![key(track.id.0), track.path.to_string_lossy(), text]))
+    .and_then(|mut s| {
+        s.execute(params![
+            key(track.id.0),
+            track.path.to_string_lossy(),
+            text,
+            track.category.map(|c| key(c.0))
+        ])
+    })
     .map(drop)
     .map_err(db_error)
 }
@@ -753,6 +827,29 @@ mod tests {
         assert_eq!(back, old);
         // The fail point is spent: the same save now succeeds.
         write_changes(&mut db, &old, &new).unwrap();
+        assert_eq!(read(&db).0, new);
+    }
+
+    #[test]
+    fn write_changes_writes_only_the_changed_category_row() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = Db::open(&dir.path().join("fauste.db")).unwrap();
+        let cat = |id: u64, name: &str| Category {
+            id: CategoryId(id),
+            parent: None,
+            name: name.into(),
+            color: None,
+            kind: fp_model::TrackKind::Music,
+        };
+        let mut old = snapshot();
+        old.categories = vec![cat(1, "A"), cat(2, "B"), cat(3, "C")];
+        write_full(&mut db, &old).unwrap();
+
+        let mut new = old.clone();
+        new.categories[1].name = "Bee".into();
+        let before = db.conn.total_changes();
+        write_changes(&mut db, &old, &new).unwrap();
+        assert_eq!(db.conn.total_changes() - before, 1);
         assert_eq!(read(&db).0, new);
     }
 }
