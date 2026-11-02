@@ -298,6 +298,10 @@ fn clamp_finite(
     }
 }
 
+/// The deepest category tree `library.max_category_depth` may allow; a
+/// loaded category below it goes to the top level.
+pub const MAX_CATEGORY_DEPTH: usize = 32;
+
 /// The track library's limits (track library spec §5).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -1464,7 +1468,7 @@ impl Config {
         clamp_to(
             &mut self.library.max_category_depth,
             1,
-            32,
+            MAX_CATEGORY_DEPTH,
             "library.max_category_depth",
             &mut w,
         );

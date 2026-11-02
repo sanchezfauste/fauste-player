@@ -253,3 +253,52 @@ fn a_three_level_subtree_moves_contiguously_and_respects_depth() {
     );
     assert_eq!(err.unwrap_err(), ModelError::CategoryTooDeep);
 }
+
+/// A chain of `n` categories: 1 at the top, each next one under the last.
+fn chain(n: u64) -> Vec<Category> {
+    (1..=n).map(|i| cat(i, (i > 1).then(|| i - 1))).collect()
+}
+
+/// Runs `f` on a thread with a small stack, so recursion as deep as the
+/// tree would overflow.
+fn on_small_stack<T: Send + 'static>(f: impl FnOnce() -> T + Send + 'static) -> T {
+    std::thread::Builder::new()
+        .stack_size(256 * 1024)
+        .spawn(f)
+        .unwrap()
+        .join()
+        .unwrap()
+}
+
+#[test]
+fn a_deep_tree_is_walked_without_recursion() {
+    let (len, height_ok) = on_small_stack(|| {
+        let cats = Categories::from(chain(10_000));
+        let subtree = cats.subtree(CategoryId(1));
+        (subtree.len(), subtree.last() == Some(&CategoryId(10_000)))
+    });
+    assert_eq!(len, 10_000);
+    assert!(height_ok);
+}
+
+#[test]
+fn repaired_lifts_categories_deeper_than_32_levels_to_the_root() {
+    let (fixed, warnings) = on_small_stack(|| Categories::from(chain(10_000)).repaired());
+    assert_eq!(fixed.len(), 10_000);
+    // Every 32nd level starts a new chain at the top.
+    assert_eq!(warnings.len(), 312, "{:?}", warnings.first());
+    assert_eq!(fixed.children(None).count(), 313);
+    assert_eq!(fixed.iter().map(|c| fixed.depth(c.id)).max(), Some(32));
+    assert_eq!(fixed.get(CategoryId(33)).unwrap().parent, None);
+    assert_eq!(
+        fixed.get(CategoryId(34)).unwrap().parent,
+        Some(CategoryId(33))
+    );
+
+    let mut s = state();
+    s.categories = fixed;
+    apply(&mut s, Command::DeleteCategory(CategoryId(1))).unwrap();
+    assert_eq!(s.categories.len(), 10_000 - 32);
+    assert!(s.categories.get(CategoryId(32)).is_none());
+    assert!(s.categories.get(CategoryId(33)).is_some());
+}

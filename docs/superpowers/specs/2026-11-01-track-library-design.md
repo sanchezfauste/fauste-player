@@ -255,7 +255,8 @@ Where the implementation knowingly differs from, or settles, the text above:
 - LB17c is also checked when a track is taken out of its category (moved
   to *uncategorised*): a missing, unused track then leaves.
 - An unknown category on a track loads as uncategorised; a category with an
-  unknown parent or in a cycle loads at the root, each with a warning.
+  unknown parent, the first category of a cycle (in stored order) and one
+  deeper than 32 levels load at the root, each with a warning.
 
 ### 5.2 Size and the snapshot
 

@@ -3,9 +3,12 @@
 //! The tree is stored as a flat list in display order: the children of a
 //! category are the entries with that parent, in list order.
 
+use std::collections::{HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
 
 use crate::cartwall::CartColor;
+use crate::config::MAX_CATEGORY_DEPTH;
 use crate::error::ModelError;
 use crate::ids::CategoryId;
 use crate::track::TrackKind;
@@ -60,6 +63,7 @@ impl Categories {
 
     /// Drops the categories in `ids`.
     pub(crate) fn remove_all(&mut self, ids: &[CategoryId]) {
+        let ids: HashSet<CategoryId> = ids.iter().copied().collect();
         self.list.retain(|c| !ids.contains(&c.id));
     }
 
@@ -103,22 +107,39 @@ impl Categories {
     /// `id` followed by all its descendants (depth first, in order). Empty
     /// for an unknown id.
     pub fn subtree(&self, id: CategoryId) -> Vec<CategoryId> {
+        self.subtree_levels(id)
+            .into_iter()
+            .map(|(c, _)| c)
+            .collect()
+    }
+
+    /// The subtree of `id` as `subtree` gives it, each category with its
+    /// level below `id` (`id` itself is 1). Iterative, so a tree of any
+    /// depth is walked without recursion; a category met twice (a cycle in
+    /// data not yet repaired) is walked once.
+    fn subtree_levels(&self, id: CategoryId) -> Vec<(CategoryId, usize)> {
         let mut out = Vec::new();
         if self.get(id).is_none() {
             return out;
         }
-        self.collect(id, &mut out);
+        let mut children: HashMap<CategoryId, Vec<CategoryId>> = HashMap::new();
+        for c in &self.list {
+            if let Some(parent) = c.parent {
+                children.entry(parent).or_default().push(c.id);
+            }
+        }
+        let mut visited = HashSet::new();
+        let mut stack = vec![(id, 1)];
+        while let Some((at, level)) = stack.pop() {
+            if !visited.insert(at) {
+                continue;
+            }
+            out.push((at, level));
+            if let Some(kids) = children.get(&at) {
+                stack.extend(kids.iter().rev().map(|k| (*k, level + 1)));
+            }
+        }
         out
-    }
-
-    fn collect(&self, id: CategoryId, out: &mut Vec<CategoryId>) {
-        if out.contains(&id) {
-            return;
-        }
-        out.push(id);
-        for child in self.children(Some(id)) {
-            self.collect(child.id, out);
-        }
     }
 
     /// Whether `id` is `root` or lies below it.
@@ -136,74 +157,163 @@ impl Categories {
 
     /// Levels of the subtree rooted at `id` (a leaf is 1).
     fn height(&self, id: CategoryId) -> usize {
-        let base = self.depth(id);
-        self.subtree(id)
+        self.subtree_levels(id)
             .into_iter()
-            .map(|c| self.depth(c).saturating_sub(base) + 1)
+            .map(|(_, level)| level)
             .max()
             .unwrap_or(0)
     }
 
     /// Loaded data may be damaged: a category whose id repeats is dropped
-    /// (the first stays), and one whose parent is unknown, or that lies on a
-    /// cycle, goes to the top level. One warning each. The list is then put
-    /// in tree order: every parent before its children, each subtree
-    /// contiguous.
+    /// (the first stays); one whose parent is unknown, or the first (in list
+    /// order) of each cycle, goes to the top level; and one deeper than
+    /// `MAX_CATEGORY_DEPTH` levels goes to the top level with its subtree.
+    /// One warning each. The list is then put in tree order: every parent
+    /// before its children, each subtree contiguous. Linear in the number
+    /// of categories, without recursion.
     pub fn repaired(mut self) -> (Categories, Vec<String>) {
         let mut warnings = Vec::new();
-        let mut seen: Vec<CategoryId> = Vec::new();
+        let mut seen: HashSet<CategoryId> = HashSet::new();
         self.list.retain(|c| {
-            if seen.contains(&c.id) {
+            if seen.insert(c.id) {
+                true
+            } else {
                 warnings.push(format!(
                     "category {} ({:?}) repeats an id; dropped",
                     c.id.0, c.name
                 ));
                 false
-            } else {
-                seen.push(c.id);
-                true
             }
         });
-        let ids: Vec<CategoryId> = self.list.iter().map(|c| c.id).collect();
-        for i in 0..self.list.len() {
-            let Some(category) = self.list.get(i) else {
-                continue;
-            };
-            let (id, name, parent) = (category.id, category.name.clone(), category.parent);
-            let Some(parent) = parent else {
-                continue;
-            };
-            let broken = if !ids.contains(&parent) {
-                Some("has an unknown parent")
-            } else if self.is_in_subtree(parent, id) {
-                Some("is part of a cycle")
-            } else {
-                None
-            };
-            if let Some(why) = broken {
-                warnings.push(format!(
-                    "category {} ({name:?}) {why}; moved to the top level",
-                    id.0
-                ));
-                if let Some(c) = self.list.get_mut(i) {
-                    c.parent = None;
+        let position: HashMap<CategoryId, usize> = self
+            .list
+            .iter()
+            .enumerate()
+            .map(|(i, c)| (c.id, i))
+            .collect();
+        // Each category's parent as an index; `None` at the top level.
+        let mut parent: Vec<Option<usize>> = Vec::with_capacity(self.list.len());
+        let mut lifted: Vec<Option<&'static str>> = vec![None; self.list.len()];
+        for (i, c) in self.list.iter().enumerate() {
+            match c.parent {
+                None => parent.push(None),
+                Some(p) => match position.get(&p) {
+                    Some(&at) => parent.push(Some(at)),
+                    None => {
+                        parent.push(None);
+                        if let Some(slot) = lifted.get_mut(i) {
+                            *slot = Some("has an unknown parent");
+                        }
+                    }
+                },
+            }
+        }
+        // Cycles: each category has one parent, so a walk up either ends at
+        // the top or enters a cycle. The first category of a cycle in list
+        // order goes to the top, which breaks it.
+        const UNSEEN: u8 = 0;
+        const ON_WALK: u8 = 1;
+        const DONE: u8 = 2;
+        let mut mark = vec![UNSEEN; self.list.len()];
+        for start in 0..self.list.len() {
+            let mut walk = Vec::new();
+            let mut at = Some(start);
+            while let Some(i) = at {
+                match mark.get(i).copied() {
+                    Some(UNSEEN) => {
+                        if let Some(m) = mark.get_mut(i) {
+                            *m = ON_WALK;
+                        }
+                        walk.push(i);
+                        at = parent.get(i).copied().flatten();
+                    }
+                    Some(ON_WALK) => {
+                        // `i` is on a cycle: the cycle is the walk from `i` on.
+                        let from = walk.iter().position(|w| *w == i).unwrap_or(0);
+                        if let Some(&first) = walk.get(from..).and_then(|c| c.iter().min()) {
+                            if let Some(p) = parent.get_mut(first) {
+                                *p = None;
+                            }
+                            if let Some(slot) = lifted.get_mut(first) {
+                                *slot = Some("is part of a cycle");
+                            }
+                        }
+                        break;
+                    }
+                    _ => break,
+                }
+            }
+            for i in walk {
+                if let Some(m) = mark.get_mut(i) {
+                    *m = DONE;
                 }
             }
         }
-        let mut ordered = Vec::with_capacity(self.list.len());
-        let mut roots: Vec<CategoryId> = self.children(None).map(|c| c.id).collect();
-        roots.reverse();
-        // Depth first, children in list order.
-        let mut stack = roots;
-        while let Some(id) = stack.pop() {
-            if let Some(c) = self.get(id) {
-                ordered.push(c.clone());
+        // Depth: from each root down, with an explicit stack.
+        let mut children: Vec<Vec<usize>> = vec![Vec::new(); self.list.len()];
+        let mut roots = Vec::new();
+        for (i, p) in parent.iter().enumerate() {
+            match p {
+                Some(p) => {
+                    if let Some(kids) = children.get_mut(*p) {
+                        kids.push(i);
+                    }
+                }
+                None => roots.push(i),
             }
-            let mut kids: Vec<CategoryId> = self.children(Some(id)).map(|c| c.id).collect();
-            kids.reverse();
-            stack.extend(kids);
         }
-        self.list = ordered;
+        let mut stack: Vec<(usize, usize)> = roots.iter().rev().map(|r| (*r, 1)).collect();
+        while let Some((i, depth)) = stack.pop() {
+            let depth = if depth > MAX_CATEGORY_DEPTH {
+                if let Some(p) = parent.get_mut(i) {
+                    *p = None;
+                }
+                if let Some(slot) = lifted.get_mut(i) {
+                    *slot = Some("is too deep");
+                }
+                1
+            } else {
+                depth
+            };
+            if let Some(kids) = children.get(i) {
+                stack.extend(kids.iter().rev().map(|k| (*k, depth + 1)));
+            }
+        }
+        for (i, why) in lifted.iter().enumerate() {
+            let (Some(why), Some(c)) = (why, self.list.get(i)) else {
+                continue;
+            };
+            warnings.push(format!(
+                "category {} ({:?}) {why}; moved to the top level",
+                c.id.0, c.name
+            ));
+        }
+        let ids: Vec<CategoryId> = self.list.iter().map(|c| c.id).collect();
+        for (c, p) in self.list.iter_mut().zip(&parent) {
+            c.parent = p.and_then(|p| ids.get(p).copied());
+        }
+        // Tree order: depth first from the roots, children in list order.
+        let mut children: Vec<Vec<usize>> = vec![Vec::new(); self.list.len()];
+        let mut roots = Vec::new();
+        for (i, p) in parent.iter().enumerate() {
+            match p.and_then(|p| children.get_mut(p)) {
+                Some(kids) => kids.push(i),
+                None => roots.push(i),
+            }
+        }
+        let mut order = Vec::with_capacity(self.list.len());
+        let mut stack: Vec<usize> = roots.into_iter().rev().collect();
+        while let Some(i) = stack.pop() {
+            order.push(i);
+            if let Some(kids) = children.get(i) {
+                stack.extend(kids.iter().rev());
+            }
+        }
+        let mut slots: Vec<Option<Category>> = self.list.into_iter().map(Some).collect();
+        self.list = order
+            .into_iter()
+            .filter_map(|i| slots.get_mut(i).and_then(Option::take))
+            .collect();
         (self, warnings)
     }
 
@@ -230,10 +340,10 @@ impl Categories {
     }
 
     fn after_subtree(&self, id: CategoryId) -> usize {
-        self.subtree(id)
-            .into_iter()
-            .filter_map(|c| self.position(c))
-            .max()
+        let subtree: HashSet<CategoryId> = self.subtree(id).into_iter().collect();
+        self.list
+            .iter()
+            .rposition(|c| subtree.contains(&c.id))
             .map_or(self.list.len(), |p| p + 1)
     }
 
@@ -265,7 +375,7 @@ impl Categories {
         }
         check_name(self, parent, &moved_name, Some(id))?;
         // Take the subtree out, keeping its order.
-        let moved = self.subtree(id);
+        let moved: HashSet<CategoryId> = self.subtree(id).into_iter().collect();
         let mut taken = Vec::with_capacity(moved.len());
         let mut rest = Vec::with_capacity(self.list.len());
         for c in std::mem::take(&mut self.list) {

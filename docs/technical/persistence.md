@@ -86,8 +86,10 @@ path and does nothing else. An explicit removal (*Remove from library*,
 deleting a category) returns no such action.
 
 **Restore.** The store reads the categories in `position` order and repairs
-them (`Categories::repaired`: an unknown parent or a cycle puts the category
-at the root, one warning each); a track whose category is unknown loads
+them (`Categories::repaired`: an unknown parent, the first category of a
+cycle, or a category deeper than 32 levels, the most `library.max_category_depth`
+allows, goes to the root, one warning each; the repair and the tree walks are
+iterative, so no depth of damaged data can overflow the stack); a track whose category is unknown loads
 uncategorised, with a warning. The `tracks.category` column wins over the same
 field in `doc`. `AppState::restore` takes the categories (`RestoreParts`). Tracks that share a path (schema 1 created a new
 track on every add) are merged by `merge_duplicate_paths`: the survivor is the

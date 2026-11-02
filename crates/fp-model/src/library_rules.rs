@@ -227,6 +227,7 @@ pub fn category_deletion(state: &AppState, category: CategoryId) -> Option<(usiz
 }
 
 fn tracks_in(state: &AppState, categories: &[CategoryId]) -> Vec<TrackId> {
+    let categories: HashSet<CategoryId> = categories.iter().copied().collect();
     state
         .library
         .iter()
