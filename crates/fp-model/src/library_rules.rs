@@ -288,17 +288,15 @@ pub(crate) fn remove_tracks(
         return Err(ModelError::LibraryOnAir(impact.on_air));
     }
     let set: HashSet<TrackId> = tracks.iter().copied().collect();
-    let entries: Vec<EntryId> = state
+    let entries: HashSet<EntryId> = state
         .playlists
         .iter()
         .flat_map(|p| p.entries.iter())
         .filter(|e| set.contains(&e.track))
         .map(|e| e.id)
         .collect();
-    for entry in entries {
-        // The track goes below: no implicit release (LB17c).
-        crate::reducer::take_out_entry(state, entry, out)?;
-    }
+    // The tracks go below: no implicit release (LB17c).
+    crate::reducer::take_out_entries(state, &entries, out);
     crate::cart_rules::empty_carts_of(state, &set, out);
     for id in set {
         state.library.remove(id);

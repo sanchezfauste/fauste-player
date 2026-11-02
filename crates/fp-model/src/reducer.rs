@@ -1323,10 +1323,9 @@ fn remove_entry(
 }
 
 /// Takes `entry` out of its playlist (the part of `remove_entry` after the
-/// on-air check, shared with the removal of library tracks): next pointers
-/// move to the entry's successor and cues on it stop. Returns the entry's
-/// track; releasing it (LB17c) is the caller's choice.
-pub(crate) fn take_out_entry(
+/// on-air check): next pointers move to the entry's successor and cues on
+/// it stop. Returns the entry's track, for the caller to release (LB17c).
+fn take_out_entry(
     state: &mut AppState,
     entry: EntryId,
     out: &mut Vec<EngineAction>,
@@ -1341,6 +1340,42 @@ pub(crate) fn take_out_entry(
     );
     refresh_next(state);
     Ok(removed.track)
+}
+
+/// Takes `entries` out of their playlists at once, as `take_out_entry` on
+/// each would: a next pointer into them moves to the first playable entry
+/// after it that stays (and is not the player's current), and cues on them
+/// stop. The entries' tracks are not released.
+pub(crate) fn take_out_entries(
+    state: &mut AppState,
+    entries: &HashSet<EntryId>,
+    out: &mut Vec<EngineAction>,
+) {
+    if entries.is_empty() {
+        return;
+    }
+    let replacements: std::collections::HashMap<(EntryId, Option<EntryId>), Option<EntryId>> =
+        state
+            .players
+            .iter()
+            .filter_map(|p| {
+                let next = p.next.filter(|n| entries.contains(n))?;
+                let after = state
+                    .playlists
+                    .playable_after_where(next, &state.library, |e| {
+                        !entries.contains(&e) && Some(e) != p.current
+                    });
+                Some(((next, p.current), after))
+            })
+            .collect();
+    state.playlists.remove_entries(entries);
+    detach_entries(
+        state,
+        entries,
+        |next, current| replacements.get(&(next, current)).copied().flatten(),
+        out,
+    );
+    refresh_next(state);
 }
 
 fn delete_playlist(

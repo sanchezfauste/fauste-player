@@ -203,6 +203,23 @@ impl Playlists {
             .map(|e| e.id)
     }
 
+    /// The first playable entry after `entry` in its playlist that `keep`
+    /// accepts.
+    pub fn playable_after_where(
+        &self,
+        entry: EntryId,
+        library: &Library,
+        keep: impl Fn(EntryId) -> bool,
+    ) -> Option<EntryId> {
+        let (pl, pos) = self.find(entry)?;
+        self.get(pl)?
+            .entries
+            .iter()
+            .skip(pos + 1)
+            .find(|e| library.is_playable(e.track) && keep(e.id))
+            .map(|e| e.id)
+    }
+
     pub fn first_playable(&self, playlist: PlaylistId, library: &Library) -> Option<EntryId> {
         self.get(playlist)?
             .entries
@@ -224,6 +241,13 @@ impl Playlists {
         let at = index.min(list.entries.len());
         list.entries.splice(at..at, entries);
         Ok(())
+    }
+
+    /// Removes every entry in `entries`, in one pass over the playlists.
+    pub fn remove_entries(&mut self, entries: &std::collections::HashSet<EntryId>) {
+        for list in &mut self.lists {
+            list.entries.retain(|e| !entries.contains(&e.id));
+        }
     }
 
     pub fn remove_entry(&mut self, entry: EntryId) -> Result<PlaylistEntry, ModelError> {

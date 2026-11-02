@@ -258,3 +258,84 @@ fn a_pre_listened_entry_refuses_removal() {
     }
     assert_eq!(s, before);
 }
+
+/// LB17b: a next whose entry goes moves past every removed successor.
+#[test]
+fn a_removed_next_hops_past_every_removed_successor() {
+    let mut s = fixture(5);
+    let t = tracks_of(&s);
+    let e = entries(&s);
+    let p = p0(&s);
+    apply(&mut s, Command::SetNext(p, e[1]));
+    apply(&mut s, Command::RemoveTracks(vec![t[1], t[2]]));
+    assert_eq!(s.players[0].next, Some(e[3]));
+    assert_eq!(entries(&s), vec![e[0], e[3], e[4]]);
+}
+
+/// 2 000 used tracks with two entries each, filed under one category, after
+/// 4 000 uncategorised entries.
+fn big_category() -> (AppState, CategoryId) {
+    let mut s = fp_model::AppState::new(fp_model::Config::default(), "Main");
+    let playlist = s.playlists.first_id().unwrap();
+    let paths: Vec<_> = (0..2_000)
+        .map(|i| std::path::PathBuf::from(format!("/music/{i}.flac")))
+        .collect();
+    for _ in 0..2 {
+        apply(
+            &mut s,
+            Command::InsertPaths {
+                playlist,
+                index: 0,
+                paths: paths.clone(),
+            },
+        );
+    }
+    let gold = category(&mut s, None, "Gold", TrackKind::Music);
+    let tracks = s.library.ids();
+    assert_eq!(tracks.len(), 2_000);
+    apply(
+        &mut s,
+        Command::MoveTracksToCategory {
+            tracks,
+            category: Some(gold),
+        },
+    );
+    // 4 000 entries that stay, before them: each removed entry is found
+    // past them.
+    let kept: Vec<_> = (0..4_000)
+        .map(|i| std::path::PathBuf::from(format!("/kept/{i}.flac")))
+        .collect();
+    apply(
+        &mut s,
+        Command::InsertPaths {
+            playlist,
+            index: 0,
+            paths: kept,
+        },
+    );
+    (s, gold)
+}
+
+#[test]
+fn deleting_a_big_category_removes_every_entry() {
+    let (mut s, gold) = big_category();
+    assert_eq!(entries(&s).len(), 8_000);
+    apply(&mut s, Command::DeleteCategory(gold));
+    assert_eq!(entries(&s).len(), 4_000);
+    assert_eq!(s.library.len(), 4_000);
+    assert!(s.library.iter().all(|t| t.category.is_none()));
+    assert!(s.categories.is_empty());
+}
+
+/// The removal is one pass over the playlists, not one per entry (one pass
+/// per entry took about 120 ms in a debug build, the batch about 16 ms).
+/// Timed, so ignored by default: run with `--ignored`.
+#[test]
+#[ignore = "timing"]
+fn deleting_a_big_category_is_fast() {
+    let (mut s, gold) = big_category();
+    let started = std::time::Instant::now();
+    apply(&mut s, Command::DeleteCategory(gold));
+    let took = started.elapsed();
+    assert!(took < std::time::Duration::from_millis(50), "took {took:?}");
+}
