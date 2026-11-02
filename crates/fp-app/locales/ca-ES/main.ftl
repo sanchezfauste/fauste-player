@@ -758,3 +758,4 @@ error-category-name-empty = El nom d'una categoria no pot estar buit.
 error-category-name-taken = Ja existeix una categoria amb aquest nom aquí.
 error-category-too-deep = Les categories no es poden niar tant.
 error-category-into-itself = Una categoria no es pot moure dins d'ella mateixa.
+error-library-on-air = Algunes d'aquestes pistes estan en emissió: { $entries } a llistes i { $carts } al cartwall. No s'ha eliminat res.

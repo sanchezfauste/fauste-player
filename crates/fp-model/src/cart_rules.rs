@@ -1,5 +1,6 @@
 //! Cartwall rules C1–C10 (Phase 2 spec P2.3), as pure state transitions.
 
+use std::collections::HashSet;
 use std::path::PathBuf;
 
 use crate::cartwall::{Cart, CartEdit, CartFileChange, CartPage, CartPageImport, PlayingCart};
@@ -357,6 +358,31 @@ fn set_track(
     cart_at_mut(state, page, index)?.track = track;
     crate::library_rules::release_tracks(state, old);
     Ok(())
+}
+
+/// LB17: empties every cart that holds one of `tracks`; they keep their
+/// name, colour and options. A playing cart or cue on them stops.
+pub(crate) fn empty_carts_of(
+    state: &mut AppState,
+    tracks: &HashSet<TrackId>,
+    out: &mut Vec<EngineAction>,
+) {
+    let spots: Vec<(CartPageId, usize)> = state
+        .cartwall
+        .pages
+        .iter()
+        .flat_map(|p| {
+            p.carts
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| c.track.is_some_and(|t| tracks.contains(&t)))
+                .map(move |(i, _)| (p.id, i))
+        })
+        .collect();
+    for (page, index) in spots {
+        // The spot was just found, so it exists.
+        let _ = set_track(state, page, index, None, out);
+    }
 }
 
 pub(crate) fn import_page(state: &mut AppState, import: CartPageImport) -> Result<(), ModelError> {

@@ -779,3 +779,4 @@ error-category-name-empty = Nazwa kategorii nie może być pusta.
 error-category-name-taken = Kategoria o tej nazwie już tu istnieje.
 error-category-too-deep = Kategorii nie można zagnieżdżać tak głęboko.
 error-category-into-itself = Kategorii nie można przenieść do niej samej.
+error-library-on-air = Niektóre z tych utworów są na antenie: { $entries } na listach i { $carts } na cartwall. Nic nie usunięto.

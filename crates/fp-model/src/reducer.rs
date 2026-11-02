@@ -318,6 +318,18 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             state.playlists.add(Playlist::new(id, name));
             insert_paths(state, id, 0, paths)?;
         }
+        Command::MoveTracksToCategory { tracks, category } => {
+            crate::library_rules::move_tracks(state, tracks, category)?
+        }
+        Command::SetTracksKind { tracks, kind } => {
+            crate::library_rules::set_tracks_kind(state, tracks, kind)?
+        }
+        Command::RemoveTracks(tracks) => {
+            crate::library_rules::remove_tracks(state, &tracks, &mut out)?
+        }
+        Command::DeleteCategory(category) => {
+            crate::library_rules::delete_category(state, category, &mut out)?
+        }
         Command::AddToLibrary { paths, category } => {
             crate::library_rules::add_to_library(state, paths, category)?
         }
@@ -1305,6 +1317,17 @@ fn remove_entry(
     if state.is_on_air(entry) {
         return Err(ModelError::EntryOnAir(entry));
     }
+    take_out_entry(state, entry, out)
+}
+
+/// Takes `entry` out of its playlist (the part of `remove_entry` after the
+/// on-air check, shared with the removal of library tracks): next pointers
+/// move to the entry's successor and cues on it stop.
+pub(crate) fn take_out_entry(
+    state: &mut AppState,
+    entry: EntryId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
     let successors = successors_of(state, entry);
     let removed = state.playlists.remove_entry(entry)?;
     detach_entries(

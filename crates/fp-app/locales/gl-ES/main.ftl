@@ -758,3 +758,4 @@ error-category-name-empty = O nome dunha categoría non pode estar baleiro.
 error-category-name-taken = Xa existe unha categoría con ese nome aquí.
 error-category-too-deep = As categorías non se poden aniñar tanto.
 error-category-into-itself = Unha categoría non se pode mover dentro de si mesma.
+error-library-on-air = Algunhas destas pistas están no aire: { $entries } en listas e { $carts } no cartwall. Non se eliminou nada.

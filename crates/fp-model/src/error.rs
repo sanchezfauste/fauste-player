@@ -53,6 +53,9 @@ pub enum ModelError {
     /// RL7: the last shown panel cannot be hidden.
     #[error("the last shown panel cannot be hidden")]
     LastPanel,
+    /// LB17b: tracks to remove are on air; nothing was removed.
+    #[error("{} entries and {} carts of these tracks are on air", .0.entries.len(), .0.carts.len())]
+    LibraryOnAir(crate::library_rules::OnAirHolds),
     #[error("unknown category {0:?}")]
     UnknownCategory(CategoryId),
     #[error("a category name must not be empty")]

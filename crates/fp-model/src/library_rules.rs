@@ -3,13 +3,14 @@
 //! that leave (LB17c). Pure functions on the state; the model does no file
 //! system work, so paths compare as given.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::path::PathBuf;
 
+use crate::command::EngineAction;
 use crate::error::ModelError;
-use crate::ids::{CategoryId, TrackId};
+use crate::ids::{CartId, CategoryId, EntryId, TrackId};
 use crate::state::AppState;
-use crate::track::{FileState, MarkerSource, Track};
+use crate::track::{FileState, MarkerSource, Track, TrackKind};
 
 /// The existing track for `path`, or a new uncategorised one (LB14).
 pub(crate) fn track_for_path(state: &mut AppState, path: PathBuf) -> TrackId {
@@ -141,4 +142,170 @@ pub(crate) fn merge_duplicate_paths(state: &mut AppState) -> usize {
         }
     }
     replaced.len()
+}
+
+/// What a removal holds on air (LB17b).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct OnAirHolds {
+    pub entries: Vec<EntryId>,
+    pub carts: Vec<CartId>,
+}
+
+impl OnAirHolds {
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty() && self.carts.is_empty()
+    }
+}
+
+/// What removing tracks takes with it (LB17), for the confirmation.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct RemovalImpact {
+    pub tracks: usize,
+    /// Playlist entries that go.
+    pub entries: usize,
+    /// Carts that lose their file.
+    pub carts: usize,
+    pub on_air: OnAirHolds,
+}
+
+/// Counts what removing `tracks` affects. Unknown tracks are ignored.
+pub fn removal_impact(state: &AppState, tracks: &[TrackId]) -> RemovalImpact {
+    let set: HashSet<TrackId> = tracks
+        .iter()
+        .copied()
+        .filter(|t| state.library.get(*t).is_some())
+        .collect();
+    let mut impact = RemovalImpact {
+        tracks: set.len(),
+        ..RemovalImpact::default()
+    };
+    for entry in state.playlists.iter().flat_map(|p| p.entries.iter()) {
+        if set.contains(&entry.track) {
+            impact.entries += 1;
+            if state.is_on_air(entry.id) {
+                impact.on_air.entries.push(entry.id);
+            }
+        }
+    }
+    for cart in state
+        .cartwall
+        .pages
+        .iter()
+        .flat_map(|p| p.carts.iter())
+        .filter(|c| c.track.is_some_and(|t| set.contains(&t)))
+    {
+        impact.carts += 1;
+        if state.cartwall.is_playing(cart.id) || state.cartwall.cue == Some(cart.id) {
+            impact.on_air.carts.push(cart.id);
+        }
+    }
+    impact
+}
+
+/// LB11: the subcategories and the impact of deleting `category` with its
+/// subtree and their tracks; `None` when the category is unknown.
+pub fn category_deletion(state: &AppState, category: CategoryId) -> Option<(usize, RemovalImpact)> {
+    state.categories.get(category)?;
+    let subtree = state.categories.subtree(category);
+    let tracks = tracks_in(state, &subtree);
+    Some((
+        subtree.len().saturating_sub(1),
+        removal_impact(state, &tracks),
+    ))
+}
+
+fn tracks_in(state: &AppState, categories: &[CategoryId]) -> Vec<TrackId> {
+    state
+        .library
+        .iter()
+        .filter(|t| t.category.is_some_and(|c| categories.contains(&c)))
+        .map(|t| t.id)
+        .collect()
+}
+
+/// LB12, LB13: files the tracks under `category` and gives them its kind.
+pub(crate) fn move_tracks(
+    state: &mut AppState,
+    tracks: Vec<TrackId>,
+    category: Option<CategoryId>,
+) -> Result<(), ModelError> {
+    let kind = match category {
+        Some(c) => Some(
+            state
+                .categories
+                .get(c)
+                .ok_or(ModelError::UnknownCategory(c))?
+                .kind,
+        ),
+        None => None,
+    };
+    for id in tracks {
+        if let Some(t) = state.library.get_mut(id) {
+            t.category = category;
+            if let Some(kind) = kind {
+                t.kind = kind;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// LB13: sets the kind of each track.
+pub(crate) fn set_tracks_kind(
+    state: &mut AppState,
+    tracks: Vec<TrackId>,
+    kind: TrackKind,
+) -> Result<(), ModelError> {
+    for id in tracks {
+        if let Some(t) = state.library.get_mut(id) {
+            t.kind = kind;
+        }
+    }
+    Ok(())
+}
+
+/// LB17, LB17b: removes the tracks with their entries, empties their carts,
+/// all or nothing.
+pub(crate) fn remove_tracks(
+    state: &mut AppState,
+    tracks: &[TrackId],
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let impact = removal_impact(state, tracks);
+    if !impact.on_air.is_empty() {
+        return Err(ModelError::LibraryOnAir(impact.on_air));
+    }
+    let set: HashSet<TrackId> = tracks.iter().copied().collect();
+    let entries: Vec<EntryId> = state
+        .playlists
+        .iter()
+        .flat_map(|p| p.entries.iter())
+        .filter(|e| set.contains(&e.track))
+        .map(|e| e.id)
+        .collect();
+    for entry in entries {
+        crate::reducer::take_out_entry(state, entry, out)?;
+    }
+    crate::cart_rules::empty_carts_of(state, &set, out);
+    for id in set {
+        state.library.remove(id);
+    }
+    crate::reducer::refresh_next(state);
+    Ok(())
+}
+
+/// LB11: removes the category, its subcategories and their tracks.
+pub(crate) fn delete_category(
+    state: &mut AppState,
+    category: CategoryId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    if state.categories.get(category).is_none() {
+        return Err(ModelError::UnknownCategory(category));
+    }
+    let subtree = state.categories.subtree(category);
+    let tracks = tracks_in(state, &subtree);
+    remove_tracks(state, &tracks, out)?;
+    state.categories.remove_all(&subtree);
+    Ok(())
 }

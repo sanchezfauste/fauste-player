@@ -77,6 +77,7 @@ pub use layout::{
     CartwallLayout, DEFAULT_SIDE_SHARE, Dock, Layout, MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE,
     Panel, settle_layout,
 };
+pub use library_rules::{OnAirHolds, RemovalImpact, category_deletion, removal_impact};
 pub use live::{
     BusyCause, DeviceSettings, Failure, Holder, LiveSettings, Pending, PendingItem, Target, Wanted,
     causes, configured_route, device_causes, device_settings, due, has_output_items, holders,

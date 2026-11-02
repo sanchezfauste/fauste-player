@@ -171,6 +171,23 @@ pub enum Command {
         paths: Vec<PathBuf>,
         category: Option<crate::ids::CategoryId>,
     },
+    /// LB12, LB13: files the tracks under `category` (`None`: uncategorised);
+    /// they take the category's kind. Unknown tracks are skipped.
+    MoveTracksToCategory {
+        tracks: Vec<crate::ids::TrackId>,
+        category: Option<crate::ids::CategoryId>,
+    },
+    /// LB13: the kind of each track, whatever its category.
+    SetTracksKind {
+        tracks: Vec<crate::ids::TrackId>,
+        kind: crate::track::TrackKind,
+    },
+    /// LB17: removes the tracks from the library with their entries and
+    /// their carts' files. Refused whole while any of them is on air (LB17b).
+    RemoveTracks(Vec<crate::ids::TrackId>),
+    /// LB11: deletes a category, its subcategories and every track in them
+    /// (LB17), refused whole while any of those is on air (LB17b).
+    DeleteCategory(crate::ids::CategoryId),
     /// Track categories (track library spec LB9, LB10).
     CreateCategory {
         parent: Option<crate::ids::CategoryId>,

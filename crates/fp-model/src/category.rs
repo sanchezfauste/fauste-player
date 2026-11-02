@@ -58,6 +58,11 @@ impl Categories {
         self.list.is_empty()
     }
 
+    /// Drops the categories in `ids`.
+    pub(crate) fn remove_all(&mut self, ids: &[CategoryId]) {
+        self.list.retain(|c| !ids.contains(&c.id));
+    }
+
     pub fn into_vec(self) -> Vec<Category> {
         self.list
     }

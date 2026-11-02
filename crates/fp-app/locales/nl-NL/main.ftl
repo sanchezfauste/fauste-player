@@ -758,3 +758,4 @@ error-category-name-empty = De naam van een categorie mag niet leeg zijn.
 error-category-name-taken = Er bestaat hier al een categorie met die naam.
 error-category-too-deep = Categorieën kunnen niet zo diep worden genest.
 error-category-into-itself = Een categorie kan niet in zichzelf worden verplaatst.
+error-library-on-air = Sommige van deze nummers zijn on air: { $entries } in afspeellijsten en { $carts } op de cartwall. Er is niets verwijderd.
