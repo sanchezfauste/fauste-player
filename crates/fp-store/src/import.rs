@@ -26,7 +26,9 @@ use std::path::{Path, PathBuf};
 
 use fp_model::{CartPage, Limits, PlayerSession};
 
-use crate::atomic::{LoadSource, Loaded, backup_path, load_with_fallback, sibling, sync_dir};
+use crate::atomic::{
+    LoadSource, Loaded, backup_path, load_with_fallback, retry_locked, sibling, sync_dir,
+};
 use crate::db::Db;
 use crate::db::snapshot::{self, Snapshot};
 use crate::docs::{PLAYLISTS_MIGRATIONS, PLAYLISTS_SCHEMA, PlaylistsDoc};
@@ -85,7 +87,7 @@ fn rename_json_files(files: &[PathBuf], fail: bool) -> io::Result<()> {
         if !file.exists() {
             continue;
         }
-        if let Err(e) = fs::rename(file, imported_name(file)) {
+        if let Err(e) = retry_locked(|| fs::rename(file, imported_name(file))) {
             tracing::warn!("{}: could not rename: {e}", file.display());
             first.get_or_insert(e);
         }

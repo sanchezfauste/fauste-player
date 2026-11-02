@@ -77,7 +77,7 @@ fn is_locked(e: &io::Error) -> bool {
 
 /// Runs `op`, retrying it a few times while the file is held by another
 /// process (`is_locked`).
-fn retry_locked<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
+pub(crate) fn retry_locked<T>(mut op: impl FnMut() -> io::Result<T>) -> io::Result<T> {
     let mut wait = LOCKED_FIRST_WAIT_MS;
     let mut attempt = 1;
     loop {

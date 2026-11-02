@@ -432,3 +432,54 @@ fn legacy_played_marks_without_a_session_are_reported() {
         loaded.warnings
     );
 }
+
+#[test]
+fn a_too_new_json_file_blocks_the_import() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = with_json(&dir);
+    // No readable backup: the document would be lost behind the database.
+    fs::remove_file(s.paths().data_dir.join("playlists.json.bak1")).unwrap();
+    fs::write(
+        s.paths().playlists_file(),
+        r#"{"schema_version": 99, "library": []}"#,
+    )
+    .unwrap();
+    let before = data_files(&s);
+    let loaded = s.load("Main");
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|w| w.contains("playlists.json") && w.contains("not read")),
+        "{:?}",
+        loaded.warnings
+    );
+    // The loader may add a `.newer-` copy; the originals stay.
+    assert!(!s.paths().database_file().exists());
+    for name in &before {
+        assert!(data_files(&s).contains(name), "{name} is gone");
+    }
+    assert!(!data_files(&s).iter().any(|n| n.ends_with(".imported")));
+}
+
+#[test]
+fn an_unreadable_bak_blocks_the_import() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = with_json(&dir);
+    // The main file is damaged, and its backup cannot be read (a directory).
+    fs::write(s.paths().carts_file(), b"not json").unwrap();
+    let bak = fp_store::backup_path(&s.paths().carts_file(), 1);
+    fs::create_dir(&bak).unwrap();
+    let loaded = s.load("Main");
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|w| w.contains("carts.json.bak1")),
+        "{:?}",
+        loaded.warnings
+    );
+    assert!(!s.paths().database_file().exists());
+    assert!(bak.exists());
+    assert!(!data_files(&s).iter().any(|n| n.ends_with(".imported")));
+}

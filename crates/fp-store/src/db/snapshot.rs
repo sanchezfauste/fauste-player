@@ -284,8 +284,22 @@ fn read_library(conn: &Connection, categories: &[Category], warnings: &mut Notes
     Library::from(tracks)
 }
 
+/// Longest text of a bad id value shown in a warning.
+const ID_TEXT_CHARS: usize = 64;
+
+/// A bad id value for a warning: text and blobs are cut, so a huge value
+/// cannot flood the warnings.
 fn id_text(v: &SqlValue) -> String {
-    format!("{v:?}")
+    let shown = match v {
+        SqlValue::Text(t) => t.clone(),
+        SqlValue::Blob(b) => String::from_utf8_lossy(b).into_owned(),
+        other => return format!("{other:?}"),
+    };
+    let mut cut: String = shown.chars().take(ID_TEXT_CHARS).collect();
+    if shown.chars().count() > ID_TEXT_CHARS {
+        cut.push('…');
+    }
+    format!("{cut:?}")
 }
 
 /// Parses the `doc` column; a value that is not text is as bad as one that
@@ -448,14 +462,20 @@ fn read_players(conn: &Connection, warnings: &mut Notes) -> Vec<PlayerSession> {
             ));
             continue;
         };
-        match parse_doc::<PlayerSession>(doc) {
-            Ok(mut player) => {
+        // Parsed once: as a value, then into the session.
+        let parsed = text(doc)
+            .ok_or_else(|| "not text".to_owned())
+            .and_then(|t| serde_json::from_str::<Value>(t).map_err(|e| e.to_string()))
+            .and_then(|v| {
+                let had_pending = v.get("pending_start").is_some_and(|p| !p.is_null());
+                serde_json::from_value::<PlayerSession>(v)
+                    .map(|p| (p, had_pending))
+                    .map_err(|e| e.to_string())
+            });
+        match parsed {
+            Ok((mut player, had_pending)) => {
                 player.id = id;
                 // The model drops a pending start that does not parse; say so.
-                let had_pending = text(doc)
-                    .and_then(|t| serde_json::from_str::<Value>(t).ok())
-                    .and_then(|v| v.get("pending_start").map(|p| !p.is_null()))
-                    .unwrap_or(false);
                 if had_pending && player.pending_start.is_none() {
                     warnings.push(format!(
                         "session: the saved pending start of player {id:?} is not valid; ignored"
@@ -791,6 +811,17 @@ mod tests {
     #![allow(clippy::unwrap_used)]
     use super::*;
     use fp_model::{PlaylistId, TrackId};
+
+    #[test]
+    fn id_text_cuts_long_text_and_blobs() {
+        let long = "x".repeat(500);
+        let text = id_text(&SqlValue::Text(long.clone()));
+        assert!(text.chars().count() < 80, "{text}");
+        assert!(text.contains('…'));
+        assert!(id_text(&SqlValue::Blob(long.into_bytes())).chars().count() < 80);
+        assert_eq!(id_text(&SqlValue::Text("ab".into())), "\"ab\"");
+        assert_eq!(id_text(&SqlValue::Integer(7)), "Integer(7)");
+    }
 
     fn snapshot() -> Snapshot {
         let mut snap = Snapshot::default();
