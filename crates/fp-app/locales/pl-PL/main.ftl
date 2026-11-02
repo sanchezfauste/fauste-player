@@ -780,3 +780,13 @@ error-category-name-taken = Kategoria o tej nazwie już tu istnieje.
 error-category-too-deep = Kategorii nie można zagnieżdżać tak głęboko.
 error-category-into-itself = Kategorii nie można przenieść do niej samej.
 error-library-on-air = Niektóre z tych utworów są na antenie: { $entries } na listach i { $carts } na cartwall. Nic nie usunięto.
+# The library window (track library spec §7.1)
+top-library = Biblioteka
+tip-library-open = Otwórz bibliotekę
+tip-library-close = Zamknij bibliotekę
+library-window-title = Biblioteka
+library-window-minimise = Minimalizuj bibliotekę
+library-window-expand = Rozwiń bibliotekę
+library-window-maximise = Maksymalizuj bibliotekę
+library-window-restore = Przywróć bibliotekę
+library-window-close = Zamknij bibliotekę

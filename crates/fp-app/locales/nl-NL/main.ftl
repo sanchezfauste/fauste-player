@@ -759,3 +759,13 @@ error-category-name-taken = Er bestaat hier al een categorie met die naam.
 error-category-too-deep = Categorieën kunnen niet zo diep worden genest.
 error-category-into-itself = Een categorie kan niet in zichzelf worden verplaatst.
 error-library-on-air = Sommige van deze nummers zijn on air: { $entries } in afspeellijsten en { $carts } op de cartwall. Er is niets verwijderd.
+# The library window (track library spec §7.1)
+top-library = Bibliotheek
+tip-library-open = Bibliotheek openen
+tip-library-close = Bibliotheek sluiten
+library-window-title = Bibliotheek
+library-window-minimise = Bibliotheek minimaliseren
+library-window-expand = Bibliotheek uitklappen
+library-window-maximise = Bibliotheek maximaliseren
+library-window-restore = Bibliotheek herstellen
+library-window-close = Bibliotheek sluiten

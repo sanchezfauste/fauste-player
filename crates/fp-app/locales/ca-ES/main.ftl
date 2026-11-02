@@ -759,3 +759,13 @@ error-category-name-taken = Ja existeix una categoria amb aquest nom aquí.
 error-category-too-deep = Les categories no es poden niar tant.
 error-category-into-itself = Una categoria no es pot moure dins d'ella mateixa.
 error-library-on-air = Algunes d'aquestes pistes estan en emissió: { $entries } a llistes i { $carts } al cartwall. No s'ha eliminat res.
+# The library window (track library spec §7.1)
+top-library = Biblioteca
+tip-library-open = Obre la biblioteca
+tip-library-close = Tanca la biblioteca
+library-window-title = Biblioteca
+library-window-minimise = Minimitza la biblioteca
+library-window-expand = Desplega la biblioteca
+library-window-maximise = Maximitza la biblioteca
+library-window-restore = Restaura la biblioteca
+library-window-close = Tanca la biblioteca

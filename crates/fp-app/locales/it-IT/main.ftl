@@ -759,3 +759,13 @@ error-category-name-taken = Esiste già una categoria con questo nome qui.
 error-category-too-deep = Le categorie non possono essere annidate così in profondità.
 error-category-into-itself = Una categoria non può essere spostata dentro se stessa.
 error-library-on-air = Alcuni di questi brani sono in onda: { $entries } nelle playlist e { $carts } nel cartwall. Non è stato rimosso nulla.
+# The library window (track library spec §7.1)
+top-library = Libreria
+tip-library-open = Apri la libreria
+tip-library-close = Chiudi la libreria
+library-window-title = Libreria
+library-window-minimise = Riduci a icona la libreria
+library-window-expand = Espandi la libreria
+library-window-maximise = Ingrandisci la libreria
+library-window-restore = Ripristina la libreria
+library-window-close = Chiudi la libreria

@@ -13,6 +13,7 @@ pub mod format;
 pub mod glyphs;
 pub mod header_layout;
 pub mod icons;
+mod library;
 mod loudness_edit;
 pub mod media_browser;
 pub mod music;

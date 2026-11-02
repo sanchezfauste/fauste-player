@@ -265,6 +265,7 @@ pub(crate) fn layout_controls(ui: &mut Ui, scene: &Scene<'_>, right: f32) {
                     }
                     let name = t.tr("layout-panel-carts");
                     panel_tile(ui, scene, &context, Panel::Cartwall, &name);
+                    library_tile(ui, scene);
                 });
             });
         ui.add_space(4.0);
@@ -291,35 +292,10 @@ fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Pane
         (false, false) => "tip-layout-show",
     };
     let label = t.tr_args(key, &[("panel", name.to_owned().into())]);
-    let style = if shown {
-        TileStyle {
-            fill: theme::NEUTRAL_800,
-            border: theme::NEUTRAL_700,
-            content: theme::TEXT,
-            hover_fill: theme::NEUTRAL_700,
-            ..TileStyle::plain()
-        }
-    } else {
-        TileStyle {
-            border: theme::NEUTRAL_800,
-            content: theme::NEUTRAL_500,
-            hover_fill: theme::NEUTRAL_800,
-            ..TileStyle::plain()
-        }
-    };
-    let width = ui
-        .painter()
-        .layout_no_wrap(name.to_owned(), font(11.0), theme::TEXT)
-        .size()
-        .x
-        + 24.0;
-    let response = widgets::tile_without_tooltip(
-        ui,
-        vec2(width.max(30.0), 24.0),
-        &label,
-        enabled,
-        style,
-        |p, r, c| {
+    let style = tile_style(shown);
+    let width = tile_width(ui, name);
+    let response =
+        widgets::tile_without_tooltip(ui, vec2(width, 24.0), &label, enabled, style, |p, r, c| {
             p.text(r.center(), egui::Align2::CENTER_CENTER, name, font(11.0), c);
             let corner = pos2(r.right() - 8.0, r.top() + 2.0);
             match activity {
@@ -342,8 +318,7 @@ fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Pane
                 }
                 panel_layout::PanelActivity::Idle => {}
             }
-        },
-    );
+        });
     let tip = if layout.locked {
         t.tr("error-layout-locked")
     } else if last {
@@ -356,6 +331,57 @@ fn panel_tile(ui: &mut Ui, scene: &Scene<'_>, context: &TileContext, panel: Pane
             panel,
             hidden: shown,
         });
+    }
+}
+
+/// A top bar tile's look: lit while what it stands for is shown.
+fn tile_style(shown: bool) -> TileStyle {
+    if shown {
+        TileStyle {
+            fill: theme::NEUTRAL_800,
+            border: theme::NEUTRAL_700,
+            content: theme::TEXT,
+            hover_fill: theme::NEUTRAL_700,
+            ..TileStyle::plain()
+        }
+    } else {
+        TileStyle {
+            border: theme::NEUTRAL_800,
+            content: theme::NEUTRAL_500,
+            hover_fill: theme::NEUTRAL_800,
+            ..TileStyle::plain()
+        }
+    }
+}
+
+/// The width of a top bar tile showing `name`.
+fn tile_width(ui: &Ui, name: &str) -> f32 {
+    let text = ui
+        .painter()
+        .layout_no_wrap(name.to_owned(), font(11.0), theme::TEXT)
+        .size()
+        .x;
+    (text + 24.0).max(30.0)
+}
+
+/// LB24: the Library tile opens and closes the library window; it is lit
+/// while the window is open. The layout lock does not apply to it.
+fn library_tile(ui: &mut Ui, scene: &Scene<'_>) {
+    let t = scene.i18n;
+    let open = scene.state.library_view.open;
+    let name = t.tr("top-library");
+    let label = t.tr(if open {
+        "tip-library-close"
+    } else {
+        "tip-library-open"
+    });
+    let size = vec2(tile_width(ui, &name), 24.0);
+    if widgets::tile(ui, size, &label, true, tile_style(open), |p, r, c| {
+        p.text(r.center(), Align2::CENTER_CENTER, &name, font(11.0), c);
+    })
+    .clicked()
+    {
+        super::library::toggle(scene);
     }
 }
 
@@ -486,9 +512,19 @@ fn hide_panel(scene: &Scene<'_>, panel: Panel) {
 
 /// The side of a header button, a square (small: a player header at its
 /// least width has little room to spare).
-const HEADER_BUTTON_SIZE: f32 = 18.0;
+pub(crate) const HEADER_BUTTON_SIZE: f32 = 18.0;
 /// The gap between the two header buttons.
-const HEADER_BUTTONS_SPACING: f32 = 2.0;
+pub(crate) const HEADER_BUTTONS_SPACING: f32 = 2.0;
+
+/// The look of a header button: an icon on no fill, lit on hover.
+pub(crate) fn header_button_style() -> TileStyle {
+    TileStyle {
+        border: Color32::TRANSPARENT,
+        content: theme::NEUTRAL_400,
+        hover_fill: theme::NEUTRAL_800,
+        ..TileStyle::plain()
+    }
+}
 
 /// The width of the two header buttons and the gap between them.
 pub(crate) const HEADER_BUTTONS_WIDTH: f32 = 2.0 * HEADER_BUTTON_SIZE + HEADER_BUTTONS_SPACING;
@@ -512,12 +548,7 @@ pub(crate) fn header_buttons(
     ui.spacing_mut().item_spacing = vec2(HEADER_BUTTONS_SPACING, 0.0);
     let t = scene.i18n;
     let locked = scene.state.layout.locked;
-    let style = TileStyle {
-        border: Color32::TRANSPARENT,
-        content: theme::NEUTRAL_400,
-        hover_fill: theme::NEUTRAL_800,
-        ..TileStyle::plain()
-    };
+    let style = header_button_style();
     let size = vec2(HEADER_BUTTON_SIZE, HEADER_BUTTON_SIZE);
     let maximised = is_maximised(view_state, panel);
     let (label, glyph) = if maximised {

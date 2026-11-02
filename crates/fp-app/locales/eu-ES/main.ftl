@@ -759,3 +759,13 @@ error-category-name-taken = Hemen badago izen hori duen kategoria bat.
 error-category-too-deep = Kategoriak ezin dira hainbeste habiatu.
 error-category-into-itself = Kategoria bat ezin da bere baitara eraman.
 error-library-on-air = Pista hauetako batzuk airean daude: { $entries } zerrendetan eta { $carts } cartwall-ean. Ez da ezer kendu.
+# The library window (track library spec §7.1)
+top-library = Liburutegia
+tip-library-open = Ireki liburutegia
+tip-library-close = Itxi liburutegia
+library-window-title = Liburutegia
+library-window-minimise = Minimizatu liburutegia
+library-window-expand = Zabaldu liburutegia
+library-window-maximise = Maximizatu liburutegia
+library-window-restore = Leheneratu liburutegia
+library-window-close = Itxi liburutegia

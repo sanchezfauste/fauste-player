@@ -109,6 +109,11 @@ pub(crate) struct ViewState {
     /// Where this frame draws the interface (a phone: less its system
     /// bars); `None` before the first frame.
     pub area: Option<Rect>,
+    /// The area between the top bar and the status bar in this frame;
+    /// `None` before the first frame.
+    pub middle: Option<Rect>,
+    /// The library window's runtime state (track library spec §7).
+    pub(crate) library: super::library::state::LibraryUi,
     /// Touch mode: rows and column headers do not drag (a finger drag
     /// scrolls).
     pub touch: bool,
@@ -743,6 +748,12 @@ impl AppUi {
         self.view.cartwall_rect
     }
 
+    /// The library window's rectangle in the last frame; `None` while it
+    /// is closed (track library spec §7.1).
+    pub fn library_rect(&self) -> Option<Rect> {
+        self.view.library.drawn
+    }
+
     /// The panel maximised for the moment (resizable layout spec RL16).
     pub fn maximised(&self) -> Option<fp_model::layout::Panel> {
         self.view.maximised.as_ref().map(|m| m.panel)
@@ -912,6 +923,7 @@ impl AppUi {
             egui::pos2(full.left(), top.bottom()),
             egui::pos2(full.right(), status.top()),
         );
+        self.view.middle = Some(middle);
         let mut top_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(top)
@@ -1008,7 +1020,9 @@ impl AppUi {
             status_bar(&mut status_ui, &scene, &self.view, faults);
         }
         ui.allocate_rect(full, Sense::hover());
-        // The CUE windows float over the screen; the dialogs below stay on top.
+        // The library window and the CUE windows float over the screen; the
+        // dialogs below stay on top.
+        super::library::draw(&ctx, &scene, &mut self.view);
         cue_window::show_all(&ctx, &scene, &mut self.view);
         super::loudness_edit::popup(&ctx, &scene, &mut self.view);
         // Once, at start-up: tracks an earlier version analysed wait for

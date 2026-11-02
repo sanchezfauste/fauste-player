@@ -759,3 +759,13 @@ error-category-name-taken = Hier gibt es bereits eine Kategorie mit diesem Namen
 error-category-too-deep = Kategorien können nicht so tief verschachtelt werden.
 error-category-into-itself = Eine Kategorie kann nicht in sich selbst verschoben werden.
 error-library-on-air = Einige dieser Titel sind on Air: { $entries } in Playlists und { $carts } auf der Cartwall. Es wurde nichts entfernt.
+# The library window (track library spec §7.1)
+top-library = Bibliothek
+tip-library-open = Bibliothek öffnen
+tip-library-close = Bibliothek schließen
+library-window-title = Bibliothek
+library-window-minimise = Bibliothek minimieren
+library-window-expand = Bibliothek aufklappen
+library-window-maximise = Bibliothek maximieren
+library-window-restore = Bibliothek wiederherstellen
+library-window-close = Bibliothek schließen

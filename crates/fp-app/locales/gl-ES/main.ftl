@@ -759,3 +759,13 @@ error-category-name-taken = Xa existe unha categoría con ese nome aquí.
 error-category-too-deep = As categorías non se poden aniñar tanto.
 error-category-into-itself = Unha categoría non se pode mover dentro de si mesma.
 error-library-on-air = Algunhas destas pistas están no aire: { $entries } en listas e { $carts } no cartwall. Non se eliminou nada.
+# The library window (track library spec §7.1)
+top-library = Biblioteca
+tip-library-open = Abrir a biblioteca
+tip-library-close = Pechar a biblioteca
+library-window-title = Biblioteca
+library-window-minimise = Minimizar a biblioteca
+library-window-expand = Despregar a biblioteca
+library-window-maximise = Maximizar a biblioteca
+library-window-restore = Restaurar a biblioteca
+library-window-close = Pechar a biblioteca

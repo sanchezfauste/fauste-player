@@ -759,3 +759,13 @@ error-category-name-taken = There is already a category with that name here.
 error-category-too-deep = Categories cannot be nested that deep.
 error-category-into-itself = A category cannot be moved into itself.
 error-library-on-air = Some of these tracks are on air: { $entries } in playlists and { $carts } on the cartwall. Nothing was removed.
+# The library window (track library spec §7.1)
+top-library = Library
+tip-library-open = Open the library
+tip-library-close = Close the library
+library-window-title = Library
+library-window-minimise = Minimize library
+library-window-expand = Expand library
+library-window-maximise = Maximize library
+library-window-restore = Restore library
+library-window-close = Close library
