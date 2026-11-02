@@ -193,7 +193,7 @@ fn duplicate_paths_are_merged_on_reload() {
 fn a_damaged_category_tree_is_repaired_on_load() {
     let dir = tempfile::tempdir().unwrap();
     let mut s = store(&dir);
-    let mut state = AppState::new(Config::default(), "Main");
+    let state = AppState::new(Config::default(), "Main");
     save_all(&mut s, &state, 0.0);
     let cat = |id: u64, parent: Option<u64>| Category {
         id: CategoryId(id),
@@ -223,5 +223,68 @@ fn a_damaged_category_tree_is_repaired_on_load() {
         None
     );
     assert!(loaded.warnings.iter().any(|w| w.contains("unknown parent")));
-    state.config.library.max_category_depth = 8; // silence unused-mut
+}
+
+fn root_category(state: &mut AppState, name: &str) -> CategoryId {
+    apply(
+        state,
+        Command::CreateCategory {
+            parent: None,
+            name: name.into(),
+            color: None,
+            kind: TrackKind::Music,
+        },
+    )
+    .unwrap();
+    state.categories.iter().map(|c| c.id).max().unwrap()
+}
+
+/// An incremental save writes a track whose category alone changed, and
+/// deletes the row of a deleted category.
+#[test]
+fn a_changed_track_category_and_a_deleted_category_are_saved() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let mut state = AppState::new(Config::default(), "Main");
+    let a = root_category(&mut state, "A");
+    let b = root_category(&mut state, "B");
+    apply(
+        &mut state,
+        Command::AddToLibrary {
+            paths: vec![PathBuf::from("/m/a.wav")],
+            category: Some(a),
+        },
+    )
+    .unwrap();
+    let id = state.library.track_at(&PathBuf::from("/m/a.wav")).unwrap();
+    save_all(&mut s, &state, 0.0);
+    let category_of = |s: &Store| {
+        count(
+            s,
+            &format!("SELECT category FROM tracks WHERE id = {}", id.0),
+        )
+    };
+    assert_eq!(category_of(&s), a.0 as i64);
+
+    apply(
+        &mut state,
+        Command::MoveTracksToCategory {
+            tracks: vec![id],
+            category: Some(b),
+        },
+    )
+    .unwrap();
+    save_all(&mut s, &state, 0.0);
+    assert_eq!(category_of(&s), b.0 as i64);
+
+    apply(&mut state, Command::DeleteCategory(a)).unwrap();
+    save_all(&mut s, &state, 0.0);
+    let rows = |s: &Store, c: CategoryId| {
+        count(
+            s,
+            &format!("SELECT COUNT(*) FROM categories WHERE id = {}", c.0),
+        )
+    };
+    assert_eq!((rows(&s, a), rows(&s, b)), (0, 1));
+    assert_eq!(category_of(&s), b.0 as i64);
 }
