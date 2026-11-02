@@ -312,6 +312,43 @@ fn changes_are_saved_after_the_debounce() {
 }
 
 #[test]
+fn a_failed_save_is_retried_at_the_next_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut r = rig(&[], dir);
+    let refuse = |sql: &str| {
+        let db = Db::open(&r.paths.database_file()).unwrap();
+        db.conn().execute_batch(sql).unwrap();
+    };
+    refuse(
+        "CREATE TRIGGER refuse BEFORE INSERT ON playlists \
+         BEGIN SELECT RAISE(ABORT, 'refused'); END;",
+    );
+    r.handle.send(Command::CreatePlaylist {
+        name: "Night".into(),
+    });
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    r.now += Duration::from_millis(1_100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    let saved = |r: &Rig| {
+        let db = Db::open(&r.paths.database_file()).unwrap();
+        snapshot::read(&db)
+            .0
+            .playlists
+            .iter()
+            .any(|p| p.name == "Night")
+    };
+    assert!(!saved(&r), "the save was refused");
+    refuse("DROP TRIGGER refuse");
+    // No new change: the retry comes from the autosave step alone.
+    r.now += Duration::from_millis(100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    assert!(saved(&r), "retried without waiting for another change");
+}
+
+#[test]
 fn shutdown_saves_the_session_with_positions() {
     let dir = tempfile::tempdir().unwrap();
     let a = wav(dir.path(), "a.wav", 5);

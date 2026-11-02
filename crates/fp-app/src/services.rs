@@ -1726,11 +1726,12 @@ impl Services {
             .dirty_since
             .is_some_and(|since| now.saturating_duration_since(since) >= debounce)
         {
-            // Recorded only once the files are written: a failed save is
-            // retried on the next step.
-            self.save_all(state, now);
-            self.saved_version = version;
-            self.dirty_since = None;
+            // Recorded only once the files are written: while a save fails
+            // the state stays dirty and every autosave step retries it.
+            if self.save_all(state, now) {
+                self.saved_version = version;
+                self.dirty_since = None;
+            }
             self.last_session_save = Some(now);
             return;
         }
@@ -1747,17 +1748,23 @@ impl Services {
         }
     }
 
-    fn save_all(&mut self, state: &AppState, now: Instant) {
-        if let Err(e) = self.store.save_config(state) {
-            tracing::error!(error = %e, "saving the configuration failed");
-        }
-        self.save_session(state, now);
+    /// Saves the configuration and the session; whether both were written.
+    fn save_all(&mut self, state: &AppState, now: Instant) -> bool {
+        let config = match self.store.save_config(state) {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::error!(error = %e, "saving the configuration failed");
+                false
+            }
+        };
+        self.save_session(state, now) && config
     }
 
     /// Saves the playlists, library, carts, players and layout through the
     /// database: only the rows that changed are written. A failure is
-    /// logged and the next autosave step retries.
-    fn save_session(&mut self, state: &AppState, now: Instant) {
+    /// logged and reported as `false`; the autosave then keeps the state
+    /// dirty and retries at its next step. Whether the save succeeded.
+    fn save_session(&mut self, state: &AppState, now: Instant) -> bool {
         let telemetry = self.conductor.telemetry.load();
         let position_of = |player: PlayerId| {
             telemetry
@@ -1767,8 +1774,12 @@ impl Services {
                 .and_then(|(_, t)| t.position_secs)
                 .unwrap_or(0.0)
         };
-        if let Err(e) = self.store.save_state(state, position_of, now) {
-            tracing::error!(error = %e, "saving the state failed");
+        match self.store.save_state(state, position_of, now) {
+            Ok(()) => true,
+            Err(e) => {
+                tracing::error!(error = %e, "saving the state failed");
+                false
+            }
         }
     }
 }
