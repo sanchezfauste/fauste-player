@@ -19,6 +19,7 @@ pub mod ids;
 pub mod insertion;
 pub mod layout;
 mod library_rules;
+pub mod library_search;
 pub mod library_view;
 pub mod live;
 pub mod loudness;
