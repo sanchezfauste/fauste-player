@@ -227,7 +227,7 @@ fn c8_the_last_page_cannot_be_deleted() {
 }
 
 #[test]
-fn c8_deleting_a_page_stops_its_carts_and_forgets_their_tracks() {
+fn c8_deleting_a_page_stops_its_carts_and_keeps_their_tracks() {
     let mut state = fixture(0);
     apply(
         &mut state,
@@ -242,7 +242,8 @@ fn c8_deleting_a_page_stops_its_carts_and_forgets_their_tracks() {
     let p = page(&state);
     let actions = apply(&mut state, Command::DeleteCartPage(p)).unwrap();
     assert_eq!(stopped(&actions), vec![a]);
-    assert!(state.library.get(track).is_none());
+    // LB15: the track stays in the library.
+    assert!(state.library.get(track).is_some());
     assert_eq!(state.cartwall.pages.len(), 1);
 }
 
@@ -403,22 +404,23 @@ fn a_track_used_by_a_cart_survives_playlist_removal() {
         },
     )
     .unwrap();
-    // The cart gets its own library track even for the same file; removing
-    // the playlist entry must not touch it.
+    // The cart shares the file's library track (LB14); removing the
+    // playlist entry must not touch it.
     let cart_track = state.cartwall.pages[0].carts[0].track.unwrap();
     apply(&mut state, Command::RemoveEntry(e[0])).unwrap();
     assert!(state.library.get(cart_track).is_some());
 }
 
 #[test]
-fn clearing_a_cart_file_forgets_its_track() {
+fn clearing_a_cart_file_keeps_its_track() {
     let mut state = fixture(0);
     load(&mut state, 0, 10.0);
     let track = state.cartwall.pages[0].carts[0].track.unwrap();
     let p = page(&state);
     apply(&mut state, Command::ClearCartFile { page: p, index: 0 }).unwrap();
     assert!(state.cartwall.pages[0].carts[0].track.is_none());
-    assert!(state.library.get(track).is_none());
+    // LB15: the track stays in the library.
+    assert!(state.library.get(track).is_some());
 }
 
 #[test]
@@ -479,7 +481,7 @@ fn new_pages_use_the_configured_grid_and_kinds_are_editable() {
 }
 
 #[test]
-fn importing_duplicate_positions_keeps_no_orphan_track() {
+fn importing_duplicate_positions_adds_only_the_last_file() {
     let mut state = fixture(0);
     let edit = CartEdit {
         name: "x".into(),
@@ -499,9 +501,9 @@ fn importing_duplicate_positions_keeps_no_orphan_track() {
     };
     apply(&mut state, Command::ImportCartPage(Box::new(import))).unwrap();
     assert_eq!(
-        state.library.iter().count(),
-        1,
-        "only the referenced track remains"
+        state.library.ids(),
+        vec![state.library.track_at(&PathBuf::from("/b.wav")).unwrap()],
+        "the replaced file never lands in a cart, so it is not added (LB16)"
     );
 }
 
@@ -811,4 +813,37 @@ fn cc4_an_imported_page_keeps_each_carts_colour() {
     let page = s.cartwall.pages.last().unwrap();
     assert_eq!(page.carts[0].color, Some(CartColor::Violet));
     assert_eq!(page.carts[1].color, None);
+}
+
+/// LB16: only the files that land in a cart of an imported page join the
+/// library; one outside the grid or replaced at its position does not.
+#[test]
+fn an_imported_page_adds_only_the_files_that_land_in_a_cart() {
+    let mut s = fixture(0);
+    let import = fp_model::CartPageImport {
+        name: "Imported".into(),
+        rows: 1,
+        cols: 2,
+        carts: vec![
+            (0, plain("early"), Some(PathBuf::from("/c/early.wav"))),
+            (5, plain("outside"), Some(PathBuf::from("/c/outside.wav"))),
+            (0, plain("late"), Some(PathBuf::from("/c/late.wav"))),
+            (1, plain("b"), Some(PathBuf::from("/c/b.wav"))),
+        ],
+    };
+    apply(&mut s, Command::ImportCartPage(Box::new(import))).unwrap();
+    for gone in ["/c/early.wav", "/c/outside.wav"] {
+        assert_eq!(s.library.track_at(&PathBuf::from(gone)), None, "{gone}");
+    }
+    let page = s.cartwall.pages.last().unwrap();
+    assert_eq!(page.carts[0].name, "late");
+    assert_eq!(
+        page.carts[0].track,
+        s.library.track_at(&PathBuf::from("/c/late.wav"))
+    );
+    assert_eq!(
+        page.carts[1].track,
+        s.library.track_at(&PathBuf::from("/c/b.wav"))
+    );
+    assert_eq!(s.library.len(), 2);
 }

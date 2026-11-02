@@ -2,7 +2,7 @@
 //! to *n*.
 
 /// The schema version this build writes and the newest it can read.
-pub const SCHEMA_VERSION: u32 = 1;
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// The migrations, in order; `MIGRATIONS[n - 1]` is migration *n*.
 pub(crate) const MIGRATIONS: &[&str] = &[
@@ -24,5 +24,13 @@ CREATE INDEX entries_by_playlist ON entries(playlist, position);
 CREATE INDEX entries_by_track ON entries(track);
 CREATE TABLE cart_pages (id INTEGER PRIMARY KEY, position INTEGER NOT NULL, doc TEXT NOT NULL);
 CREATE TABLE players (id INTEGER PRIMARY KEY, position INTEGER NOT NULL, doc TEXT NOT NULL);
+",
+    // 2: the category tree (a flat list in display order) and each track's
+    // category. The column wins over the same field in the track's `doc`.
+    "
+CREATE TABLE categories (id INTEGER PRIMARY KEY, position INTEGER NOT NULL, doc TEXT NOT NULL);
+ALTER TABLE tracks ADD COLUMN category INTEGER;
+CREATE INDEX tracks_by_category ON tracks(category);
+CREATE INDEX tracks_by_path ON tracks(path);
 ",
 ];

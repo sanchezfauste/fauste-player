@@ -13,6 +13,7 @@ fn parts(state: &AppState) -> RestoreParts {
     RestoreParts {
         config: state.config.clone(),
         library: state.library.clone(),
+        categories: Default::default(),
         playlists: state.playlists.clone(),
         cart_pages: state.cartwall.pages.clone(),
         cartwall_session: state.cartwall.session(),
@@ -90,6 +91,7 @@ fn restoring_with_no_playlists_creates_a_default_one_and_moves_ids_forward() {
     let parts = RestoreParts {
         config: Config::default(),
         library: Library::default(),
+        categories: Default::default(),
         playlists: Playlists::default(),
         cart_pages: Vec::new(),
         cartwall_session: fp_model::CartwallSession::default(),
@@ -155,6 +157,7 @@ fn restored_cart_pages_are_normalised() {
     let parts = RestoreParts {
         config: state.config.clone(),
         library: state.library.clone(),
+        categories: Default::default(),
         playlists: state.playlists.clone(),
         cart_pages: vec![broken.clone(), broken],
         cartwall_session: CartwallSession::default(),
@@ -181,13 +184,13 @@ fn restored_cart_pages_are_normalised() {
 }
 
 #[test]
-fn orphan_library_tracks_are_dropped_on_restore() {
+fn unreferenced_library_tracks_are_kept_on_restore() {
     let mut state = fixture(1);
     let orphan = fp_model::Track::new(fp_model::TrackId(777), std::path::PathBuf::from("/x.wav"));
     state.library.insert(orphan);
     let (restored, _) = AppState::restore(parts(&state), &[], "Main");
-    assert!(restored.library.get(fp_model::TrackId(777)).is_none());
-    assert_eq!(restored.library.iter().count(), 1);
+    assert!(restored.library.get(fp_model::TrackId(777)).is_some());
+    assert_eq!(restored.library.iter().count(), 2);
 }
 
 #[test]

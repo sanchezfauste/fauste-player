@@ -3,7 +3,7 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 
-use fp_model::{AppState, EngineAction, Limits, PlayerId, RestoreParts};
+use fp_model::{AppState, Categories, EngineAction, Limits, PlayerId, RestoreParts};
 
 use crate::atomic::{ParseError, load_with_fallback, write_atomic};
 use crate::db::snapshot::{self, Snapshot};
@@ -313,6 +313,7 @@ fn restore(
 ) -> LoadedState {
     let Snapshot {
         library,
+        categories,
         playlists,
         ids,
         players: sessions,
@@ -344,6 +345,7 @@ fn restore(
         RestoreParts {
             config,
             library,
+            categories: Categories::from(categories),
             playlists,
             cart_pages,
             cartwall_session,

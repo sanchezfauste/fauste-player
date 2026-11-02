@@ -960,6 +960,7 @@ fn n13_crash_recovery_computes_the_gain_again() {
     let parts = fp_model::RestoreParts {
         config: s.config.clone(),
         library: s.library.clone(),
+        categories: Default::default(),
         playlists: s.playlists.clone(),
         cart_pages: s.cartwall.pages.clone(),
         cartwall_session: s.cartwall.session(),

@@ -96,6 +96,7 @@ fn rich() -> Snapshot {
     ids.observe(600);
     Snapshot {
         library,
+        categories: Vec::new(),
         playlists,
         ids,
         players: vec![p1, p2],

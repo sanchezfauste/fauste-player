@@ -1,6 +1,6 @@
 use thiserror::Error;
 
-use crate::ids::{CartId, CartPageId, EntryId, PlayerId, PlaylistId, TrackId};
+use crate::ids::{CartId, CartPageId, CategoryId, EntryId, PlayerId, PlaylistId, TrackId};
 
 /// Why a command was refused. A refused command never changes the state.
 #[derive(Debug, Clone, PartialEq, Eq, Error)]
@@ -53,6 +53,19 @@ pub enum ModelError {
     /// RL7: the last shown panel cannot be hidden.
     #[error("the last shown panel cannot be hidden")]
     LastPanel,
+    /// LB17b: tracks to remove are on air; nothing was removed.
+    #[error("{} entries and {} carts of these tracks are on air", .0.entries.len(), .0.carts.len())]
+    LibraryOnAir(crate::library_rules::OnAirHolds),
+    #[error("unknown category {0:?}")]
+    UnknownCategory(CategoryId),
+    #[error("a category name must not be empty")]
+    CategoryNameEmpty,
+    #[error("a category with that name already exists there")]
+    CategoryNameTaken,
+    #[error("categories cannot be nested that deep")]
+    CategoryTooDeep,
+    #[error("a category cannot be moved into itself")]
+    CategoryIntoItself,
     /// RL9: the layout is locked.
     #[error("the layout is locked")]
     LayoutLocked,

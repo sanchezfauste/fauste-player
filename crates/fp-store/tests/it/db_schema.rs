@@ -2,11 +2,11 @@ use fp_store::{Db, OpenError, SCHEMA_VERSION};
 use tempfile::tempdir;
 
 #[test]
-fn a_new_database_gets_schema_1_wal_and_foreign_keys() {
+fn a_new_database_gets_schema_2_wal_and_foreign_keys() {
     let dir = tempdir().unwrap();
     let db = Db::open(&dir.path().join("fauste.db")).unwrap();
-    assert_eq!(SCHEMA_VERSION, 1);
-    assert_eq!(db.pragma_i64("user_version"), 1);
+    assert_eq!(SCHEMA_VERSION, 2);
+    assert_eq!(db.pragma_i64("user_version"), 2);
     assert_eq!(db.pragma_text("journal_mode"), "wal");
     assert_eq!(db.pragma_i64("foreign_keys"), 1);
 }
@@ -17,7 +17,7 @@ fn reopening_keeps_the_schema() {
     let path = dir.path().join("fauste.db");
     drop(Db::open(&path).unwrap());
     let db = Db::open(&path).unwrap();
-    assert_eq!(db.pragma_i64("user_version"), 1);
+    assert_eq!(db.pragma_i64("user_version"), 2);
 }
 
 #[test]
@@ -26,9 +26,9 @@ fn a_newer_schema_is_refused() {
     let path = dir.path().join("fauste.db");
     drop(Db::open(&path).unwrap());
     let conn = rusqlite::Connection::open(&path).unwrap();
-    conn.pragma_update(None, "user_version", 2).unwrap();
+    conn.pragma_update(None, "user_version", 3).unwrap();
     drop(conn);
-    assert!(matches!(Db::open(&path), Err(OpenError::Newer(2))));
+    assert!(matches!(Db::open(&path), Err(OpenError::Newer(3))));
 }
 
 #[test]

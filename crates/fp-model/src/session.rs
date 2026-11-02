@@ -96,6 +96,7 @@ fn full_volume() -> f32 {
 pub struct RestoreParts {
     pub config: Config,
     pub library: Library,
+    pub categories: crate::category::Categories,
     pub playlists: Playlists,
     /// Cart pages (their carts reference `library` tracks).
     pub cart_pages: Vec<CartPage>,
@@ -141,6 +142,7 @@ impl AppState {
         let RestoreParts {
             config,
             library,
+            categories,
             mut playlists,
             cart_pages,
             cartwall_session,
@@ -148,6 +150,7 @@ impl AppState {
             mut ids,
         } = parts;
         ids.observe(library.max_raw_id());
+        ids.observe(categories.max_raw_id());
         ids.observe(playlists.max_raw_id());
         for s in sessions {
             ids.observe(s.id.0);
@@ -178,6 +181,7 @@ impl AppState {
         let mut state = AppState {
             config,
             library,
+            categories,
             playlists,
             players: Vec::new(),
             cartwall,
@@ -186,18 +190,9 @@ impl AppState {
             cue_on_air: crate::cue_on_air::CueOnAir::default(),
             layout: Layout::default(),
         };
-        // Tracks nothing references (left by an interrupted save) are dropped.
-        let orphans: Vec<_> = state
-            .library
-            .iter()
-            .map(|t| t.id)
-            .filter(|t| {
-                !state.playlists.references_track(*t) && !state.cartwall.references_track(*t)
-            })
-            .collect();
-        for track in orphans {
-            state.library.remove(track);
-        }
+        // One track per file (LB14): a library saved before that rule, or
+        // by a buggy build, may hold several. Unreferenced tracks stay (LB15).
+        let _ = crate::library_rules::merge_duplicate_paths(&mut state);
         let mut out = Vec::new();
         for k in 0..state.config.players.count {
             let player = match sessions.get(k) {

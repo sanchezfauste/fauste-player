@@ -6,8 +6,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use fp_model::{
-    AppState, CartPage, CartwallSession, IdGen, Layout, Library, PlayerId, PlayerSession, Playlist,
-    PlaylistEntry, Playlists, Track,
+    AppState, CartPage, CartwallSession, Categories, Category, CategoryId, IdGen, Layout, Library,
+    PlayerId, PlayerSession, Playlist, PlaylistEntry, Playlists, Track,
 };
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
@@ -26,6 +26,8 @@ const KV_LAYOUT: &str = "layout";
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Snapshot {
     pub library: Library,
+    /// The category tree, in display order.
+    pub categories: Vec<Category>,
     pub playlists: Playlists,
     pub ids: IdGen,
     pub players: Vec<PlayerSession>,
@@ -40,6 +42,7 @@ impl Snapshot {
     pub fn of(state: &AppState, position_of: impl Fn(PlayerId) -> f64) -> Snapshot {
         Snapshot {
             library: state.library.clone(),
+            categories: state.categories.clone().into_vec(),
             playlists: state.playlists.clone(),
             ids: state.ids.clone(),
             players: state.sessions(position_of),
@@ -98,8 +101,10 @@ pub struct Read {
 pub fn read_checked(db: &Db) -> Read {
     let mut warnings = Notes::default();
     let conn = &db.conn;
-    let library = read_library(conn, &mut warnings);
+    let categories = read_categories(conn, &mut warnings);
+    let library = read_library(conn, &categories, &mut warnings);
     let snapshot = Snapshot {
+        categories,
         playlists: read_playlists(conn, &library, &mut warnings),
         library,
         ids: read_kv(conn, KV_IDS, "ids", &mut warnings),
@@ -181,17 +186,54 @@ fn rows(
     out
 }
 
-fn read_library(conn: &Connection, warnings: &mut Notes) -> Library {
+/// Reads the category tree in `position` order and repairs it.
+fn read_categories(conn: &Connection, warnings: &mut Notes) -> Vec<Category> {
     let rows = rows(
         conn,
-        "SELECT id, path, doc FROM tracks ORDER BY id",
-        3,
+        "SELECT id, doc FROM categories ORDER BY position, id",
+        2,
+        "the categories",
+        warnings,
+    );
+    let mut list = Vec::with_capacity(rows.len());
+    for row in rows {
+        let [id, doc] = row.as_slice() else {
+            continue;
+        };
+        let Some(id) = int(id).map(|i| CategoryId(raw(i))) else {
+            warnings.push(format!(
+                "categories: a category record with an unusable id was dropped ({})",
+                id_text(&row[0])
+            ));
+            continue;
+        };
+        match parse_doc::<Category>(doc) {
+            Ok(mut category) => {
+                category.id = id;
+                list.push(category);
+            }
+            Err(e) => warnings.push(format!(
+                "categories: the record of category {} is not valid ({e}); dropped",
+                id.0
+            )),
+        }
+    }
+    let (fixed, notes) = Categories::from(list).repaired();
+    warnings.extend(notes);
+    fixed.into_vec()
+}
+
+fn read_library(conn: &Connection, categories: &[Category], warnings: &mut Notes) -> Library {
+    let rows = rows(
+        conn,
+        "SELECT id, path, doc, category FROM tracks ORDER BY id",
+        4,
         "the tracks",
         warnings,
     );
     let mut tracks = Vec::with_capacity(rows.len());
     for row in rows {
-        let [id, path, doc] = row.as_slice() else {
+        let [id, path, doc, category] = row.as_slice() else {
             continue;
         };
         let (Some(id), Some(path)) = (int(id), text(path)) else {
@@ -206,7 +248,7 @@ fn read_library(conn: &Connection, warnings: &mut Notes) -> Library {
         let parsed = text(doc)
             .ok_or_else(|| "not text".to_owned())
             .and_then(|t| serde_json::from_str::<Track>(t).map_err(|e| e.to_string()));
-        let track = match parsed {
+        let mut track = match parsed {
             Ok(mut track) => {
                 track.id = id;
                 track.path = path;
@@ -220,13 +262,44 @@ fn read_library(conn: &Connection, warnings: &mut Notes) -> Library {
                 Track::new(id, path)
             }
         };
+        // The column wins over the document; a category that does not exist
+        // (or a column that is not an integer) leaves the track uncategorised.
+        track.category = match category {
+            SqlValue::Null => None,
+            other => {
+                let known = int(other)
+                    .map(|c| CategoryId(raw(c)))
+                    .filter(|c| categories.iter().any(|k| k.id == *c));
+                if known.is_none() {
+                    warnings.push(format!(
+                        "library: track {} is in an unknown category; loaded uncategorised",
+                        track.id.0
+                    ));
+                }
+                known
+            }
+        };
         tracks.push(track);
     }
     Library::from(tracks)
 }
 
+/// Longest text of a bad id value shown in a warning.
+const ID_TEXT_CHARS: usize = 64;
+
+/// A bad id value for a warning: text and blobs are cut, so a huge value
+/// cannot flood the warnings.
 fn id_text(v: &SqlValue) -> String {
-    format!("{v:?}")
+    let shown = match v {
+        SqlValue::Text(t) => t.clone(),
+        SqlValue::Blob(b) => String::from_utf8_lossy(b).into_owned(),
+        other => return format!("{other:?}"),
+    };
+    let mut cut: String = shown.chars().take(ID_TEXT_CHARS).collect();
+    if shown.chars().count() > ID_TEXT_CHARS {
+        cut.push('…');
+    }
+    format!("{cut:?}")
 }
 
 /// Parses the `doc` column; a value that is not text is as bad as one that
@@ -389,14 +462,20 @@ fn read_players(conn: &Connection, warnings: &mut Notes) -> Vec<PlayerSession> {
             ));
             continue;
         };
-        match parse_doc::<PlayerSession>(doc) {
-            Ok(mut player) => {
+        // Parsed once: as a value, then into the session.
+        let parsed = text(doc)
+            .ok_or_else(|| "not text".to_owned())
+            .and_then(|t| serde_json::from_str::<Value>(t).map_err(|e| e.to_string()))
+            .and_then(|v| {
+                let had_pending = v.get("pending_start").is_some_and(|p| !p.is_null());
+                serde_json::from_value::<PlayerSession>(v)
+                    .map(|p| (p, had_pending))
+                    .map_err(|e| e.to_string())
+            });
+        match parsed {
+            Ok((mut player, had_pending)) => {
                 player.id = id;
                 // The model drops a pending start that does not parse; say so.
-                let had_pending = text(doc)
-                    .and_then(|t| serde_json::from_str::<Value>(t).ok())
-                    .and_then(|v| v.get("pending_start").map(|p| !p.is_null()))
-                    .unwrap_or(false);
                 if had_pending && player.pending_start.is_none() {
                     warnings.push(format!(
                         "session: the saved pending start of player {id:?} is not valid; ignored"
@@ -487,6 +566,7 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
         "entries",
         "playlists",
         "tracks",
+        "categories",
         "cart_pages",
         "players",
         "kv",
@@ -500,6 +580,9 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
     for (index, list) in snap.playlists.iter().enumerate() {
         upsert_playlist(&tx, list, index)?;
         insert_entries(&tx, list)?;
+    }
+    for (index, category) in snap.categories.iter().enumerate() {
+        upsert_doc(&tx, "categories", category.id.0, index, category)?;
     }
     for (index, page) in snap.cart_pages.iter().enumerate() {
         upsert_doc(&tx, "cart_pages", page.id.0, index, page)?;
@@ -591,6 +674,9 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
         }
     }
 
+    sync_docs(&tx, "categories", &old.categories, &new.categories, |c| {
+        c.id.0
+    })?;
     sync_docs(&tx, "cart_pages", &old.cart_pages, &new.cart_pages, |p| {
         p.id.0
     })?;
@@ -611,10 +697,18 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
 fn upsert_track(tx: &Transaction<'_>, track: &Track) -> Result<(), StoreError> {
     let text = doc(track)?;
     tx.prepare_cached(
-        "INSERT INTO tracks (id, path, doc) VALUES (?1, ?2, ?3) \
-         ON CONFLICT(id) DO UPDATE SET path = excluded.path, doc = excluded.doc",
+        "INSERT INTO tracks (id, path, doc, category) VALUES (?1, ?2, ?3, ?4) \
+         ON CONFLICT(id) DO UPDATE SET path = excluded.path, doc = excluded.doc, \
+         category = excluded.category",
     )
-    .and_then(|mut s| s.execute(params![key(track.id.0), track.path.to_string_lossy(), text]))
+    .and_then(|mut s| {
+        s.execute(params![
+            key(track.id.0),
+            track.path.to_string_lossy(),
+            text,
+            track.category.map(|c| key(c.0))
+        ])
+    })
     .map(drop)
     .map_err(db_error)
 }
@@ -718,6 +812,17 @@ mod tests {
     use super::*;
     use fp_model::{PlaylistId, TrackId};
 
+    #[test]
+    fn id_text_cuts_long_text_and_blobs() {
+        let long = "x".repeat(500);
+        let text = id_text(&SqlValue::Text(long.clone()));
+        assert!(text.chars().count() < 80, "{text}");
+        assert!(text.contains('…'));
+        assert!(id_text(&SqlValue::Blob(long.into_bytes())).chars().count() < 80);
+        assert_eq!(id_text(&SqlValue::Text("ab".into())), "\"ab\"");
+        assert_eq!(id_text(&SqlValue::Integer(7)), "Integer(7)");
+    }
+
     fn snapshot() -> Snapshot {
         let mut snap = Snapshot::default();
         snap.library
@@ -753,6 +858,29 @@ mod tests {
         assert_eq!(back, old);
         // The fail point is spent: the same save now succeeds.
         write_changes(&mut db, &old, &new).unwrap();
+        assert_eq!(read(&db).0, new);
+    }
+
+    #[test]
+    fn write_changes_writes_only_the_changed_category_row() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut db = Db::open(&dir.path().join("fauste.db")).unwrap();
+        let cat = |id: u64, name: &str| Category {
+            id: CategoryId(id),
+            parent: None,
+            name: name.into(),
+            color: None,
+            kind: fp_model::TrackKind::Music,
+        };
+        let mut old = snapshot();
+        old.categories = vec![cat(1, "A"), cat(2, "B"), cat(3, "C")];
+        write_full(&mut db, &old).unwrap();
+
+        let mut new = old.clone();
+        new.categories[1].name = "Bee".into();
+        let before = db.conn.total_changes();
+        write_changes(&mut db, &old, &new).unwrap();
+        assert_eq!(db.conn.total_changes() - before, 1);
         assert_eq!(read(&db).0, new);
     }
 }

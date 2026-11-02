@@ -31,7 +31,7 @@ fn rule13_removing_the_next_entry_moves_next_to_the_following_one() {
 }
 
 #[test]
-fn removing_the_last_reference_drops_the_track_from_the_library() {
+fn removing_the_last_reference_keeps_the_track_in_the_library() {
     let mut state = fixture(2);
     let e = entries(&state);
     apply(&mut state, Command::DuplicateEntry(e[1])).unwrap();
@@ -44,7 +44,7 @@ fn removing_the_last_reference_drops_the_track_from_the_library() {
         "the original still references the track"
     );
     apply(&mut state, Command::RemoveEntry(e[1])).unwrap();
-    assert_eq!(state.library.len(), 1);
+    assert_eq!(state.library.len(), 2, "LB15: the track stays");
 }
 
 #[test]

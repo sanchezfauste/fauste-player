@@ -1767,7 +1767,14 @@ fn a_track_removed_while_measured_is_forgotten() {
     });
     let first = r.handle.model.load().playlists.first_id().unwrap();
     let entry = r.handle.model.load().playlists.get(first).unwrap().entries[0].id;
+    let track = r.handle.model.load().playlists.get(first).unwrap().entries[0].track;
+    // The track stays in the library after its last entry (LB15); a missing,
+    // uncategorised, unused one leaves (LB17c).
     r.handle.send(Command::RemoveEntry(entry));
+    r.handle.send(Command::SetFileState {
+        track,
+        state: fp_model::FileState::Missing,
+    });
     r.run_until("the track gone", |r| {
         r.handle.model.load().library.is_empty()
     });
@@ -2358,4 +2365,23 @@ fn an_unchanged_library_is_not_walked_again() {
     }));
     idle_for(&mut r, 100);
     assert!(r.services.library_walks() > walks, "an edit walks");
+}
+
+/// LB17c end to end: an uncategorised track nothing uses, whose file was
+/// deleted, is found missing by the file check and leaves the library.
+#[test]
+fn an_unused_uncategorised_track_whose_file_is_deleted_leaves_the_library() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "gone.wav", 1);
+    let mut r = rig(&[], dir);
+    r.handle.send(Command::AddToLibrary {
+        paths: vec![path.clone()],
+        category: None,
+    });
+    r.conductor.tick(r.now);
+    assert!(r.handle.model.load().library.track_at(&path).is_some());
+    std::fs::remove_file(&path).unwrap();
+    r.run_until("the track gone", |r| {
+        r.handle.model.load().library.track_at(&path).is_none()
+    });
 }

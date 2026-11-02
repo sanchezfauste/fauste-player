@@ -56,6 +56,7 @@ pub fn roundtrip(state: &AppState) -> AppState {
     let parts = fp_model::RestoreParts {
         config: state.config.clone(),
         library: state.library.clone(),
+        categories: Default::default(),
         playlists: state.playlists.clone(),
         cart_pages: state.cartwall.pages.clone(),
         cartwall_session: state.cartwall.session(),

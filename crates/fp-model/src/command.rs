@@ -164,6 +164,57 @@ pub enum Command {
         name: String,
         paths: Vec<PathBuf>,
     },
+    /// Puts files in the library, filed under `category` when given: a new
+    /// track takes the category and its kind, an uncategorised one joins it,
+    /// one already in a category keeps it (LB16).
+    AddToLibrary {
+        paths: Vec<PathBuf>,
+        category: Option<crate::ids::CategoryId>,
+    },
+    /// LB12, LB13: files the tracks under `category` (`None`: uncategorised);
+    /// they take the category's kind. Unknown tracks are skipped.
+    MoveTracksToCategory {
+        tracks: Vec<crate::ids::TrackId>,
+        category: Option<crate::ids::CategoryId>,
+    },
+    /// LB13: the kind of each track, whatever its category.
+    SetTracksKind {
+        tracks: Vec<crate::ids::TrackId>,
+        kind: crate::track::TrackKind,
+    },
+    /// LB17: removes the tracks from the library with their entries and
+    /// their carts' files. Refused whole while any of them is on air (LB17b).
+    RemoveTracks(Vec<crate::ids::TrackId>),
+    /// LB11: deletes a category, its subcategories and every track in them
+    /// (LB17), refused whole while any of those is on air (LB17b).
+    DeleteCategory(crate::ids::CategoryId),
+    /// Track categories (track library spec LB9, LB10).
+    CreateCategory {
+        parent: Option<crate::ids::CategoryId>,
+        name: String,
+        color: Option<crate::cartwall::CartColor>,
+        kind: crate::track::TrackKind,
+    },
+    RenameCategory {
+        category: crate::ids::CategoryId,
+        name: String,
+    },
+    SetCategoryColor {
+        category: crate::ids::CategoryId,
+        color: Option<crate::cartwall::CartColor>,
+    },
+    /// Only the kind new tracks take; tracks already filed keep theirs.
+    SetCategoryKind {
+        category: crate::ids::CategoryId,
+        kind: crate::track::TrackKind,
+    },
+    /// Moves a category with its subtree; `index` is among the new
+    /// siblings and is clamped.
+    MoveCategory {
+        category: crate::ids::CategoryId,
+        parent: Option<crate::ids::CategoryId>,
+        index: usize,
+    },
     RenamePlaylist {
         playlist: PlaylistId,
         name: String,
@@ -519,6 +570,13 @@ pub enum EngineAction {
         device: OutputDevice,
         settings: DeviceSettings,
         force: bool,
+    },
+    /// LB17c: `track` left the library by itself (its file is missing, it
+    /// has no category and nothing uses it). The engine only logs it; an
+    /// explicit removal (LB11, LB17) is not reported.
+    TrackLeftLibrary {
+        track: TrackId,
+        path: PathBuf,
     },
 }
 

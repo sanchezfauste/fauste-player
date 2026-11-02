@@ -16,7 +16,7 @@ use crate::player::{CueState, FadeOrigin, PlayMode, PlayerState, Transport};
 use crate::playlist::{Playlist, PlaylistEntry};
 use crate::shortcuts::{Shortcut, default_shortcuts};
 use crate::state::AppState;
-use crate::track::{FileState, MarkerKind, Track};
+use crate::track::{FileState, MarkerKind};
 
 /// Applies a user command. On `Err` the state is unchanged.
 pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>, ModelError> {
@@ -252,6 +252,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
                     }
                 }
                 refresh_next(state);
+                crate::library_rules::release_tracks(state, [track], &mut out);
             }
         }
         Command::RemoveEntry(entry) => remove_entry(state, entry, &mut out)?,
@@ -316,6 +317,80 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             let id = state.ids.playlist();
             state.playlists.add(Playlist::new(id, name));
             insert_paths(state, id, 0, paths)?;
+        }
+        Command::MoveTracksToCategory { tracks, category } => {
+            crate::library_rules::move_tracks(state, tracks, category, &mut out)?
+        }
+        Command::SetTracksKind { tracks, kind } => {
+            crate::library_rules::set_tracks_kind(state, tracks, kind)?
+        }
+        Command::RemoveTracks(tracks) => {
+            crate::library_rules::remove_tracks(state, &tracks, &mut out)?
+        }
+        Command::DeleteCategory(category) => {
+            crate::library_rules::delete_category(state, category, &mut out)?
+        }
+        Command::AddToLibrary { paths, category } => {
+            crate::library_rules::add_to_library(state, paths, category)?
+        }
+        Command::CreateCategory {
+            parent,
+            name,
+            color,
+            kind,
+        } => {
+            if let Some(p) = parent
+                && state.categories.get(p).is_none()
+            {
+                return Err(ModelError::UnknownCategory(p));
+            }
+            let max = state.config.library.max_category_depth;
+            if state.categories.depth_below(parent) + 1 > max {
+                return Err(ModelError::CategoryTooDeep);
+            }
+            let name = crate::category::check_name(&state.categories, parent, &name, None)?;
+            let id = state.ids.category();
+            state.categories.push(crate::category::Category {
+                id,
+                parent,
+                name,
+                color,
+                kind,
+            });
+        }
+        Command::RenameCategory { category, name } => {
+            let parent = state
+                .categories
+                .get(category)
+                .ok_or(ModelError::UnknownCategory(category))?
+                .parent;
+            let name =
+                crate::category::check_name(&state.categories, parent, &name, Some(category))?;
+            if let Some(c) = state.categories.get_mut(category) {
+                c.name = name;
+            }
+        }
+        Command::SetCategoryColor { category, color } => {
+            state
+                .categories
+                .get_mut(category)
+                .ok_or(ModelError::UnknownCategory(category))?
+                .color = color;
+        }
+        Command::SetCategoryKind { category, kind } => {
+            state
+                .categories
+                .get_mut(category)
+                .ok_or(ModelError::UnknownCategory(category))?
+                .kind = kind;
+        }
+        Command::MoveCategory {
+            category,
+            parent,
+            index,
+        } => {
+            let max = state.config.library.max_category_depth;
+            state.categories.move_to(category, parent, index, max)?;
         }
         Command::RenamePlaylist { playlist, name } => state.playlists.rename(playlist, name)?,
         Command::DeletePlaylist(playlist) => delete_playlist(state, playlist, &mut out)?,
@@ -730,8 +805,7 @@ fn insert_paths(
     }
     let mut entries = Vec::with_capacity(paths.len());
     for path in paths {
-        let track = state.ids.track();
-        state.library.insert(Track::new(track, path));
+        let track = crate::library_rules::track_for_path(state, path);
         entries.push(PlaylistEntry::new(state.ids.entry(), track));
     }
     state.playlists.insert(playlist, index, entries)?;
@@ -1235,11 +1309,6 @@ fn set_marker(
     Ok(())
 }
 
-/// Drops library tracks that no playlist entry or cart references any more.
-fn forget_unreferenced(state: &mut AppState, tracks: impl IntoIterator<Item = TrackId>) {
-    cart_rules::forget_tracks(state, tracks);
-}
-
 fn remove_entry(
     state: &mut AppState,
     entry: EntryId,
@@ -1248,6 +1317,19 @@ fn remove_entry(
     if state.is_on_air(entry) {
         return Err(ModelError::EntryOnAir(entry));
     }
+    let track = take_out_entry(state, entry, out)?;
+    crate::library_rules::release_tracks(state, [track], out);
+    Ok(())
+}
+
+/// Takes `entry` out of its playlist (the part of `remove_entry` after the
+/// on-air check): next pointers move to the entry's successor and cues on
+/// it stop. Returns the entry's track, for the caller to release (LB17c).
+fn take_out_entry(
+    state: &mut AppState,
+    entry: EntryId,
+    out: &mut Vec<EngineAction>,
+) -> Result<TrackId, ModelError> {
     let successors = successors_of(state, entry);
     let removed = state.playlists.remove_entry(entry)?;
     detach_entries(
@@ -1256,9 +1338,44 @@ fn remove_entry(
         |_, current| successors.for_current(current),
         out,
     );
-    forget_unreferenced(state, [removed.track]);
     refresh_next(state);
-    Ok(())
+    Ok(removed.track)
+}
+
+/// Takes `entries` out of their playlists at once, as `take_out_entry` on
+/// each would: a next pointer into them moves to the first playable entry
+/// after it that stays (and is not the player's current), and cues on them
+/// stop. The entries' tracks are not released.
+pub(crate) fn take_out_entries(
+    state: &mut AppState,
+    entries: &HashSet<EntryId>,
+    out: &mut Vec<EngineAction>,
+) {
+    if entries.is_empty() {
+        return;
+    }
+    let replacements: std::collections::HashMap<(EntryId, Option<EntryId>), Option<EntryId>> =
+        state
+            .players
+            .iter()
+            .filter_map(|p| {
+                let next = p.next.filter(|n| entries.contains(n))?;
+                let after = state
+                    .playlists
+                    .playable_after_where(next, &state.library, |e| {
+                        !entries.contains(&e) && Some(e) != p.current
+                    });
+                Some(((next, p.current), after))
+            })
+            .collect();
+    state.playlists.remove_entries(entries);
+    detach_entries(
+        state,
+        entries,
+        |next, current| replacements.get(&(next, current)).copied().flatten(),
+        out,
+    );
+    refresh_next(state);
 }
 
 fn delete_playlist(
@@ -1282,7 +1399,7 @@ fn delete_playlist(
     }
     let ids: HashSet<EntryId> = removed.entries.iter().map(|e| e.id).collect();
     detach_entries(state, &ids, |_, _| None, out);
-    forget_unreferenced(state, removed.entries.iter().map(|e| e.track));
+    crate::library_rules::release_tracks(state, removed.entries.iter().map(|e| e.track), out);
     refresh_next(state);
     Ok(())
 }

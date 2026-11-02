@@ -68,7 +68,7 @@ fn a_corrupt_database_falls_back_to_its_newest_backup() {
 }
 
 #[test]
-fn an_unusable_backup_is_skipped_and_left_untouched() {
+fn an_unusable_backup_is_skipped_and_set_aside() {
     let dir = tempdir().unwrap();
     let path = dir.path().join("fauste.db");
     fs::write(backup_path(&path, 1), vec![0xCD; 4096]).unwrap();
@@ -77,10 +77,16 @@ fn an_unusable_backup_is_skipped_and_left_untouched() {
     let opened = open_with_fallback(&path, 3).unwrap();
     assert_eq!(opened.source, DbSource::Backup(2));
     assert_eq!(marker(&opened.db).as_deref(), Some("older"));
+    assert!(!backup_path(&path, 1).exists(), "its name is free");
+    let aside: Vec<_> = names(dir.path())
+        .into_iter()
+        .filter(|n| n.starts_with("fauste.db.bak1.corrupt-"))
+        .collect();
+    assert_eq!(aside.len(), 1, "{aside:?}");
     assert_eq!(
-        fs::read(backup_path(&path, 1)).unwrap(),
+        fs::read(dir.path().join(&aside[0])).unwrap(),
         vec![0xCD; 4096],
-        "the fallback never modifies a backup"
+        "the bytes are kept"
     );
 }
 
@@ -91,7 +97,7 @@ fn a_newer_database_is_kept_aside() {
     make_db(&path, "future");
     {
         let conn = rusqlite::Connection::open(&path).unwrap();
-        conn.pragma_update(None, "user_version", 2).unwrap();
+        conn.pragma_update(None, "user_version", 3).unwrap();
     }
     let before = fs::read(&path).unwrap();
     let opened = open_with_fallback(&path, 3).unwrap();
@@ -113,7 +119,7 @@ fn without_anything_readable_it_starts_fresh() {
     fs::write(backup_path(&path, 1), vec![0xCD; 4096]).unwrap();
     let opened = open_with_fallback(&path, 3).unwrap();
     assert_eq!(opened.source, DbSource::Fresh);
-    assert_eq!(opened.db.pragma_i64("user_version"), 1);
+    assert_eq!(opened.db.pragma_i64("user_version"), 2);
     assert!(path.exists());
 }
 
@@ -123,7 +129,7 @@ fn an_unopenable_directory_gives_an_in_memory_database() {
     let path = dir.path().join("missing/fauste.db");
     let opened = open_with_fallback(&path, 3).unwrap();
     assert_eq!(opened.source, DbSource::Fresh);
-    assert_eq!(opened.db.pragma_i64("user_version"), 1);
+    assert_eq!(opened.db.pragma_i64("user_version"), 2);
     assert!(!opened.warnings.is_empty());
     assert!(!path.exists());
 }
@@ -228,7 +234,7 @@ fn a_newer_database_in_rollback_journal_mode_is_not_modified() {
     let path = dir.path().join("fauste.db");
     {
         let conn = rusqlite::Connection::open(&path).unwrap();
-        conn.execute_batch("CREATE TABLE t (x); PRAGMA user_version = 2;")
+        conn.execute_batch("CREATE TABLE t (x); PRAGMA user_version = 3;")
             .unwrap();
     }
     let before = fs::read(&path).unwrap();
@@ -238,4 +244,29 @@ fn a_newer_database_in_rollback_journal_mode_is_not_modified() {
         .find(|n| n.starts_with("fauste.db.newer-"))
         .unwrap();
     assert_eq!(fs::read(dir.path().join(kept)).unwrap(), before);
+}
+
+#[test]
+fn a_newer_backup_is_set_aside_as_newer() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("fauste.db");
+    make_db(&backup_path(&path, 1), "future");
+    {
+        let conn = rusqlite::Connection::open(backup_path(&path, 1)).unwrap();
+        conn.pragma_update(None, "user_version", 99).unwrap();
+    }
+    make_db(&backup_path(&path, 2), "older");
+    fs::write(&path, vec![0xAB; 4096]).unwrap();
+    let opened = open_with_fallback(&path, 3).unwrap();
+    assert_eq!(opened.source, DbSource::Backup(2));
+    let all = names(dir.path());
+    assert!(!backup_path(&path, 1).exists());
+    assert!(
+        all.iter().any(|n| n.starts_with("fauste.db.bak1.newer-")),
+        "{all:?}"
+    );
+    assert!(
+        !all.iter().any(|n| n.starts_with("fauste.db.bak1.corrupt-")),
+        "{all:?}"
+    );
 }

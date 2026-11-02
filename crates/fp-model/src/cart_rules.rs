@@ -1,5 +1,6 @@
 //! Cartwall rules C1–C10 (Phase 2 spec P2.3), as pure state transitions.
 
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::cartwall::{Cart, CartEdit, CartFileChange, CartPage, CartPageImport, PlayingCart};
@@ -8,7 +9,7 @@ use crate::error::ModelError;
 use crate::ids::{CartId, CartPageId, TrackId};
 use crate::live::Holder;
 use crate::state::AppState;
-use crate::track::{FileState, Track};
+use crate::track::FileState;
 
 /// What the engine needs to play `cart`, if it has a playable file.
 fn request(state: &AppState, cart: &Cart, looped: bool, holder: Holder) -> Option<CartRequest> {
@@ -167,15 +168,6 @@ pub(crate) fn rename_page(
     Ok(())
 }
 
-/// Tracks no longer referenced by any playlist entry or cart are dropped.
-pub(crate) fn forget_tracks(state: &mut AppState, tracks: impl IntoIterator<Item = TrackId>) {
-    for track in tracks {
-        if !state.playlists.references_track(track) && !state.cartwall.references_track(track) {
-            state.library.remove(track);
-        }
-    }
-}
-
 /// C8.
 pub(crate) fn delete_page(
     state: &mut AppState,
@@ -198,7 +190,7 @@ pub(crate) fn delete_page(
             stop_cue(state, out);
         }
     }
-    forget_tracks(state, removed.carts.iter().filter_map(|c| c.track));
+    crate::library_rules::release_tracks(state, removed.carts.iter().filter_map(|c| c.track), out);
     Ok(())
 }
 
@@ -321,7 +313,7 @@ pub(crate) fn edit_cart(
     }
 }
 
-/// C8: a new file stops the cart first; the old track is forgotten.
+/// C8: a new file stops the cart first; the old track is released (LB17c).
 pub(crate) fn assign_file(
     state: &mut AppState,
     page: CartPageId,
@@ -330,11 +322,7 @@ pub(crate) fn assign_file(
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
     cart_at(state, page, index)?;
-    let track = path.map(|path| {
-        let track = state.ids.track();
-        state.library.insert(Track::new(track, path));
-        track
-    });
+    let track = path.map(|path| crate::library_rules::track_for_path(state, path));
     set_track(state, page, index, track, out)
 }
 
@@ -351,7 +339,7 @@ pub(crate) fn assign_track(
     set_track(state, page, index, Some(track), out)
 }
 
-/// Stops the cart, gives it `track` and forgets the old one if unused (C8).
+/// Stops the cart, gives it `track` and releases the old one (C8, LB17c).
 fn set_track(
     state: &mut AppState,
     page: CartPageId,
@@ -359,6 +347,19 @@ fn set_track(
     track: Option<TrackId>,
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
+    let old = replace_track(state, page, index, track, out)?;
+    crate::library_rules::release_tracks(state, old, out);
+    Ok(())
+}
+
+/// Stops the cart and gives it `track`; returns the track it had.
+fn replace_track(
+    state: &mut AppState,
+    page: CartPageId,
+    index: usize,
+    track: Option<TrackId>,
+    out: &mut Vec<EngineAction>,
+) -> Result<Option<TrackId>, ModelError> {
     let (id, old) = {
         let cart = cart_at(state, page, index)?;
         (cart.id, cart.track)
@@ -368,33 +369,60 @@ fn set_track(
         stop_cue(state, out);
     }
     cart_at_mut(state, page, index)?.track = track;
-    forget_tracks(state, old);
-    Ok(())
+    Ok(old)
 }
 
+/// LB17: empties every cart that holds one of `tracks`; they keep their
+/// name, colour and options. A playing cart or cue on them stops.
+pub(crate) fn empty_carts_of(
+    state: &mut AppState,
+    tracks: &HashSet<TrackId>,
+    out: &mut Vec<EngineAction>,
+) {
+    let spots: Vec<(CartPageId, usize)> = state
+        .cartwall
+        .pages
+        .iter()
+        .flat_map(|p| {
+            p.carts
+                .iter()
+                .enumerate()
+                .filter(|(_, c)| c.track.is_some_and(|t| tracks.contains(&t)))
+                .map(move |(i, _)| (p.id, i))
+        })
+        .collect();
+    for (page, index) in spots {
+        // The spot was just found, so it exists. The tracks are being
+        // removed explicitly: no implicit release (LB17c).
+        let _ = replace_track(state, page, index, None, out);
+    }
+}
+
+/// LB16: only a file that lands in a cart joins the library: a position
+/// outside the grid is ignored, and of a position given twice the last
+/// wins, so the earlier file never becomes a track.
 pub(crate) fn import_page(state: &mut AppState, import: CartPageImport) -> Result<(), ModelError> {
     check_grid(state, import.rows, import.cols)?;
     let mut page = CartPage::new(&mut state.ids, import.name, import.rows, import.cols);
-    for (position, edit, file) in import.carts {
-        let track = file.map(|path| {
-            let track = state.ids.track();
-            state.library.insert(Track::new(track, path));
-            track
-        });
+    let slots = page.carts.len();
+    let mut last: HashMap<usize, usize> = HashMap::new();
+    for (i, (position, _, _)) in import.carts.iter().enumerate() {
+        if *position < slots {
+            last.insert(*position, i);
+        }
+    }
+    for (i, (position, edit, file)) in import.carts.into_iter().enumerate() {
+        if last.get(&position) != Some(&i) {
+            continue;
+        }
+        let track = file.map(|path| crate::library_rules::track_for_path(state, path));
         if let Some(cart) = page.carts.get_mut(position) {
-            // A position given twice: the earlier file is not kept.
-            if let Some(old) = cart.track.take() {
-                state.library.remove(old);
-            }
             cart.name = edit.name;
             cart.kind = edit.kind;
             cart.looped = edit.looped;
             cart.exclusive = edit.exclusive;
             cart.color = edit.color;
             cart.track = track;
-        } else if let Some(track) = track {
-            // Outside the grid: do not keep an orphan track.
-            state.library.remove(track);
         }
     }
     state.cartwall.pages.push(page);

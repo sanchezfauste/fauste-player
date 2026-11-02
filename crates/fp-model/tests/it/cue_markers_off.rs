@@ -264,6 +264,7 @@ fn a_restored_position_past_the_end_comes_back_at_the_start_of_the_range() {
         let parts = RestoreParts {
             config: state.config.clone(),
             library: state.library.clone(),
+            categories: Default::default(),
             playlists: state.playlists.clone(),
             cart_pages: state.cartwall.pages.clone(),
             cartwall_session: state.cartwall.session(),

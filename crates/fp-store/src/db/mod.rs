@@ -218,6 +218,17 @@ fn side_files(path: &Path) -> [PathBuf; 2] {
 /// done are undone. Returns whether `path` is now free; nothing is ever
 /// deleted or overwritten.
 fn set_aside(path: &Path, kind: &str, warnings: &mut Vec<String>) -> bool {
+    set_aside_with(path, kind, warnings, |from, to| fs::rename(from, to))
+}
+
+/// [`set_aside`] with the rename as a parameter, so a test can make one
+/// of them fail.
+fn set_aside_with(
+    path: &Path,
+    kind: &str,
+    warnings: &mut Vec<String>,
+    rename: impl Fn(&Path, &Path) -> std::io::Result<()>,
+) -> bool {
     let target = free_target(path, kind);
     let mut moves: Vec<(PathBuf, PathBuf)> = side_files(path)
         .into_iter()
@@ -229,10 +240,10 @@ fn set_aside(path: &Path, kind: &str, warnings: &mut Vec<String>) -> bool {
     }
     let mut done: Vec<&(PathBuf, PathBuf)> = Vec::new();
     for pair in &moves {
-        if let Err(e) = fs::rename(&pair.0, &pair.1) {
+        if let Err(e) = rename(&pair.0, &pair.1) {
             warnings.push(format!("{}: could not set aside: {e}", pair.0.display()));
             for (from, to) in done.into_iter().rev() {
-                if let Err(e) = fs::rename(to, from) {
+                if let Err(e) = rename(to, from) {
                     warnings.push(format!("{}: could not restore: {e}", from.display()));
                 }
             }
@@ -315,6 +326,10 @@ pub fn open_with_fallback(path: &Path, backups: usize) -> Result<Opened, OpenErr
             fail(&mut warnings, "unusable", &e);
             if matches!(e, OpenError::Busy(_)) {
                 // In use by someone else: leave it alone, write nothing.
+                warnings.push(format!(
+                    "{}: the database is in use by another process (is another copy running?)",
+                    path.display()
+                ));
                 return in_memory(path, warnings);
             }
             if path.exists() {
@@ -346,6 +361,9 @@ fn from_backups(
     // A backup that opened but cannot be read in full: the data may be
     // there, so the session must not start a new database over it.
     let mut incomplete = false;
+    // Backups that cannot be used: kept under another name once the
+    // session has a database, so the rotation never deletes them.
+    let mut unusable: Vec<(PathBuf, &str)> = Vec::new();
     for n in 1..=backups {
         let backup = backup_path(path, n);
         if !backup.exists() {
@@ -354,6 +372,7 @@ fn from_backups(
         if let Err(e) = fs::copy(&backup, path) {
             warnings.push(format!("{}: could not copy: {e}", backup.display()));
             discard_copy(path);
+            unusable.push((backup, "corrupt"));
             continue;
         }
         match Db::open(path) {
@@ -365,8 +384,14 @@ fn from_backups(
                     backup.display()
                 ));
                 discard_copy(path);
+                unusable.push((backup, "corrupt"));
             }
             Ok(db) => {
+                // The ones skipped on the way would be rotated away.
+                for (bad, kind) in &unusable {
+                    // A failure has already left a warning.
+                    set_aside(bad, kind, &mut warnings);
+                }
                 warnings.push(format!("restored from {}", backup.display()));
                 return Ok(Opened {
                     db,
@@ -375,8 +400,14 @@ fn from_backups(
                 });
             }
             Err(e) => {
-                fail(&mut warnings, "backup unusable", &e);
+                warnings.push(format!("{}: backup unusable: {e}", backup.display()));
                 discard_copy(path);
+                let kind = if matches!(e, OpenError::Newer(_)) {
+                    "newer"
+                } else {
+                    "corrupt"
+                };
+                unusable.push((backup, kind));
             }
         }
     }
@@ -384,11 +415,19 @@ fn from_backups(
         return in_memory(path, warnings);
     }
     match Db::open(path) {
-        Ok(db) => Ok(Opened {
-            db,
-            source: DbSource::Fresh,
-            warnings,
-        }),
+        Ok(db) => {
+            // Every backup failed and the next one rotates them: keep
+            // what could not be read.
+            for (backup, kind) in &unusable {
+                // A failure has already left a warning.
+                set_aside(backup, kind, &mut warnings);
+            }
+            Ok(Opened {
+                db,
+                source: DbSource::Fresh,
+                warnings,
+            })
+        }
         Err(e) => {
             fail(&mut warnings, "could not create a new database", &e);
             in_memory(path, warnings)
@@ -462,5 +501,34 @@ mod tests {
                 .to_string_lossy()
                 .contains(".corrupt-")
         }));
+    }
+
+    #[test]
+    #[allow(clippy::unwrap_used)]
+    fn set_aside_rolls_back_when_a_side_file_cannot_move() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("fauste.db");
+        fs::write(&path, b"main").unwrap();
+        let [wal, shm] = side_files(&path);
+        fs::write(&wal, b"wal").unwrap();
+        fs::write(&shm, b"shm").unwrap();
+        let target = free_target(&path, "corrupt");
+        let mut warnings = Vec::new();
+        // The `-shm` rename fails after the `-wal` one succeeded (a failure
+        // an operating system cannot be made to give on demand).
+        let moved = set_aside_with(&path, "corrupt", &mut warnings, |from, to| {
+            if from.to_string_lossy().ends_with("-shm") {
+                Err(std::io::Error::other("injected"))
+            } else {
+                fs::rename(from, to)
+            }
+        });
+        assert!(!moved);
+        assert_eq!(fs::read(&path).unwrap(), b"main");
+        assert_eq!(fs::read(&wal).unwrap(), b"wal");
+        assert_eq!(fs::read(&shm).unwrap(), b"shm");
+        assert!(!side_files(&target)[0].exists(), "the -wal move was undone");
+        assert!(!target.exists());
+        assert!(warnings.iter().any(|w| w.contains("could not set aside")));
     }
 }

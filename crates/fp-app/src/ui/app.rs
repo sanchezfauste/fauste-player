@@ -1948,7 +1948,19 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
         | ModelError::UnknownCart(_)
         | ModelError::UnknownCartPage(_)
         | ModelError::UnknownCartPosition(_)
+        | ModelError::UnknownCategory(_)
         | ModelError::UnknownTrack(_) => i18n.tr("error-not-found"),
+        ModelError::CategoryNameEmpty => i18n.tr("error-category-name-empty"),
+        ModelError::CategoryNameTaken => i18n.tr("error-category-name-taken"),
+        ModelError::CategoryTooDeep => i18n.tr("error-category-too-deep"),
+        ModelError::LibraryOnAir(holds) => i18n.tr_args(
+            "error-library-on-air",
+            &[
+                ("entries", holds.entries.len().into()),
+                ("carts", holds.carts.len().into()),
+            ],
+        ),
+        ModelError::CategoryIntoItself => i18n.tr("error-category-into-itself"),
         ModelError::InvalidMarker => i18n.tr("error-invalid-marker"),
         ModelError::InvalidTrim => i18n.tr("error-invalid-trim"),
         ModelError::LastCartPage => i18n.tr("error-last-cart-page"),

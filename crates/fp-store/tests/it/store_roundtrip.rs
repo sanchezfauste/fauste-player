@@ -756,11 +756,12 @@ fn an_unreadable_backup_is_skipped_for_the_next_one() {
         "{:?}",
         loaded.warnings
     );
-    assert_eq!(
-        fs::read(bak(&s, 1)).unwrap(),
-        before,
-        "the bad backup is untouched"
-    );
+    assert!(!bak(&s, 1).exists(), "the bad backup's name is free");
+    let kept = corrupt_aside(&s)
+        .into_iter()
+        .find(|p| p.to_string_lossy().contains(".bak1.corrupt-"))
+        .expect("the bad backup is set aside");
+    assert_eq!(fs::read(kept).unwrap(), before, "its bytes are kept");
 }
 
 #[test]
@@ -953,4 +954,76 @@ fn a_stale_wal_beside_a_missing_database_is_set_aside() {
         .filter(|n| n.contains("-wal") && n.contains("corrupt-"))
         .collect();
     assert_eq!(aside.len(), 1, "{aside:?}");
+}
+
+#[test]
+fn unusable_backups_are_set_aside_not_rotated_away() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = saved_with_a_played_entry(&mut s);
+    fs::copy(bak(&s, 1), bak(&s, 2)).unwrap();
+    let files = [s.paths().database_file(), bak(&s, 1), bak(&s, 2)];
+    drop(s);
+    for (i, file) in files.iter().enumerate() {
+        fs::remove_file(format!("{}-wal", file.display())).ok();
+        fs::remove_file(format!("{}-shm", file.display())).ok();
+        fs::write(file, format!("garbage {i}")).unwrap();
+    }
+    let mut s = store(&dir);
+    let loaded = s.load("Main");
+    assert!(
+        loaded.warnings.iter().any(|w| w.contains("bak1")),
+        "{:?}",
+        loaded.warnings
+    );
+    let aside = corrupt_aside(&s);
+    assert_eq!(aside.len(), 3, "{aside:?}");
+    for (i, name) in ["fauste.db", "fauste.db.bak1", "fauste.db.bak2"]
+        .iter()
+        .enumerate()
+    {
+        let found = aside.iter().find(|p| {
+            let n = p.file_name().unwrap().to_string_lossy().into_owned();
+            n.starts_with(&format!("{name}.corrupt-"))
+        });
+        let found = found.unwrap_or_else(|| panic!("{name} not set aside: {aside:?}"));
+        assert_eq!(fs::read(found).unwrap(), format!("garbage {i}").as_bytes());
+    }
+    // Saving and rotating backups never touches them.
+    let now = std::time::Instant::now();
+    s.save_state(&state, |_| 0.0, now).unwrap();
+    for k in 1..6u64 {
+        s.save_state(
+            &state,
+            |_| 0.0,
+            now + std::time::Duration::from_secs(10_000 * k),
+        )
+        .unwrap();
+    }
+    assert_eq!(corrupt_aside(&s).len(), 3);
+}
+
+#[test]
+fn a_busy_database_at_start_is_reported() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    saved_with_a_played_entry(&mut s);
+    let db = s.paths().database_file();
+    drop(s);
+    let holder = rusqlite::Connection::open(&db).unwrap();
+    holder
+        .execute_batch("PRAGMA locking_mode=EXCLUSIVE; BEGIN EXCLUSIVE;")
+        .unwrap();
+    let mut s = store(&dir);
+    let loaded = s.load("Main");
+    assert!(
+        loaded
+            .warnings
+            .iter()
+            .any(|w| w.contains("in use") && w.contains("fauste.db")),
+        "{:?}",
+        loaded.warnings
+    );
+    assert!(loaded.warnings.iter().any(|w| w.contains("not saved")));
+    assert!(corrupt_aside(&s).is_empty());
 }

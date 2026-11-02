@@ -230,6 +230,34 @@ Rules (pure functions in `fp-model`, one test each):
   kind can then be changed on the track. Changing a category's kind does not
   change its tracks.
 
+### 5.1b Implementation notes (plan 2)
+
+Where the implementation knowingly differs from, or settles, the text above:
+
+- `Category::order` is the category's position in `Categories` (a `Vec` in
+  tree order); the store writes it as the `categories.position` column.
+  `watched_folder` arrives with plan 5 (serde default).
+- Paths are compared as given by the model; canonicalisation happens in
+  fp-app's helper threads where paths enter. Paths stored before schema 2 are
+  kept as written, and Android MediaStore paths are not canonicalised, so a
+  symlinked path saved earlier would not merge with its canonical twin.
+- Uniqueness of paths is enforced by the model and merged at restore (the
+  survivor is the lowest id among tracks with an operator edit, else the
+  lowest id), not by a unique SQL index.
+- *Add to library* with a category: a new track takes the category and its
+  kind; an uncategorised existing track joins it; one already categorised
+  keeps its category.
+- A pre-listened (CUE) entry counts as on air for LB17b when removing tracks
+  or deleting a category; removing a single entry is unchanged.
+- The model cannot log: it reports each LB17c removal as an engine action
+  (`TrackLeftLibrary`, with the path), which the engine logs. Explicit
+  removals (LB11, LB17) are not reported.
+- LB17c is also checked when a track is taken out of its category (moved
+  to *uncategorised*): a missing, unused track then leaves.
+- An unknown category on a track loads as uncategorised; a category with an
+  unknown parent, the first category of a cycle (in stored order) and one
+  deeper than 32 levels load at the root, each with a warning.
+
 ### 5.2 Size and the snapshot
 
 The library stays in `AppState` (the model's rules need it), but today the

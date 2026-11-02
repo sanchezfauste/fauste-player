@@ -24,6 +24,17 @@ Playlists can also be created, and are renamed and deleted, in
 
 ## The track table
 
+Every file you add to a playlist, a cart or by importing an M3U or PLS file
+becomes a *track* of the library, and it stays there when you remove its
+entry, clear the cart or delete the playlist: its markers, loudness settings
+and tags are kept for the next time you add the file. The same file is always
+one track: adding it twice, or to a playlist and to a cart, shares its
+markers and loudness settings everywhere. On the desktop, a file added from
+this version on is the same track whatever path reaches it (a symlink or `..`
+in the path does not make a second track). The one exception: a track that
+has no category, whose file has gone missing and that nothing uses any more
+leaves the library by itself, with a line in the log.
+
 ![A playlist: played tracks dimmed, the track on air in red, the next track in green, and the footer with the time left](../images/guide/playlist.png)
 
 | Column | Content |
@@ -129,7 +140,7 @@ Row colours:
 | Repeat this track | Tick to play it again and again, without a gap, until you press Play (next), Previous, Stop or Fade stop, or turn on Stop after. Pause keeps it repeating. A repeat icon shows before the title |
 | Stop after this track | Tick to stop the player when this track ends, every time it plays (in any mode). Unlike the player's **Stop after** button, the mark stays with the track and is saved with the playlist. The stop-after icon shows before the title. It wins over Repeat |
 | Move to ▸ | Move it to the end of another playlist |
-| Remove from playlist | Remove it; not possible while it is on air |
+| Remove from playlist | Remove it from this playlist; not possible while it is on air. The track stays in the library (its markers and loudness settings are kept) |
 
 ## Editing tags
 

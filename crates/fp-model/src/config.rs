@@ -33,6 +33,8 @@ pub struct Config {
     /// Loudness normalization (loudness normalization spec §4). Changes
     /// apply to sources loaded afterwards (N3).
     pub loudness: LoudnessConfig,
+    /// The track library (track library spec §5).
+    pub library: LibraryConfig,
 }
 
 impl Default for Config {
@@ -50,6 +52,7 @@ impl Default for Config {
             midi: crate::midi::MidiConfig::default(),
             remote: crate::remote::RemoteConfig::default(),
             loudness: LoudnessConfig::default(),
+            library: LibraryConfig::default(),
         }
     }
 }
@@ -292,6 +295,26 @@ fn clamp_finite(
             message: format!("{value} is not a number; using {default}"),
         });
         *value = default;
+    }
+}
+
+/// The deepest category tree `library.max_category_depth` may allow; a
+/// loaded category below it goes to the top level.
+pub const MAX_CATEGORY_DEPTH: usize = 32;
+
+/// The track library's limits (track library spec §5).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LibraryConfig {
+    /// How many levels the category tree may have (1 ..= 32).
+    pub max_category_depth: usize,
+}
+
+impl Default for LibraryConfig {
+    fn default() -> Self {
+        Self {
+            max_category_depth: 8,
+        }
     }
 }
 
@@ -1442,6 +1465,13 @@ impl Config {
         self.midi.validate(&mut w);
         self.remote.validate(&mut w);
         self.loudness.validate(&mut w);
+        clamp_to(
+            &mut self.library.max_category_depth,
+            1,
+            MAX_CATEGORY_DEPTH,
+            "library.max_category_depth",
+            &mut w,
+        );
 
         w
     }
