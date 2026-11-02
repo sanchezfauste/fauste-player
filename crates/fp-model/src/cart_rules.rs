@@ -1,6 +1,6 @@
 //! Cartwall rules C1–C10 (Phase 2 spec P2.3), as pure state transitions.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use crate::cartwall::{Cart, CartEdit, CartFileChange, CartPage, CartPageImport, PlayingCart};
@@ -398,35 +398,34 @@ pub(crate) fn empty_carts_of(
     }
 }
 
-pub(crate) fn import_page(
-    state: &mut AppState,
-    import: CartPageImport,
-    out: &mut Vec<EngineAction>,
-) -> Result<(), ModelError> {
+/// LB16: only a file that lands in a cart joins the library: a position
+/// outside the grid is ignored, and of a position given twice the last
+/// wins, so the earlier file never becomes a track.
+pub(crate) fn import_page(state: &mut AppState, import: CartPageImport) -> Result<(), ModelError> {
     check_grid(state, import.rows, import.cols)?;
     let mut page = CartPage::new(&mut state.ids, import.name, import.rows, import.cols);
-    let mut released = Vec::new();
-    for (position, edit, file) in import.carts {
+    let slots = page.carts.len();
+    let mut last: HashMap<usize, usize> = HashMap::new();
+    for (i, (position, _, _)) in import.carts.iter().enumerate() {
+        if *position < slots {
+            last.insert(*position, i);
+        }
+    }
+    for (i, (position, edit, file)) in import.carts.into_iter().enumerate() {
+        if last.get(&position) != Some(&i) {
+            continue;
+        }
         let track = file.map(|path| crate::library_rules::track_for_path(state, path));
         if let Some(cart) = page.carts.get_mut(position) {
-            // A position given twice: the earlier file leaves the cart.
-            let old = cart.track.take();
             cart.name = edit.name;
             cart.kind = edit.kind;
             cart.looped = edit.looped;
             cart.exclusive = edit.exclusive;
             cart.color = edit.color;
             cart.track = track;
-            if let Some(old) = old {
-                released.push(old);
-            }
-        } else if let Some(track) = track {
-            // Outside the grid: the track may be shared, so release it.
-            released.push(track);
         }
     }
     state.cartwall.pages.push(page);
-    crate::library_rules::release_tracks(state, released, out);
     Ok(())
 }
 

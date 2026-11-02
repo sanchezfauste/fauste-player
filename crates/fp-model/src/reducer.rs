@@ -434,7 +434,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::ClearCartFile { page, index } => {
             cart_rules::assign_file(state, page, index, None, &mut out)?
         }
-        Command::ImportCartPage(import) => cart_rules::import_page(state, *import, &mut out)?,
+        Command::ImportCartPage(import) => cart_rules::import_page(state, *import)?,
         Command::ShowCartPage(page) => {
             if state.cartwall.page(page).is_none() {
                 return Err(ModelError::UnknownCartPage(page));
