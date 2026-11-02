@@ -29,6 +29,10 @@ id_type!(
     /// Identifies a track (one audio file and its metadata).
     TrackId
 );
+id_type!(
+    /// Identifies a track category.
+    CategoryId
+);
 
 id_type!(
     /// Identifies a cart page (one tab of the cartwall).
@@ -72,6 +76,10 @@ impl IdGen {
 
     pub fn track(&mut self) -> TrackId {
         TrackId(self.next_raw())
+    }
+
+    pub fn category(&mut self) -> CategoryId {
+        CategoryId(self.next_raw())
     }
 
     pub fn cart_page(&mut self) -> CartPageId {

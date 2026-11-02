@@ -344,6 +344,7 @@ fn restore(
         RestoreParts {
             config,
             library,
+            categories: Default::default(),
             playlists,
             cart_pages,
             cartwall_session,

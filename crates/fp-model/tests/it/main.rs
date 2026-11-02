@@ -10,6 +10,7 @@ mod bit_perfect_rules;
 mod bitrate_pass;
 mod cartwall;
 mod cartwall_props;
+mod categories;
 mod column_widths;
 mod common;
 mod create_playlist_in;

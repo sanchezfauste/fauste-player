@@ -96,6 +96,7 @@ fn full_volume() -> f32 {
 pub struct RestoreParts {
     pub config: Config,
     pub library: Library,
+    pub categories: crate::category::Categories,
     pub playlists: Playlists,
     /// Cart pages (their carts reference `library` tracks).
     pub cart_pages: Vec<CartPage>,
@@ -141,6 +142,7 @@ impl AppState {
         let RestoreParts {
             config,
             library,
+            categories,
             mut playlists,
             cart_pages,
             cartwall_session,
@@ -148,6 +150,7 @@ impl AppState {
             mut ids,
         } = parts;
         ids.observe(library.max_raw_id());
+        ids.observe(categories.max_raw_id());
         ids.observe(playlists.max_raw_id());
         for s in sessions {
             ids.observe(s.id.0);
@@ -178,6 +181,7 @@ impl AppState {
         let mut state = AppState {
             config,
             library,
+            categories,
             playlists,
             players: Vec::new(),
             cartwall,

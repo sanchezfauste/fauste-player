@@ -1,0 +1,189 @@
+#![allow(clippy::unwrap_used, clippy::expect_used, clippy::panic)]
+//! Track categories (track library spec LB9, LB10, LB13).
+
+use fp_model::{
+    AppState, Categories, Category, CategoryId, Command, Config, ModelError, Track, TrackKind,
+    apply,
+};
+
+fn state() -> AppState {
+    AppState::new(Config::default(), "P")
+}
+
+fn create(
+    s: &mut AppState,
+    parent: Option<CategoryId>,
+    name: &str,
+) -> Result<CategoryId, ModelError> {
+    apply(
+        s,
+        Command::CreateCategory {
+            parent,
+            name: name.into(),
+            color: None,
+            kind: TrackKind::Music,
+        },
+    )?;
+    Ok(s.categories.iter().map(|c| c.id).max().unwrap())
+}
+
+fn names(s: &AppState, parent: Option<CategoryId>) -> Vec<String> {
+    s.categories
+        .children(parent)
+        .map(|c| c.name.clone())
+        .collect()
+}
+
+#[test]
+fn names_are_trimmed_and_must_not_be_empty() {
+    let mut s = state();
+    let id = create(&mut s, None, "  Gold ").unwrap();
+    assert_eq!(s.categories.get(id).unwrap().name, "Gold");
+    assert_eq!(
+        create(&mut s, None, "   "),
+        Err(ModelError::CategoryNameEmpty)
+    );
+}
+
+#[test]
+fn siblings_cannot_share_a_name_ignoring_case() {
+    let mut s = state();
+    let gold = create(&mut s, None, "Gold").unwrap();
+    assert_eq!(
+        create(&mut s, None, "gold"),
+        Err(ModelError::CategoryNameTaken)
+    );
+    let other = create(&mut s, None, "Other").unwrap();
+    create(&mut s, Some(other), "gold").unwrap();
+    apply(
+        &mut s,
+        Command::RenameCategory {
+            category: gold,
+            name: "GOLD".into(),
+        },
+    )
+    .unwrap();
+    assert_eq!(s.categories.get(gold).unwrap().name, "GOLD");
+}
+
+#[test]
+fn depth_is_limited_by_config() {
+    let mut s = state();
+    s.config.library.max_category_depth = 2;
+    let a = create(&mut s, None, "A").unwrap();
+    let b = create(&mut s, Some(a), "B").unwrap();
+    assert_eq!(
+        create(&mut s, Some(b), "C"),
+        Err(ModelError::CategoryTooDeep)
+    );
+    let root = create(&mut s, None, "Root").unwrap();
+    let err = apply(
+        &mut s,
+        Command::MoveCategory {
+            category: a,
+            parent: Some(root),
+            index: 0,
+        },
+    );
+    assert_eq!(err.unwrap_err(), ModelError::CategoryTooDeep);
+}
+
+#[test]
+fn a_category_cannot_move_under_itself() {
+    let mut s = state();
+    let a = create(&mut s, None, "A").unwrap();
+    let b = create(&mut s, Some(a), "B").unwrap();
+    for parent in [b, a] {
+        let err = apply(
+            &mut s,
+            Command::MoveCategory {
+                category: a,
+                parent: Some(parent),
+                index: 0,
+            },
+        );
+        assert_eq!(err.unwrap_err(), ModelError::CategoryIntoItself);
+    }
+}
+
+#[test]
+fn move_category_sets_parent_and_sibling_order() {
+    let mut s = state();
+    create(&mut s, None, "A").unwrap();
+    create(&mut s, None, "B").unwrap();
+    let c = create(&mut s, None, "C").unwrap();
+    let d = create(&mut s, Some(c), "D").unwrap();
+    apply(
+        &mut s,
+        Command::MoveCategory {
+            category: c,
+            parent: None,
+            index: 0,
+        },
+    )
+    .unwrap();
+    assert_eq!(names(&s, None), ["C", "A", "B"]);
+    assert_eq!(s.categories.get(d).unwrap().parent, Some(c));
+    assert_eq!(s.categories.subtree(c), [c, d]);
+    // Into another parent, past the end: clamped.
+    let a = s.categories.children(None).nth(1).unwrap().id;
+    apply(
+        &mut s,
+        Command::MoveCategory {
+            category: c,
+            parent: Some(a),
+            index: 99,
+        },
+    )
+    .unwrap();
+    assert_eq!(names(&s, None), ["A", "B"]);
+    assert_eq!(names(&s, Some(a)), ["C"]);
+    assert_eq!(s.categories.depth(d), 3);
+    assert!(s.categories.is_in_subtree(d, a));
+}
+
+#[test]
+fn changing_a_category_kind_does_not_change_its_tracks() {
+    let mut s = state();
+    let a = create(&mut s, None, "A").unwrap();
+    let id = s.ids.track();
+    let mut track = Track::new(id, "/x.wav".into());
+    track.category = Some(a);
+    s.library.insert(track);
+    apply(
+        &mut s,
+        Command::SetCategoryKind {
+            category: a,
+            kind: TrackKind::Ad,
+        },
+    )
+    .unwrap();
+    assert_eq!(s.categories.get(a).unwrap().kind, TrackKind::Ad);
+    assert_eq!(s.library.get(id).unwrap().kind, TrackKind::Music);
+}
+
+#[test]
+fn repaired_moves_orphans_and_cycles_to_the_root() {
+    let cat = |id: u64, parent: Option<u64>| Category {
+        id: CategoryId(id),
+        parent: parent.map(CategoryId),
+        name: format!("c{id}"),
+        color: None,
+        kind: TrackKind::Music,
+    };
+    let (fixed, warnings) = Categories::from(vec![
+        cat(1, Some(99)),
+        cat(2, Some(3)),
+        cat(3, Some(2)),
+        cat(4, Some(4)),
+    ])
+    .repaired();
+    assert!(
+        fixed
+            .iter()
+            .all(|c| { fixed.depth(c.id) >= 1 && fixed.subtree(c.id).first() == Some(&c.id) })
+    );
+    assert!((2..=4).contains(&warnings.len()), "{warnings:?}");
+    assert!(fixed.children(None).count() >= 2);
+    assert!(fixed.iter().all(|c| fixed.depth(c.id) <= 2));
+}

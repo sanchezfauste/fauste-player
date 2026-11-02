@@ -164,6 +164,33 @@ pub enum Command {
         name: String,
         paths: Vec<PathBuf>,
     },
+    /// Track categories (track library spec LB9, LB10).
+    CreateCategory {
+        parent: Option<crate::ids::CategoryId>,
+        name: String,
+        color: Option<crate::cartwall::CartColor>,
+        kind: crate::track::TrackKind,
+    },
+    RenameCategory {
+        category: crate::ids::CategoryId,
+        name: String,
+    },
+    SetCategoryColor {
+        category: crate::ids::CategoryId,
+        color: Option<crate::cartwall::CartColor>,
+    },
+    /// Only the kind new tracks take; tracks already filed keep theirs.
+    SetCategoryKind {
+        category: crate::ids::CategoryId,
+        kind: crate::track::TrackKind,
+    },
+    /// Moves a category with its subtree; `index` is among the new
+    /// siblings and is clamped.
+    MoveCategory {
+        category: crate::ids::CategoryId,
+        parent: Option<crate::ids::CategoryId>,
+        index: usize,
+    },
     RenamePlaylist {
         playlist: PlaylistId,
         name: String,

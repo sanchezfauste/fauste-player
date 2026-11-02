@@ -754,3 +754,7 @@ flag-analysis-queued = Analisiaren zain
 flag-analysis-running = Orain aztertzen
 menu-reanalyse-queued = Dagoeneko analisiaren zain dago
 menu-reanalyse-running = Orain aztertzen ari da
+error-category-name-empty = Kategoria baten izena ezin da hutsik egon.
+error-category-name-taken = Hemen badago izen hori duen kategoria bat.
+error-category-too-deep = Kategoriak ezin dira hainbeste habiatu.
+error-category-into-itself = Kategoria bat ezin da bere baitara eraman.

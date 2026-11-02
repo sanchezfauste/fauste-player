@@ -754,3 +754,7 @@ flag-analysis-queued = Waiting for analysis
 flag-analysis-running = Analysing now
 menu-reanalyse-queued = Already waiting for analysis
 menu-reanalyse-running = Being analysed now
+error-category-name-empty = A category name cannot be empty.
+error-category-name-taken = There is already a category with that name here.
+error-category-too-deep = Categories cannot be nested that deep.
+error-category-into-itself = A category cannot be moved into itself.

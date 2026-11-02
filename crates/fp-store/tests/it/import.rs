@@ -48,6 +48,7 @@ fn state_of_fixtures() -> AppState {
         RestoreParts {
             config: Config::default(),
             library: lists.library,
+            categories: Default::default(),
             playlists: lists.playlists,
             cart_pages: carts.pages,
             cartwall_session: session.cartwall,

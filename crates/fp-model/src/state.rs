@@ -13,6 +13,8 @@ use crate::track::{Library, Track};
 pub struct AppState {
     pub config: Config,
     pub library: Library,
+    /// The tree of track categories.
+    pub categories: crate::category::Categories,
     pub playlists: Playlists,
     /// Players in display order.
     pub players: Vec<PlayerState>,
@@ -49,6 +51,7 @@ impl AppState {
         Self {
             config,
             library: Library::default(),
+            categories: crate::category::Categories::default(),
             playlists,
             players,
             cartwall: Cartwall {

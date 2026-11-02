@@ -6,6 +6,7 @@ pub mod availability;
 pub mod bit_perfect;
 mod cart_rules;
 pub mod cartwall;
+pub mod category;
 pub mod columns;
 pub mod command;
 pub mod config;
@@ -43,6 +44,7 @@ pub use cartwall::{
     Cart, CartColor, CartEdit, CartFileChange, CartKind, CartPage, CartPageImport, Cartwall,
     CartwallSession, PlayingCart,
 };
+pub use category::{Categories, Category, check_name};
 pub use columns::{
     TableColumn, column_rows, default_columns, move_column, move_column_before, normalize_columns,
     with_column_shown,
@@ -53,9 +55,9 @@ pub use command::{
 };
 pub use config::{
     AnalysisSettings, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes, Config, ConfigWarning,
-    DeviceOverride, Limits, LoudnessConfig, LoudnessReadout, MeterBallistics, MeterConfig,
-    MeterSettings, OutputDevice, OutputsConfig, OutputsView, PlayerRoutes, PlayersConfig, Route,
-    SAMPLE_RATE_RANGE, Tuning, UiConfig, WindowSystem,
+    DeviceOverride, LibraryConfig, Limits, LoudnessConfig, LoudnessReadout, MeterBallistics,
+    MeterConfig, MeterSettings, OutputDevice, OutputsConfig, OutputsView, PlayerRoutes,
+    PlayersConfig, Route, SAMPLE_RATE_RANGE, Tuning, UiConfig, WindowSystem,
 };
 pub use cue_on_air::{CueConfirmation, CueOnAir, CueStopped, needs_confirmation};
 pub use device_offer::{
@@ -68,7 +70,7 @@ pub use dsd::{
 };
 pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;
-pub use ids::{CartId, CartPageId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
+pub use ids::{CartId, CartPageId, CategoryId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
 pub use insertion::after_next;
 pub use layout::{
     CartwallLayout, DEFAULT_SIDE_SHARE, Dock, Layout, MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE,

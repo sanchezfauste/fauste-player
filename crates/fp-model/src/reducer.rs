@@ -317,6 +317,65 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             state.playlists.add(Playlist::new(id, name));
             insert_paths(state, id, 0, paths)?;
         }
+        Command::CreateCategory {
+            parent,
+            name,
+            color,
+            kind,
+        } => {
+            if let Some(p) = parent
+                && state.categories.get(p).is_none()
+            {
+                return Err(ModelError::UnknownCategory(p));
+            }
+            let max = state.config.library.max_category_depth;
+            if state.categories.depth_below(parent) + 1 > max {
+                return Err(ModelError::CategoryTooDeep);
+            }
+            let name = crate::category::check_name(&state.categories, parent, &name, None)?;
+            let id = state.ids.category();
+            state.categories.push(crate::category::Category {
+                id,
+                parent,
+                name,
+                color,
+                kind,
+            });
+        }
+        Command::RenameCategory { category, name } => {
+            let parent = state
+                .categories
+                .get(category)
+                .ok_or(ModelError::UnknownCategory(category))?
+                .parent;
+            let name =
+                crate::category::check_name(&state.categories, parent, &name, Some(category))?;
+            if let Some(c) = state.categories.get_mut(category) {
+                c.name = name;
+            }
+        }
+        Command::SetCategoryColor { category, color } => {
+            state
+                .categories
+                .get_mut(category)
+                .ok_or(ModelError::UnknownCategory(category))?
+                .color = color;
+        }
+        Command::SetCategoryKind { category, kind } => {
+            state
+                .categories
+                .get_mut(category)
+                .ok_or(ModelError::UnknownCategory(category))?
+                .kind = kind;
+        }
+        Command::MoveCategory {
+            category,
+            parent,
+            index,
+        } => {
+            let max = state.config.library.max_category_depth;
+            state.categories.move_to(category, parent, index, max)?;
+        }
         Command::RenamePlaylist { playlist, name } => state.playlists.rename(playlist, name)?,
         Command::DeletePlaylist(playlist) => delete_playlist(state, playlist, &mut out)?,
         Command::SetPlayerCount(count) => set_player_count(state, count, &mut out)?,

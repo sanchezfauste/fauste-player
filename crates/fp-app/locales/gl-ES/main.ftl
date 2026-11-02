@@ -754,3 +754,7 @@ flag-analysis-queued = En espera de análise
 flag-analysis-running = Analizándose agora
 menu-reanalyse-queued = Xa está en espera de análise
 menu-reanalyse-running = Estase analizando agora
+error-category-name-empty = O nome dunha categoría non pode estar baleiro.
+error-category-name-taken = Xa existe unha categoría con ese nome aquí.
+error-category-too-deep = As categorías non se poden aniñar tanto.
+error-category-into-itself = Unha categoría non se pode mover dentro de si mesma.

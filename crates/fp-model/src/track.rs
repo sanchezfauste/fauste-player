@@ -5,7 +5,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::TrackId;
+use crate::ids::{CategoryId, TrackId};
 use crate::loudness::{LOUDNESS_VERSION, LoudnessEdit, LoudnessMeasurement};
 
 /// What a track is used for on air.
@@ -318,6 +318,9 @@ pub struct Track {
     /// the default (not excluded, 0 dB).
     #[serde(default)]
     pub loudness_edit: LoudnessEdit,
+    /// The category the track is filed under (track library spec §5).
+    #[serde(default)]
+    pub category: Option<CategoryId>,
 }
 
 /// Where a player plays a track: from `cue_in` to `cue_out`. See
@@ -373,6 +376,7 @@ impl Track {
             loudness: None,
             loudness_pass: None,
             loudness_edit: LoudnessEdit::default(),
+            category: None,
         }
     }
 

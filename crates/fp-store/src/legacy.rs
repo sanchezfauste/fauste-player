@@ -134,6 +134,7 @@ pub fn fuzz_documents(bytes: &[u8]) {
         RestoreParts {
             config,
             library,
+            categories: Default::default(),
             playlists,
             cart_pages: carts.map(|d| d.pages).unwrap_or_default(),
             cartwall_session,

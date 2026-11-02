@@ -150,3 +150,19 @@ fn a_saved_false_stays_off_and_a_missing_field_takes_the_default() {
     let none: Config = serde_json::from_str("{}").unwrap();
     assert!(none.loudness.normalize);
 }
+
+#[test]
+fn the_category_depth_is_clamped_and_a_missing_section_takes_the_default() {
+    for (set, want) in [(0, 1), (99, 32), (5, 5)] {
+        let mut config = Config::default();
+        config.library.max_category_depth = set;
+        let warned = config
+            .validate()
+            .iter()
+            .any(|w| w.field == "library.max_category_depth");
+        assert_eq!(config.library.max_category_depth, want);
+        assert_eq!(warned, set != want);
+    }
+    let config: Config = serde_json::from_str(r#"{"players":{"count":2}}"#).unwrap();
+    assert_eq!(config.library.max_category_depth, 8);
+}
