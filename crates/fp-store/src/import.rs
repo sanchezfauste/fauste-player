@@ -395,6 +395,7 @@ fn read_documents(paths: &AppPaths, limits: &Limits, warnings: &mut Vec<String>)
             players,
             cartwall: cartwall_session,
             layout,
+            library_view: Default::default(),
             cart_pages: walls.pages,
         },
         any_read,

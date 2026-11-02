@@ -29,6 +29,8 @@ pub struct AppState {
     /// The main window's arrangement (resizable layout spec RL1), saved
     /// with the session.
     pub layout: crate::layout::Layout,
+    /// The library window's state, saved with the session.
+    pub library_view: crate::library_view::LibraryView,
 }
 
 impl AppState {
@@ -62,6 +64,7 @@ impl AppState {
             live: crate::live::LiveSettings::default(),
             cue_on_air: crate::cue_on_air::CueOnAir::default(),
             layout: crate::layout::Layout::default(),
+            library_view: crate::library_view::LibraryView::default(),
         }
     }
 

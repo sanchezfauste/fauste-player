@@ -577,6 +577,7 @@ fn rl19_settle_fits_the_cartwall_size_to_its_dock() {
 
 fn restore_with(state: &AppState, layout: Layout) -> AppState {
     let parts = RestoreParts {
+        library_view: Default::default(),
         config: state.config.clone(),
         library: state.library.clone(),
         categories: Default::default(),

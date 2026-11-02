@@ -94,6 +94,9 @@ pub enum Command {
     /// Phone layout spec PL12: faders and waveforms ignore touches while
     /// set. Not a layout command: the layout lock does not refuse it.
     SetTouchLocked(bool),
+    /// Stores the library window's state (placement, selection, columns),
+    /// repaired against the category tree. Not a layout command.
+    SetLibraryView(Box<crate::library_view::LibraryView>),
     /// RL10: back to the default layout (unlocked only).
     ResetLayout,
     /// Stores an analysis result for a track (ignored if the track is gone).

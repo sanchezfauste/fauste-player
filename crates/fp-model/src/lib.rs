@@ -19,6 +19,7 @@ pub mod ids;
 pub mod insertion;
 pub mod layout;
 mod library_rules;
+pub mod library_view;
 pub mod live;
 pub mod loudness;
 pub mod midi;
@@ -78,6 +79,10 @@ pub use layout::{
     Panel, settle_layout,
 };
 pub use library_rules::{OnAirHolds, RemovalImpact, category_deletion, removal_impact};
+pub use library_view::{
+    LibraryColumn, LibraryColumnWidth, LibrarySelection, LibrarySort, LibraryView,
+    lenient_library_view,
+};
 pub use live::{
     BusyCause, DeviceSettings, Failure, Holder, LiveSettings, Pending, PendingItem, Target, Wanted,
     causes, configured_route, device_causes, device_settings, due, has_output_items, holders,

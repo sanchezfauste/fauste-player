@@ -32,6 +32,7 @@ mod layout;
 mod library_lifetime;
 mod library_removal;
 mod library_storage;
+mod library_view;
 mod live;
 mod loudness;
 mod loudness_config;

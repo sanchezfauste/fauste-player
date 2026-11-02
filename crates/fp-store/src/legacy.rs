@@ -139,6 +139,7 @@ pub fn fuzz_documents(bytes: &[u8]) {
             cart_pages: carts.map(|d| d.pages).unwrap_or_default(),
             cartwall_session,
             layout,
+            library_view: Default::default(),
             ids,
         },
         &sessions,
