@@ -245,3 +245,28 @@ fn a_newer_database_in_rollback_journal_mode_is_not_modified() {
         .unwrap();
     assert_eq!(fs::read(dir.path().join(kept)).unwrap(), before);
 }
+
+#[test]
+fn a_newer_backup_is_set_aside_as_newer() {
+    let dir = tempdir().unwrap();
+    let path = dir.path().join("fauste.db");
+    make_db(&backup_path(&path, 1), "future");
+    {
+        let conn = rusqlite::Connection::open(backup_path(&path, 1)).unwrap();
+        conn.pragma_update(None, "user_version", 99).unwrap();
+    }
+    make_db(&backup_path(&path, 2), "older");
+    fs::write(&path, vec![0xAB; 4096]).unwrap();
+    let opened = open_with_fallback(&path, 3).unwrap();
+    assert_eq!(opened.source, DbSource::Backup(2));
+    let all = names(dir.path());
+    assert!(!backup_path(&path, 1).exists());
+    assert!(
+        all.iter().any(|n| n.starts_with("fauste.db.bak1.newer-")),
+        "{all:?}"
+    );
+    assert!(
+        !all.iter().any(|n| n.starts_with("fauste.db.bak1.corrupt-")),
+        "{all:?}"
+    );
+}

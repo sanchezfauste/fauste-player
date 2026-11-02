@@ -363,7 +363,7 @@ fn from_backups(
     let mut incomplete = false;
     // Backups that cannot be used: kept under another name once the
     // session has a database, so the rotation never deletes them.
-    let mut unusable: Vec<PathBuf> = Vec::new();
+    let mut unusable: Vec<(PathBuf, &str)> = Vec::new();
     for n in 1..=backups {
         let backup = backup_path(path, n);
         if !backup.exists() {
@@ -372,7 +372,7 @@ fn from_backups(
         if let Err(e) = fs::copy(&backup, path) {
             warnings.push(format!("{}: could not copy: {e}", backup.display()));
             discard_copy(path);
-            unusable.push(backup);
+            unusable.push((backup, "corrupt"));
             continue;
         }
         match Db::open(path) {
@@ -384,12 +384,13 @@ fn from_backups(
                     backup.display()
                 ));
                 discard_copy(path);
-                unusable.push(backup);
+                unusable.push((backup, "corrupt"));
             }
             Ok(db) => {
                 // The ones skipped on the way would be rotated away.
-                for bad in &unusable {
-                    set_aside(bad, "corrupt", &mut warnings);
+                for (bad, kind) in &unusable {
+                    // A failure has already left a warning.
+                    set_aside(bad, kind, &mut warnings);
                 }
                 warnings.push(format!("restored from {}", backup.display()));
                 return Ok(Opened {
@@ -401,7 +402,12 @@ fn from_backups(
             Err(e) => {
                 warnings.push(format!("{}: backup unusable: {e}", backup.display()));
                 discard_copy(path);
-                unusable.push(backup);
+                let kind = if matches!(e, OpenError::Newer(_)) {
+                    "newer"
+                } else {
+                    "corrupt"
+                };
+                unusable.push((backup, kind));
             }
         }
     }
@@ -412,8 +418,9 @@ fn from_backups(
         Ok(db) => {
             // Every backup failed and the next one rotates them: keep
             // what could not be read.
-            for backup in &unusable {
-                set_aside(backup, "corrupt", &mut warnings);
+            for (backup, kind) in &unusable {
+                // A failure has already left a warning.
+                set_aside(backup, kind, &mut warnings);
             }
             Ok(Opened {
                 db,
