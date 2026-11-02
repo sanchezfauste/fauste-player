@@ -23,8 +23,13 @@ pub(crate) fn track_for_path(state: &mut AppState, path: PathBuf) -> TrackId {
 }
 
 /// LB17c: removes each track that is uncategorised, missing and used by no
-/// entry or cart. Every other track stays in the library (LB15, LB16).
-pub(crate) fn release_tracks(state: &mut AppState, tracks: impl IntoIterator<Item = TrackId>) {
+/// entry or cart, and reports it (`TrackLeftLibrary`) so it is logged. Every
+/// other track stays in the library (LB15, LB16).
+pub(crate) fn release_tracks(
+    state: &mut AppState,
+    tracks: impl IntoIterator<Item = TrackId>,
+    out: &mut Vec<EngineAction>,
+) {
     for id in tracks {
         let leaves = state
             .library
@@ -32,8 +37,11 @@ pub(crate) fn release_tracks(state: &mut AppState, tracks: impl IntoIterator<Ite
             .is_some_and(|t| t.category.is_none() && t.file_state == FileState::Missing)
             && !state.playlists.references_track(id)
             && !state.cartwall.references_track(id);
-        if leaves {
-            state.library.remove(id);
+        if leaves && let Some(track) = state.library.remove(id) {
+            out.push(EngineAction::TrackLeftLibrary {
+                track: id,
+                path: track.path,
+            });
         }
     }
 }
@@ -288,6 +296,7 @@ pub(crate) fn remove_tracks(
         .map(|e| e.id)
         .collect();
     for entry in entries {
+        // The track goes below: no implicit release (LB17c).
         crate::reducer::take_out_entry(state, entry, out)?;
     }
     crate::cart_rules::empty_carts_of(state, &set, out);

@@ -190,7 +190,7 @@ pub(crate) fn delete_page(
             stop_cue(state, out);
         }
     }
-    crate::library_rules::release_tracks(state, removed.carts.iter().filter_map(|c| c.track));
+    crate::library_rules::release_tracks(state, removed.carts.iter().filter_map(|c| c.track), out);
     Ok(())
 }
 
@@ -347,6 +347,19 @@ fn set_track(
     track: Option<TrackId>,
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
+    let old = replace_track(state, page, index, track, out)?;
+    crate::library_rules::release_tracks(state, old, out);
+    Ok(())
+}
+
+/// Stops the cart and gives it `track`; returns the track it had.
+fn replace_track(
+    state: &mut AppState,
+    page: CartPageId,
+    index: usize,
+    track: Option<TrackId>,
+    out: &mut Vec<EngineAction>,
+) -> Result<Option<TrackId>, ModelError> {
     let (id, old) = {
         let cart = cart_at(state, page, index)?;
         (cart.id, cart.track)
@@ -356,8 +369,7 @@ fn set_track(
         stop_cue(state, out);
     }
     cart_at_mut(state, page, index)?.track = track;
-    crate::library_rules::release_tracks(state, old);
-    Ok(())
+    Ok(old)
 }
 
 /// LB17: empties every cart that holds one of `tracks`; they keep their
@@ -380,12 +392,17 @@ pub(crate) fn empty_carts_of(
         })
         .collect();
     for (page, index) in spots {
-        // The spot was just found, so it exists.
-        let _ = set_track(state, page, index, None, out);
+        // The spot was just found, so it exists. The tracks are being
+        // removed explicitly: no implicit release (LB17c).
+        let _ = replace_track(state, page, index, None, out);
     }
 }
 
-pub(crate) fn import_page(state: &mut AppState, import: CartPageImport) -> Result<(), ModelError> {
+pub(crate) fn import_page(
+    state: &mut AppState,
+    import: CartPageImport,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
     check_grid(state, import.rows, import.cols)?;
     let mut page = CartPage::new(&mut state.ids, import.name, import.rows, import.cols);
     let mut released = Vec::new();
@@ -409,7 +426,7 @@ pub(crate) fn import_page(state: &mut AppState, import: CartPageImport) -> Resul
         }
     }
     state.cartwall.pages.push(page);
-    crate::library_rules::release_tracks(state, released);
+    crate::library_rules::release_tracks(state, released, out);
     Ok(())
 }
 

@@ -249,8 +249,9 @@ Where the implementation knowingly differs from, or settles, the text above:
   keeps its category.
 - A pre-listened (CUE) entry counts as on air for LB17b when removing tracks
   or deleting a category; removing a single entry is unchanged.
-- The model cannot log: the services thread logs the LB17c removal when it
-  sees a missing, uncategorised track leave.
+- The model cannot log: it reports each LB17c removal as an engine action
+  (`TrackLeftLibrary`, with the path), which the engine logs. Explicit
+  removals (LB11, LB17) are not reported.
 - An unknown category on a track loads as uncategorised; a category with an
   unknown parent or in a cycle loads at the root, each with a warning.
 

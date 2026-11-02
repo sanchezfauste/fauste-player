@@ -15,8 +15,8 @@ use fp_analysis::analyzer::{AnalysisResult, Analyzer, LoudnessResult};
 use fp_analysis::{AnalysisError, WavePeak};
 use fp_engine::conductor::ConductorHandle;
 use fp_model::{
-    AnalysisSettings, AppState, Command, FileState, LOUDNESS_VERSION, Library, PlayerId, Track,
-    TrackId, Transport,
+    AnalysisSettings, AppState, Command, FileState, LOUDNESS_VERSION, Library, PlayerId, TrackId,
+    Transport,
 };
 use fp_store::Store;
 
@@ -388,17 +388,6 @@ struct WalkInputs {
     sizes: [usize; 17],
 }
 
-/// The tracks of `old` that are not in `new` and were missing and
-/// uncategorised: the ones the model released (LB17c).
-pub fn left_library<'a>(old: &'a Library, new: &Library) -> Vec<&'a Track> {
-    new.changes_since(old)
-        .removed
-        .iter()
-        .filter_map(|id| old.get(*id))
-        .filter(|t| t.category.is_none() && t.file_state == FileState::Missing)
-        .collect()
-}
-
 impl WalkInputs {
     fn same_as(&self, other: &Self) -> bool {
         self.library.shares_storage(&other.library)
@@ -473,8 +462,6 @@ pub struct Services {
     /// The inputs of the library walks as of the end of the last step; `None`
     /// until the first step, and after a step that panicked.
     walked: Option<WalkInputs>,
-    /// The library as of the last step, to log the tracks that left it.
-    logged_library: Option<Library>,
     /// Something may have created work for the library walks without
     /// changing `walked`: the next step walks again.
     walk_again: bool,
@@ -579,7 +566,6 @@ impl Services {
             urgent: HashSet::new(),
             analyse_outdated: false,
             walked: None,
-            logged_library: None,
             walk_again: false,
             library_walks: 0,
             walk_counted: false,
@@ -719,7 +705,6 @@ impl Services {
         // only be newer than the version recorded as saved, never older.
         let version = self.conductor.telemetry.load().model_version;
         let state = self.conductor.model.load_full();
-        self.log_departures(&state);
         // Analysis and saving are isolated from each other: a fault in one
         // never stops the other.
         let analysis = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -738,20 +723,6 @@ impl Services {
                 tracing::error!("a services step panicked; continuing");
             }
         }
-    }
-
-    /// LB17c: the model removes an uncategorised, unused track whose file is
-    /// missing but cannot log, so the line is written here.
-    fn log_departures(&mut self, state: &AppState) {
-        if let Some(old) = &self.logged_library {
-            for t in left_library(old, &state.library) {
-                tracing::info!(
-                    path = %t.path.display(),
-                    "track left the library (file missing, uncategorised, unused)"
-                );
-            }
-        }
-        self.logged_library = Some(state.library.clone());
     }
 
     fn analysis_step(&mut self, state: &AppState, now: Instant) {

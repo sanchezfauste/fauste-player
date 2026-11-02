@@ -571,6 +571,13 @@ pub enum EngineAction {
         settings: DeviceSettings,
         force: bool,
     },
+    /// LB17c: `track` left the library by itself (its file is missing, it
+    /// has no category and nothing uses it). The engine only logs it; an
+    /// explicit removal (LB11, LB17) is not reported.
+    TrackLeftLibrary {
+        track: TrackId,
+        path: PathBuf,
+    },
 }
 
 /// Everything the engine needs to play one cart.

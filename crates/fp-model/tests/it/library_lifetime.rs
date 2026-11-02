@@ -304,3 +304,86 @@ fn restore_keeps_unreferenced_tracks() {
     let (r, _) = AppState::restore(parts(&s, library), &[], "P");
     assert!(r.library.get(TrackId(5)).is_some());
 }
+
+fn left(actions: &[fp_model::EngineAction]) -> Vec<(TrackId, PathBuf)> {
+    actions
+        .iter()
+        .filter_map(|a| match a {
+            fp_model::EngineAction::TrackLeftLibrary { track, path } => {
+                Some((*track, path.clone()))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+/// LB17c: the model reports the implicit removal, so it can be logged.
+#[test]
+fn an_implicit_removal_is_reported_and_an_explicit_one_is_not() {
+    let mut s = state();
+    let pg = page(&s);
+    apply(
+        &mut s,
+        Command::AssignCartFile {
+            page: pg,
+            index: 0,
+            path: p("/m/a.wav"),
+        },
+    )
+    .unwrap();
+    apply(&mut s, Command::ClearCartFile { page: pg, index: 0 }).unwrap();
+    let a = s.library.track_at(&p("/m/a.wav")).unwrap();
+    let out = apply(
+        &mut s,
+        Command::SetFileState {
+            track: a,
+            state: FileState::Missing,
+        },
+    )
+    .unwrap();
+    assert_eq!(left(&out), vec![(a, p("/m/a.wav"))]);
+
+    // The last entry of a missing track goes: reported too.
+    insert(&mut s, "/m/c.wav");
+    let c = s.library.track_at(&p("/m/c.wav")).unwrap();
+    let out = apply(
+        &mut s,
+        Command::SetFileState {
+            track: c,
+            state: FileState::Missing,
+        },
+    )
+    .unwrap();
+    assert!(left(&out).is_empty());
+    let entry = s.playlists.iter().next().unwrap().entries[0].id;
+    let out = apply(&mut s, Command::RemoveEntry(entry)).unwrap();
+    assert_eq!(left(&out), vec![(c, p("/m/c.wav"))]);
+
+    // Explicit removals of missing, uncategorised tracks used by an entry
+    // and by a cart are not implicit departures.
+    insert(&mut s, "/m/d.wav");
+    let d = s.library.track_at(&p("/m/d.wav")).unwrap();
+    apply(
+        &mut s,
+        Command::AssignCartFile {
+            page: pg,
+            index: 1,
+            path: p("/m/e.wav"),
+        },
+    )
+    .unwrap();
+    let e = s.library.track_at(&p("/m/e.wav")).unwrap();
+    for t in [d, e] {
+        apply(
+            &mut s,
+            Command::SetFileState {
+                track: t,
+                state: FileState::Missing,
+            },
+        )
+        .unwrap();
+    }
+    let out = apply(&mut s, Command::RemoveTracks(vec![d, e])).unwrap();
+    assert!(left(&out).is_empty(), "{out:?}");
+    assert!(s.library.get(d).is_none() && s.library.get(e).is_none());
+}

@@ -2211,6 +2211,10 @@ impl Engine {
             apply @ (EngineAction::ApplyAudioSystem { .. }
             | EngineAction::ApplyRoute { .. }
             | EngineAction::ApplyDevice { .. }) => self.keep(apply),
+            EngineAction::TrackLeftLibrary { path, .. } => tracing::info!(
+                path = %path.display(),
+                "track left the library (file missing, uncategorised, unused)"
+            ),
         }
     }
 

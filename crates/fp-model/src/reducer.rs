@@ -252,7 +252,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
                     }
                 }
                 refresh_next(state);
-                crate::library_rules::release_tracks(state, [track]);
+                crate::library_rules::release_tracks(state, [track], &mut out);
             }
         }
         Command::RemoveEntry(entry) => remove_entry(state, entry, &mut out)?,
@@ -434,7 +434,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::ClearCartFile { page, index } => {
             cart_rules::assign_file(state, page, index, None, &mut out)?
         }
-        Command::ImportCartPage(import) => cart_rules::import_page(state, *import)?,
+        Command::ImportCartPage(import) => cart_rules::import_page(state, *import, &mut out)?,
         Command::ShowCartPage(page) => {
             if state.cartwall.page(page).is_none() {
                 return Err(ModelError::UnknownCartPage(page));
@@ -1317,17 +1317,20 @@ fn remove_entry(
     if state.is_on_air(entry) {
         return Err(ModelError::EntryOnAir(entry));
     }
-    take_out_entry(state, entry, out)
+    let track = take_out_entry(state, entry, out)?;
+    crate::library_rules::release_tracks(state, [track], out);
+    Ok(())
 }
 
 /// Takes `entry` out of its playlist (the part of `remove_entry` after the
 /// on-air check, shared with the removal of library tracks): next pointers
-/// move to the entry's successor and cues on it stop.
+/// move to the entry's successor and cues on it stop. Returns the entry's
+/// track; releasing it (LB17c) is the caller's choice.
 pub(crate) fn take_out_entry(
     state: &mut AppState,
     entry: EntryId,
     out: &mut Vec<EngineAction>,
-) -> Result<(), ModelError> {
+) -> Result<TrackId, ModelError> {
     let successors = successors_of(state, entry);
     let removed = state.playlists.remove_entry(entry)?;
     detach_entries(
@@ -1336,9 +1339,8 @@ pub(crate) fn take_out_entry(
         |_, current| successors.for_current(current),
         out,
     );
-    crate::library_rules::release_tracks(state, [removed.track]);
     refresh_next(state);
-    Ok(())
+    Ok(removed.track)
 }
 
 fn delete_playlist(
@@ -1362,7 +1364,7 @@ fn delete_playlist(
     }
     let ids: HashSet<EntryId> = removed.entries.iter().map(|e| e.id).collect();
     detach_entries(state, &ids, |_, _| None, out);
-    crate::library_rules::release_tracks(state, removed.entries.iter().map(|e| e.track));
+    crate::library_rules::release_tracks(state, removed.entries.iter().map(|e| e.track), out);
     refresh_next(state);
     Ok(())
 }
