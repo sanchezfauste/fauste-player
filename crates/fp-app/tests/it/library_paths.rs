@@ -49,3 +49,21 @@ fn services_log_a_track_that_left_the_library() {
     assert_eq!(paths, vec![PathBuf::from("/m/1.wav")]);
     assert!(left_library(&new, &new).is_empty());
 }
+
+#[test]
+fn verbatim_windows_paths_are_simplified() {
+    use fp_app::ui::files::simplified_verbatim;
+    use std::path::Path;
+    let s = |p: &str| simplified_verbatim(Path::new(p));
+    assert_eq!(s(r"\\?\C:\Music\a.wav"), Path::new(r"C:\Music\a.wav"));
+    assert_eq!(
+        s(r"\\?\UNC\server\share\x.wav"),
+        Path::new(r"\\server\share\x.wav")
+    );
+    assert_eq!(s(r"C:\Music\a.wav"), Path::new(r"C:\Music\a.wav"));
+    assert_eq!(s("/music/a.wav"), Path::new("/music/a.wav"));
+    let volume = r"\\?\Volume{1234}\a.wav";
+    assert_eq!(s(volume), Path::new(volume));
+    let long = format!(r"\\?\C:\{}", "a".repeat(300));
+    assert_eq!(s(&long), Path::new(&long));
+}

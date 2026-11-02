@@ -20,7 +20,40 @@ pub fn is_audio(path: &Path) -> bool {
 /// given when the file system cannot say (LB14). It touches the file system:
 /// call it on a helper thread.
 pub fn canonical_path(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    match std::fs::canonicalize(path) {
+        #[cfg(windows)]
+        Ok(canonical) => simplified_verbatim(&canonical),
+        #[cfg(not(windows))]
+        Ok(canonical) => canonical,
+        Err(_) => path.to_path_buf(),
+    }
+}
+
+/// Windows `canonicalize` answers verbatim paths. `\\?\C:\a.wav` becomes
+/// `C:\a.wav` and `\\?\UNC\server\share\a.wav` becomes
+/// `\\server\share\a.wav`, the forms every other producer of paths uses, so
+/// one file stays one track. Any other verbatim form (`\\?\Volume{..}`), and a
+/// path of `MAX_PATH` characters or more (which only the verbatim form can
+/// open), stays as it is. Pure string work: it runs on every platform.
+pub fn simplified_verbatim(path: &Path) -> PathBuf {
+    const MAX_PATH: usize = 260;
+    let Some(text) = path.to_str() else {
+        return path.to_path_buf();
+    };
+    let simple = if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        Some(format!(r"\\{rest}"))
+    } else {
+        text.strip_prefix(r"\\?\")
+            .filter(|rest| {
+                let b = rest.as_bytes();
+                b.len() >= 3 && b[0].is_ascii_alphabetic() && b[1] == b':' && b[2] == b'\\'
+            })
+            .map(str::to_owned)
+    };
+    match simple {
+        Some(s) if s.len() < MAX_PATH => PathBuf::from(s),
+        _ => path.to_path_buf(),
+    }
 }
 
 /// Keeps the audio files, in the given order. A folder is replaced by the
