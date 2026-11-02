@@ -39,14 +39,15 @@ SQL: `Store::load` returns the state the model restores from, and
 
 ### Schema (`db/schema.rs`)
 
-`PRAGMA user_version` is the schema version (`SCHEMA_VERSION`, 1), and
+`PRAGMA user_version` is the schema version (`SCHEMA_VERSION`, 2), and
 `MIGRATIONS[n - 1]` takes it from *n − 1* to *n*, each in its own
 transaction. The tables:
 
 | Table | Content |
 |---|---|
 | `kv` | Key-value documents: the library's id counter and the other small values |
-| `tracks` | `id`, `path`, and `doc`: the track's JSON (tags, markers and the `analysis_version` of the automatic ones, `analyzed`, `loudness`, `loudness_pass`, `loudness_edit`, `tags_read`) |
+| `tracks` | `id`, `path`, `category` (schema 2; null: uncategorised) and `doc`: the track's JSON (tags, markers and the `analysis_version` of the automatic ones, `analyzed`, `loudness`, `loudness_pass`, `loudness_edit`, `tags_read`). Indexes `tracks_by_path` and `tracks_by_category` (schema 2) |
+| `categories` | `id`, `position` and `doc`: the category tree as a flat list in display order (`parent`, `name`, `color`, `kind`). `position` is the category's place in `Categories`; siblings keep their relative order |
 | `playlists`, `entries` | A playlist's `position` and `name`; its entries with `playlist`, `position`, `track` and `doc` (`played_by`, `repeat`, `stop_after`). Deleting a playlist deletes its entries |
 | `cart_pages` | `id`, `position`, and `doc`: the page with its carts (`color` is a lower-case name, left out when the cart has none) |
 | `players` | `id`, `position`, and `doc`: playlist, current, next, `next_explicit`, mode, `stop_after_current`, position, volume, columns, history, `pending_start` |
@@ -55,6 +56,41 @@ The session's cartwall state and its layout (`player_shares`,
 `hidden_players`, the cartwall's dock and size, `locked`) are JSON values
 in `kv`. A `doc` column holds the model value's JSON, and the key columns
 win over the same fields inside it. Foreign keys are on.
+
+Schema 2 (track library, plan 2) adds the `categories` table, the
+`tracks.category` column and the two track indexes. A schema 1 database
+migrates in place: every track is uncategorised and nothing is lost. A build
+that only knows schema 1 sees a `user_version` above its own, so it sets the
+file aside as `.newer-<stamp>` (see below).
+
+**The path rule.** The library holds one track per file (LB14). Uniqueness is
+enforced by the model (`Library::track_at`, a path index; `track_for_path`
+reuses the track of a path), not by a unique SQL index, so `tracks_by_path` is
+a plain index. The model compares paths as given: fp-app's helper threads
+canonicalise (`canonical_path`: `std::fs::canonicalize`, the path as given when
+that fails, Windows verbatim prefixes simplified) where paths enter, namely the
+file picks, drops, folder scans, the cart file pick, the cart page import and
+the M3U/PLS import. Paths stored before schema 2 are kept as written, so a
+symlinked path saved earlier is not merged with its canonical twin. Android
+MediaStore paths are not canonicalised.
+
+**Tracks stay.** A track is no longer forgotten when its last playlist entry
+or cart goes (LB15). The one implicit removal (LB17c) is a track that is
+uncategorised, `Missing` and used by nothing (`release_tracks`, called when the
+file is found missing and when its last use goes). The model cannot log, so the
+services thread logs `track left the library (file missing, uncategorised,
+unused)` with the path when it sees such a track disappear between snapshots.
+
+**Restore.** The store reads the categories in `position` order and repairs
+them (`Categories::repaired`: an unknown parent or a cycle puts the category
+at the root, one warning each); a track whose category is unknown loads
+uncategorised, with a warning. The `tracks.category` column wins over the same
+field in `doc`. `AppState::restore` takes the categories (`RestoreParts`). Tracks that share a path (schema 1 created a new
+track on every add) are merged by `merge_duplicate_paths`: the survivor is the
+lowest id among the tracks with an operator edit (a manual marker, a loudness
+edit other than the default, or a category), else the lowest id; playlist
+entries and carts are re-pointed to it.
+Unreferenced tracks are kept.
 
 A new field that loads as its default when it is missing and that older
 builds ignore needs no migration, as before. A new shape is a new migration
@@ -77,11 +113,18 @@ WAL and migrates. The connection waits up to five seconds for a lock.
   the main file last; if a rename fails, the ones done are undone.
 - Then `fauste.db.bak1` … `.bakN` (`limits.backup_count`, 3) are tried in
   order. A backup is *copied* over the main name, never moved, and a copy
-  that cannot be read in full is deleted again.
+  that cannot be read in full is deleted again. A backup that turns out
+  unusable is kept, not rotated away: once a database is in place (a later
+  backup was restored, or a new one was created) it is renamed with its side
+  files to `fauste.db.bakN.corrupt-<stamp>`, or `fauste.db.bakN.newer-<stamp>`
+  when a newer version wrote it. The set-aside is deferred until then so that
+  a session that cannot start a database leaves every backup in place.
 - If nothing is usable, the application starts with an empty database and
   a warning in the log.
 - A file that another connection holds locked is in use, not damaged: it
-  is left alone and the session runs on an in-memory database.
+  is left alone and the session runs on an in-memory database. The start
+  reports it as a load warning ("the database is in use by another process (is
+  another copy running?)"), besides the log line.
 
 ### The disk is untrusted (`DiskState`)
 
@@ -197,7 +240,7 @@ id.
 
 A rename or copy that fails with "permission denied" (on Windows, a
 sharing violation while a scanner or indexer holds the file) is retried up to
-five times, waiting 10 ms and doubling (`retry_locked`).
+five times, waiting 10 ms and doubling (`retry_locked`). The `*.imported` renames of the JSON import use it too.
 
 `load_with_fallback` tries the file, then `.bak1`…`.bakN`. A file that
 fails to parse or validate is renamed `*.corrupt-<stamp>` and kept (a

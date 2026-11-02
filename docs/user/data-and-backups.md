@@ -30,7 +30,7 @@ a USB stick, or to keep separate setups side by side.
 | File | Content |
 |---|---|
 | `config.json` | Settings, outputs, analysis thresholds, advanced tuning |
-| `fauste.db` | The library (tracks, manual markers, tags, loudness), the playlists with their played flags, the cart pages and the session: for each player the playlist shown, current and next tracks, mode, position, volume and column widths (by column), and the window layout |
+| `fauste.db` | The library (tracks, their categories, manual markers, tags, loudness), the playlists with their played flags, the cart pages and the session: for each player the playlist shown, current and next tracks, mode, position, volume and column widths (by column), and the window layout |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Copies of the database (see below) |
 | `window.ron` | The main window's size, position and whether it was maximized (computer only; on Wayland the system chooses the position) |
 
@@ -49,6 +49,12 @@ a USB stick, or to keep separate setups side by side.
   unreadable file is kept, renamed `fauste.db.corrupt-<time>`, for
   inspection. If every copy fails, the application starts empty. It always
   starts.
+- A copy that cannot be used is kept too: when the application starts from
+  another copy (or an empty database), the unusable ones are renamed
+  `fauste.db.bak1.corrupt-<time>` (or `.newer-<time>`) so the next backup
+  never pushes them out.
+- If another copy of the application is using the database, this one runs
+  without saving and says so at start.
 - A database written by a newer version of the application is not opened:
   it is kept as `fauste.db.newer-<time>`, and the application starts from
   the newest backup it can read, or empty when there is none, so opening
@@ -59,6 +65,16 @@ a USB stick, or to keep separate setups side by side.
 - If the database cannot be used at all in a session (for example, it
   cannot be renamed because the folder is read-only), the application
   runs without saving until the next start, and the log says so.
+
+## Updating from the previous version
+
+This version stores the library in a newer database format (it adds the
+categories for tracks). It reads the old database and keeps everything, and
+tracks no longer disappear from the library when their last playlist entry or
+cart goes. Going back to the previous version is safe, but it cannot read the
+new format: it keeps the new database as `fauste.db.newer-<time>` and starts
+from the newest backup it can read, as described above. Copy the data folder
+first if you may want to go back with everything you saved since.
 
 ## Playlists and session from an earlier version
 

@@ -80,7 +80,7 @@
   - Commands: `CreateCategory { parent: Option<CategoryId>, name: String, color: Option<CartColor>, kind: TrackKind }`, `RenameCategory { category: CategoryId, name: String }`, `SetCategoryColor { category, color: Option<CartColor> }`, `SetCategoryKind { category, kind: TrackKind }`, `MoveCategory { category, parent: Option<CategoryId>, index: usize }` (index among the new siblings, clamped).
   - Errors: `UnknownCategory(CategoryId)`, `CategoryNameEmpty`, `CategoryNameTaken`, `CategoryTooDeep`, `CategoryIntoItself`.
 
-- [ ] **Step 1: Write the failing tests** in `crates/fp-model/tests/it/categories.rs`, using `AppState::new(Config::default(), "P")` and `apply`:
+- [x] **Step 1: Write the failing tests** in `crates/fp-model/tests/it/categories.rs`, using `AppState::new(Config::default(), "P")` and `apply`:
   - `names_are_trimmed_and_must_not_be_empty` (LB9): create `"  Gold "` → name `"Gold"`; create `"   "` → `Err(CategoryNameEmpty)`.
   - `siblings_cannot_share_a_name_ignoring_case` (LB9): root `"Gold"` then root `"gold"` → `Err(CategoryNameTaken)`; `"gold"` under another parent → Ok; renaming `"Gold"` to `"GOLD"` → Ok (itself excepted).
   - `depth_is_limited_by_config` (LB9): with `max_category_depth = 2`, a chain of 2 is Ok, a third level `Err(CategoryTooDeep)`; moving a 2-deep subtree under a root category → `Err(CategoryTooDeep)`.
@@ -89,10 +89,10 @@
   - `changing_a_category_kind_does_not_change_its_tracks` (LB13, second half): a track with `category = Some(A)`, kind Music; `SetCategoryKind { A, Ad }` → track still Music.
   - `repaired_moves_orphans_and_cycles_to_the_root`: `Categories::from(vec![…])` with an unknown parent and a two-node cycle → all at the root, 2 or 3 warnings, no panic.
   - A config test in the existing config test file: `library.max_category_depth` 0 and 99 are clamped into 1–32 with a warning; a missing `library` section loads the default.
-- [ ] **Step 2: Run** `cargo test -p fp-model --test it categories::` — expect compile failure.
-- [ ] **Step 3: Implement** the types, the checks and the five commands (`MoveCategory` removes the category from the `Vec` and inserts it after the new parent's subtree position matching `index` among siblings; its whole subtree moves with it, so descendants stay after it). Add the error texts (`error-category-name-empty`, `error-category-name-taken`, `error-category-too-deep`, `error-category-into-itself`, `error-unknown-category`) to the `ModelError` match in `crates/fp-app/src/ui/app.rs` and to every locale file.
-- [ ] **Step 4: Run** the focused tests, then fmt, clippy and the workspace suite.
-- [ ] **Step 5: Commit** `feat(model): add a tree of track categories`.
+- [x] **Step 2: Run** `cargo test -p fp-model --test it categories::` — expect compile failure.
+- [x] **Step 3: Implement** the types, the checks and the five commands (`MoveCategory` removes the category from the `Vec` and inserts it after the new parent's subtree position matching `index` among siblings; its whole subtree moves with it, so descendants stay after it). Add the error texts (`error-category-name-empty`, `error-category-name-taken`, `error-category-too-deep`, `error-category-into-itself`, `error-unknown-category`) to the `ModelError` match in `crates/fp-app/src/ui/app.rs` and to every locale file.
+- [x] **Step 4: Run** the focused tests, then fmt, clippy and the workspace suite.
+- [x] **Step 5: Commit** `feat(model): add a tree of track categories`.
 
 ---
 
@@ -111,17 +111,17 @@
   - `library_rules::merge_duplicate_paths(state: &mut AppState) -> usize` — merges tracks that share a path (survivor per the plan's ruling), re-points playlist entries and carts, returns how many tracks were merged away.
   - Command `AddToLibrary { paths: Vec<PathBuf>, category: Option<CategoryId> }` (ruling above; a new track in a category takes its kind, LB13).
 
-- [ ] **Step 1: Write the failing tests** in `library_lifetime.rs`:
+- [x] **Step 1: Write the failing tests** in `library_lifetime.rs`:
   - `the_same_path_reuses_its_track_everywhere` (LB14): `InsertPaths` of `/m/a.wav` into a playlist twice and `AssignCartFile` with the same path → library `len() == 1`, both entries and the cart point at the same `TrackId`; a `SetMarker` on it is seen through the cart's track.
   - `a_track_stays_when_its_last_entry_goes` (LB15, LB16): insert, `RemoveEntry`, `DeletePlaylist` (another list), `ClearCartFile`, `DeleteCartPage` → the track is still in the library, uncategorised.
   - `missing_uncategorised_unused_tracks_leave` (LB17c): an unused uncategorised track → `SetFileState { Missing }` removes it; the same track with a category, or used by an entry, stays; and a used uncategorised missing track leaves when its last entry is removed.
   - `add_to_library_takes_the_category_and_its_kind` (LB16, LB13): `AddToLibrary { [a], Some(Ads) }` with Ads kind `Ad` → track category Ads, kind Ad; again with `Some(Gold)` → keeps Ads; an uncategorised existing track joins.
   - `restore_merges_tracks_that_share_a_path`: `RestoreParts` with tracks 1 and 2 on the same path, track 2 with a manual cue-in, an entry on 1 and a cart on 2 → one track (id 2), both pointing at it, manual cue-in kept.
   - `restore_keeps_unreferenced_tracks` (LB15): a track no entry or cart uses survives `AppState::restore`.
-- [ ] **Step 2: Run** `cargo test -p fp-model --test it library_lifetime::` — expect failures.
-- [ ] **Step 3: Implement.** Every `Track::new` + `library.insert` in the reducer and `cart_rules` goes through `track_for_path`. `forget_unreferenced`/`forget_tracks` become `release_tracks`. `import_page`'s "position given twice" and "outside the grid" branches use `release_tracks` (the track may be shared now). `SetFileState` with `Missing` calls `release_tracks([track])` after its existing work. Restore: drop the orphan sweep, call `merge_duplicate_paths`. Update the doc comment of `cart_rules::set_track` ("forgets the old one if unused").
-- [ ] **Step 4: Run** the focused tests, then fmt, clippy and the workspace suite (existing tests that expected forgetting change: update them to the new rule and say so in the commit body).
-- [ ] **Step 5: Commit** `feat(model)!: keep tracks in the library and hold one track per file`.
+- [x] **Step 2: Run** `cargo test -p fp-model --test it library_lifetime::` — expect failures.
+- [x] **Step 3: Implement.** Every `Track::new` + `library.insert` in the reducer and `cart_rules` goes through `track_for_path`. `forget_unreferenced`/`forget_tracks` become `release_tracks`. `import_page`'s "position given twice" and "outside the grid" branches use `release_tracks` (the track may be shared now). `SetFileState` with `Missing` calls `release_tracks([track])` after its existing work. Restore: drop the orphan sweep, call `merge_duplicate_paths`. Update the doc comment of `cart_rules::set_track` ("forgets the old one if unused").
+- [x] **Step 4: Run** the focused tests, then fmt, clippy and the workspace suite (existing tests that expected forgetting change: update them to the new rule and say so in the commit body).
+- [x] **Step 5: Commit** `feat(model)!: keep tracks in the library and hold one track per file`.
 
 ---
 
@@ -140,17 +140,17 @@
   - Commands: `MoveTracksToCategory { tracks: Vec<TrackId>, category: Option<CategoryId> }`, `SetTracksKind { tracks: Vec<TrackId>, kind: TrackKind }`, `RemoveTracks(Vec<TrackId>)`, `DeleteCategory(CategoryId)`.
   - Error: `LibraryOnAir(OnAirHolds)`.
 
-- [ ] **Step 1: Write the failing tests** in `library_removal.rs`:
+- [x] **Step 1: Write the failing tests** in `library_removal.rs`:
   - `moving_tracks_sets_their_category_and_kind` (LB12, LB13): two tracks into Ads (kind Ad) → both category Ads, kind Ad; to `None` → uncategorised, kind unchanged; an unknown category → `Err(UnknownCategory)` and nothing changed.
   - `the_kind_can_be_changed_on_the_track` (LB13): after joining Ads, `SetTracksKind { Jingle }` → Jingle.
   - `removal_impact_counts_entries_and_carts` (LB17): a track in 2 entries and 1 cart → `{tracks: 1, entries: 2, carts: 1, on_air empty}`.
   - `remove_tracks_removes_their_entries_and_empties_their_carts` (LB17): after `RemoveTracks`, no entry or cart references them; the carts keep their name and colour with `track: None`; the next of a player whose next entry went is the entry after it.
   - `a_deletion_touching_an_on_air_entry_is_refused_whole` (LB17b): one of two tracks is current on a player (`Play`) → `RemoveTracks` and `DeleteCategory` both `Err(LibraryOnAir { entries: [that entry], .. })`, and state is unchanged (`assert_eq!` with a clone taken before); likewise a playing cart (`FireCart`) and a cart pre-listen.
   - `deleting_a_category_removes_its_subtree_and_tracks` (LB11): A ⊃ B, tracks in A and B, one in C → after `DeleteCategory(A)` only C and its track remain; `category_deletion(A)` beforehand reports 1 subcategory and the right impact.
-- [ ] **Step 2: Run** `cargo test -p fp-model --test it library_removal::` — expect failures.
-- [ ] **Step 3: Implement.** Check holds first, then remove: entries via the same path as `remove_entry` (successors, `detach_entries`, `refresh_next`), carts emptied as `ClearCartFile` does, then the tracks, then (for `DeleteCategory`) the categories. Add `error-library-on-air` (it names how many entries and carts hold it) to the error match and every locale.
-- [ ] **Step 4: Run** the focused tests, fmt, clippy, the workspace suite.
-- [ ] **Step 5: Commit** `feat(model): move, re-kind and remove library tracks and categories`.
+- [x] **Step 2: Run** `cargo test -p fp-model --test it library_removal::` — expect failures.
+- [x] **Step 3: Implement.** Check holds first, then remove: entries via the same path as `remove_entry` (successors, `detach_entries`, `refresh_next`), carts emptied as `ClearCartFile` does, then the tracks, then (for `DeleteCategory`) the categories. Add `error-library-on-air` (it names how many entries and carts hold it) to the error match and every locale.
+- [x] **Step 4: Run** the focused tests, fmt, clippy, the workspace suite.
+- [x] **Step 5: Commit** `feat(model): move, re-kind and remove library tracks and categories`.
 
 ---
 
@@ -173,16 +173,16 @@ CREATE INDEX tracks_by_category ON tracks(category);
 CREATE INDEX tracks_by_path ON tracks(path);
 ```
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `categories_and_track_categories_round_trip`: save a state with A ⊃ B (colour, kind) and a track in B; reload → same categories in order, track in B.
   - `a_schema_1_database_opens_with_every_track_uncategorised`: build a schema-1 file with the plan-1 SQL (copy migration 1 into the test) holding one track and one playlist; `Store::load` → the track is there, uncategorised; after a save `PRAGMA user_version` is 2.
   - `an_unknown_category_on_a_track_loads_uncategorised`: write a track row with `category = 999` → loads `None` with one warning.
   - `duplicate_paths_are_merged_on_reload` (LB14 on reload): two track rows on one path, an entry on each → one track after load, both entries on it; after a save the database has one row.
   - A snapshot unit test: `write_changes` writes only the changed category row (count rows changed via `conn.changes()` or a `total_changes()` difference).
-- [ ] **Step 2: Run** `cargo test -p fp-store --test it categories_store::` — expect failures.
-- [ ] **Step 3: Implement.** The `tracks.category` column wins over the doc field (as the other key columns); `upsert_track` writes it. Categories are read in `position` order, then `repaired()` (its warnings join the read's). `write_full` and `write_changes` handle `categories` with `sync_docs`. `Snapshot::of` and the restore pass the categories through.
-- [ ] **Step 4: Run** focused tests, fmt, clippy, the workspace suite.
-- [ ] **Step 5: Commit** `feat(store): store categories and each track's category (schema 2)`.
+- [x] **Step 2: Run** `cargo test -p fp-store --test it categories_store::` — expect failures.
+- [x] **Step 3: Implement.** The `tracks.category` column wins over the doc field (as the other key columns); `upsert_track` writes it. Categories are read in `position` order, then `repaired()` (its warnings join the read's). `write_full` and `write_changes` handle `categories` with `sync_docs`. `Snapshot::of` and the restore pass the categories through.
+- [x] **Step 4: Run** focused tests, fmt, clippy, the workspace suite.
+- [x] **Step 5: Commit** `feat(store): store categories and each track's category (schema 2)`.
 
 ---
 
@@ -195,13 +195,13 @@ CREATE INDEX tracks_by_path ON tracks(path);
 **Interfaces:**
 - Produces: `pub fn canonical_path(path: &Path) -> PathBuf` in `crates/fp-app/src/ui/files.rs` (`std::fs::canonicalize`, else the path as given).
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `audio_paths_are_canonical`: a temp dir with `a.wav` and a symlink `link.wav → a.wav` (Unix only, `#[cfg(unix)]`) → `audio_paths(&[link])` returns the canonical `a.wav` path; a path given relative through `..` comes back without it.
   - `services_log_a_track_that_left_the_library` (LB17c): with the services test harness, an uncategorised unused track whose file is removed from the temp dir; after the file check, the track is gone from the model and the captured log has one line naming its path. A categorised track in the same situation stays.
-- [ ] **Step 2: Run** them — expect failures.
-- [ ] **Step 3: Implement.** `audio_paths` maps through `canonical_path` (it already runs on helper threads); the file picks, the cart file pick, the cart page import and the M3U/PLS import map their paths through it on their helper threads. In `services.rs`, where the library is compared between snapshots (skip when `shares_storage`), log `track left the library (file missing, uncategorised, unused)` with the path for each removed track whose previous version was `Missing` and uncategorised.
-- [ ] **Step 4: Run** focused tests, fmt, clippy, the workspace suite.
-- [ ] **Step 5: Commit** `feat(app): canonical paths for new tracks; log tracks that leave the library`.
+- [x] **Step 2: Run** them — expect failures.
+- [x] **Step 3: Implement.** `audio_paths` maps through `canonical_path` (it already runs on helper threads); the file picks, the cart file pick, the cart page import and the M3U/PLS import map their paths through it on their helper threads. In `services.rs`, where the library is compared between snapshots (skip when `shares_storage`), log `track left the library (file missing, uncategorised, unused)` with the path for each removed track whose previous version was `Missing` and uncategorised.
+- [x] **Step 4: Run** focused tests, fmt, clippy, the workspace suite.
+- [x] **Step 5: Commit** `feat(app): canonical paths for new tracks; log tracks that leave the library`.
 
 ---
 
@@ -211,15 +211,15 @@ CREATE INDEX tracks_by_path ON tracks(path);
 - Modify: `crates/fp-store/src/db/backup.rs`, `db/mod.rs`, `db/snapshot.rs`, `import.rs`, `store.rs`
 - Test: `crates/fp-store/tests/it/store_roundtrip.rs`, `crates/fp-store/tests/it/` import tests
 
-- [ ] **Step 1: Write the failing tests:**
+- [x] **Step 1: Write the failing tests:**
   - `unusable_backups_are_set_aside_not_rotated_away`: a corrupt main file and corrupt `.bak1`/`.bak2` → after the start, each is renamed `.corrupt-<stamp>` (none deleted), and the next backup rotation does not delete them.
   - `a_busy_database_at_start_is_reported`: hold an exclusive lock on `fauste.db` from a second connection (`BEGIN EXCLUSIVE`) → `Store::load` gives an in-memory session and its `warnings` contain a line saying the database is in use (today only the log has it).
   - `a_too_new_json_file_blocks_the_import` and `an_unreadable_bak_blocks_the_import`: the import leaves every JSON file in place and no database file.
   - `set_aside_rolls_back_when_a_side_file_cannot_move` (the rollback path of `set_aside`; on Unix make the target directory read-only for the side file rename, `#[cfg(unix)]`).
-- [ ] **Step 2: Run** them — expect failures where behaviour is missing (the import and rollback tests may already pass: then they are coverage, say so in the report).
-- [ ] **Step 3: Implement.** Backups judged unusable are set aside with the same `.corrupt-<stamp>` naming as the main file. The busy start adds a load warning. The `*.imported` renames go through `retry_locked`. `id_text` truncates a text or blob to 64 characters. The player document is parsed once in `read_players`.
-- [ ] **Step 4: Run** focused tests, fmt, clippy, the workspace suite.
-- [ ] **Step 5: Commit** `fix(store): keep unusable backups, report a busy database, retry locked renames`.
+- [x] **Step 2: Run** them — expect failures where behaviour is missing (the import and rollback tests may already pass: then they are coverage, say so in the report).
+- [x] **Step 3: Implement.** Backups judged unusable are set aside with the same `.corrupt-<stamp>` naming as the main file. The busy start adds a load warning. The `*.imported` renames go through `retry_locked`. `id_text` truncates a text or blob to 64 characters. The player document is parsed once in `read_players`.
+- [x] **Step 4: Run** focused tests, fmt, clippy, the workspace suite.
+- [x] **Step 5: Commit** `fix(store): keep unusable backups, report a busy database, retry locked renames`.
 
 ---
 
@@ -228,6 +228,6 @@ CREATE INDEX tracks_by_path ON tracks(path);
 **Files:**
 - Modify: `docs/technical/persistence.md` (schema 2, categories table, the path rule, LB17c), `docs/technical/architecture.md` (categories in `AppState`), `docs/user/data-and-backups.md` (tracks now stay in the library; schema 2 cannot be opened by older builds — the existing set-aside text covers it), `docs/user/playlists.md` (removing an entry no longer forgets its track; the same file is one track everywhere), the spec §5 status note if behaviour differs from it (the rulings above), and the plan's checkboxes.
 
-- [ ] **Step 1:** Update the files; check every statement against the code.
-- [ ] **Step 2:** `scripts/site/build.sh /tmp/site-check && scripts/site/check-links.sh /tmp/site-check` (if `gh` is unavailable, `FAUSTE_RELEASE_JSON` per CLAUDE.md, or skip the build and note it).
-- [ ] **Step 3: Commit** `docs: describe categories and tracks that stay in the library`.
+- [x] **Step 1:** Update the files; check every statement against the code.
+- [x] **Step 2:** `scripts/site/build.sh /tmp/site-check && scripts/site/check-links.sh /tmp/site-check` (if `gh` is unavailable, `FAUSTE_RELEASE_JSON` per CLAUDE.md, or skip the build and note it).
+- [x] **Step 3: Commit** `docs: describe categories and tracks that stay in the library`.
