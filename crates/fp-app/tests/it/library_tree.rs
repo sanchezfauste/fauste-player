@@ -455,3 +455,79 @@ fn a_menu_on_all_tracks_has_no_category_actions() {
         "no dialog"
     );
 }
+
+/// The gap below an open category with children is where its first child
+/// goes: the line is drawn there.
+#[test]
+fn dropping_below_an_open_category_makes_it_the_first_child() {
+    let (s, tree) = tree_state();
+    let (mut h, fake) = open(s);
+    let from = h.get_by_label("Jingles").rect().center();
+    let rock = h.get_by_label("Rock").rect();
+    drag(&mut h, from, pos2(rock.center().x, rock.bottom() - 1.0));
+    assert_eq!(
+        others(fake.take_sent()),
+        vec![Command::MoveCategory {
+            category: tree.jingles,
+            parent: Some(tree.rock),
+            index: 0,
+        }]
+    );
+}
+
+/// A category dropped onto a closed one opens it, so the moved category
+/// stays in sight.
+#[test]
+fn dropping_onto_a_closed_category_opens_it() {
+    let (s, tree) = tree_state();
+    let (mut h, fake) = open(s);
+    let from = h.get_by_label("Classic").rect().center();
+    let to = h.get_by_label("Jingles").rect().center();
+    drag(&mut h, from, to);
+    let sent = fake.take_sent();
+    assert_eq!(
+        others(sent.clone()),
+        vec![Command::MoveCategory {
+            category: tree.classic,
+            parent: Some(tree.jingles),
+            index: 0,
+        }]
+    );
+    let views = views(&sent);
+    assert_eq!(views.len(), 1, "{views:?}");
+    assert!(views[0].expanded.contains(&tree.jingles), "{views:?}");
+    assert!(views[0].expanded.contains(&tree.rock), "kept: {views:?}");
+    h.run_steps(2);
+    assert!(h.query_by_label("Classic").is_some(), "still in sight");
+}
+
+/// What went on air while the question was open is judged on the answer:
+/// the removal is refused, with the notice, and nothing is sent.
+#[test]
+fn a_removal_that_went_on_air_meanwhile_is_refused_on_the_answer() {
+    let (s, _) = tree_state();
+    let (mut h, fake) = open(s);
+    menu(&mut h, "Rock");
+    h.get_by_label("Delete…").click();
+    h.run_steps(3);
+    assert!(confirm_title(&h, "Delete “Rock”?"));
+    let mut now = (**fake.state.load()).clone();
+    let first = now.playlists.first_id().unwrap();
+    let e0 = now.playlists.get(first).unwrap().entries[0].id;
+    now.players[0].current = Some(e0);
+    now.players[0].transport = fp_model::Transport::Playing;
+    fake.state.store(std::sync::Arc::new(now));
+    h.run_steps(2);
+    h.get_by_label("Delete").click();
+    h.run_steps(3);
+    assert!(others(fake.take_sent()).is_empty());
+    assert!(!confirm_title(&h, "Delete “Rock”?"), "the question closed");
+    assert!(h.query_by_label("Remove anyway").is_none());
+    assert!(
+        h.query_by_label(
+            "Some of these tracks are on air: 1 in playlists and 0 on the cartwall. \
+             Nothing was removed."
+        )
+        .is_some()
+    );
+}

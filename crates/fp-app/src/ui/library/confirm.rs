@@ -6,7 +6,8 @@
 
 use egui::{RichText, vec2};
 use fp_model::{
-    CategoryId, Command, ModelError, RemovalImpact, TrackId, category_deletion, removal_impact,
+    CategoryId, Command, Library, ModelError, RemovalImpact, TrackId, category_deletion,
+    removal_impact,
 };
 
 use super::super::app::{Scene, ViewState, error_text};
@@ -28,15 +29,38 @@ pub(crate) enum Removal {
     Category(CategoryId),
 }
 
-/// The subcategories that go with `removal` (none for tracks) and what its
-/// tracks take with them; `None` when there is nothing left to remove.
-fn impact(scene: &Scene<'_>, removal: &Removal) -> Option<(usize, RemovalImpact)> {
-    match removal {
-        Removal::Tracks(tracks) => {
-            let impact = removal_impact(scene.state, tracks);
-            (impact.tracks > 0).then_some((0, impact))
-        }
-        Removal::Category(category) => category_deletion(scene.state, *category),
+/// What a removal question shows: the subcategories that go (none for
+/// tracks) and what the tracks take with them, counted in `library`.
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) struct Asked {
+    pub subcategories: usize,
+    pub impact: RemovalImpact,
+    pub library: Library,
+}
+
+impl Asked {
+    /// Counts `removal` now; `None` when there is nothing left to remove.
+    fn new(scene: &Scene<'_>, removal: &Removal) -> Option<Asked> {
+        let (subcategories, impact) = match removal {
+            Removal::Tracks(tracks) => {
+                let impact = removal_impact(scene.state, tracks);
+                (impact.tracks > 0).then_some((0, impact))?
+            }
+            Removal::Category(category) => category_deletion(scene.state, *category)?,
+        };
+        Some(Asked {
+            subcategories,
+            impact,
+            library: scene.state.library.clone(),
+        })
+    }
+
+    /// The same question: the same counts.
+    fn same_counts(&self, other: &Asked) -> bool {
+        self.subcategories == other.subcategories
+            && self.impact.tracks == other.impact.tracks
+            && self.impact.entries == other.impact.entries
+            && self.impact.carts == other.impact.carts
     }
 }
 
@@ -54,15 +78,16 @@ fn refused(scene: &Scene<'_>, view_state: &mut ViewState, impact: &RemovalImpact
 /// Starts a removal: refused at once while any of it is on air, else the
 /// first question opens.
 pub(crate) fn ask_removal(scene: &Scene<'_>, view_state: &mut ViewState, removal: Removal) {
-    let Some((_, impact)) = impact(scene, &removal) else {
+    let Some(asked) = Asked::new(scene, &removal) else {
         return;
     };
-    if refused(scene, view_state, &impact) {
+    if refused(scene, view_state, &asked.impact) {
         return;
     }
     view_state.library.dialog = Some(LibraryDialog::Removal {
         removal,
         step: RemovalStep::First,
+        asked: Box::new(asked),
     });
 }
 
@@ -73,39 +98,68 @@ fn command(removal: Removal) -> Command {
     }
 }
 
-/// Draws the open removal question, if any, and acts on its answer.
+/// Draws the open removal question, if any, and acts on its answer. The
+/// counts shown are taken again only when the library changed; the answer
+/// is judged on the state of its frame (what is on air lives outside the
+/// library).
 pub(crate) fn draw_confirmations(
     ctx: &egui::Context,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
 ) {
-    let Some(LibraryDialog::Removal { removal, step }) = view_state.library.dialog.clone() else {
-        return;
-    };
-    // What is asked about is judged again each frame: it may have changed.
-    let Some((subcategories, impact)) = impact(scene, &removal) else {
-        view_state.library.dialog = None;
-        return;
-    };
-    if refused(scene, view_state, &impact) {
-        view_state.library.dialog = None;
+    if !matches!(
+        view_state.library.dialog,
+        Some(LibraryDialog::Removal { .. })
+    ) {
         return;
     }
-    let used = impact.entries > 0 || impact.carts > 0;
-    match question(ctx, scene, &removal, step, subcategories, &impact) {
-        Some(true) if step == RemovalStep::First && used => {
-            view_state.library.dialog = Some(LibraryDialog::Removal {
-                removal,
-                step: RemovalStep::Second,
-            });
+    let Some(LibraryDialog::Removal {
+        removal,
+        mut step,
+        mut asked,
+    }) = view_state.library.dialog.take()
+    else {
+        return;
+    };
+    // Gone or on air once the library changed: closed (refused) at once.
+    if !asked.library.shares_storage(&scene.state.library) {
+        let Some(now) = Asked::new(scene, &removal) else {
+            return;
+        };
+        if refused(scene, view_state, &now.impact) {
+            return;
         }
+        *asked = now;
+    }
+    match question(ctx, scene, &removal, step, &asked) {
         Some(true) => {
-            view_state.library.dialog = None;
-            scene.ctl.send(command(removal));
+            let Some(now) = Asked::new(scene, &removal) else {
+                return;
+            };
+            if refused(scene, view_state, &now.impact) {
+                return;
+            }
+            let changed = !now.same_counts(&asked);
+            let used = now.impact.entries > 0 || now.impact.carts > 0;
+            if changed {
+                // The counts moved under the question: it asks again with
+                // the new ones, at the same step.
+                *asked = now;
+            } else if step == RemovalStep::First && used {
+                step = RemovalStep::Second;
+            } else {
+                scene.ctl.send(command(removal));
+                return;
+            }
         }
-        Some(false) => view_state.library.dialog = None,
+        Some(false) => return,
         None => {}
     }
+    view_state.library.dialog = Some(LibraryDialog::Removal {
+        removal,
+        step,
+        asked,
+    });
 }
 
 /// One question. `Some(true)` goes on, `Some(false)` cancels (the button,
@@ -115,10 +169,10 @@ fn question(
     scene: &Scene<'_>,
     removal: &Removal,
     step: RemovalStep,
-    subcategories: usize,
-    impact: &RemovalImpact,
+    asked: &Asked,
 ) -> Option<bool> {
     let t = scene.i18n;
+    let (subcategories, impact) = (asked.subcategories, &asked.impact);
     let (title, lines, confirm) = match (step, removal) {
         (RemovalStep::First, Removal::Category(category)) => {
             let name = scene

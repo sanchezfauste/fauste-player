@@ -475,16 +475,37 @@ fn menu(
     action
 }
 
+/// How the tree shows where a dragged category would land.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Mark {
+    /// A line above the item.
+    Above,
+    /// A line below the item.
+    Below,
+    /// An outline around the item.
+    Onto,
+}
+
 /// Where a dragged category lands when dropped at `y` on `target`'s item
-/// of `rect`: in the gap above or below it (among its siblings), or onto it
-/// (its last child). `None`: on itself.
+/// of `rect`: in the gap above or below it (among its siblings; below an
+/// open category with children, its first child), or onto it (its last
+/// child). `None`: on itself.
 fn drop_target(
     categories: &Categories,
     dragged: CategoryId,
-    target: CategoryId,
+    target: Item,
     rect: Rect,
     y: f32,
-) -> Option<(Option<CategoryId>, usize)> {
+) -> Option<(Option<CategoryId>, usize, Mark)> {
+    let Item::Category {
+        id: target,
+        has_children,
+        expanded,
+        ..
+    } = target
+    else {
+        return None;
+    };
     if target == dragged {
         return None;
     }
@@ -499,17 +520,24 @@ fn drop_target(
             .map(|s| s.id)
             .collect::<Vec<_>>()
     };
-    if share < GAP_SHARE || share > 1.0 - GAP_SHARE {
+    if share < GAP_SHARE {
         let at = siblings(c.parent).iter().position(|s| *s == target)?;
-        let index = if share < GAP_SHARE { at } else { at + 1 };
-        Some((c.parent, index))
+        Some((c.parent, at, Mark::Above))
+    } else if share > 1.0 - GAP_SHARE {
+        // Below an open category, the line sits above its first child.
+        if has_children && expanded {
+            return Some((Some(target), 0, Mark::Below));
+        }
+        let at = siblings(c.parent).iter().position(|s| *s == target)?;
+        Some((c.parent, at + 1, Mark::Below))
     } else {
-        Some((Some(target), siblings(Some(target)).len()))
+        Some((Some(target), siblings(Some(target)).len(), Mark::Onto))
     }
 }
 
 /// Follows a category being dragged: shows where it would land, and sends
-/// the move when it is dropped on another category.
+/// the move when it is dropped on another category. A new parent that is
+/// closed opens, so the moved category stays in sight.
 fn drop_category(
     ui: &Ui,
     scene: &Scene<'_>,
@@ -528,37 +556,39 @@ fn drop_category(
         )
     });
     let target = pointer.filter(|p| body.contains(*p)).and_then(|p| {
-        drawn.iter().find_map(|(item, rect)| match item {
-            Item::Category { id, .. } if rect.y_range().contains(p.y) => {
-                drop_target(&scene.state.categories, dragged, *id, *rect, p.y)
-                    .map(|to| (to, *id, *rect, p.y))
+        drawn.iter().find_map(|(item, rect)| {
+            if !rect.y_range().contains(p.y) {
+                return None;
             }
-            _ => None,
+            drop_target(&scene.state.categories, dragged, *item, *rect, p.y).map(|to| (to, *rect))
         })
     });
-    if let Some(((parent, _), target, rect, _)) = target {
+    if let Some(((_, _, mark), rect)) = target {
         let painter = ui.painter();
         let stroke = Stroke::new(2.0, theme::ACCENT);
-        if parent == Some(target) {
-            painter.rect_stroke(rect.shrink(1.0), 2.0, stroke, StrokeKind::Inside);
-        } else {
-            let share = (pointer.map_or(rect.top(), |p| p.y) - rect.top()) / rect.height().max(1.0);
-            let y = if share < GAP_SHARE {
-                rect.top()
-            } else {
-                rect.bottom()
-            };
-            painter.hline(rect.x_range(), y, stroke);
+        match mark {
+            Mark::Onto => {
+                painter.rect_stroke(rect.shrink(1.0), 2.0, stroke, StrokeKind::Inside);
+            }
+            Mark::Above => {
+                painter.hline(rect.x_range(), rect.top(), stroke);
+            }
+            Mark::Below => {
+                painter.hline(rect.x_range(), rect.bottom(), stroke);
+            }
         }
     }
     if released {
         library.tree_drag = None;
-        if let Some(((parent, index), ..)) = target {
+        if let Some(((parent, index, _), _)) = target {
             scene.ctl.send(Command::MoveCategory {
                 category: dragged,
                 parent,
                 index,
             });
+            if let Some(parent) = parent {
+                category_dialog::expand(scene, library, parent);
+            }
         }
     } else if !down {
         library.tree_drag = None;

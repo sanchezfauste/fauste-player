@@ -11,7 +11,7 @@ use super::super::exit_guard::button;
 use super::super::settings::carts::{color_key, swatch};
 use super::super::theme;
 use super::super::widgets::{self, TileStyle, font, font_medium};
-use super::state::LibraryDialog;
+use super::state::{LibraryDialog, LibraryUi};
 
 /// Every track kind, in the menus' order.
 pub(crate) const KINDS: [TrackKind; 5] = [
@@ -180,7 +180,7 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
             scene.ctl.send(command);
             // A new subcategory shows: its parent opens.
             if let Some(parent) = parent {
-                expand(scene, view_state, parent);
+                expand(scene, &view_state.library, parent);
             }
         }
         None => {}
@@ -188,8 +188,8 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
 }
 
 /// Opens `category` in the tree, if it is closed.
-fn expand(scene: &Scene<'_>, view_state: &ViewState, category: CategoryId) {
-    let view = super::current_view(&scene.state.library_view, &view_state.library);
+pub(super) fn expand(scene: &Scene<'_>, library: &LibraryUi, category: CategoryId) {
+    let view = super::current_view(&scene.state.library_view, library);
     if view.expanded.contains(&category) {
         return;
     }
@@ -221,7 +221,6 @@ fn field(ui: &mut Ui, label: &str, content: impl FnOnce(&mut Ui)) {
 
 /// A dialog with a title, the name field, `extra` below it, and Cancel and
 /// `confirm`. Enter in the name confirms; Esc or the backdrop cancels.
-#[allow(clippy::too_many_arguments)]
 fn modal(
     ctx: &egui::Context,
     scene: &Scene<'_>,

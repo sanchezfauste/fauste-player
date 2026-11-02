@@ -9,7 +9,7 @@ use fp_model::library_search::{CategoryCounts, SearchIndex};
 use fp_model::library_view::LibraryView;
 use fp_model::{CartColor, Categories, CategoryId, Library, TrackId, TrackKind};
 
-use super::confirm::Removal;
+use super::confirm::{Asked, Removal};
 
 /// The library window's runtime state, in `ViewState::library`.
 #[derive(Default)]
@@ -83,7 +83,12 @@ pub(crate) enum LibraryDialog {
         fresh: bool,
     },
     /// A removal waiting for the operator's answer (LB11, LB17).
-    Removal { removal: Removal, step: RemovalStep },
+    Removal {
+        removal: Removal,
+        step: RemovalStep,
+        /// What the question shows, and the library it was counted in.
+        asked: Box<Asked>,
+    },
 }
 
 /// The two questions of a removal (LB11).
