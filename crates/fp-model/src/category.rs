@@ -144,10 +144,26 @@ impl Categories {
             .unwrap_or(0)
     }
 
-    /// Loaded data may be damaged: a category whose parent is unknown, or
-    /// that lies on a cycle, goes to the top level. One warning each.
+    /// Loaded data may be damaged: a category whose id repeats is dropped
+    /// (the first stays), and one whose parent is unknown, or that lies on a
+    /// cycle, goes to the top level. One warning each. The list is then put
+    /// in tree order: every parent before its children, each subtree
+    /// contiguous.
     pub fn repaired(mut self) -> (Categories, Vec<String>) {
         let mut warnings = Vec::new();
+        let mut seen: Vec<CategoryId> = Vec::new();
+        self.list.retain(|c| {
+            if seen.contains(&c.id) {
+                warnings.push(format!(
+                    "category {} ({:?}) repeats an id; dropped",
+                    c.id.0, c.name
+                ));
+                false
+            } else {
+                seen.push(c.id);
+                true
+            }
+        });
         let ids: Vec<CategoryId> = self.list.iter().map(|c| c.id).collect();
         for i in 0..self.list.len() {
             let Some(category) = self.list.get(i) else {
@@ -174,6 +190,20 @@ impl Categories {
                 }
             }
         }
+        let mut ordered = Vec::with_capacity(self.list.len());
+        let mut roots: Vec<CategoryId> = self.children(None).map(|c| c.id).collect();
+        roots.reverse();
+        // Depth first, children in list order.
+        let mut stack = roots;
+        while let Some(id) = stack.pop() {
+            if let Some(c) = self.get(id) {
+                ordered.push(c.clone());
+            }
+            let mut kids: Vec<CategoryId> = self.children(Some(id)).map(|c| c.id).collect();
+            kids.reverse();
+            stack.extend(kids);
+        }
+        self.list = ordered;
         (self, warnings)
     }
 
@@ -246,8 +276,8 @@ impl Categories {
             }
         }
         self.list = rest;
-        if let Some(first) = taken.first_mut() {
-            first.parent = parent;
+        if let Some(root) = taken.iter_mut().find(|c| c.id == id) {
+            root.parent = parent;
         }
         let siblings: Vec<CategoryId> = self.children(parent).map(|c| c.id).collect();
         let at = match siblings.get(index) {

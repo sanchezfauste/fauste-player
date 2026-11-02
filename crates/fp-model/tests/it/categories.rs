@@ -178,12 +178,78 @@ fn repaired_moves_orphans_and_cycles_to_the_root() {
         cat(4, Some(4)),
     ])
     .repaired();
+    assert_eq!(warnings.len(), 3, "{warnings:?}");
+    assert_eq!(fixed.children(None).count(), 3);
+    assert_eq!(fixed.len(), 4);
     assert!(
         fixed
             .iter()
-            .all(|c| { fixed.depth(c.id) >= 1 && fixed.subtree(c.id).first() == Some(&c.id) })
+            .all(|c| fixed.depth(c.id) >= 1 && fixed.subtree(c.id).first() == Some(&c.id))
     );
-    assert!((2..=4).contains(&warnings.len()), "{warnings:?}");
-    assert!(fixed.children(None).count() >= 2);
-    assert!(fixed.iter().all(|c| fixed.depth(c.id) <= 2));
+    assert_eq!(
+        fixed.get(CategoryId(3)).unwrap().parent,
+        Some(CategoryId(2))
+    );
+    assert_eq!(fixed.iter().map(|c| fixed.depth(c.id)).max(), Some(2));
+}
+
+fn cat(id: u64, parent: Option<u64>) -> Category {
+    Category {
+        id: CategoryId(id),
+        parent: parent.map(CategoryId),
+        name: format!("c{id}"),
+        color: None,
+        kind: TrackKind::Music,
+    }
+}
+
+#[test]
+fn repaired_puts_parents_before_children_and_drops_repeated_ids() {
+    let (fixed, warnings) = Categories::from(vec![
+        cat(3, Some(2)),
+        cat(2, Some(1)),
+        cat(1, None),
+        cat(2, None),
+    ])
+    .repaired();
+    let order: Vec<u64> = fixed.iter().map(|c| c.id.0).collect();
+    assert_eq!(order, [1, 2, 3]);
+    assert_eq!(
+        fixed.get(CategoryId(2)).unwrap().parent,
+        Some(CategoryId(1))
+    );
+    assert_eq!(warnings.len(), 1, "{warnings:?}");
+}
+
+#[test]
+fn a_three_level_subtree_moves_contiguously_and_respects_depth() {
+    let mut s = state();
+    let a = create(&mut s, None, "A").unwrap();
+    let b = create(&mut s, Some(a), "B").unwrap();
+    let c = create(&mut s, Some(b), "C").unwrap();
+    let x = create(&mut s, None, "X").unwrap();
+    let y = create(&mut s, None, "Y").unwrap();
+    apply(
+        &mut s,
+        Command::MoveCategory {
+            category: a,
+            parent: None,
+            index: 1,
+        },
+    )
+    .unwrap();
+    let order: Vec<CategoryId> = s.categories.iter().map(|k| k.id).collect();
+    assert_eq!(order, [x, a, b, c, y]);
+    assert_eq!(s.categories.get(a).unwrap().parent, None);
+    // A grandchild that would exceed the limit.
+    s.config.library.max_category_depth = 3;
+    let err = apply(
+        &mut s,
+        Command::MoveCategory {
+            category: a,
+            parent: Some(x),
+            index: 0,
+        },
+    );
+    assert_eq!(err.unwrap_err(), ModelError::CategoryTooDeep);
 }
