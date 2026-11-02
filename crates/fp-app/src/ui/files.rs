@@ -16,9 +16,17 @@ pub fn is_audio(path: &Path) -> bool {
         .is_some_and(|e| AUDIO_EXTENSIONS.iter().any(|a| a.eq_ignore_ascii_case(e)))
 }
 
+/// The canonical form of `path` (symlinks and `..` resolved), or the path as
+/// given when the file system cannot say (LB14). It touches the file system:
+/// call it on a helper thread.
+pub fn canonical_path(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+}
+
 /// Keeps the audio files, in the given order. A folder is replaced by the
 /// audio files directly inside it, sorted by name (sub-folders are not
-/// entered). Paths that no longer exist are dropped.
+/// entered). Paths that no longer exist are dropped. The paths come back
+/// canonical.
 pub fn audio_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
     let mut out = Vec::new();
     for path in paths {
@@ -32,9 +40,9 @@ pub fn audio_paths(paths: &[PathBuf]) -> Vec<PathBuf> {
                 .filter(|p| p.is_file() && is_audio(p))
                 .collect();
             inside.sort_by_key(|p| p.file_name().map(|n| n.to_string_lossy().to_lowercase()));
-            out.extend(inside);
+            out.extend(inside.iter().map(|p| canonical_path(p)));
         } else if path.is_file() && is_audio(path) {
-            out.push(path.clone());
+            out.push(canonical_path(path));
         }
     }
     out

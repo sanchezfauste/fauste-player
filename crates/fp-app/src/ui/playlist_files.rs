@@ -14,6 +14,7 @@ use fp_store::playlist_io::{
 
 use crate::i18n::I18n;
 use crate::platform::Platform;
+use crate::ui::files::canonical_path;
 
 /// Extensions read as playlist files.
 pub const PLAYLIST_EXTENSIONS: &[&str] = &["m3u", "m3u8", "pls"];
@@ -166,6 +167,14 @@ fn read(path: &Path, limits: &Limits) -> FileOutcome {
         .unwrap_or_default();
     let result = read_bounded(path, limits.max_playlist_file_bytes)
         .and_then(|bytes| parse_playlist(&bytes, path, limits))
+        .map(|mut list| {
+            // LB14: new tracks are keyed by canonical path. `read` runs on a
+            // helper thread.
+            for entry in &mut list.entries {
+                entry.path = canonical_path(&entry.path);
+            }
+            list
+        })
         .map_err(FileError::from);
     FileOutcome::Imported { name, result }
 }

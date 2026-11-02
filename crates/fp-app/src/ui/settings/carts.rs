@@ -11,7 +11,7 @@ use fp_store::playlist_io::{parse_cart_page_noting, read_bounded, write_cart_pag
 
 use super::super::app::Scene;
 use super::super::cartwall::page_name;
-use super::super::files::AUDIO_EXTENSIONS;
+use super::super::files::{AUDIO_EXTENSIONS, canonical_path};
 use super::super::loudness_edit;
 use super::super::theme;
 use super::super::widgets::{self, TileStyle, font};
@@ -208,6 +208,15 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                         .and_then(|bytes| {
                             let mut notes = Vec::new();
                             let import = parse_cart_page_noting(&bytes, &path, &limits, &mut notes)
+                                .map(|mut import| {
+                                    // LB14: canonical, on this helper thread.
+                                    for (_, _, file) in &mut import.carts {
+                                        if let Some(f) = file {
+                                            *f = canonical_path(f);
+                                        }
+                                    }
+                                    import
+                                })
                                 .map_err(FileError::from);
                             for note in &notes {
                                 tracing::warn!(%note, "while importing a cart page");
@@ -510,7 +519,9 @@ pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         let dir = scene.state.config.ui.music_dir.clone();
         let platform = scene.platform.clone();
         c.file = background(scene, move || {
-            platform.pick_file(&filter, AUDIO_EXTENSIONS, dir)
+            platform
+                .pick_file(&filter, AUDIO_EXTENSIONS, dir)
+                .map(|p| canonical_path(&p))
         });
     }
     if clear {

@@ -26,6 +26,7 @@ mod header_overlap_ui;
 mod i18n;
 mod instance;
 mod layout_ui;
+mod library_paths;
 mod live_settings;
 mod loudness_ui;
 mod main_screen;
