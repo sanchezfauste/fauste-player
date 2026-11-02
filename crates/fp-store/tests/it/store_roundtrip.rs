@@ -848,7 +848,10 @@ fn a_database_that_could_not_be_opened_is_never_created_by_a_later_save() {
     assert!(!loaded.warnings.is_empty());
     fs::remove_file(&data_dir).unwrap();
     let state = AppState::new(Config::default(), "Main");
-    let _ = s.save_state(&state, |_| 0.0, std::time::Instant::now());
+    // A disabled store has nothing to save and reports success, so the
+    // services do not stay dirty and retry forever.
+    s.save_state(&state, |_| 0.0, std::time::Instant::now())
+        .unwrap();
     assert!(
         !s.paths().database_file().exists(),
         "a save reopened the database after a failed open"

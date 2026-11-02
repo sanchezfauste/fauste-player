@@ -341,8 +341,13 @@ fn a_failed_save_is_retried_at_the_next_step() {
     };
     assert!(!saved(&r), "the save was refused");
     refuse("DROP TRIGGER refuse");
-    // No new change: the retry comes from the autosave step alone.
+    // Inside the debounce interval of the failed attempt: no new attempt.
     r.now += Duration::from_millis(100);
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    assert!(!saved(&r), "retries wait for the debounce interval");
+    // No new change: the retry comes from the autosave step alone.
+    r.now += Duration::from_millis(1_100);
     r.conductor.tick(r.now);
     r.services.step(r.now);
     assert!(saved(&r), "retried without waiting for another change");

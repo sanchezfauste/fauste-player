@@ -525,6 +525,10 @@ pub struct Services {
     header_reads_sent: u64,
     saved_version: u64,
     dirty_since: Option<Instant>,
+    /// A save failed and none has worked since: the failure was logged.
+    save_failing: bool,
+    /// Earliest time of the next attempt after a failed save.
+    next_retry: Option<Instant>,
     last_session_save: Option<Instant>,
 }
 
@@ -601,6 +605,8 @@ impl Services {
             header_reads_sent: 0,
             saved_version: 0,
             dirty_since: None,
+            save_failing: false,
+            next_retry: None,
             last_session_save: None,
         }
     }
@@ -874,7 +880,10 @@ impl Services {
     /// Final save, with the positions the engine reports right now.
     pub fn shutdown(&mut self) {
         let state = self.conductor.model.load_full();
-        self.save_all(&state, Instant::now());
+        // The final save always tries once, whatever the retry throttle says.
+        let now = Instant::now();
+        let result = self.save_all(&state, now);
+        self.note_save(&state, result, now);
     }
 
     /// Runs on its own thread until the handle is shut down or dropped.
@@ -1727,12 +1736,16 @@ impl Services {
             .is_some_and(|since| now.saturating_duration_since(since) >= debounce)
         {
             // Recorded only once the files are written: while a save fails
-            // the state stays dirty and every autosave step retries it.
-            if self.save_all(state, now) {
-                self.saved_version = version;
-                self.dirty_since = None;
+            // the state stays dirty and is retried, no more often than the
+            // debounce interval.
+            if self.next_retry.is_none_or(|at| now >= at) {
+                let result = self.save_all(state, now);
+                if self.note_save(state, result, now) {
+                    self.saved_version = version;
+                    self.dirty_since = None;
+                }
+                self.last_session_save = Some(now);
             }
-            self.last_session_save = Some(now);
             return;
         }
         let playing = state
@@ -1743,28 +1756,54 @@ impl Services {
             .last_session_save
             .is_none_or(|last| now.saturating_duration_since(last) >= debounce);
         if playing && session_due {
-            self.save_session(state, now);
+            let result = self.save_session(state, now);
+            self.note_save(state, result, now);
             self.last_session_save = Some(now);
         }
     }
 
-    /// Saves the configuration and the session; whether both were written.
-    fn save_all(&mut self, state: &AppState, now: Instant) -> bool {
-        let config = match self.store.save_config(state) {
-            Ok(()) => true,
+    /// Keeps the failure state of the saves: the first failure of a run is
+    /// logged, then silence until a save works again (one info line). A
+    /// failure delays the next autosave attempt by the debounce interval.
+    /// Returns whether the save worked.
+    fn note_save(&mut self, state: &AppState, result: Result<(), String>, now: Instant) -> bool {
+        match result {
+            Ok(()) => {
+                if self.save_failing {
+                    tracing::info!("saving works again");
+                }
+                self.save_failing = false;
+                self.next_retry = None;
+                true
+            }
             Err(e) => {
-                tracing::error!(error = %e, "saving the configuration failed");
+                if !self.save_failing {
+                    tracing::error!(error = %e, "saving failed; retrying at the autosave pace");
+                }
+                self.save_failing = true;
+                let debounce =
+                    Duration::from_secs_f64(state.config.tuning.save_debounce_ms.max(0.0) / 1000.0);
+                self.next_retry = Some(now + debounce);
                 false
             }
-        };
-        self.save_session(state, now) && config
+        }
+    }
+
+    /// Saves the configuration and the session; the error of the first
+    /// that failed. The caller logs it.
+    fn save_all(&mut self, state: &AppState, now: Instant) -> Result<(), String> {
+        let config = self
+            .store
+            .save_config(state)
+            .map_err(|e| format!("the configuration: {e}"));
+        let session = self.save_session(state, now);
+        config.and(session)
     }
 
     /// Saves the playlists, library, carts, players and layout through the
-    /// database: only the rows that changed are written. A failure is
-    /// logged and reported as `false`; the autosave then keeps the state
-    /// dirty and retries at its next step. Whether the save succeeded.
-    fn save_session(&mut self, state: &AppState, now: Instant) -> bool {
+    /// database: only the rows that changed are written. On failure the
+    /// autosave keeps the state dirty and retries (see `note_save`).
+    fn save_session(&mut self, state: &AppState, now: Instant) -> Result<(), String> {
         let telemetry = self.conductor.telemetry.load();
         let position_of = |player: PlayerId| {
             telemetry
@@ -1774,13 +1813,9 @@ impl Services {
                 .and_then(|(_, t)| t.position_secs)
                 .unwrap_or(0.0)
         };
-        match self.store.save_state(state, position_of, now) {
-            Ok(()) => true,
-            Err(e) => {
-                tracing::error!(error = %e, "saving the state failed");
-                false
-            }
-        }
+        self.store
+            .save_state(state, position_of, now)
+            .map_err(|e| format!("the state: {e}"))
     }
 }
 

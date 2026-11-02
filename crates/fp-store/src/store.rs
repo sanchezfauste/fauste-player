@@ -266,6 +266,10 @@ impl Store {
         now: Instant,
     ) -> Result<(), StoreError> {
         let backups = state.config.limits.backup_count;
+        if self.disk == DiskState::Disabled {
+            // Load already warned that changes are not saved this session.
+            return Ok(());
+        }
         if self.disk == DiskState::Unopened {
             for w in self.open_db(backups)? {
                 tracing::warn!("{w}");
