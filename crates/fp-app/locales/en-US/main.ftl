@@ -822,3 +822,10 @@ library-used-body = { $entries ->
    *[other] { $carts } carts
 } use these tracks. The entries are removed from their playlists and the carts are emptied.
 library-used-confirm = Remove anyway
+# The library's table and search (track library spec §7.4, §7.5)
+library-search-hint = Search
+library-search = Search the library
+library-whole-library = Whole library
+library-add-files = Add files
+library-col-category = Category
+library-col-kind = Kind

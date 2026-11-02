@@ -822,3 +822,10 @@ library-used-body = { $entries ->
    *[other] { $carts } carts utilisent
 } ces titres. Les entrées sont retirées de leurs listes et les carts sont vidés.
 library-used-confirm = Retirer quand même
+# Le tableau et la recherche de la bibliothèque (track library spec §7.4, §7.5)
+library-search-hint = Rechercher
+library-search = Rechercher dans la bibliothèque
+library-whole-library = Toute la bibliothèque
+library-add-files = Ajouter des fichiers
+library-col-category = Catégorie
+library-col-kind = Type

@@ -822,3 +822,10 @@ library-used-body = { $entries ->
    *[other] { $carts } carts fan servir
 } aquestes pistes. Les entrades es treuen de les llistes i els carts es buiden.
 library-used-confirm = Treu igualment
+# La taula i la cerca de la biblioteca (track library spec §7.4, §7.5)
+library-search-hint = Cerca
+library-search = Cerca a la biblioteca
+library-whole-library = Tota la biblioteca
+library-add-files = Afegeix fitxers
+library-col-category = Categoria
+library-col-kind = Tipus

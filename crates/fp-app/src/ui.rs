@@ -33,6 +33,7 @@ pub mod table_layout;
 mod tag_editor;
 pub mod theme;
 pub mod touch;
+mod track_cells;
 pub mod view;
 mod wave_panel;
 pub mod wave_view;

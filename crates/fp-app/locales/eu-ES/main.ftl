@@ -822,3 +822,10 @@ library-used-body = { $entries ->
    *[other] { $carts } cart-ek
 } erabiltzen dituzte pista hauek. Sarrerak beren zerrendetatik kentzen dira eta cart-ak hustu egiten dira.
 library-used-confirm = Kendu hala ere
+# Liburutegiaren taula eta bilaketa (track library spec §7.4, §7.5)
+library-search-hint = Bilatu
+library-search = Bilatu liburutegian
+library-whole-library = Liburutegi osoa
+library-add-files = Gehitu fitxategiak
+library-col-category = Kategoria
+library-col-kind = Mota

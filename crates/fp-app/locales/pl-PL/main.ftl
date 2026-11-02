@@ -853,3 +853,10 @@ library-used-body = Te utwory są używane przez { $entries ->
    *[other] { $carts } cartu
 }. Pozycje zostaną usunięte z playlist, a carty opróżnione.
 library-used-confirm = Usuń mimo to
+# Tabela i wyszukiwanie biblioteki (track library spec §7.4, §7.5)
+library-search-hint = Szukaj
+library-search = Szukaj w bibliotece
+library-whole-library = Cała biblioteka
+library-add-files = Dodaj pliki
+library-col-category = Kategoria
+library-col-kind = Rodzaj

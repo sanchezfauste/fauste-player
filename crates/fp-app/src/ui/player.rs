@@ -2172,7 +2172,10 @@ fn footer(
             .playlists
             .get(playlist)
             .map_or(0, |p| p.entries.len());
-        scene.pick_files(playlist, len);
+        scene.pick_files(super::app::PickTarget::Playlist {
+            playlist,
+            index: len,
+        });
     }
     // O22: clear the played marks of this playlist, after a question. A
     // phone keeps only Add in sight and puts the rest behind ⋯ (PL11).

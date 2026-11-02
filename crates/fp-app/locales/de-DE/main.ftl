@@ -822,3 +822,10 @@ library-used-body = { $entries ->
    *[other] { $carts } Carts
 } verwenden diese Titel. Die Einträge werden aus ihren Playlists entfernt und die Carts geleert.
 library-used-confirm = Trotzdem entfernen
+# Tabelle und Suche der Bibliothek (track library spec §7.4, §7.5)
+library-search-hint = Suchen
+library-search = Bibliothek durchsuchen
+library-whole-library = Ganze Bibliothek
+library-add-files = Dateien hinzufügen
+library-col-category = Kategorie
+library-col-kind = Art

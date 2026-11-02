@@ -822,3 +822,10 @@ library-used-body = { $entries ->
    *[other] { $carts } carts usan
 } estas pistas. Las entradas se quitan de sus listas y los carts se vacían.
 library-used-confirm = Quitar igualmente
+# La tabla y la búsqueda de la biblioteca (track library spec §7.4, §7.5)
+library-search-hint = Buscar
+library-search = Buscar en la biblioteca
+library-whole-library = Toda la biblioteca
+library-add-files = Añadir archivos
+library-col-category = Categoría
+library-col-kind = Tipo

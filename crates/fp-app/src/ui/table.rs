@@ -6,11 +6,12 @@ use egui_extras::{Column, TableBuilder};
 use egui_phosphor::regular as icon;
 use fp_model::{ColumnWidths, Command, EntryId, PlayerId, PlaylistId, TableColumn, Transport};
 
-use super::app::{DragColumn, DragEntry, DropTarget, FollowScroll, Scene, ViewState};
+use super::app::{DragColumn, DragEntry, DropTarget, FollowScroll, PickTarget, Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
 use super::table_layout;
 use super::theme;
+use super::track_cells;
 use super::view::{self, RowStatus};
 use super::widgets::{self, font, font_medium};
 
@@ -153,24 +154,6 @@ pub(crate) struct LiveResize {
     released: Option<(ColumnWidths, f64)>,
 }
 
-fn header_label(ui: &mut Ui, text: &str, right: bool) {
-    let label = egui::Label::new(
-        RichText::new(text.to_uppercase())
-            .font(font(10.0))
-            .color(theme::NEUTRAL_500),
-    )
-    .selectable(false);
-    if right {
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.add_space(8.0);
-            ui.add(label);
-        });
-    } else {
-        ui.add_space(8.0);
-        ui.add(label.truncate());
-    }
-}
-
 /// The widths to draw: the model's, or the ones of a column edge being
 /// dragged (or just released). Called before anything is drawn, so a drag
 /// shows in the same frame as the pointer move.
@@ -268,7 +251,6 @@ pub(crate) fn track_table(
     };
     let t = scene.i18n;
     let digits = format::number_width(list.entries.len());
-    let use_markers = scene.state.config.players.use_cue_markers;
     // O24: one list of columns for every table.
     let columns = fp_model::normalize_columns(&scene.state.config.ui.table_columns);
     let mins: Vec<f32> = columns
@@ -381,8 +363,8 @@ pub(crate) fn track_table(
                     if phone && index + 1 == columns.len() {
                         ui.set_max_width((ui.max_rect().width() - HANDLE_WIDTH).max(0.0));
                     }
-                    let right = matches!(column, TableColumn::Duration | TableColumn::Intro);
-                    header_label(ui, &t.tr(&format!("col-{}", column.name())), right);
+                    let right = track_cells::right_aligned(*column);
+                    track_cells::header_label(ui, &t.tr(&format!("col-{}", column.name())), right);
                 });
                 if response.drag_started() {
                     response.dnd_set_drag_payload(DragColumn { index });
@@ -447,17 +429,9 @@ pub(crate) fn track_table(
                 let line = |ui: &mut Ui, index: usize| {
                     let r = ui.max_rect();
                     let full = Rect::from_min_max(r.min, pos2(r.max.x, r.min.y + ROW_HEIGHT));
-                    ui.painter().rect_filled(full, 0.0, bg);
-                    ui.painter().rect_filled(
-                        Rect::from_min_size(
-                            pos2(full.left(), full.bottom() - 1.0),
-                            vec2(full.width(), 1.0),
-                        ),
-                        0.0,
-                        theme::TEXT.gamma_multiply(0.06),
-                    );
+                    track_cells::row_background(ui, full, bg);
                     if is_selected {
-                        selection_outline(ui, full, index == 0, index == last_column);
+                        track_cells::selection_outline(ui, full, index == 0, index == last_column);
                     }
                 };
                 for (index, column) in columns.iter().enumerate() {
@@ -546,126 +520,35 @@ pub(crate) fn track_table(
                                 }
                             }
                             TableColumn::Title => {
-                                ui.add_space(8.0);
-                                // The entry's repeat and stop icons sit before the title,
-                                // in the row's text colour (feedback 2 spec O9); the
-                                // "analysed by an earlier version" flag stays at the right.
-                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    ui.spacing_mut().item_spacing.x = 4.0;
-                                    ui.add_space(4.0);
-                                    // Shown tracks are brought up to date anyway, so
-                                    // the flag only stays on the ones waiting.
-                                    if crate::services::outdated(track) {
-                                        flag(ui, &t.tr("flag-outdated"), |p, r| {
-                                            let c = theme::NEUTRAL_500;
-                                            widgets::glyph(
-                                                p,
-                                                r,
-                                                icon::ARROWS_CLOCKWISE,
-                                                13.0,
-                                                c,
-                                                false,
-                                            );
+                                track_cells::title_cell(ui, scene, track, &row_font, text, |ui| {
+                                    if entry.repeat {
+                                        track_cells::flag(ui, &t.tr("flag-repeat"), |p, r| {
+                                            widgets::glyph(p, r, icon::REPEAT, 13.0, text, false);
                                         });
                                     }
-                                    // Main spec §6.1: running, queued, or not
-                                    // analysed yet and not queued.
-                                    if let Some((glyph, key)) =
-                                        view::analysis_flag(track, scene.analysis)
-                                    {
-                                        flag(ui, &t.tr(key), |p, r| {
-                                            widgets::glyph(
-                                                p,
-                                                r,
-                                                glyph,
-                                                13.0,
-                                                theme::NEUTRAL_400,
-                                                false,
-                                            );
+                                    if entry.stop_after {
+                                        track_cells::flag(ui, &t.tr("flag-stop-after"), |p, r| {
+                                            // Drawn into the flag's own 16x12 box, as before
+                                            // (paint would centre the grid's 18x13 size instead).
+                                            if let Some(d) =
+                                                glyphs::drawn(TransportAction::StopAfter)
+                                            {
+                                                p.extend((d.draw)(r, text));
+                                            }
                                         });
                                     }
-                                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                                        ui.spacing_mut().item_spacing.x = 4.0;
-                                        if entry.repeat {
-                                            flag(ui, &t.tr("flag-repeat"), |p, r| {
-                                                widgets::glyph(
-                                                    p,
-                                                    r,
-                                                    icon::REPEAT,
-                                                    13.0,
-                                                    text,
-                                                    false,
-                                                );
-                                            });
-                                        }
-                                        if entry.stop_after {
-                                            flag(ui, &t.tr("flag-stop-after"), |p, r| {
-                                                // Drawn into the flag's own 16x12 box, as before (paint would
-                                                // centre the grid's 18x13 size instead).
-                                                if let Some(d) =
-                                                    glyphs::drawn(TransportAction::StopAfter)
-                                                {
-                                                    p.extend((d.draw)(r, text));
-                                                }
-                                            });
-                                        }
-                                        ui.add(
-                                            egui::Label::new(
-                                                RichText::new(&track.title)
-                                                    .font(row_font.clone())
-                                                    .color(text),
-                                            )
-                                            .selectable(false)
-                                            .truncate(),
-                                        );
-                                    });
                                 });
                             }
-                            TableColumn::Artist => {
-                                ui.add_space(8.0);
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(if track.artist.is_empty() {
-                                            t.tr("unknown-artist")
-                                        } else {
-                                            track.artist.clone()
-                                        })
-                                        .font(font(12.0))
-                                        .color(artist_color),
-                                    )
-                                    .selectable(false)
-                                    .truncate(),
-                                );
-                            }
-                            TableColumn::Duration | TableColumn::Intro => {
-                                // Times sit at the right, like the duration.
-                                let d = view::cell_text(track, *column, use_markers);
-                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    ui.add_space(10.0);
-                                    ui.add(
-                                        egui::Label::new(
-                                            RichText::new(d).font(font(12.0)).color(text),
-                                        )
-                                        .selectable(false),
-                                    );
-                                });
-                            }
-                            TableColumn::Album
-                            | TableColumn::Date
-                            | TableColumn::Genre
-                            | TableColumn::FileName
-                            | TableColumn::Comment => {
-                                ui.add_space(8.0);
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(view::cell_text(track, *column, use_markers))
-                                            .font(font(12.0))
-                                            .color(artist_color),
-                                    )
-                                    .selectable(false)
-                                    .truncate(),
-                                );
-                            }
+                            other => track_cells::tag_cell(
+                                ui,
+                                scene,
+                                track,
+                                *other,
+                                track_cells::RowColours {
+                                    text,
+                                    secondary: artist_color,
+                                },
+                            ),
                         }
                     });
                 }
@@ -1031,7 +914,10 @@ fn context_menu(
     }
     ui.separator();
     if labelled(ui, icon::PLUS, "menu-add-below", true).clicked() {
-        scene.pick_files(playlist, index + 1);
+        scene.pick_files(PickTarget::Playlist {
+            playlist,
+            index: index + 1,
+        });
         ui.close();
     }
     if labelled(ui, icon::COPY, "menu-duplicate", true).clicked() {
@@ -1211,17 +1097,6 @@ fn drag_handle(ui: &mut Ui, label: &str, id: egui::Id) -> egui::Response {
     response
 }
 
-/// A small flag icon with `label` as its accessible name and tooltip.
-fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
-    let (rect, response) = ui.allocate_exact_size(vec2(16.0, 12.0), Sense::hover());
-    let owned = label.to_owned();
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, owned.clone()));
-    if ui.is_rect_visible(rect) {
-        paint(ui.painter(), rect);
-    }
-    response.on_hover_text(label);
-}
-
 /// The row tooltip: the reason the file cannot be played, when there is one,
 /// then label and value per line. Fixed width, never wider than the window.
 fn track_tip(
@@ -1318,43 +1193,6 @@ fn track_tip(
             on_air.as_ref(),
         ),
     );
-}
-
-/// Width of the selected row's outline.
-const SELECTION_OUTLINE_WIDTH: f32 = 2.0;
-
-/// The selected row's outline, on the part of the row that `cell` covers:
-/// its top and bottom edges, and the left or right edge when the cell is the
-/// row's first or last. Drawn on any row colour, so a selected on-air or
-/// next row still shows it is selected.
-fn selection_outline(ui: &Ui, cell: Rect, first: bool, last: bool) {
-    let w = SELECTION_OUTLINE_WIDTH;
-    let painter = ui.painter();
-    let colour = theme::SELECTION_OUTLINE;
-    painter.rect_filled(
-        Rect::from_min_size(cell.min, vec2(cell.width(), w)),
-        0.0,
-        colour,
-    );
-    painter.rect_filled(
-        Rect::from_min_size(pos2(cell.left(), cell.bottom() - w), vec2(cell.width(), w)),
-        0.0,
-        colour,
-    );
-    if first {
-        painter.rect_filled(
-            Rect::from_min_size(cell.min, vec2(w, cell.height())),
-            0.0,
-            colour,
-        );
-    }
-    if last {
-        painter.rect_filled(
-            Rect::from_min_size(pos2(cell.right() - w, cell.top()), vec2(w, cell.height())),
-            0.0,
-            colour,
-        );
-    }
 }
 
 #[cfg(test)]

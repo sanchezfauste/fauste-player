@@ -13,7 +13,8 @@ use fp_backends::AudioBackend;
 use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
 use fp_model::{
-    AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, ShortcutAction, TrackId,
+    AppState, CategoryId, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId,
+    ShortcutAction, TrackId,
 };
 
 use super::about::{self, Opener};
@@ -67,10 +68,19 @@ pub(crate) struct DropTarget {
     pub index: usize,
 }
 
-/// Files chosen in a file dialog, to insert at `index` of `playlist`.
+/// Where files chosen in a file dialog or dropped on the window go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PickTarget {
+    /// Inserted at `index` of `playlist`.
+    Playlist { playlist: PlaylistId, index: usize },
+    /// Added to the library, under a category (`None`: uncategorised).
+    Library(Option<CategoryId>),
+}
+
+/// Files chosen in a file dialog or dropped on the window, read on a
+/// helper thread (folders become the audio files in them).
 pub(crate) struct Picked {
-    playlist: PlaylistId,
-    index: usize,
+    target: PickTarget,
     paths: Vec<PathBuf>,
 }
 
@@ -371,7 +381,7 @@ impl Scene<'_> {
     }
 
     /// Opens the native file dialog without blocking the interface.
-    pub fn pick_files(&self, playlist: PlaylistId, index: usize) {
+    pub(crate) fn pick_files(&self, target: PickTarget) {
         let tx = self.picks.clone();
         let ctx = self.ctx.clone();
         let filter = self.i18n.tr("dialog-audio-files");
@@ -382,11 +392,7 @@ impl Scene<'_> {
             .spawn(move || {
                 let picked = platform.pick_audio_files(&filter, dir);
                 let paths = audio_paths(&picked);
-                let _ = tx.send(Picked {
-                    playlist,
-                    index,
-                    paths,
-                });
+                let _ = tx.send(Picked { target, paths });
                 ctx.request_repaint();
             });
         if let Err(e) = spawned {
@@ -863,14 +869,18 @@ impl AppUi {
             let text = self.file_outcome(outcome);
             self.view.notice = Some((text, time + NOTICE_SECS));
         }
-        while let Ok(picked) = self.picks_rx.try_recv() {
-            if !picked.paths.is_empty() {
-                self.ctl.send(Command::InsertPaths {
-                    playlist: picked.playlist,
-                    index: picked.index,
-                    paths: picked.paths,
-                });
+        while let Ok(Picked { target, paths }) = self.picks_rx.try_recv() {
+            if paths.is_empty() {
+                continue;
             }
+            self.ctl.send(match target {
+                PickTarget::Playlist { playlist, index } => Command::InsertPaths {
+                    playlist,
+                    index,
+                    paths,
+                },
+                PickTarget::Library(category) => Command::AddToLibrary { paths, category },
+            });
         }
         self.tag_outcomes(&state, time);
         self.cover_picks(&ctx, &state);
@@ -1781,6 +1791,17 @@ impl AppUi {
         if dropped.is_empty() {
             return;
         }
+        // Over the library window: the files join the selected category
+        // (track library spec §7.4).
+        let over_library = self.view.library.drawn.is_some_and(|window| {
+            ctx.input(|i| i.pointer.hover_pos().or_else(|| i.pointer.interact_pos()))
+                .is_some_and(|p| window.contains(p))
+        });
+        if over_library {
+            let target = PickTarget::Library(super::library::added_category(&state.library_view));
+            self.read_dropped(ctx, target, dropped);
+            return;
+        }
         // Over a table but not on a target: nothing is inserted (Q4.6).
         if self.view.file_drop.is_none() && self.view.file_drop_refused {
             return;
@@ -1812,16 +1833,24 @@ impl AppUi {
             }
             return;
         };
-        // Reading folders can be slow (network shares, sleeping disks): it
-        // happens on a helper thread and the result comes back as a pick.
+        let target = PickTarget::Playlist {
+            playlist: target.playlist,
+            index: target.index,
+        };
+        self.read_dropped(ctx, target, dropped);
+    }
+
+    /// Reads dropped files and folders for `target`. Reading folders can be
+    /// slow (network shares, sleeping disks): it happens on a helper thread
+    /// and the result comes back as a pick.
+    fn read_dropped(&self, ctx: &egui::Context, target: PickTarget, dropped: Vec<PathBuf>) {
         let tx = self.picks_tx.clone();
         let ctx = ctx.clone();
         let spawned = std::thread::Builder::new()
             .name("fp-drop-scan".to_owned())
             .spawn(move || {
                 let _ = tx.send(Picked {
-                    playlist: target.playlist,
-                    index: target.index,
+                    target,
                     paths: audio_paths(&dropped),
                 });
                 ctx.request_repaint();

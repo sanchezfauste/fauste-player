@@ -822,3 +822,10 @@ library-used-body = { $entries ->
    *[other] { $carts } carts gebruiken
 } deze nummers. De items worden uit hun afspeellijsten verwijderd en de carts worden leeggemaakt.
 library-used-confirm = Toch verwijderen
+# De tabel en zoekfunctie van de bibliotheek (track library spec §7.4, §7.5)
+library-search-hint = Zoeken
+library-search = Zoeken in de bibliotheek
+library-whole-library = Hele bibliotheek
+library-add-files = Bestanden toevoegen
+library-col-category = Categorie
+library-col-kind = Soort

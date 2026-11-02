@@ -822,3 +822,10 @@ library-used-body = { $entries ->
    *[other] { $carts } cart usano
 } questi brani. Le voci vengono rimosse dalle loro playlist e i cart vengono svuotati.
 library-used-confirm = Rimuovi comunque
+# La tabella e la ricerca della libreria (track library spec §7.4, §7.5)
+library-search-hint = Cerca
+library-search = Cerca nella libreria
+library-whole-library = Tutta la libreria
+library-add-files = Aggiungi file
+library-col-category = Categoria
+library-col-kind = Tipo

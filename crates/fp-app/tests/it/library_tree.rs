@@ -13,7 +13,7 @@ use crate::support;
 use egui::accesskit::Role;
 use egui::{Event, Modifiers, PointerButton, Pos2, pos2, vec2};
 use egui_kittest::Harness;
-use egui_kittest::kittest::Queryable;
+use egui_kittest::kittest::{NodeT, Queryable};
 use fp_app::ui::app::AppUi;
 use fp_model::library_view::{LibrarySelection, LibraryView};
 use fp_model::{AppState, CartColor, CategoryId, Command, TrackKind};
@@ -297,7 +297,8 @@ fn colour_and_kind_menus_send_their_commands() {
     h.get_by_label("Teal").click();
     h.run_steps(2);
     menu(&mut h, "Jingles");
-    h.get_by_label("Kind").click();
+    // The menu's Kind, not the table's column header.
+    h.get_by_role_and_label(Role::Button, "Kind").click();
     h.run_steps(2);
     h.get_by_label("Jingle").click();
     h.run_steps(2);
@@ -451,8 +452,9 @@ fn a_menu_on_all_tracks_has_no_category_actions() {
     assert!(h.query_by_label("Rename…").is_none());
     assert!(h.query_by_label("Delete…").is_none());
     assert!(
-        h.query_all_by_role(Role::TextInput).next().is_none(),
-        "no dialog"
+        h.query_all_by_role(Role::TextInput)
+            .all(|n| n.accesskit_node().label().as_deref() == Some("Search the library")),
+        "no dialog: only the table's search field"
     );
 }
 

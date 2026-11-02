@@ -8,6 +8,7 @@
 mod category_dialog;
 pub(crate) mod confirm;
 pub(crate) mod state;
+mod table;
 pub(crate) mod tree;
 
 use egui::{
@@ -15,8 +16,8 @@ use egui::{
     Vec2, pos2, vec2,
 };
 use egui_phosphor::regular as icon;
-use fp_model::Command;
-use fp_model::library_view::LibraryView;
+use fp_model::library_view::{LibrarySelection, LibraryView};
+use fp_model::{CategoryId, Command};
 
 use super::app::{Scene, ViewState};
 use super::panels;
@@ -559,4 +560,16 @@ pub(crate) fn dialogs(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut V
 
 /// The search field, the Whole library toggle and the table (track library
 /// spec §7.4, §7.5).
-fn table(_ui: &mut Ui, _scene: &Scene<'_>, _view_state: &mut ViewState) {}
+fn table(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+    table::table(ui, scene, view_state);
+}
+
+/// The category that added files join (track library spec §7.4): the
+/// selected one; none (uncategorised) with *All tracks* or
+/// *Uncategorised* selected.
+pub(crate) fn added_category(view: &LibraryView) -> Option<CategoryId> {
+    match view.selection {
+        LibrarySelection::Category(id) => Some(id),
+        LibrarySelection::All | LibrarySelection::Uncategorised => None,
+    }
+}

@@ -27,6 +27,7 @@ mod i18n;
 mod instance;
 mod layout_ui;
 mod library_paths;
+mod library_table;
 mod library_tree;
 mod library_window;
 mod live_settings;
