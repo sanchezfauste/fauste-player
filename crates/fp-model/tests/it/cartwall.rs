@@ -227,7 +227,7 @@ fn c8_the_last_page_cannot_be_deleted() {
 }
 
 #[test]
-fn c8_deleting_a_page_stops_its_carts_and_forgets_their_tracks() {
+fn c8_deleting_a_page_stops_its_carts_and_keeps_their_tracks() {
     let mut state = fixture(0);
     apply(
         &mut state,
@@ -242,7 +242,8 @@ fn c8_deleting_a_page_stops_its_carts_and_forgets_their_tracks() {
     let p = page(&state);
     let actions = apply(&mut state, Command::DeleteCartPage(p)).unwrap();
     assert_eq!(stopped(&actions), vec![a]);
-    assert!(state.library.get(track).is_none());
+    // LB15: the track stays in the library.
+    assert!(state.library.get(track).is_some());
     assert_eq!(state.cartwall.pages.len(), 1);
 }
 
@@ -403,22 +404,23 @@ fn a_track_used_by_a_cart_survives_playlist_removal() {
         },
     )
     .unwrap();
-    // The cart gets its own library track even for the same file; removing
-    // the playlist entry must not touch it.
+    // The cart shares the file's library track (LB14); removing the
+    // playlist entry must not touch it.
     let cart_track = state.cartwall.pages[0].carts[0].track.unwrap();
     apply(&mut state, Command::RemoveEntry(e[0])).unwrap();
     assert!(state.library.get(cart_track).is_some());
 }
 
 #[test]
-fn clearing_a_cart_file_forgets_its_track() {
+fn clearing_a_cart_file_keeps_its_track() {
     let mut state = fixture(0);
     load(&mut state, 0, 10.0);
     let track = state.cartwall.pages[0].carts[0].track.unwrap();
     let p = page(&state);
     apply(&mut state, Command::ClearCartFile { page: p, index: 0 }).unwrap();
     assert!(state.cartwall.pages[0].carts[0].track.is_none());
-    assert!(state.library.get(track).is_none());
+    // LB15: the track stays in the library.
+    assert!(state.library.get(track).is_some());
 }
 
 #[test]
@@ -479,7 +481,7 @@ fn new_pages_use_the_configured_grid_and_kinds_are_editable() {
 }
 
 #[test]
-fn importing_duplicate_positions_keeps_no_orphan_track() {
+fn importing_duplicate_positions_keeps_both_tracks_in_the_library() {
     let mut state = fixture(0);
     let edit = CartEdit {
         name: "x".into(),
@@ -500,8 +502,8 @@ fn importing_duplicate_positions_keeps_no_orphan_track() {
     apply(&mut state, Command::ImportCartPage(Box::new(import))).unwrap();
     assert_eq!(
         state.library.iter().count(),
-        1,
-        "only the referenced track remains"
+        2,
+        "the replaced file stays in the library (LB15)"
     );
 }
 

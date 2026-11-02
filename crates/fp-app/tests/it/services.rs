@@ -1767,7 +1767,14 @@ fn a_track_removed_while_measured_is_forgotten() {
     });
     let first = r.handle.model.load().playlists.first_id().unwrap();
     let entry = r.handle.model.load().playlists.get(first).unwrap().entries[0].id;
+    let track = r.handle.model.load().playlists.get(first).unwrap().entries[0].track;
+    // The track stays in the library after its last entry (LB15); a missing,
+    // uncategorised, unused one leaves (LB17c).
     r.handle.send(Command::RemoveEntry(entry));
+    r.handle.send(Command::SetFileState {
+        track,
+        state: fp_model::FileState::Missing,
+    });
     r.run_until("the track gone", |r| {
         r.handle.model.load().library.is_empty()
     });

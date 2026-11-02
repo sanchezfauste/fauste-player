@@ -164,6 +164,13 @@ pub enum Command {
         name: String,
         paths: Vec<PathBuf>,
     },
+    /// Puts files in the library, filed under `category` when given: a new
+    /// track takes the category and its kind, an uncategorised one joins it,
+    /// one already in a category keeps it (LB16).
+    AddToLibrary {
+        paths: Vec<PathBuf>,
+        category: Option<crate::ids::CategoryId>,
+    },
     /// Track categories (track library spec LB9, LB10).
     CreateCategory {
         parent: Option<crate::ids::CategoryId>,

@@ -184,13 +184,13 @@ fn restored_cart_pages_are_normalised() {
 }
 
 #[test]
-fn orphan_library_tracks_are_dropped_on_restore() {
+fn unreferenced_library_tracks_are_kept_on_restore() {
     let mut state = fixture(1);
     let orphan = fp_model::Track::new(fp_model::TrackId(777), std::path::PathBuf::from("/x.wav"));
     state.library.insert(orphan);
     let (restored, _) = AppState::restore(parts(&state), &[], "Main");
-    assert!(restored.library.get(fp_model::TrackId(777)).is_none());
-    assert_eq!(restored.library.iter().count(), 1);
+    assert!(restored.library.get(fp_model::TrackId(777)).is_some());
+    assert_eq!(restored.library.iter().count(), 2);
 }
 
 #[test]

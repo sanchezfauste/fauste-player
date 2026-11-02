@@ -16,7 +16,7 @@ use crate::player::{CueState, FadeOrigin, PlayMode, PlayerState, Transport};
 use crate::playlist::{Playlist, PlaylistEntry};
 use crate::shortcuts::{Shortcut, default_shortcuts};
 use crate::state::AppState;
-use crate::track::{FileState, MarkerKind, Track};
+use crate::track::{FileState, MarkerKind};
 
 /// Applies a user command. On `Err` the state is unchanged.
 pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>, ModelError> {
@@ -252,6 +252,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
                     }
                 }
                 refresh_next(state);
+                crate::library_rules::release_tracks(state, [track]);
             }
         }
         Command::RemoveEntry(entry) => remove_entry(state, entry, &mut out)?,
@@ -316,6 +317,9 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             let id = state.ids.playlist();
             state.playlists.add(Playlist::new(id, name));
             insert_paths(state, id, 0, paths)?;
+        }
+        Command::AddToLibrary { paths, category } => {
+            crate::library_rules::add_to_library(state, paths, category)?
         }
         Command::CreateCategory {
             parent,
@@ -789,8 +793,7 @@ fn insert_paths(
     }
     let mut entries = Vec::with_capacity(paths.len());
     for path in paths {
-        let track = state.ids.track();
-        state.library.insert(Track::new(track, path));
+        let track = crate::library_rules::track_for_path(state, path);
         entries.push(PlaylistEntry::new(state.ids.entry(), track));
     }
     state.playlists.insert(playlist, index, entries)?;
@@ -1294,11 +1297,6 @@ fn set_marker(
     Ok(())
 }
 
-/// Drops library tracks that no playlist entry or cart references any more.
-fn forget_unreferenced(state: &mut AppState, tracks: impl IntoIterator<Item = TrackId>) {
-    cart_rules::forget_tracks(state, tracks);
-}
-
 fn remove_entry(
     state: &mut AppState,
     entry: EntryId,
@@ -1315,7 +1313,7 @@ fn remove_entry(
         |_, current| successors.for_current(current),
         out,
     );
-    forget_unreferenced(state, [removed.track]);
+    crate::library_rules::release_tracks(state, [removed.track]);
     refresh_next(state);
     Ok(())
 }
@@ -1341,7 +1339,7 @@ fn delete_playlist(
     }
     let ids: HashSet<EntryId> = removed.entries.iter().map(|e| e.id).collect();
     detach_entries(state, &ids, |_, _| None, out);
-    forget_unreferenced(state, removed.entries.iter().map(|e| e.track));
+    crate::library_rules::release_tracks(state, removed.entries.iter().map(|e| e.track));
     refresh_next(state);
     Ok(())
 }

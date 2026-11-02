@@ -1,6 +1,6 @@
 //! Tracks (audio files with metadata and cue markers) and the library that owns them.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
@@ -618,6 +618,10 @@ impl Track {
 #[serde(from = "Vec<Track>", into = "Vec<Track>")]
 pub struct Library {
     tracks: imbl::OrdMap<TrackId, Arc<Track>>,
+    /// The track of each path (LB14), kept in step with `tracks`. It holds
+    /// the lowest id when a library read from disk has two tracks on a path
+    /// (`merge_duplicate_paths` removes the extra ones).
+    by_path: imbl::OrdMap<PathBuf, TrackId>,
 }
 
 /// What differs between two versions of a [`Library`].
@@ -631,9 +635,13 @@ pub struct LibraryChanges<'a> {
 
 impl From<Vec<Track>> for Library {
     fn from(tracks: Vec<Track>) -> Self {
-        Self {
-            tracks: tracks.into_iter().map(|t| (t.id, Arc::new(t))).collect(),
+        let tracks: imbl::OrdMap<TrackId, Arc<Track>> =
+            tracks.into_iter().map(|t| (t.id, Arc::new(t))).collect();
+        let mut by_path = imbl::OrdMap::new();
+        for (id, track) in &tracks {
+            by_path.entry(track.path.clone()).or_insert(*id);
         }
+        Self { tracks, by_path }
     }
 }
 
@@ -649,19 +657,52 @@ impl From<Library> for Vec<Track> {
 
 impl Library {
     pub fn insert(&mut self, track: Track) {
-        self.tracks.insert(track.id, Arc::new(track));
+        let id = track.id;
+        let path = track.path.clone();
+        if let Some(old) = self.tracks.insert(id, Arc::new(track))
+            && old.path != path
+        {
+            self.unindex(&old.path, id);
+        }
+        self.by_path.insert(path, id);
+    }
+
+    /// The track of a file, compared by path as given (LB14).
+    pub fn track_at(&self, path: &Path) -> Option<TrackId> {
+        self.by_path.get(path).copied()
+    }
+
+    /// Points a track at another file. This is the only way to change a
+    /// library track's `path` (the path index follows it).
+    pub fn set_path(&mut self, id: TrackId, path: PathBuf) {
+        let Some(track) = self.tracks.get_mut(&id).map(Arc::make_mut) else {
+            return;
+        };
+        let old = std::mem::replace(&mut track.path, path.clone());
+        self.unindex(&old, id);
+        self.by_path.insert(path, id);
+    }
+
+    fn unindex(&mut self, path: &Path, id: TrackId) {
+        if self.by_path.get(path) == Some(&id) {
+            self.by_path.remove(path);
+        }
     }
 
     pub fn get(&self, id: TrackId) -> Option<&Track> {
         self.tracks.get(&id).map(Arc::as_ref)
     }
 
+    /// A track to edit. Its `path` must not change here: use
+    /// [`Library::set_path`], or the path index goes stale.
     pub fn get_mut(&mut self, id: TrackId) -> Option<&mut Track> {
         self.tracks.get_mut(&id).map(Arc::make_mut)
     }
 
     pub fn remove(&mut self, id: TrackId) -> Option<Track> {
-        self.tracks.remove(&id).map(Arc::unwrap_or_clone)
+        let track = self.tracks.remove(&id).map(Arc::unwrap_or_clone)?;
+        self.unindex(&track.path, id);
+        Some(track)
     }
 
     pub fn iter(&self) -> impl Iterator<Item = &Track> {

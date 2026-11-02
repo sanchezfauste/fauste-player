@@ -190,18 +190,9 @@ impl AppState {
             cue_on_air: crate::cue_on_air::CueOnAir::default(),
             layout: Layout::default(),
         };
-        // Tracks nothing references (left by an interrupted save) are dropped.
-        let orphans: Vec<_> = state
-            .library
-            .iter()
-            .map(|t| t.id)
-            .filter(|t| {
-                !state.playlists.references_track(*t) && !state.cartwall.references_track(*t)
-            })
-            .collect();
-        for track in orphans {
-            state.library.remove(track);
-        }
+        // One track per file (LB14): a library saved before that rule, or
+        // by a buggy build, may hold several. Unreferenced tracks stay (LB15).
+        let _ = crate::library_rules::merge_duplicate_paths(&mut state);
         let mut out = Vec::new();
         for k in 0..state.config.players.count {
             let player = match sessions.get(k) {

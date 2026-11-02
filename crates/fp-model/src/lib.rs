@@ -18,6 +18,7 @@ pub mod error;
 pub mod ids;
 pub mod insertion;
 pub mod layout;
+mod library_rules;
 pub mod live;
 pub mod loudness;
 pub mod midi;

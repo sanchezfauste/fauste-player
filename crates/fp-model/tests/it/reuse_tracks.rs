@@ -119,5 +119,8 @@ fn removing_an_entry_keeps_a_track_a_cart_still_uses() {
     apply(&mut s, Command::RemoveEntry(entry)).unwrap();
     assert!(s.library.get(t).is_some(), "the cart still uses it");
     apply(&mut s, Command::ClearCartFile { page, index: 0 }).unwrap();
-    assert!(s.library.get(t).is_none(), "forgotten once nothing uses it");
+    assert!(
+        s.library.get(t).is_some(),
+        "LB15: it stays once nothing uses it"
+    );
 }
