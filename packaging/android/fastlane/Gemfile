@@ -2,4 +2,4 @@
 # pins every gem it runs with the service account's key.
 source "https://rubygems.org"
 
-gem "fastlane", "2.241.1"
+gem "fastlane", "2.241.2"
