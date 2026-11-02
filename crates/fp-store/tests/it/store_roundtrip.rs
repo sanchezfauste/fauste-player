@@ -799,14 +799,21 @@ fn when_no_backup_is_readable_the_disk_is_left_alone_for_the_session() {
     assert_eq!(backups_before, backups_after);
 }
 
-/// The main file and its side files, removed.
-fn remove_main_database(s: &Store) {
+/// The main file and its side files, removed. The store is dropped first
+/// (Windows cannot remove a file a connection holds open) and a fresh one
+/// on the same home is returned.
+fn remove_main_database(s: Store, dir: &tempfile::TempDir) -> Store {
     let main = s.paths().database_file();
+    drop(s);
     for suffix in ["", "-wal", "-shm"] {
         let mut name = main.as_os_str().to_owned();
         name.push(suffix);
-        let _ = fs::remove_file(PathBuf::from(name));
+        let path = PathBuf::from(name);
+        if path.exists() {
+            fs::remove_file(&path).unwrap();
+        }
     }
+    store(dir)
 }
 
 #[test]
@@ -816,7 +823,7 @@ fn a_missing_database_is_restored_from_its_backup() {
     let state = saved_with_a_played_entry(&mut s);
     assert!(bak(&s, 1).exists());
     let kept = fs::read(bak(&s, 1)).unwrap();
-    remove_main_database(&s);
+    let mut s = remove_main_database(s, &dir);
     let loaded = s.load("Main");
     assert_eq!(loaded.state.library, state.library);
     assert_eq!(loaded.state.playlists, state.playlists);
@@ -931,7 +938,7 @@ fn a_stale_wal_beside_a_missing_database_is_set_aside() {
     };
     let wal_bytes = fs::read(&other_wal).unwrap();
     assert!(!wal_bytes.is_empty());
-    remove_main_database(&s);
+    let mut s = remove_main_database(s, &dir);
     let main = s.paths().database_file();
     let mut wal = main.clone().into_os_string();
     wal.push("-wal");
