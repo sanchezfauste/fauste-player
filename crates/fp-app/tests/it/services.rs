@@ -407,12 +407,28 @@ fn while_playing_only_the_players_rows_are_written() {
     let tracks = docs(&r.paths, "tracks");
     let players = docs(&r.paths, "players");
     assert!(!tracks.is_empty());
+    // Count every write to the tracks table from now on.
+    let counted = Db::open(&r.paths.database_file()).unwrap();
+    counted
+        .conn()
+        .execute_batch(
+            "CREATE TABLE touched (n INTEGER); \
+             CREATE TRIGGER t_ins AFTER INSERT ON tracks BEGIN INSERT INTO touched VALUES (1); END; \
+             CREATE TRIGGER t_upd AFTER UPDATE ON tracks BEGIN INSERT INTO touched VALUES (1); END; \
+             CREATE TRIGGER t_del AFTER DELETE ON tracks BEGIN INSERT INTO touched VALUES (1); END;",
+        )
+        .unwrap();
     let until = r.now + Duration::from_millis(300);
     r.run_until("more playback", |r| r.now >= until);
     r.now += Duration::from_millis(1_100);
     r.conductor.tick(r.now);
     r.services.step(r.now);
     assert_eq!(docs(&r.paths, "tracks"), tracks, "tracks rows untouched");
+    let touched: i64 = counted
+        .conn()
+        .query_row("SELECT COUNT(*) FROM touched", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(touched, 0, "no track row was written, not even unchanged");
     assert_ne!(docs(&r.paths, "players"), players, "the position moved");
 }
 
