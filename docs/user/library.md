@@ -14,8 +14,9 @@ over the players and the cartwall and does not block them: nothing in it stops
 the audio or the shortcuts of the main window.
 
 Move it by its title bar and resize it from its edges and corners. The title
-bar has three buttons: **Minimize** (only the title bar is left at the top of
-the main area; click it again to expand), **Maximize** (the window fills the
+bar has three buttons: **Minimize** (only the title bar is left, where the
+window was, or at the top of the main area when the window is maximized;
+click it again to expand), **Maximize** (the window fills the
 main area; **Restore** brings it back) and **Close**. A window that would
 not fit, after the main window shrinks or moves to a smaller screen, is
 brought back inside the main area.
@@ -66,8 +67,9 @@ has no *All tracks*, *Uncategorised* or selection).
 The table lists the tracks of the selected item, in the same columns as the
 playlist tables (the ones chosen in **Settings → Playlists → Table columns**,
 without the position `#`) followed by **Category** and **Kind**. A narrow cell
-at the left shows a track's problem: its file is missing or cannot be read, or
-it is waiting for its analysis.
+at the left flags a track whose file is missing or cannot be read. A track
+waiting for its analysis is flagged at the right of its **Title** cell (so
+only when the Title column is shown).
 
 - Drag a header separator to change a column's width; click a header to sort
   by it and again to reverse. Widths and sort order are saved.
@@ -96,8 +98,9 @@ scope is saved; the text is not. Clear the field to see the whole item again.
 ## The row menu
 
 Right-click a row. If the row is not selected, it becomes the selection;
-otherwise the menu acts on every selected row. The first line says how many
-tracks are selected.
+otherwise the menu acts on every selected row. The first line shows the
+track's title when the menu is for one track, and how many tracks are
+selected when it is for several.
 
 | Item | Action |
 |---|---|
@@ -137,5 +140,5 @@ says what plays.
 On the desktop, the track menu of a playlist row has **Show in library** and
 **Move to category ▸**, after **Loudness…**. *Show in library* opens the
 window on the track's category and selects its row; *Move to category* files
-the track without opening the window. A track that is not in the library has
-neither.
+the track without opening the window. For a track that is not in the library,
+*Show in library* is shown disabled and *Move to category* is not shown.
