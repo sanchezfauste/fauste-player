@@ -424,6 +424,8 @@ fn rows(
                         );
                         taken = Some(id);
                     }
+                    // A right-click, or a long press on a touch screen
+                    // (egui counts it as a secondary click).
                     if response.secondary_clicked() {
                         taken = Some(id);
                     }

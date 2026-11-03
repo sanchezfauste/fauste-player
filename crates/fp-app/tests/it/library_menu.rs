@@ -620,3 +620,175 @@ fn files_dropped_on_a_dialog_over_the_library_are_not_added() {
         "{sent:?}"
     );
 }
+
+/// A library whose cart 1 holds Song 1 (playing or cueing as asked).
+fn with_cart_one(playing: bool, cueing: bool) -> (AppState, TrackId) {
+    let mut s = base(&["Lib A"]);
+    let page = s.cartwall.pages[0].id;
+    let song1 = s
+        .library
+        .track_at(&PathBuf::from("/music/Song 1.mp3"))
+        .unwrap();
+    fp_model::apply(
+        &mut s,
+        Command::AssignCartTrack {
+            page,
+            index: 0,
+            track: song1,
+        },
+    )
+    .unwrap();
+    let id = s.cartwall.pages[0].carts[0].id;
+    if playing {
+        fp_model::apply(&mut s, Command::FireCart(id)).unwrap();
+        assert!(s.cartwall.is_playing(id));
+    }
+    if cueing {
+        s.cartwall.cue = Some(id);
+    }
+    let a = track(&s, "Lib A");
+    (s, a)
+}
+
+/// Presses at `from` and moves to `to`, the button still down.
+fn hold_over(h: &mut H, from: Pos2, to: Pos2) {
+    h.event(Event::PointerMoved(from));
+    h.run_steps(1);
+    press(h, from, true);
+    h.run_steps(1);
+    for step in 1..=10 {
+        let t = step as f32 / 10.0;
+        h.event(Event::PointerMoved(pos2(
+            from.x + (to.x - from.x) * t,
+            from.y + (to.y - from.y) * t,
+        )));
+        h.run_steps(1);
+    }
+}
+
+fn drop_on_cart_one(s: AppState) -> (usize, Vec<Command>) {
+    let (mut h, fake) = open(s);
+    let from = in_library(&h, "Lib A").center();
+    // The cart's name, below the library window (the decks name it too).
+    let cart = h
+        .query_all_by_label("Song 1")
+        .map(|n| n.rect())
+        .find(|r| r.top() > library_rect(&h).bottom() + 150.0)
+        .expect("cart 1 names its track");
+    hold_over(&mut h, from, cart.center());
+    let outlines = h
+        .output()
+        .shapes
+        .iter()
+        .filter(|s| {
+            matches!(&s.shape, egui::Shape::Rect(r)
+                if r.stroke.color == fp_app::ui::theme::ACCENT
+                    && r.stroke.width == 2.0
+                    && r.rect.contains(cart.center()))
+        })
+        .count();
+    press(&mut h, cart.center(), false);
+    h.run_steps(3);
+    (outlines, others(fake.take_sent()))
+}
+
+#[test]
+fn dragging_rows_onto_an_idle_cart_replaces_its_file() {
+    let (s, a) = with_cart_one(false, false);
+    let page = s.cartwall.pages[0].id;
+    let (outlines, sent) = drop_on_cart_one(s);
+    assert_eq!(outlines, 1, "the cart is outlined as a target");
+    assert_eq!(
+        sent,
+        vec![Command::AssignCartTrack {
+            page,
+            index: 0,
+            track: a
+        }]
+    );
+}
+
+#[test]
+fn dragging_rows_onto_a_playing_cart_does_nothing() {
+    let (s, _) = with_cart_one(true, false);
+    let (outlines, sent) = drop_on_cart_one(s);
+    assert_eq!(outlines, 0, "a playing cart is not a target");
+    assert!(sent.is_empty(), "{sent:?}");
+}
+
+#[test]
+fn dragging_rows_onto_a_cueing_cart_does_nothing() {
+    let (s, _) = with_cart_one(false, true);
+    let (outlines, sent) = drop_on_cart_one(s);
+    assert_eq!(outlines, 0, "a cart on CUE is not a target");
+    assert!(sent.is_empty(), "{sent:?}");
+}
+
+#[test]
+fn dragging_rows_onto_a_playlist_tab_appends_them() {
+    let mut s = base(&["Lib A", "Lib B"]);
+    fp_model::apply(
+        &mut s,
+        Command::CreatePlaylist {
+            name: "Second".into(),
+        },
+    )
+    .unwrap();
+    let second = s.playlists.iter().find(|p| p.name == "Second").unwrap().id;
+    let a = track(&s, "Lib A");
+    let (mut h, fake) = open(s);
+    let from = in_library(&h, "Lib A").center();
+    let tab = in_playlist(&h, "Second");
+    assert!(!library_rect(&h).contains(tab.center()), "{tab:?}");
+    drag(&mut h, from, tab.center());
+    assert_eq!(
+        others(fake.take_sent()),
+        vec![Command::InsertTracks {
+            playlist: second,
+            index: 0,
+            tracks: vec![a],
+        }]
+    );
+}
+
+/// A finger held still at `at` for a second, then lifted.
+fn long_press(h: &mut H, at: Pos2) {
+    let touch = |phase| Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase,
+        pos: at,
+        force: None,
+    };
+    h.event(touch(egui::TouchPhase::Start));
+    h.event(Event::PointerMoved(at));
+    press(h, at, true);
+    for _ in 0..60 {
+        h.step();
+    }
+    h.event(touch(egui::TouchPhase::End));
+    press(h, at, false);
+    h.run_steps(3);
+}
+
+/// Whether the library row through `c` is selected.
+fn row_selected(h: &H, c: Pos2) -> bool {
+    h.query_all_by_role(Role::Row)
+        .filter(|n| n.accesskit_node().toggled() == Some(egui::accesskit::Toggled::True))
+        .any(|n| n.rect().contains(c))
+}
+
+#[test]
+fn a_long_press_on_an_unselected_row_selects_it_alone() {
+    let s = base(&["Lib A", "Lib B"]);
+    let (mut h, _) = harness_sized(s, vec2(1200.0, 800.0), |ui| ui.with_touch());
+    h.run_steps(2);
+    let a = in_library(&h, "Lib A").center();
+    click_at(&mut h, a, Modifiers::NONE, PointerButton::Primary);
+    assert!(row_selected(&h, a));
+    let b = in_library(&h, "Lib B").center();
+    long_press(&mut h, b);
+    assert!(h.query_by_label("Re-analyse").is_some(), "the menu is open");
+    assert!(row_selected(&h, b), "the row is selected");
+    assert!(!row_selected(&h, a), "alone");
+}

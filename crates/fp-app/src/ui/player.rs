@@ -1962,7 +1962,11 @@ fn tabs(
         response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone()));
         let dropping = response.dnd_hover_payload::<DragEntry>().is_some()
             || response.dnd_hover_payload::<DragTracks>().is_some();
-        if let Some(payload) = response.dnd_release_payload::<DragEntry>() {
+        // egui's release takes the payload whatever its type: each kind is
+        // taken only when it is the one dragged.
+        if egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx())
+            && let Some(payload) = response.dnd_release_payload::<DragEntry>()
+        {
             scene.ctl.send(Command::MoveEntry {
                 entry: payload.entry,
                 to: pl.id,

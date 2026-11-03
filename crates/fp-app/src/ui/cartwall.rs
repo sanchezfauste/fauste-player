@@ -677,8 +677,12 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                     response.clone()
                 };
                 // Library rows dropped on a cart: it takes the first (a
-                // cart holds one file; plan 3 rulings).
-                if menu_on.dnd_hover_payload::<DragTracks>().is_some() {
+                // cart holds one file; plan 3 rulings). A cart playing or
+                // on CUE is no target: a new file would stop it on air (C8).
+                let takes_tracks = !playing
+                    && !view.cueing
+                    && egui::DragAndDrop::has_payload_of_type::<DragTracks>(ui.ctx());
+                if takes_tracks && menu_on.dnd_hover_payload::<DragTracks>().is_some() {
                     ui.painter().rect_stroke(
                         menu_on.rect,
                         0.0,
@@ -686,7 +690,8 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                         StrokeKind::Inside,
                     );
                 }
-                if let Some(payload) = menu_on.dnd_release_payload::<DragTracks>()
+                if takes_tracks
+                    && let Some(payload) = menu_on.dnd_release_payload::<DragTracks>()
                     && let Some(&track) = payload.tracks.first()
                 {
                     scene.ctl.send(Command::AssignCartTrack {
