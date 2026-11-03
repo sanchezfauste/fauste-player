@@ -460,11 +460,10 @@ fn read_library_view(conn: &Connection, warnings: &mut Notes) -> LibraryView {
         }
     };
     let view = fp_model::lenient_library_view(value.clone()).unwrap_or_default();
-    // A field that fell back on its default is reported.
-    let again = serde_json::to_value(&view).unwrap_or(Value::Null);
-    if let (Value::Object(saved), Value::Object(kept)) = (&value, &again) {
+    // A field that fell back on its default (or lost an element) is reported.
+    if let Value::Object(saved) = &value {
         for (key, v) in saved {
-            if kept.get(key) != Some(v) {
+            if !library_view_field_kept(key, v, &view) {
                 warnings.push(format!(
                     "session: the saved library window's `{key}` is not valid; its default is used"
                 ));
@@ -475,6 +474,36 @@ fn read_library_view(conn: &Connection, warnings: &mut Notes) -> LibraryView {
             .push("session: the saved library window is not valid; the default is used".to_owned());
     }
     view
+}
+
+/// Whether the saved `key` was kept as it is in `view`: its value parses
+/// into the field's own type, equals what the lenient load kept, and is
+/// within range. Compared as typed values, never as JSON: an `f32` written
+/// back to JSON widens (268.8 becomes 268.799...), so a text or `Value`
+/// comparison would report every fractional size.
+fn library_view_field_kept(key: &str, saved: &Value, view: &LibraryView) -> bool {
+    use fp_model::library_view::{good_rect, good_size};
+    match key {
+        "open" => parses_to(saved, &view.open),
+        "rect" => parses_to(saved, &view.rect) && view.rect.is_none_or(good_rect),
+        "minimised" => parses_to(saved, &view.minimised),
+        "maximised" => parses_to(saved, &view.maximised),
+        "selection" => parses_to(saved, &view.selection),
+        "expanded" => parses_to(saved, &view.expanded),
+        "whole_library" => parses_to(saved, &view.whole_library),
+        "columns" => {
+            parses_to(saved, &view.columns) && view.columns.iter().all(|c| good_size(c.width))
+        }
+        "sort" => parses_to(saved, &view.sort),
+        "tree_width" => parses_to(saved, &view.tree_width) && view.tree_width.is_none_or(good_size),
+        // A key the view does not have is not kept.
+        _ => false,
+    }
+}
+
+/// Whether `saved` parses strictly into `T` and equals `kept`.
+fn parses_to<T: DeserializeOwned + PartialEq>(saved: &Value, kept: &T) -> bool {
+    T::deserialize(saved).is_ok_and(|v| v == *kept)
 }
 
 fn read_players(conn: &Connection, warnings: &mut Notes) -> Vec<PlayerSession> {

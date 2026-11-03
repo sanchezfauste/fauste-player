@@ -74,8 +74,14 @@ pub struct LibraryView {
     pub tree_width: Option<f32>,
 }
 
-fn good_size(v: f32) -> bool {
+/// Whether `v` is a usable size in points: finite and above zero.
+pub fn good_size(v: f32) -> bool {
     v.is_finite() && v > 0.0
+}
+
+/// Whether a saved rectangle is usable: a finite place and usable sizes.
+pub fn good_rect([x, y, w, h]: [f32; 4]) -> bool {
+    x.is_finite() && y.is_finite() && good_size(w) && good_size(h)
 }
 
 impl LibraryView {
@@ -88,8 +94,8 @@ impl LibraryView {
             self.selection = LibrarySelection::All;
         }
         self.expanded.retain(|id| categories.get(*id).is_some());
-        if let Some([x, y, w, h]) = self.rect
-            && !(x.is_finite() && y.is_finite() && good_size(w) && good_size(h))
+        if let Some(rect) = self.rect
+            && !good_rect(rect)
         {
             self.rect = None;
         }
