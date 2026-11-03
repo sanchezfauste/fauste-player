@@ -384,3 +384,46 @@ fn dragging_a_column_edge_saves_the_widths() {
         "the table keeps the width"
     );
 }
+
+/// I3: the sort keys are kept between snapshots and follow a library
+/// change: a retitled track moves to its new place in a sorted table, and
+/// a sort by another column orders by that column's own keys.
+#[test]
+fn a_sorted_table_follows_a_retitled_track() {
+    let mut s = base();
+    add(&mut s, &["B song", "A song", "C song"], None);
+    s.library_view.sort = Some(LibrarySort {
+        column: LibraryColumn::Tag(TableColumn::Title),
+        ascending: true,
+    });
+    let (mut h, fake) = open(s);
+    assert_eq!(
+        order(&h, &["A song", "B song", "C song"]),
+        ["A song", "B song", "C song"]
+    );
+    let mut next = (*fake.state.load_full()).clone();
+    let id = next
+        .library
+        .iter()
+        .find(|t| t.title == "A song")
+        .unwrap()
+        .id;
+    next.library.get_mut(id).unwrap().title = "Z song".into();
+    fake.state.store(std::sync::Arc::new(next.clone()));
+    h.run_steps(2);
+    assert_eq!(
+        order(&h, &["Z song", "B song", "C song"]),
+        ["B song", "C song", "Z song"]
+    );
+    // Descending by file name: the stems, which kept "A song" for Z.
+    next.library_view.sort = Some(LibrarySort {
+        column: LibraryColumn::Tag(TableColumn::FileName),
+        ascending: false,
+    });
+    fake.state.store(std::sync::Arc::new(next));
+    h.run_steps(2);
+    assert_eq!(
+        order(&h, &["Z song", "B song", "C song"]),
+        ["C song", "B song", "Z song"]
+    );
+}

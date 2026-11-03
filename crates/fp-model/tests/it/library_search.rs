@@ -5,7 +5,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use fp_model::library_search::{
-    SearchIndex, category_counts, fold, library_rows, query_words, sort_rows,
+    SearchIndex, SortKeys, category_counts, fold, library_rows, query_words, sort_rows,
+    sort_rows_by,
 };
 use fp_model::{
     Categories, Category, CategoryId, Library, LibraryColumn, LibrarySelection, LibrarySort,
@@ -261,4 +262,110 @@ fn searching_20000_tracks_takes_less_than_a_frame() {
     let took = started.elapsed();
     assert!(!got.is_empty());
     assert!(took.as_millis() < 16, "took {took:?}");
+}
+
+/// I3: the folded sort keys are kept per track, so a library change folds
+/// only the tracks it touched, and the order with the kept keys is the
+/// order `sort_rows` gives.
+#[test]
+fn sort_keys_fold_only_the_tracks_a_change_touched() {
+    let tracks = (1..=500u64)
+        .map(|i| {
+            track(
+                i,
+                &format!("/m/{i}.wav"),
+                &format!("Título {}", 500 - i),
+                "",
+                Some(100 + i % 3),
+            )
+        })
+        .collect();
+    let old = library(tracks);
+    let cats = tree();
+    let title = LibraryColumn::Tag(TableColumn::Title);
+    let mut keys = SortKeys::build(&old, &cats, title);
+    assert_eq!(keys.column(), title);
+    let mut new = old.clone();
+    new.get_mut(TrackId(7)).unwrap().title = "Álef".into();
+    new.get_mut(TrackId(9)).unwrap().duration_secs = 12.0;
+    new.remove(TrackId(11));
+    assert_eq!(keys.update(&old, &new, &cats), 2, "two tracks changed");
+    for ascending in [true, false] {
+        let sort = LibrarySort {
+            column: title,
+            ascending,
+        };
+        let mut expected = new.ids();
+        sort_rows(&mut expected, &new, &cats, sort);
+        let mut got = new.ids();
+        sort_rows_by(&mut got, &keys, ascending);
+        assert_eq!(got, expected);
+        if ascending {
+            assert_eq!(got.first(), Some(&TrackId(7)), "the renamed title leads");
+        }
+    }
+    // Nothing changed: nothing folded.
+    assert_eq!(keys.update(&new, &new.clone(), &cats), 0);
+}
+
+/// A category column folds again when a category is renamed: its key is
+/// the category's name.
+#[test]
+fn category_sort_keys_follow_a_renamed_category() {
+    let lib = tree_library();
+    let cats = tree();
+    let mut keys = SortKeys::build(&lib, &cats, LibraryColumn::Category);
+    let mut renamed = cats.clone().into_vec();
+    for c in &mut renamed {
+        if c.id == CategoryId(102) {
+            c.name = "Aaa".into();
+        }
+    }
+    let renamed = Categories::from(renamed);
+    keys.update(&lib, &lib.clone(), &renamed);
+    let sort = LibrarySort {
+        column: LibraryColumn::Category,
+        ascending: true,
+    };
+    let mut expected = lib.ids();
+    sort_rows(&mut expected, &lib, &renamed, sort);
+    let mut got = lib.ids();
+    sort_rows_by(&mut got, &keys, true);
+    assert_eq!(got, expected);
+}
+
+/// LB31 with a sort: after a library change, keeping the rows and their
+/// order by title over 20 000 tracks stays well within a frame.
+#[test]
+#[cfg_attr(debug_assertions, ignore)]
+fn a_change_to_20000_sorted_tracks_takes_less_than_a_frame() {
+    let tracks = (1..=20_000u64)
+        .map(|i| {
+            track(
+                i,
+                &format!("/music/folder{}/file{i}.flac", i % 50),
+                &format!("Canción número {}", (i * 7919) % 20_000),
+                &format!("Artista {}", i % 300),
+                Some(100 + i % 3),
+            )
+        })
+        .collect();
+    let old = library(tracks);
+    let cats = tree();
+    let title = LibraryColumn::Tag(TableColumn::Title);
+    let mut index = SearchIndex::build(&old);
+    let mut keys = SortKeys::build(&old, &cats, title);
+    let mut new = old.clone();
+    for i in 1..=50u64 {
+        new.get_mut(TrackId(i * 300)).unwrap().duration_secs = 90.0;
+    }
+    let started = Instant::now();
+    index.update(&old, &new);
+    keys.update(&old, &new, &cats);
+    let mut rows = library_rows(&new, &cats, &index, LibrarySelection::All, true, "");
+    sort_rows_by(&mut rows, &keys, true);
+    let took = started.elapsed();
+    eprintln!("rows + sort after a change: {took:?}");
+    assert_eq!(rows.len(), 20_000);
+    assert!(took.as_millis() < 8, "took {took:?}");
 }

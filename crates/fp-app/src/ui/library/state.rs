@@ -5,7 +5,7 @@
 use std::collections::HashSet;
 
 use egui::{Pos2, Rect};
-use fp_model::library_search::{CategoryCounts, SearchIndex, library_rows, sort_rows};
+use fp_model::library_search::{CategoryCounts, SearchIndex, SortKeys, library_rows, sort_rows_by};
 use fp_model::library_view::{
     LibraryColumn, LibraryColumnWidth, LibrarySelection, LibrarySort, LibraryView,
 };
@@ -87,6 +87,8 @@ pub(crate) struct RowsCache {
     pub query: String,
     pub sort: Option<LibrarySort>,
     pub index: SearchIndex,
+    /// The folded keys of the sort column, for every track of `library`.
+    pub sort_keys: Option<SortKeys>,
     pub rows: Vec<TrackId>,
 }
 
@@ -116,16 +118,34 @@ impl LibraryUi {
             .as_ref()
             .is_some_and(|c| c.holds(state, &self.search));
         if !fresh {
-            let index = match self.rows.take() {
+            let view = &state.library_view;
+            let column = view.sort.map(|sort| sort.column);
+            // The index and the sort keys follow the library's changes:
+            // only the tracks a change touched are folded again.
+            let (index, sort_keys) = match self.rows.take() {
                 Some(RowsCache {
-                    library, mut index, ..
+                    library,
+                    mut index,
+                    sort_keys,
+                    ..
                 }) => {
                     index.update(&library, &state.library);
-                    index
+                    let sort_keys = match (sort_keys, column) {
+                        (Some(mut keys), Some(column)) if keys.column() == column => {
+                            keys.update(&library, &state.library, &state.categories);
+                            Some(keys)
+                        }
+                        (_, column) => {
+                            column.map(|c| SortKeys::build(&state.library, &state.categories, c))
+                        }
+                    };
+                    (index, sort_keys)
                 }
-                None => SearchIndex::build(&state.library),
+                None => (
+                    SearchIndex::build(&state.library),
+                    column.map(|c| SortKeys::build(&state.library, &state.categories, c)),
+                ),
             };
-            let view = &state.library_view;
             let mut rows = library_rows(
                 &state.library,
                 &state.categories,
@@ -134,8 +154,8 @@ impl LibraryUi {
                 view.whole_library,
                 &self.search,
             );
-            if let Some(sort) = view.sort {
-                sort_rows(&mut rows, &state.library, &state.categories, sort);
+            if let (Some(sort), Some(keys)) = (view.sort, sort_keys.as_ref()) {
+                sort_rows_by(&mut rows, keys, sort.ascending);
             }
             // The selection keeps only the rows listed: what a category,
             // scope or search change hides, or the library lost, leaves it
@@ -157,6 +177,7 @@ impl LibraryUi {
                 query: self.search.clone(),
                 sort: view.sort,
                 index,
+                sort_keys,
                 rows,
             });
         }

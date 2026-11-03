@@ -128,7 +128,7 @@ pub fn library_rows(
 }
 
 /// What a column's order compares.
-#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 enum Key {
     Text(String),
     Number(u64),
@@ -181,9 +181,23 @@ fn key(track: &Track, categories: &Categories, column: LibraryColumn) -> Option<
     }
 }
 
+/// The order of two keyed rows: by key in the direction asked, tracks
+/// without a value last either way, ties by track id.
+fn compare(a: (Option<&Key>, TrackId), b: (Option<&Key>, TrackId), ascending: bool) -> Ordering {
+    let order = match (a.0, b.0) {
+        (Some(x), Some(y)) if ascending => x.cmp(y),
+        (Some(x), Some(y)) => y.cmp(x),
+        (Some(_), None) => Ordering::Less,
+        (None, Some(_)) => Ordering::Greater,
+        (None, None) => Ordering::Equal,
+    };
+    order.then(a.1.cmp(&b.1))
+}
+
 /// Orders `rows` by a column, text compared with [`fold`]. Ties go by track
 /// id, and tracks without a value for the column come last in both
-/// directions.
+/// directions. Folds every row's key: a table that keeps its order across
+/// library changes uses [`SortKeys`] and [`sort_rows_by`] instead.
 pub fn sort_rows(
     rows: &mut [TrackId],
     library: &Library,
@@ -199,16 +213,78 @@ pub fn sort_rows(
             (k, id)
         })
         .collect();
-    keyed.sort_by(|(a, ida), (b, idb)| {
-        let order = match (a, b) {
-            (Some(a), Some(b)) if sort.ascending => a.cmp(b),
-            (Some(a), Some(b)) => b.cmp(a),
-            (Some(_), None) => Ordering::Less,
-            (None, Some(_)) => Ordering::Greater,
-            (None, None) => Ordering::Equal,
-        };
-        order.then(ida.cmp(idb))
+    // Ties go by id, so the order is total and an unstable sort is exact.
+    keyed.sort_unstable_by(|(a, ida), (b, idb)| {
+        compare((a.as_ref(), *ida), (b.as_ref(), *idb), sort.ascending)
     });
+    for (slot, (_, id)) in rows.iter_mut().zip(keyed) {
+        *slot = id;
+    }
+}
+
+/// The sort key of every track of the library for one column, folded once
+/// and kept in step with the library: a change folds again only the
+/// tracks it touched (and, for the category column, every track when the
+/// categories changed, since the key is the category's name).
+#[derive(Debug, Clone)]
+pub struct SortKeys {
+    column: LibraryColumn,
+    /// The categories the keys were folded with (the category column only).
+    categories: Option<Categories>,
+    keys: HashMap<TrackId, Option<Key>>,
+}
+
+impl SortKeys {
+    pub fn build(library: &Library, categories: &Categories, column: LibraryColumn) -> Self {
+        Self {
+            column,
+            categories: (column == LibraryColumn::Category).then(|| categories.clone()),
+            keys: library
+                .iter()
+                .map(|t| (t.id, key(t, categories, column)))
+                .collect(),
+        }
+    }
+
+    /// The column the keys order by.
+    pub fn column(&self) -> LibraryColumn {
+        self.column
+    }
+
+    /// Follows `library.changes_since(old)` and, for the category column, a
+    /// change of `categories`. Returns how many keys it computed again.
+    pub fn update(&mut self, old: &Library, library: &Library, categories: &Categories) -> usize {
+        if self
+            .categories
+            .as_ref()
+            .is_some_and(|kept| kept != categories)
+        {
+            *self = Self::build(library, categories, self.column);
+            return self.keys.len();
+        }
+        let changes = library.changes_since(old);
+        for id in changes.removed {
+            self.keys.remove(&id);
+        }
+        let mut computed = 0;
+        for track in changes.upserted {
+            let k = key(track, categories, self.column);
+            computed += 1;
+            self.keys.insert(track.id, k);
+        }
+        computed
+    }
+}
+
+/// Orders `rows` like [`sort_rows`] with keys folded beforehand. A row
+/// without a kept key sorts as one without a value.
+pub fn sort_rows_by(rows: &mut [TrackId], keys: &SortKeys, ascending: bool) {
+    // Each key looked up once, not once per comparison.
+    let mut keyed: Vec<(Option<&Key>, TrackId)> = rows
+        .iter()
+        .map(|&id| (keys.keys.get(&id).and_then(Option::as_ref), id))
+        .collect();
+    keyed.sort_unstable_by(|a, b| compare(*a, *b, ascending));
     for (slot, (_, id)) in rows.iter_mut().zip(keyed) {
         *slot = id;
     }
