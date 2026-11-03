@@ -242,6 +242,11 @@ impl Engine {
         let Some(source) = self.library.as_mut().and_then(|l| l.source.take()) else {
             return;
         };
+        self.retire_library_source(source);
+    }
+
+    /// Stops `source`, no longer the preview, with a de-click ramp.
+    fn retire_library_source(&mut self, source: LibrarySource) {
         self.send(&source.bus, BusCommand::Cancel { slot: source.slot });
         // A requested start may already be audible (its Started event is
         // not polled yet): fade it like a started one. A held one is
@@ -250,6 +255,9 @@ impl Engine {
             self.release_library(&source);
             return;
         }
+        // One source ramps down at a time (the derived capacity): an older
+        // tail is cut.
+        self.cut_library_outgoing(|_| true);
         self.declick_stop(&source.bus, source.slot);
         if let Some(l) = self.library.as_mut() {
             l.outgoing.push(source);
@@ -423,5 +431,140 @@ impl Engine {
             s.request.track,
             s.from_secs + s.shared.frames_played() as f64 / rate,
         ))
+    }
+
+    /// LB33: replaces the preview by one at `secs` of its file, as the
+    /// player CUE's seek does: the old source ramps down. A held preview
+    /// stays held: the new source waits idle until it is released. Without
+    /// a preview nothing happens.
+    pub(super) fn seek_library_cue(&mut self, secs: f64) {
+        let Some(mut request) = self
+            .library
+            .as_ref()
+            .and_then(|l| l.source.as_ref())
+            .map(|s| s.request.clone())
+        else {
+            return;
+        };
+        if !secs.is_finite() {
+            return;
+        }
+        request.from_secs = secs.max(0.0);
+        // One source ramps down at a time (the derived capacity): an older
+        // tail is cut.
+        self.cut_library_outgoing(|_| true);
+        let Ok(mut next) = self.library_source(&request) else {
+            return;
+        };
+        let Some(l) = self.library.as_mut() else {
+            return;
+        };
+        if l.paused {
+            next.start = StartState::Idle;
+            next.held = true;
+        }
+        let old = l.source.replace(next);
+        if let Some(old) = old {
+            self.retire_library_source(old);
+        }
+    }
+
+    /// LB33: holds or releases the preview, as the player CUE's pause does.
+    /// A source that has not started yet is held back idle; one that is
+    /// audible ramps down with the pause ramp. Without a preview only the
+    /// flag changes.
+    pub(super) fn set_library_cue_paused(&mut self, paused: bool) {
+        let Some(l) = self.library.as_mut() else {
+            return;
+        };
+        l.paused = paused;
+        let Some(s) = l.source.as_mut() else {
+            return;
+        };
+        s.held = paused;
+        let (bus, slot) = (s.bus.clone(), s.slot);
+        let send = match (paused, s.start) {
+            (true, StartState::WhenReady { .. }) => {
+                s.start = StartState::Idle;
+                None
+            }
+            (false, StartState::Idle) => {
+                s.start = StartState::WhenReady { fade_in: false };
+                None
+            }
+            (pause, _) => Some(pause),
+        };
+        let Some(pause) = send else {
+            return;
+        };
+        let ramp_frames = self.ramp_frames(&bus);
+        let command = if pause {
+            BusCommand::Pause { slot, ramp_frames }
+        } else {
+            BusCommand::Resume { slot, ramp_frames }
+        };
+        self.send(&bus, command);
+    }
+
+    /// The library CUE part of `reopen_on_bus` (and of a B3.2 rate change
+    /// under a held preview): a preview on `bus` is opened again at its
+    /// position measured at `old_rate`, held if it was; one ramping down
+    /// there is cut.
+    pub(super) fn follow_forced_rate_library(&mut self, bus: &BusKey, old_rate: u32) {
+        self.cut_library_outgoing(|s| &s.bus == bus);
+        let Some(source) = self
+            .library
+            .as_mut()
+            .and_then(|l| l.source.take_if(|s| &s.bus == bus))
+        else {
+            return;
+        };
+        let mut request = source.request.clone();
+        request.from_secs =
+            source.from_secs + source.shared.frames_played() as f64 / f64::from(old_rate.max(1));
+        self.send(&source.bus, BusCommand::Cancel { slot: source.slot });
+        self.release_library(&source);
+        match self.library_source(&request) {
+            Ok(mut fresh) => {
+                if source.held {
+                    fresh.start = StartState::Idle;
+                    fresh.held = true;
+                }
+                if let Some(l) = self.library.as_mut() {
+                    l.source = Some(fresh);
+                }
+            }
+            Err(_) => self.events.push(EngineEvent::LibraryCueEnded {
+                track: request.track,
+            }),
+        }
+    }
+
+    /// Cuts and releases the sources ramping down that `on` selects.
+    fn cut_library_outgoing(&mut self, on: impl Fn(&LibrarySource) -> bool) {
+        let Some(l) = self.library.as_mut() else {
+            return;
+        };
+        let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut l.outgoing)
+            .into_iter()
+            .partition(|s| on(s));
+        l.outgoing = kept;
+        for s in &gone {
+            self.send(&s.bus, BusCommand::Cancel { slot: s.slot });
+            self.release_library(s);
+        }
+    }
+
+    /// What the library CUE's sources (the preview and one ramping down)
+    /// measured since the last call; the measurement is taken, not copied.
+    pub fn take_library_cue_meter_input(&self) -> crate::meter::MeterInput {
+        let mut input = crate::meter::MeterInput::default();
+        let Some(l) = self.library.as_ref() else {
+            return input;
+        };
+        for p in l.all() {
+            input.merge(self.take_source_measurement(&p.bus, &p.shared));
+        }
+        input
     }
 }

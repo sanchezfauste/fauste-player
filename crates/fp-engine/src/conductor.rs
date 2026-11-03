@@ -13,7 +13,7 @@ use arc_swap::ArcSwap;
 use crossbeam_channel::{Receiver, Sender, TrySendError};
 use fp_model::{
     AppState, CartId, Command, EngineAction, EngineEvent, EntryId, ModelError, PlayerId, Route,
-    apply, on_event,
+    TrackId, apply, on_event,
 };
 
 use crate::bus::BusKey;
@@ -112,6 +112,18 @@ pub struct Telemetry {
     pub carts: Vec<(CartId, CartTelemetry)>,
     /// The cart pre-listening and its position.
     pub cart_cue: Option<(CartId, f64)>,
+    /// The library CUE's preview, its position and its own meter (library
+    /// plan 4, LB33).
+    pub library_cue: Option<LibraryCueTelemetry>,
+}
+
+/// The track the library CUE pre-listens, where it is in its file and what
+/// its own meter reads (never a player's).
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LibraryCueTelemetry {
+    pub track: TrackId,
+    pub position_secs: f64,
+    pub meter: crate::meter::MeterReading,
 }
 
 /// Test tone parameters (spec §8.4): 1.5 s at −18 dBFS.
@@ -127,6 +139,8 @@ pub enum EngineRequest {
     },
     /// Restarts the maximum of a player's meter (meters spec M2).
     ResetMeterMax(PlayerId),
+    /// Restarts the maximum of the library CUE's meter.
+    ResetLibraryCueMeterMax,
 }
 
 pub struct Conductor {
@@ -146,6 +160,9 @@ pub struct Conductor {
     /// Players that started an entry since the last metering: each start
     /// restarts the maximum, even of the same entry.
     started: Vec<PlayerId>,
+    /// The library CUE's own meter, and the track its maximum belongs to.
+    library_meter: MeterState,
+    library_metered: Option<TrackId>,
     /// The counters of the real-time side, for the log (audit A8).
     bus_watches: HashMap<BusKey, [Watch; 6]>,
     underrun_watches: HashMap<PlayerId, Watch>,
@@ -227,6 +244,14 @@ impl ConductorHandle {
             .try_send(EngineRequest::ResetMeterMax(player))
             .is_ok()
     }
+
+    /// Restarts the maximum of the library CUE's meter; never blocks.
+    /// `false` if the queue is full.
+    pub fn reset_library_cue_meter_max(&self) -> bool {
+        self.requests
+            .try_send(EngineRequest::ResetLibraryCueMeterMax)
+            .is_ok()
+    }
 }
 
 impl Drop for ConductorHandle {
@@ -274,6 +299,8 @@ impl Conductor {
             metered_at: None,
             metered_entries: HashMap::new(),
             started: Vec::new(),
+            library_meter: MeterState::default(),
+            library_metered: None,
             bus_watches: HashMap::new(),
             underrun_watches: HashMap::new(),
             waker: waker.clone(),
@@ -299,8 +326,10 @@ impl Conductor {
         &self.engine
     }
 
-    /// Runs `action` on the engine, noting the players it starts.
-    fn execute(&mut self, action: EngineAction, now: Instant) {
+    /// Runs `action` on the engine, noting the players it starts. The
+    /// model's actions take this path; tests and tools may drive the
+    /// engine through it too.
+    pub fn execute(&mut self, action: EngineAction, now: Instant) {
         if let EngineAction::StartCurrent { player, .. } | EngineAction::Crossfade { player, .. } =
             action
         {
@@ -348,6 +377,7 @@ impl Conductor {
                         meter.reset_max();
                     }
                 }
+                EngineRequest::ResetLibraryCueMeterMax => self.library_meter.reset_max(),
             }
         }
         for event in self.engine.tick(now) {
@@ -417,15 +447,38 @@ impl Conductor {
         let buses = self.engine.bus_status();
         self.report_counters(&buses, &players, now);
         let (carts, cart_cue) = self.engine.cart_telemetry();
+        let library_cue = self.library_telemetry(dt);
         self.telemetry.store(Arc::new(Telemetry {
             carts,
             cart_cue,
+            library_cue,
             players,
             buses,
             model_version: self.version,
             dropped_commands: self.engine.dropped_commands(),
             slot_exhaustions: self.engine.slot_exhaustions(),
         }));
+    }
+
+    /// The library CUE's telemetry, its meter moved by `dt` seconds. Its
+    /// maximum restarts when another track is pre-listened; a stop keeps it
+    /// on show until then.
+    fn library_telemetry(&mut self, dt: f64) -> Option<LibraryCueTelemetry> {
+        let input = self.engine.take_library_cue_meter_input();
+        let position = self.engine.library_cue_position();
+        if let Some((track, _)) = position
+            && self.library_metered.replace(track) != Some(track)
+        {
+            self.library_meter.reset_max();
+        }
+        let meter = self
+            .library_meter
+            .update(input, dt, &self.state.config.meter);
+        position.map(|(track, position_secs)| LibraryCueTelemetry {
+            track,
+            position_secs,
+            meter,
+        })
     }
 
     /// Logs the counters that grew since the last tick, at most once per

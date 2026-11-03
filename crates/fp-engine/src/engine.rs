@@ -1410,28 +1410,33 @@ impl Engine {
             take_measurement(&p.shared);
         }
         for p in rt.current.iter().chain(rt.outgoing.iter()) {
-            let s = &p.shared;
-            let mut source = crate::meter::MeterInput::default();
-            let mut take = || {
-                source.extend(crate::meter::MeterInput {
-                    peak: [s.peak_l.take(), s.peak_r.take()],
-                    sum_sq: [s.sum_sq_l.take(), s.sum_sq_r.take()],
-                    sum_abs: [s.sum_abs_l.take(), s.sum_abs_r.take()],
-                    k_sum: [s.k_sum_l.take(), s.k_sum_r.take()],
-                    frames: s
-                        .measured_frames
-                        .swap(0, std::sync::atomic::Ordering::AcqRel),
-                });
-            };
-            // The sums are taken one by one: a block rendered meanwhile is
-            // taken whole in the same reading (a tick never gets half a block).
-            match self.buses.get(&p.bus) {
-                Some(bus) => bus.shared().whole_blocks(take),
-                None => take(),
-            }
-            input.merge(source);
+            input.merge(self.take_source_measurement(&p.bus, &p.shared));
         }
         input
+    }
+
+    /// What the source sharing `s` on `bus` measured since the last call;
+    /// the measurement is taken, not copied.
+    fn take_source_measurement(&self, bus: &BusKey, s: &SourceShared) -> crate::meter::MeterInput {
+        let mut source = crate::meter::MeterInput::default();
+        let mut take = || {
+            source.extend(crate::meter::MeterInput {
+                peak: [s.peak_l.take(), s.peak_r.take()],
+                sum_sq: [s.sum_sq_l.take(), s.sum_sq_r.take()],
+                sum_abs: [s.sum_abs_l.take(), s.sum_abs_r.take()],
+                k_sum: [s.k_sum_l.take(), s.k_sum_r.take()],
+                frames: s
+                    .measured_frames
+                    .swap(0, std::sync::atomic::Ordering::AcqRel),
+            });
+        };
+        // The sums are taken one by one: a block rendered meanwhile is
+        // taken whole in the same reading (a tick never gets half a block).
+        match self.buses.get(bus) {
+            Some(bus) => bus.shared().whole_blocks(take),
+            None => take(),
+        }
+        source
     }
 
     /// Meters measure true peak on every bus (meters spec M1).
@@ -1683,8 +1688,8 @@ impl Engine {
             return;
         }
         let now = self.now;
+        let before = self.rate_of(bus);
         let changed = self.buses.get_mut(bus).is_some_and(|b| {
-            let before = b.sample_rate();
             // Nothing sounds here (checked above): the conductor may wait.
             let mut budget = b.busy_budget(true);
             b.reopen_at(rate, now, &mut budget);
@@ -1692,6 +1697,8 @@ impl Engine {
         });
         if changed {
             self.reopen_waiting(bus);
+            // A held library preview counts as quiet: it follows too.
+            self.follow_forced_rate_library(bus, before);
         }
     }
 
@@ -1838,6 +1845,7 @@ impl Engine {
             self.reopen_player_sources(player, |p| &p.bus == bus, old_rate);
         }
         self.follow_forced_rate_carts(bus, old_rate);
+        self.follow_forced_rate_library(bus, old_rate);
         let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.tones)
             .into_iter()
             .partition(|(b, _)| b == bus);
@@ -2185,8 +2193,8 @@ impl Engine {
                 self.start_library_cue(&request, paused, now)
             }
             EngineAction::StopLibraryCue => self.stop_library_cue(),
-            // Task 3 of library plan 4 handles seek and pause.
-            EngineAction::SeekLibraryCue { .. } | EngineAction::SetLibraryCuePaused { .. } => {}
+            EngineAction::SeekLibraryCue { secs } => self.seek_library_cue(secs),
+            EngineAction::SetLibraryCuePaused { paused } => self.set_library_cue_paused(paused),
             EngineAction::AddPlayer { player } => self.add_player(player, now),
             EngineAction::RemovePlayer { player } => self.remove_player(player),
             EngineAction::Preload { player, request } => self.preload(player, request),

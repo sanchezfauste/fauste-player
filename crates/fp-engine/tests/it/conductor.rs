@@ -935,3 +935,134 @@ fn a_refused_command_wakes_the_interface() {
     assert!(handle.rejected.try_recv().is_ok(), "refused");
     assert_eq!(woken.load(std::sync::atomic::Ordering::Relaxed), 1);
 }
+
+/// Library plan 4: a conductor whose library CUE plays on `main`.
+fn library_conductor() -> (Conductor, ConductorHandle, OfflineDevice, Instant) {
+    let mut state = model(1, 1);
+    state.config.outputs.library.cue = Some(fp_model::Route {
+        backend: "offline".into(),
+        device: "main".into(),
+        first_channel: 0,
+    });
+    offline_conductor(state)
+}
+
+fn library_preview(n: u64, from_secs: f64) -> fp_model::EngineAction {
+    fp_model::EngineAction::StartLibraryCue {
+        request: fp_model::LibraryCueRequest {
+            track: fp_model::TrackId(n),
+            path: PathBuf::from(format!("track{n}")),
+            from_secs,
+            format: None,
+            normalization: fp_model::Normalization::default(),
+        },
+        paused: false,
+    }
+}
+
+fn library_telemetry(
+    handle: &ConductorHandle,
+) -> Option<fp_engine::conductor::LibraryCueTelemetry> {
+    handle.telemetry.load().library_cue
+}
+
+/// Plays `blocks` blocks, ticking before each.
+fn play_blocks(
+    conductor: &mut Conductor,
+    device: &OfflineDevice,
+    now: &mut Instant,
+    blocks: usize,
+) {
+    for _ in 0..blocks {
+        conductor.tick(*now);
+        device.render(BLOCK);
+        *now += Duration::from_millis(10);
+    }
+}
+
+#[test]
+fn the_telemetry_carries_the_library_preview_and_its_meter() {
+    let (mut conductor, handle, device, mut now) = library_conductor();
+    assert_eq!(library_telemetry(&handle), None);
+    conductor.execute(library_preview(1, 0.2), now);
+    settle(&mut conductor, now);
+    play_blocks(&mut conductor, &device, &mut now, 20);
+    let t = library_telemetry(&handle).unwrap();
+    assert_eq!(t.track, fp_model::TrackId(1));
+    assert!(t.position_secs >= 0.2, "{t:?}");
+    assert!(
+        t.meter.level_db[0] > -60.0 && t.meter.level_db[1] > -60.0,
+        "{t:?}"
+    );
+    conductor.execute(fp_model::EngineAction::StopLibraryCue, now);
+    play_blocks(&mut conductor, &device, &mut now, 10);
+    assert_eq!(library_telemetry(&handle), None);
+}
+
+/// Plays track `n` in the library CUE for 200 ms, stops it and lets 500 ms
+/// pass; returns the meter while playing and after.
+fn preview_then_stop(
+    conductor: &mut Conductor,
+    handle: &ConductorHandle,
+    device: &OfflineDevice,
+    now: &mut Instant,
+    n: u64,
+) -> (
+    fp_engine::meter::MeterReading,
+    fp_engine::meter::MeterReading,
+) {
+    conductor.execute(library_preview(n, 0.0), *now);
+    settle(conductor, *now);
+    play_blocks(conductor, device, now, 20);
+    let playing = library_telemetry(handle).unwrap().meter;
+    conductor.execute(fp_model::EngineAction::StopLibraryCue, *now);
+    play_blocks(conductor, device, now, 2);
+    for _ in 0..50 {
+        conductor.tick(*now);
+        *now += Duration::from_millis(10);
+    }
+    conductor.execute(
+        fp_model::EngineAction::StartLibraryCue {
+            request: fp_model::LibraryCueRequest {
+                track: fp_model::TrackId(n),
+                path: PathBuf::from(format!("track{n}")),
+                from_secs: 0.0,
+                format: None,
+                normalization: fp_model::Normalization::default(),
+            },
+            paused: true,
+        },
+        *now,
+    );
+    conductor.tick(*now);
+    let stopped = library_telemetry(handle).unwrap().meter;
+    (playing, stopped)
+}
+
+#[test]
+fn the_library_meter_maximum_restarts_with_a_new_track() {
+    let (mut conductor, handle, device, mut now) = library_conductor();
+    let (playing, held) = preview_then_stop(&mut conductor, &handle, &device, &mut now, 1);
+    assert!(playing.max_db > -60.0, "{playing:?}");
+    assert!(
+        held.max_db >= playing.max_db,
+        "the same track keeps it: {held:?}"
+    );
+    conductor.execute(library_preview(2, 0.0), now);
+    conductor.tick(now);
+    let restarted = library_telemetry(&handle).unwrap().meter;
+    assert!(
+        restarted.max_db < playing.max_db - 3.0,
+        "a new track restarts it: {restarted:?}"
+    );
+}
+
+#[test]
+fn the_library_meter_maximum_restarts_on_request() {
+    let (mut conductor, handle, device, mut now) = library_conductor();
+    let (playing, _) = preview_then_stop(&mut conductor, &handle, &device, &mut now, 1);
+    assert!(handle.reset_library_cue_meter_max());
+    conductor.tick(now);
+    let restarted = library_telemetry(&handle).unwrap().meter;
+    assert!(restarted.max_db < playing.max_db - 3.0, "{restarted:?}");
+}

@@ -127,14 +127,27 @@ struct Play {
 }
 
 fn play_rig(channels: u16, library: Option<Route>, track_frames: u64) -> Play {
+    play_rig_with(channels, library, track_frames, |_| {})
+}
+
+/// As `play_rig`, with `adjust` applied to the configuration (and `card`
+/// exclusive-capable, for a bit-perfect `card`).
+fn play_rig_with(
+    channels: u16,
+    library: Option<Route>,
+    track_frames: u64,
+    adjust: impl FnOnce(&mut Config),
+) -> Play {
     let backend = OfflineBackend::new();
     let device = backend.add_device("card", channels);
+    device.set_exclusive_capable(true);
     backend.add_device("other", 2);
     let mut config = Config::default();
     config.outputs.buffer_frames = BLOCK as u32;
     config.outputs.backend = Some("offline".into());
     config.outputs.library.cue = library;
     config.tuning.gain_smoothing_ms = 0.0;
+    adjust(&mut config);
     let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
     let engine = Engine::new(
         backends,
@@ -482,4 +495,252 @@ fn ca7_an_on_air_preview_never_reopens_a_bit_perfect_bus() {
         engine.tick(clock);
     }
     assert!(heard.iter().any(|v| *v != 0.0), "it is heard, resampled");
+}
+
+// Task 3: pause, seek, rate changes and the meter (LB33).
+
+/// One block at 48 kHz, in seconds.
+const BLOCK_SECS: f64 = BLOCK as f64 / 48_000.0;
+
+fn pause(paused: bool) -> EngineAction {
+    EngineAction::SetLibraryCuePaused { paused }
+}
+
+impl Play {
+    fn position(&self) -> f64 {
+        self.engine.library_cue_position().unwrap().1
+    }
+
+    /// The left samples of the last `blocks` blocks rendered.
+    fn last_blocks(&self, blocks: usize) -> Vec<f32> {
+        let left = self.channel(0);
+        left[left.len().saturating_sub(blocks * BLOCK)..].to_vec()
+    }
+}
+
+/// The position (in seconds at `rate`) in track `n` of a tagged sample.
+fn tagged_secs(n: u64, sample: f32, rate: u32) -> f64 {
+    (f64::from(sample) - (n * 100_000) as f64) / f64::from(rate)
+}
+
+#[test]
+fn lb33_pause_holds_and_resume_continues_where_it_was() {
+    let mut r = play_rig(2, Some(on("card", 0)), 48_000 * 10);
+    r.act(start(preview(1)));
+    r.settle();
+    r.run(10);
+    r.act(pause(true));
+    r.run(5);
+    let held = r.position();
+    r.run(10);
+    assert_eq!(r.position(), held, "a held preview does not move");
+    assert_eq!(audible(&r.last_blocks(9)), 0, "and is silent");
+    r.act(pause(false));
+    r.run(1);
+    let resumed = r.position();
+    assert!(
+        (resumed - held - BLOCK_SECS).abs() < 1e-9,
+        "one block after {held}: {resumed}"
+    );
+    r.run(5);
+    assert!(audible(&r.last_blocks(4)) > 0);
+    assert!(r.ends().is_empty(), "{:?}", r.events);
+}
+
+#[test]
+fn a_pause_before_the_start_holds_the_source_idle() {
+    let mut r = play_rig(2, Some(on("card", 0)), 48_000 * 10);
+    r.act(start(preview(1)));
+    r.act(pause(true));
+    r.settle();
+    r.run(10);
+    assert_eq!(audible(&r.channel(0)), 0);
+    assert_eq!(r.engine.library_cue_position(), Some((TrackId(1), 0.0)));
+    r.act(pause(false));
+    r.settle();
+    r.run(5);
+    assert!(audible(&r.channel(0)) > 0);
+    assert!(r.position() > 0.0);
+}
+
+#[test]
+fn lb33_a_seek_replaces_the_source_at_the_new_position() {
+    let mut r = play_rig(2, Some(on("card", 0)), 48_000 * 10);
+    r.act(start(preview(1)));
+    r.settle();
+    r.run(5);
+    r.act(EngineAction::SeekLibraryCue { secs: 5.0 });
+    assert_eq!(r.engine.library_cue_position(), Some((TrackId(1), 5.0)));
+    r.settle();
+    r.run(10);
+    let position = r.position();
+    assert!(
+        (5.0..5.0 + 10.0 * BLOCK_SECS + 1e-9).contains(&position),
+        "{position}"
+    );
+    let last = *r.channel(0).last().unwrap();
+    assert!(
+        (tagged_secs(1, last, 48_000) - position).abs() <= BLOCK_SECS,
+        "heard {last} at {position}"
+    );
+    assert_eq!(r.engine.used_slots(), 1, "the old source is released");
+    assert!(r.ends().is_empty(), "{:?}", r.events);
+}
+
+#[test]
+fn a_seek_while_held_stays_held_at_the_new_position() {
+    let mut r = play_rig(2, Some(on("card", 0)), 48_000 * 10);
+    r.act(start(preview(1)));
+    r.settle();
+    r.run(5);
+    r.act(pause(true));
+    r.run(5);
+    r.act(EngineAction::SeekLibraryCue { secs: 5.0 });
+    r.settle();
+    r.run(10);
+    assert_eq!(audible(&r.last_blocks(10)), 0, "still held");
+    assert_eq!(r.engine.library_cue_position(), Some((TrackId(1), 5.0)));
+    assert_eq!(r.engine.used_slots(), 1);
+    r.act(pause(false));
+    r.settle();
+    r.run(5);
+    assert!(audible(&r.last_blocks(4)) > 0);
+    assert!(r.position() > 5.0);
+}
+
+fn device_settings(r: &Play) -> fp_model::DeviceSettings {
+    r.engine
+        .running_settings(&fp_model::OutputDevice {
+            backend: "offline".into(),
+            device: "card".into(),
+        })
+        .unwrap()
+}
+
+#[test]
+fn a_forced_rate_change_reopens_the_preview_at_its_position() {
+    let mut r = play_rig(2, Some(on("card", 0)), 48_000 * 10);
+    r.act(start(preview(1)));
+    r.settle();
+    r.run(100);
+    let before = r.position();
+    let wanted = fp_model::DeviceSettings {
+        sample_rate: 44_100,
+        ..device_settings(&r)
+    };
+    r.act(EngineAction::ApplyDevice {
+        device: fp_model::OutputDevice {
+            backend: "offline".into(),
+            device: "card".into(),
+        },
+        settings: wanted,
+        force: true,
+    });
+    assert_eq!(r.device.config().unwrap().sample_rate, 44_100);
+    let reopened = r.position();
+    assert!(
+        (reopened - before).abs() <= BLOCK_SECS,
+        "{before} then {reopened}"
+    );
+    r.settle();
+    r.run(10);
+    let position = r.position();
+    let last = *r.channel(0).last().unwrap();
+    assert!(
+        (tagged_secs(1, last, 44_100) - position).abs() <= BLOCK_SECS,
+        "heard {last} at {position}: decoded at the new rate"
+    );
+    assert!(position > reopened);
+    assert!(r.ends().is_empty(), "{:?}", r.events);
+}
+
+const P: fp_model::PlayerId = fp_model::PlayerId(1);
+
+/// A 4-channel `card`, bit-perfect when `bit_perfect`, with P's Main on
+/// its first pair and the library CUE on the second.
+fn shared_rig(bit_perfect: bool) -> Play {
+    let mut r = play_rig_with(4, Some(on("card", 2)), 48_000 * 10, |c| {
+        c.outputs.routes = vec![fp_model::PlayerRoutes {
+            player: P,
+            main: Some(on("card", 0)),
+            cue: None,
+        }];
+        if bit_perfect {
+            c.outputs.bit_perfect = vec![fp_model::OutputDevice {
+                backend: "offline".into(),
+                device: "card".into(),
+            }];
+        }
+    });
+    r.act(EngineAction::AddPlayer { player: P });
+    r
+}
+
+fn pcm16(rate: u32) -> Option<AudioFormat> {
+    Some(AudioFormat {
+        sample_rate: rate,
+        bits: Some(16),
+        channels: 2,
+        dsd_rate: None,
+        bitrate: None,
+    })
+}
+
+#[test]
+fn a_held_preview_follows_a_rate_change_made_while_it_waits() {
+    let mut r = shared_rig(true);
+    r.act(EngineAction::StartLibraryCue {
+        request: LibraryCueRequest {
+            from_secs: 1.0,
+            ..preview(1)
+        },
+        paused: true,
+    });
+    r.settle();
+    r.run(2);
+    assert_eq!(r.device.config().unwrap().sample_rate, 48_000);
+    r.act(EngineAction::StartCurrent {
+        player: P,
+        request: fp_model::SourceRequest {
+            entry: fp_model::EntryId(2),
+            track: TrackId(2),
+            path: PathBuf::from("track2"),
+            from_secs: 0.0,
+            format: pcm16(44_100),
+            normalization: Normalization::default(),
+        },
+    });
+    assert_eq!(
+        r.device.config().unwrap().sample_rate,
+        44_100,
+        "the player's track moves the idle bit-perfect bus"
+    );
+    r.settle();
+    r.run(5);
+    assert_eq!(r.engine.library_cue_position(), Some((TrackId(1), 1.0)));
+    r.act(pause(false));
+    r.settle();
+    r.run(10);
+    let position = r.position();
+    let last = r.frames.last().unwrap()[2];
+    assert!(
+        (tagged_secs(1, last, 44_100) - position).abs() <= BLOCK_SECS,
+        "heard {last} at {position}: from where it was held, at the new rate"
+    );
+    assert!(position > 1.0, "{position}");
+}
+
+#[test]
+fn the_preview_meter_reads_only_the_preview() {
+    let mut r = shared_rig(false);
+    r.act(start(preview(1)));
+    r.settle();
+    r.run(2);
+    r.engine.take_library_cue_meter_input();
+    r.run(5);
+    let preview = r.engine.take_library_cue_meter_input();
+    assert!(preview.frames > 0 && preview.peak[0] > 0.0, "{preview:?}");
+    assert_eq!(r.engine.take_meter_input(P).frames, 0);
+    let again = r.engine.take_library_cue_meter_input();
+    assert_eq!(again.frames, 0, "taken, not copied");
 }
