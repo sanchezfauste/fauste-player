@@ -14,11 +14,13 @@ use crate::ui::theme;
 const TREE_HEIGHT: f32 = 360.0;
 
 pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
-    note(
-        ui,
-        &scene.i18n.tr("settings-library-hint"),
-        theme::NEUTRAL_400,
-    );
+    // On a touch screen the tree only takes taps: no drag to point to.
+    let hint = if view_state.touch {
+        "settings-library-hint-touch"
+    } else {
+        "settings-library-hint"
+    };
+    note(ui, &scene.i18n.tr(hint), theme::NEUTRAL_400);
     ui.add_space(6.0);
     ui.allocate_ui(vec2(ui.available_width(), TREE_HEIGHT), |ui| {
         category_tree(ui, scene, view_state, TreeMode::Settings);

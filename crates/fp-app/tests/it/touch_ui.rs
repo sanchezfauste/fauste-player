@@ -1130,6 +1130,21 @@ fn a_touch_drag_over_the_category_tree_moves_no_category() {
     );
 }
 
+/// On a touch screen the tree only takes taps: the Settings → Library hint
+/// points to the menu, not to a drag.
+#[test]
+fn the_settings_library_hint_on_touch_points_to_the_menu() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_by_label("Library").click();
+    h.run_steps(3);
+    assert!(h.query_by_label_contains("Drag a category").is_none());
+    assert!(
+        h.query_by_label_contains("Touch and hold a category")
+            .is_some()
+    );
+}
+
 /// PL20: the arrow goes back to the list too.
 #[test]
 fn the_arrow_returns_to_the_section_list() {

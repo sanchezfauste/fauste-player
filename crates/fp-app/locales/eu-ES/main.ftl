@@ -250,6 +250,7 @@ menu-cart-edit = Editatu…
 settings-tab-cartwall = Kartutxoak
 settings-tab-library = Liburutegia
 settings-library-hint = Sortu, berrizendatu, aldatu kolorea eta ezabatu zure pistak taldekatzen dituzten kategoriak. Arrastatu kategoria bat mugitzeko.
+settings-library-hint-touch = Sortu, berrizendatu, aldatu kolorea eta ezabatu zure pistak taldekatzen dituzten kategoriak. Eutsi sakatuta kategoria bat bere menua irekitzeko.
 settings-tab-shortcuts = Laster-teklak
 settings-cartwall-outputs = Kartutxo-panela
 settings-outputs-view = Erakutsi

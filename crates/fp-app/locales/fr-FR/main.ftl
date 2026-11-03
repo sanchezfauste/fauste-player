@@ -250,6 +250,7 @@ menu-cart-edit = Modifier…
 settings-tab-cartwall = Cartouches
 settings-tab-library = Bibliothèque
 settings-library-hint = Créez, renommez, recolorez et supprimez les catégories qui regroupent vos pistes. Faites glisser une catégorie pour la déplacer.
+settings-library-hint-touch = Créez, renommez, recolorez et supprimez les catégories qui regroupent vos pistes. Appuyez longuement sur une catégorie pour ouvrir son menu.
 settings-tab-shortcuts = Raccourcis clavier
 settings-cartwall-outputs = Mur de cartouches
 settings-outputs-view = Afficher

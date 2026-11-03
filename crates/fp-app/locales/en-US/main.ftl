@@ -250,6 +250,7 @@ menu-cart-edit = Edit…
 settings-tab-cartwall = Cartwall
 settings-tab-library = Library
 settings-library-hint = Create, rename, recolour and delete the categories that group your tracks. Drag a category to move it.
+settings-library-hint-touch = Create, rename, recolour and delete the categories that group your tracks. Touch and hold a category for its menu.
 settings-tab-shortcuts = Keyboard shortcuts
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Show

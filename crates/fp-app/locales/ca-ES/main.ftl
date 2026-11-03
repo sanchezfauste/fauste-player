@@ -250,6 +250,7 @@ menu-cart-edit = Editar…
 settings-tab-cartwall = Cartutxera
 settings-tab-library = Biblioteca
 settings-library-hint = Crea, reanomena, canvia el color i elimina les categories que agrupen les teves pistes. Arrossega una categoria per moure-la.
+settings-library-hint-touch = Crea, reanomena, canvia el color i elimina les categories que agrupen les teves pistes. Mantén premuda una categoria per obrir-ne el menú.
 settings-tab-shortcuts = Dreceres de teclat
 settings-cartwall-outputs = Cartutxera
 settings-outputs-view = Mostrar

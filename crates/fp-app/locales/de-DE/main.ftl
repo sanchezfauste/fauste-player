@@ -250,6 +250,7 @@ menu-cart-edit = Bearbeiten…
 settings-tab-cartwall = Cartwall
 settings-tab-library = Bibliothek
 settings-library-hint = Lege die Kategorien an, die deine Titel gruppieren, benenne sie um, ändere ihre Farbe oder lösche sie. Ziehe eine Kategorie, um sie zu verschieben.
+settings-library-hint-touch = Lege die Kategorien an, die deine Titel gruppieren, benenne sie um, ändere ihre Farbe oder lösche sie. Halte eine Kategorie gedrückt, um ihr Menü zu öffnen.
 settings-tab-shortcuts = Tastenkürzel
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Anzeigen

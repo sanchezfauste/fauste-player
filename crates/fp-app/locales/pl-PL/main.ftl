@@ -256,6 +256,7 @@ menu-cart-edit = Edytuj…
 settings-tab-cartwall = Cartwall
 settings-tab-library = Biblioteka
 settings-library-hint = Twórz, zmieniaj nazwy i kolory oraz usuwaj kategorie grupujące utwory. Przeciągnij kategorię, aby ją przenieść.
+settings-library-hint-touch = Twórz, zmieniaj nazwy i kolory oraz usuwaj kategorie grupujące utwory. Przytrzymaj kategorię, aby otworzyć jej menu.
 settings-tab-shortcuts = Skróty klawiszowe
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Pokaż

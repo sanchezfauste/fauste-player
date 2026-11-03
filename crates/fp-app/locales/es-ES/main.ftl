@@ -250,6 +250,7 @@ menu-cart-edit = Editar…
 settings-tab-cartwall = Cartuchera
 settings-tab-library = Biblioteca
 settings-library-hint = Crea, renombra, cambia el color y elimina las categorías que agrupan tus pistas. Arrastra una categoría para moverla.
+settings-library-hint-touch = Crea, renombra, cambia el color y elimina las categorías que agrupan tus pistas. Mantén pulsada una categoría para abrir su menú.
 settings-tab-shortcuts = Atajos de teclado
 settings-cartwall-outputs = Cartuchera
 settings-outputs-view = Mostrar

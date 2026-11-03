@@ -250,6 +250,7 @@ menu-cart-edit = Modifica…
 settings-tab-cartwall = Cartwall
 settings-tab-library = Libreria
 settings-library-hint = Crea, rinomina, cambia il colore ed elimina le categorie che raggruppano i tuoi brani. Trascina una categoria per spostarla.
+settings-library-hint-touch = Crea, rinomina, cambia il colore ed elimina le categorie che raggruppano i tuoi brani. Tieni premuta una categoria per aprirne il menu.
 settings-tab-shortcuts = Scorciatoie da tastiera
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Mostra

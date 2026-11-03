@@ -250,6 +250,7 @@ menu-cart-edit = Editar…
 settings-tab-cartwall = Cartucheira
 settings-tab-library = Biblioteca
 settings-library-hint = Crie, mude o nome e a cor e elimine as categorias que agrupam as suas faixas. Arraste uma categoria para a mover.
+settings-library-hint-touch = Crie, mude o nome e a cor e elimine as categorias que agrupam as suas faixas. Mantenha premida uma categoria para abrir o respetivo menu.
 settings-tab-shortcuts = Atalhos de teclado
 settings-cartwall-outputs = Cartucheira
 settings-outputs-view = Mostrar
