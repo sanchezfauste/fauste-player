@@ -10,6 +10,9 @@ their own outputs, independently of the players.
 ## Using it
 
 - **Click a cart** to fire it. **Click it again** to stop it.
+- **Drag tracks from the [library window](library.md)** onto a cart to put
+  the first one in it (replacing its file when it is stopped). A cart that is
+  playing or on CUE refuses the drop.
 - **Stop all** (right end of the bar) stops every cart that is playing, on
   every page. Its label shows how many are playing, as in **Stop all (2)**;
   with none playing it is dimmed and shows no count.

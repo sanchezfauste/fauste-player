@@ -135,6 +135,8 @@ Row colours:
 | Edit tags… | Open the tag editor for this track. **Save** writes the changes into the audio file; **Cancel** (or Esc, when no save is running) closes without writing. The item is dimmed, with the reason when you hover it, while the track is on air, on CUE or on a playing cart, while its tags have not been read yet, when the file is missing, and for formats whose tags cannot be written (for example DSD) |
 | Re-analyse | Analyse this track again now, whatever its state, reading the file again (so a file you edited is measured again even if its size and date did not change). A fixed file that was unreadable is also picked up by itself (see [Troubleshooting](troubleshooting.md)). Manual markers are kept. Dimmed, with the reason when you hover it, while the track is already waiting for its analysis or being analysed |
 | Loudness… | Open the loudness popup of this track (trim and exclusion; see [Loudness](loudness.md)) |
+| Show in library | Open the [library window](library.md) on this track's category with its row selected. Desktop only |
+| Move to category ▸ | File the track in a category, or Uncategorised, without opening the library. Desktop only |
 | Add tracks below… | Pick files to insert after this track |
 | Duplicate | Insert an unplayed copy below (with its repeat and stop-after marks) |
 | Repeat this track | Tick to play it again and again, without a gap, until you press Play (next), Previous, Stop or Fade stop, or turn on Stop after. Pause keeps it repeating. A repeat icon shows before the title |
