@@ -30,8 +30,11 @@ pub(crate) struct LibraryUi {
     pub dialog: Option<LibraryDialog>,
     /// The tree's counts, kept until the library or the categories change.
     pub(crate) counts: Option<CountsCache>,
-    /// The category being dragged in the tree.
-    pub(crate) tree_drag: Option<CategoryId>,
+    /// The category being dragged in a tree, and which tree it started in:
+    /// the window's tree and the one in Settings → Library are both laid
+    /// out while Settings is open, and only the one the drag started in
+    /// takes its release.
+    pub(crate) tree_drag: Option<(super::tree::TreeMode, CategoryId)>,
     /// A move or a resize of the window being dragged.
     pub(crate) live: Option<LiveRect>,
     /// The tree's splitter being dragged.

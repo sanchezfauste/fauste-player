@@ -533,3 +533,40 @@ fn a_removal_that_went_on_air_meanwhile_is_refused_on_the_answer() {
         .is_some()
     );
 }
+
+/// The node labelled `label` that is not at `except` (the same item in the
+/// other tree).
+fn other_item(h: &H, label: &str, except: egui::Rect) -> egui::Rect {
+    h.query_all_by_label(label)
+        .map(|n| n.rect())
+        .find(|r| *r != except)
+        .unwrap_or_else(|| panic!("a second {label:?}"))
+}
+
+/// A drag in Settings → Library moves the category it was aimed at while
+/// the library window is open under Settings: the window's own tree, laid
+/// out first, neither takes the release nor drops it.
+#[test]
+fn a_drag_in_settings_moves_its_category_with_the_window_open() {
+    let (s, tree) = tree_state();
+    let (mut h, fake) = open(s);
+    let window_jingles = h.get_by_label("Jingles").rect();
+    let window_classic = h.get_by_label("Classic").rect();
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Library")
+        .click();
+    h.run_steps(3);
+    fake.take_sent();
+    let from = other_item(&h, "Jingles", window_jingles).center();
+    let to = other_item(&h, "Classic", window_classic).center();
+    drag(&mut h, from, to);
+    assert_eq!(
+        others(fake.take_sent()),
+        vec![Command::MoveCategory {
+            category: tree.jingles,
+            parent: Some(tree.classic),
+            index: 0,
+        }]
+    );
+}

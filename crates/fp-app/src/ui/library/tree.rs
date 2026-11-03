@@ -149,7 +149,10 @@ pub(crate) fn category_tree(
     header(ui, scene, mode, &view, &mut actions);
     let shown = items(&scene.state.categories, &view.expanded, mode);
     let counts = view_state.library.counts.as_ref().map(|c| &c.counts);
-    let dragging = view_state.library.tree_drag;
+    let dragging = view_state
+        .library
+        .tree_drag
+        .and_then(|(from, id)| (from == mode).then_some(id));
     let touch = view_state.touch;
     let mut drawn: Vec<(Item, Rect)> = Vec::new();
     let body = ui.available_rect_before_wrap();
@@ -173,9 +176,9 @@ pub(crate) fn category_tree(
                 drawn.push((*item, rect));
             }
         });
-    drop_category(ui, scene, &mut view_state.library, &drawn, body);
+    drop_category(ui, scene, &mut view_state.library, mode, &drawn, body);
     for action in actions {
-        act(scene, view_state, action);
+        act(scene, view_state, mode, action);
     }
 }
 
@@ -541,17 +544,24 @@ fn drop_target(
 
 /// Follows a category being dragged: shows where it would land, and sends
 /// the move when it is dropped on another category. A new parent that is
-/// closed opens, so the moved category stays in sight.
+/// closed opens, so the moved category stays in sight. Only the tree the
+/// drag started in follows it, and only where its own layer is the one
+/// under the pointer: a tree covered by Settings, a dialog or a popup
+/// shows no mark and drops nothing.
 fn drop_category(
     ui: &Ui,
     scene: &Scene<'_>,
     library: &mut LibraryUi,
+    mode: TreeMode,
     drawn: &[(Item, Rect)],
     body: Rect,
 ) {
-    let Some(dragged) = library.tree_drag else {
+    let Some((from, dragged)) = library.tree_drag else {
         return;
     };
+    if from != mode {
+        return;
+    }
     let (pointer, released, down) = ui.input(|i| {
         (
             i.pointer.hover_pos().or_else(|| i.pointer.interact_pos()),
@@ -559,7 +569,9 @@ fn drop_category(
             i.pointer.primary_down(),
         )
     });
-    let target = pointer.filter(|p| body.contains(*p)).and_then(|p| {
+    let layer = ui.layer_id();
+    let on_tree = |p: &egui::Pos2| body.contains(*p) && ui.ctx().layer_id_at(*p) == Some(layer);
+    let target = pointer.filter(on_tree).and_then(|p| {
         drawn.iter().find_map(|(item, rect)| {
             if !rect.y_range().contains(p.y) {
                 return None;
@@ -600,7 +612,7 @@ fn drop_category(
 }
 
 /// Does what an item asked for.
-fn act(scene: &Scene<'_>, view_state: &mut ViewState, action: Action) {
+fn act(scene: &Scene<'_>, view_state: &mut ViewState, mode: TreeMode, action: Action) {
     let send = |view: LibraryView| scene.ctl.send(Command::SetLibraryView(Box::new(view)));
     match action {
         Action::Select(selection) => {
@@ -627,6 +639,6 @@ fn act(scene: &Scene<'_>, view_state: &mut ViewState, action: Action) {
             scene.ctl.send(Command::SetCategoryKind { category, kind });
         }
         Action::Delete(id) => ask_removal(scene, view_state, Removal::Category(id)),
-        Action::Drag(id) => view_state.library.tree_drag = Some(id),
+        Action::Drag(id) => view_state.library.tree_drag = Some((mode, id)),
     }
 }
