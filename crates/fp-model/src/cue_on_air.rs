@@ -279,6 +279,11 @@ fn stop(state: &mut AppState, cue: Holder, out: &mut Vec<EngineAction>) {
                 out.push(EngineAction::StopCartCue);
             }
         }
+        Holder::LibraryCue => {
+            // Task 4 adds the engine action that stops the playback.
+            state.library_cue.transport = Transport::Stopped;
+            state.library_cue.start_at = None;
+        }
         Holder::PlayerMain(_) | Holder::CartwallMain => {}
     }
 }

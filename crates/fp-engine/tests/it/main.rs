@@ -20,6 +20,7 @@ mod dsd_mixer;
 mod dsd_output;
 mod dsd_real_music;
 mod engine;
+mod library_cue;
 mod live_settings;
 mod metering;
 mod mixer;

@@ -18,6 +18,7 @@ pub mod error;
 pub mod ids;
 pub mod insertion;
 pub mod layout;
+pub mod library_cue;
 mod library_rules;
 pub mod library_search;
 pub mod library_view;
@@ -58,9 +59,9 @@ pub use command::{
 };
 pub use config::{
     AnalysisSettings, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes, Config, ConfigWarning,
-    DeviceOverride, LibraryConfig, Limits, LoudnessConfig, LoudnessReadout, MeterBallistics,
-    MeterConfig, MeterSettings, OutputDevice, OutputsConfig, OutputsView, PlayerRoutes,
-    PlayersConfig, Route, SAMPLE_RATE_RANGE, Tuning, UiConfig, WindowSystem,
+    DeviceOverride, LibraryConfig, LibraryRoutes, Limits, LoudnessConfig, LoudnessReadout,
+    MeterBallistics, MeterConfig, MeterSettings, OutputDevice, OutputsConfig, OutputsView,
+    PlayerRoutes, PlayersConfig, Route, SAMPLE_RATE_RANGE, Tuning, UiConfig, WindowSystem,
 };
 pub use cue_on_air::{CueConfirmation, CueOnAir, CueStopped, needs_confirmation};
 pub use device_offer::{

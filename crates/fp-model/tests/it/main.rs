@@ -29,6 +29,7 @@ mod header_duration;
 mod history;
 mod intro_column;
 mod layout;
+mod library_cue;
 mod library_lifetime;
 mod library_removal;
 mod library_search;

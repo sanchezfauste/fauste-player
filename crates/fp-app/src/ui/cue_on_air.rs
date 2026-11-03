@@ -30,6 +30,7 @@ fn sounding_text(t: &I18n, state: &AppState, holder: Holder) -> String {
         Holder::PlayerCue(p) => t.tr_args("cue-on-air-player-cue", &[("n", n(p).into())]),
         Holder::CartwallMain => t.tr("cue-on-air-cartwall"),
         Holder::CartwallCue => t.tr("cue-on-air-cartwall-cue"),
+        Holder::LibraryCue => t.tr("cue-on-air-library-cue"),
     }
 }
 
@@ -40,7 +41,9 @@ pub(crate) fn notice_text(t: &I18n, state: &AppState, stopped: &CueStopped) -> S
             "cue-on-air-stopped-player",
             &[("n", player_number(state, p).into())],
         ),
-        Holder::CartwallMain | Holder::CartwallCue => t.tr("cue-on-air-stopped-cartwall"),
+        Holder::CartwallMain | Holder::CartwallCue | Holder::LibraryCue => {
+            t.tr("cue-on-air-stopped-cartwall")
+        }
     }
 }
 

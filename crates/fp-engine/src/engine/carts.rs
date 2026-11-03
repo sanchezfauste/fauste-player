@@ -374,7 +374,7 @@ impl Engine {
                 self.place_cart_cue(cue, route);
                 Some(outcome)
             }
-            Holder::PlayerMain(_) | Holder::PlayerCue(_) => Some(Ok(())),
+            Holder::PlayerMain(_) | Holder::PlayerCue(_) | Holder::LibraryCue => Some(Ok(())),
         }
     }
 

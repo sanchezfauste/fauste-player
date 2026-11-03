@@ -14,5 +14,8 @@ pub fn playout_active(state: &AppState) -> bool {
             || p.transport != Transport::Stopped
             || p.cue.is_some()
     });
-    players || !state.cartwall.playing.is_empty() || state.cartwall.cue.is_some()
+    players
+        || !state.cartwall.playing.is_empty()
+        || state.cartwall.cue.is_some()
+        || state.library_cue.transport != Transport::Stopped
 }

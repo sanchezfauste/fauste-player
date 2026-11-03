@@ -46,6 +46,7 @@ fn place(s: &mut AppState, holder: Holder, route: Option<Route>, on: &str) -> Ve
         }
         Holder::CartwallMain => outputs.cartwall.main = route.clone(),
         Holder::CartwallCue => outputs.cartwall.cue = route.clone(),
+        Holder::LibraryCue => outputs.library.cue = route.clone(),
     }
     let running = device_settings(&s.config.outputs, &device(on));
     on_event(

@@ -21,6 +21,8 @@ pub enum Holder {
     PlayerCue(PlayerId),
     CartwallMain,
     CartwallCue,
+    /// The library window pre-listen (library plan 4, LB32).
+    LibraryCue,
 }
 
 /// Everything a device's stream depends on (L4).
@@ -68,6 +70,7 @@ pub enum BusyCause {
     PlayerCue(PlayerId),
     CartPlaying(CartId),
     CartCue(CartId),
+    LibraryCue,
 }
 
 /// What the engine runs with, as it reported it (spec §4.1).
@@ -111,13 +114,17 @@ pub fn device_settings(outputs: &OutputsConfig, device: &OutputDevice) -> Device
 }
 
 /// Every holder, in display order: each player's Main then Cue, then the
-/// cartwall's Main and Cue (L9).
+/// cartwall's Main and Cue, then the library Cue (L9).
 pub fn holders(state: &AppState) -> Vec<Holder> {
     state
         .players
         .iter()
         .flat_map(|p| [Holder::PlayerMain(p.id), Holder::PlayerCue(p.id)])
-        .chain([Holder::CartwallMain, Holder::CartwallCue])
+        .chain([
+            Holder::CartwallMain,
+            Holder::CartwallCue,
+            Holder::LibraryCue,
+        ])
         .collect()
 }
 
@@ -129,6 +136,7 @@ pub fn configured_route(config: &Config, holder: Holder) -> Option<Route> {
         Holder::PlayerCue(p) => outputs.player_routes(p).and_then(|r| r.cue.clone()),
         Holder::CartwallMain => outputs.cartwall.main.clone(),
         Holder::CartwallCue => outputs.cartwall.cue.clone(),
+        Holder::LibraryCue => outputs.library.cue.clone(),
     }
 }
 
@@ -168,6 +176,10 @@ pub fn causes(state: &AppState, holder: Holder) -> Vec<BusyCause> {
             .cartwall
             .cue
             .map(BusyCause::CartCue)
+            .into_iter()
+            .collect(),
+        Holder::LibraryCue => (state.library_cue.transport != Transport::Stopped)
+            .then_some(BusyCause::LibraryCue)
             .into_iter()
             .collect(),
     }

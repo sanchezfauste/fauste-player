@@ -343,6 +343,7 @@ pub fn on_desk(state: &mut AppState, holders: &[fp_model::Holder]) {
             }
             Holder::CartwallMain => outputs.cartwall.main = Some(desk.clone()),
             Holder::CartwallCue => outputs.cartwall.cue = Some(desk.clone()),
+            Holder::LibraryCue => outputs.library.cue = Some(desk.clone()),
         }
     }
     let running = fp_model::device_settings(&state.config.outputs, &device);

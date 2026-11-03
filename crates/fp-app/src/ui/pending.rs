@@ -37,6 +37,7 @@ fn holder_label(t: &I18n, state: &AppState, holder: Holder) -> String {
         ),
         Holder::CartwallMain => t.tr("holder-cartwall-main"),
         Holder::CartwallCue => t.tr("holder-cartwall-cue"),
+        Holder::LibraryCue => t.tr("holder-library-cue"),
     }
 }
 
@@ -214,6 +215,7 @@ pub(crate) fn describe_cause(t: &I18n, state: &AppState, cause: &BusyCause) -> S
             "cause-cart-cue",
             &[("name", cart_label(t, state, c).into())],
         ),
+        BusyCause::LibraryCue => t.tr("cause-library-cue"),
     }
 }
 
@@ -526,6 +528,19 @@ mod tests {
         assert_eq!(
             describe_item(&t, &state, &names, &item),
             "Cartwall Main → System default"
+        );
+        let item = PendingItem::Route {
+            holder: Holder::LibraryCue,
+            from: None,
+            to: Some(route("phones")),
+        };
+        assert_eq!(
+            describe_item(&t, &state, &names, &item),
+            "Library CUE → phones"
+        );
+        assert_eq!(
+            describe_cause(&t, &state, &BusyCause::LibraryCue),
+            "library CUE"
         );
         let pending = Pending {
             item: PendingItem::Device {

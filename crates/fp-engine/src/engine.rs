@@ -12,8 +12,8 @@ use crossbeam_channel::{Receiver, Sender};
 use fp_backends::{AudioBackend, Availability, NullBackend, StreamConfig, choose_default_backend};
 use fp_model::{
     CartwallRoutes, Config, DeviceSettings, EngineAction, EngineEvent, EntryId, Holder,
-    OutputDevice, PlayerId, PlayerRoutes, Route, SourceRequest, Target, TransitionPlan, Tuning,
-    Wanted,
+    LibraryRoutes, OutputDevice, PlayerId, PlayerRoutes, Route, SourceRequest, Target,
+    TransitionPlan, Tuning, Wanted,
 };
 
 use crate::atomic::AtomicF32;
@@ -67,6 +67,8 @@ pub struct EngineSettings {
     pub tuning: Tuning,
     pub routes: Vec<PlayerRoutes>,
     pub cartwall_routes: CartwallRoutes,
+    /// Where the library pre-listens (library plan 4, LB32).
+    pub library_routes: LibraryRoutes,
     /// Backend used when a player has no explicit route (`None`: the first registered).
     pub default_backend: Option<String>,
     /// Devices played bit-perfect (Phase 4 spec B1).
@@ -87,6 +89,7 @@ impl EngineSettings {
             tuning: config.tuning.clone(),
             routes: config.outputs.routes.clone(),
             cartwall_routes: config.outputs.cartwall.clone(),
+            library_routes: config.outputs.library.clone(),
             default_backend: config.outputs.backend.clone(),
             bit_perfect: config
                 .outputs
@@ -528,6 +531,7 @@ impl Engine {
         let audio_system = settings.default_backend.clone();
         let backend_in_use = choose_backend(&backends, audio_system.as_deref());
         let cartwall_routes = settings.cartwall_routes.clone();
+        let library_route = settings.library_routes.cue.clone();
         let (failures_tx, failures_rx) = crossbeam_channel::unbounded();
         let mut engine = Self {
             backends,
@@ -567,6 +571,7 @@ impl Engine {
         });
         engine.report_cartwall_route(Holder::CartwallMain, cartwall_routes.main);
         engine.report_cartwall_route(Holder::CartwallCue, cartwall_routes.cue);
+        engine.report_library_route(library_route);
         engine
     }
 
@@ -738,6 +743,7 @@ impl Engine {
     fn update_settings(&mut self, config: &Config, now: Instant) {
         let retune = self.settings.tuning != config.tuning;
         let cartwall_before = self.settings.cartwall_routes.clone();
+        let library_before = self.settings.library_routes.clone();
         self.settings = EngineSettings::from_config(config);
         // The cartwall has no bus before its first cart, so `ApplyRoute`
         // never has anything to move: it holds the configured routes, and
@@ -747,6 +753,11 @@ impl Engine {
             let routes = self.settings.cartwall_routes.clone();
             self.report_cartwall_route(Holder::CartwallMain, routes.main);
             self.report_cartwall_route(Holder::CartwallCue, routes.cue);
+        }
+        // The library Cue has no bus until Task 2: it is placed the same way.
+        if self.settings.library_routes != library_before {
+            let route = self.settings.library_routes.cue.clone();
+            self.report_library_route(route);
         }
         if !retune {
             return;
@@ -818,6 +829,14 @@ impl Engine {
             }),
         };
         self.report_placement(holder, route, target.as_ref().map(|t| &t.0));
+    }
+
+    /// LB32: reports where the library Cue plays from its `route`, as its
+    /// playback will place it, without opening a stream or creating a
+    /// worker. A route that cannot carry a Cue has no bus.
+    fn report_library_route(&mut self, route: Option<Route>) {
+        let target = route.as_ref().and_then(|r| self.cue_target(r));
+        self.report_placement(Holder::LibraryCue, route, target.as_ref().map(|t| &t.0));
     }
 
     /// BR1: reports each bus whose stream rate or refused rates changed
@@ -1107,6 +1126,8 @@ impl Engine {
                 .is_none_or(|rt| self.player_quiet(rt, |s| s.cue)),
             Holder::CartwallMain => self.cart_path_quiet(false),
             Holder::CartwallCue => self.cart_path_quiet(true),
+            // Until the library playback exists there is nothing to wait for.
+            Holder::LibraryCue => true,
         }
     }
 
@@ -1158,6 +1179,10 @@ impl Engine {
             Holder::PlayerCue(p) => self.move_player_cue(p, route.clone(), force),
             Holder::CartwallMain | Holder::CartwallCue => {
                 self.move_cartwall(holder, route.clone(), force)
+            }
+            Holder::LibraryCue => {
+                self.report_library_route(route.clone());
+                Some(Ok(()))
             }
         };
         let Some(outcome) = done else {
@@ -2069,6 +2094,7 @@ impl Engine {
             .flat_map(|r| r.main.iter().chain(r.cue.iter()))
             .chain(self.settings.cartwall_routes.main.iter())
             .chain(self.settings.cartwall_routes.cue.iter())
+            .chain(self.settings.library_routes.cue.iter())
             .map(|route| self.route_target(route))
             .filter(|(k, _)| k == key)
             .map(|(_, first)| first.saturating_add(2))

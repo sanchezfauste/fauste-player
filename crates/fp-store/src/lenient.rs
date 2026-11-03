@@ -234,6 +234,19 @@ mod tests {
     }
 
     #[test]
+    fn a_bad_library_cue_route_falls_back_to_none() {
+        let user: serde_json::Value =
+            serde_json::from_str(r#"{"outputs": {"sample_rate": 44100, "library": {"cue": 5}}}"#)
+                .unwrap();
+        let mut warnings = Vec::new();
+        let c = config_from_value(&user, &mut warnings);
+        assert_eq!(c.outputs.library.cue, None);
+        assert_eq!(c.outputs.sample_rate, 44_100);
+        assert_eq!(warnings.len(), 1, "{warnings:?}");
+        assert!(warnings[0].contains("outputs/library/cue"), "{warnings:?}");
+    }
+
+    #[test]
     fn device_overrides_and_the_outputs_view_load_leniently() {
         let user: serde_json::Value = serde_json::from_str(
             r#"{"ui":{"outputs_view":"Expert"},
