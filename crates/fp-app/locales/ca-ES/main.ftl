@@ -248,6 +248,8 @@ cart-kind-spot = Falca
 menu-cart-stop = Aturar
 menu-cart-edit = Editar…
 settings-tab-cartwall = Cartutxera
+settings-tab-library = Biblioteca
+settings-library-hint = Crea, reanomena, canvia el color i elimina les categories que agrupen les teves pistes. Arrossega una categoria per moure-la.
 settings-tab-shortcuts = Dreceres de teclat
 settings-cartwall-outputs = Cartutxera
 settings-outputs-view = Mostrar
@@ -529,6 +531,7 @@ settings-restore-confirm = Restaurar
 
 menu-edit-tags = Editar les etiquetes…
 menu-loudness = Sonoritat…
+menu-show-in-library = Mostra a la biblioteca
 menu-edit-tags-file = El fitxer no existeix o no es pot llegir
 menu-edit-tags-format = Aquest format no admet escriure etiquetes
 menu-edit-tags-unread = Encara no s'han llegit les etiquetes

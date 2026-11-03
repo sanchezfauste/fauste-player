@@ -248,6 +248,8 @@ cart-kind-spot = Spot
 menu-cart-stop = Stoppen
 menu-cart-edit = Bewerken…
 settings-tab-cartwall = Cartwall
+settings-tab-library = Bibliotheek
+settings-library-hint = Maak de categorieën die je nummers groeperen, hernoem ze, geef ze een andere kleur of verwijder ze. Sleep een categorie om haar te verplaatsen.
 settings-tab-shortcuts = Sneltoetsen
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Tonen
@@ -529,6 +531,7 @@ settings-restore-confirm = Herstellen
 
 menu-edit-tags = Tags bewerken…
 menu-loudness = Loudness…
+menu-show-in-library = Tonen in bibliotheek
 menu-edit-tags-file = Het bestand ontbreekt of kan niet worden gelezen
 menu-edit-tags-format = Dit formaat heeft geen schrijfbare tags
 menu-edit-tags-unread = De tags zijn nog niet gelezen

@@ -108,6 +108,50 @@ fn submenu(ui: &mut Ui, glyph: &str, text: &str, enabled: bool, add: impl FnOnce
     });
 }
 
+/// Move to category ▸ the categories in the tree's order, then
+/// Uncategorised. Also the playlist row menu's entry.
+pub(crate) fn move_to_category(ui: &mut Ui, scene: &Scene<'_>, tracks: &[TrackId]) {
+    let t = scene.i18n;
+    let state: &AppState = scene.state;
+    let categories = tree_order(&state.categories);
+    let current: Option<Option<CategoryId>> = {
+        let mut of = tracks
+            .iter()
+            .filter_map(|id| state.library.get(*id))
+            .map(|tr| tr.category);
+        let first = of.next();
+        first.filter(|f| of.all(|c| c == *f))
+    };
+    submenu(
+        ui,
+        icon::FOLDER,
+        &t.tr("library-menu-move-to-category"),
+        true,
+        |ui| {
+            let choice = |ui: &mut Ui, label: String, category: Option<CategoryId>| {
+                let on = current == Some(category);
+                let response = ui.add(egui::Button::selectable(on, &label));
+                let name = label.trim_start().to_owned();
+                response.widget_info(|| {
+                    egui::WidgetInfo::selected(egui::Role::Button, true, on, name.clone())
+                });
+                if response.clicked() {
+                    scene.ctl.send(Command::MoveTracksToCategory {
+                        tracks: tracks.to_vec(),
+                        category,
+                    });
+                    ui.close();
+                }
+            };
+            for (id, name, depth) in categories {
+                choice(ui, format!("{}{name}", "    ".repeat(depth)), Some(id));
+            }
+            ui.separator();
+            choice(ui, t.tr("library-tree-uncategorised"), None);
+        },
+    );
+}
+
 /// The row menu over `tracks` (the selected rows, in the table's order).
 pub(super) fn row_menu(ui: &mut Ui, scene: &Scene<'_>, tracks: &[TrackId]) -> Option<MenuOutcome> {
     let t = scene.i18n;
@@ -198,45 +242,7 @@ pub(super) fn row_menu(ui: &mut Ui, scene: &Scene<'_>, tracks: &[TrackId]) -> Op
         },
     );
 
-    // Move to category ▸ the categories in the tree's order, then
-    // Uncategorised.
-    let categories = tree_order(&state.categories);
-    let current: Option<Option<CategoryId>> = {
-        let mut of = tracks
-            .iter()
-            .filter_map(|id| state.library.get(*id))
-            .map(|tr| tr.category);
-        let first = of.next();
-        first.filter(|f| of.all(|c| c == *f))
-    };
-    submenu(
-        ui,
-        icon::FOLDER,
-        &t.tr("library-menu-move-to-category"),
-        true,
-        |ui| {
-            let choice = |ui: &mut Ui, label: String, category: Option<CategoryId>| {
-                let on = current == Some(category);
-                let response = ui.add(egui::Button::selectable(on, &label));
-                let name = label.trim_start().to_owned();
-                response.widget_info(|| {
-                    egui::WidgetInfo::selected(egui::Role::Button, true, on, name.clone())
-                });
-                if response.clicked() {
-                    scene.ctl.send(Command::MoveTracksToCategory {
-                        tracks: tracks.to_vec(),
-                        category,
-                    });
-                    ui.close();
-                }
-            };
-            for (id, name, depth) in categories {
-                choice(ui, format!("{}{name}", "    ".repeat(depth)), Some(id));
-            }
-            ui.separator();
-            choice(ui, t.tr("library-tree-uncategorised"), None);
-        },
-    );
+    move_to_category(ui, scene, tracks);
 
     // Kind ▸
     let current_kind = {

@@ -248,6 +248,8 @@ cart-kind-spot = Spot
 menu-cart-stop = Arrêter
 menu-cart-edit = Modifier…
 settings-tab-cartwall = Cartouches
+settings-tab-library = Bibliothèque
+settings-library-hint = Créez, renommez, recolorez et supprimez les catégories qui regroupent vos pistes. Faites glisser une catégorie pour la déplacer.
 settings-tab-shortcuts = Raccourcis clavier
 settings-cartwall-outputs = Mur de cartouches
 settings-outputs-view = Afficher
@@ -529,6 +531,7 @@ settings-restore-confirm = Rétablir
 
 menu-edit-tags = Modifier les tags…
 menu-loudness = Loudness…
+menu-show-in-library = Afficher dans la bibliothèque
 menu-edit-tags-file = Le fichier est absent ou illisible
 menu-edit-tags-format = Ce format n'a pas de tags modifiables
 menu-edit-tags-unread = Les tags n'ont pas encore été lus

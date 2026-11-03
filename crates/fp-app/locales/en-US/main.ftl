@@ -248,6 +248,8 @@ cart-kind-spot = Spot
 menu-cart-stop = Stop
 menu-cart-edit = Edit…
 settings-tab-cartwall = Cartwall
+settings-tab-library = Library
+settings-library-hint = Create, rename, recolour and delete the categories that group your tracks. Drag a category to move it.
 settings-tab-shortcuts = Keyboard shortcuts
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Show
@@ -529,6 +531,7 @@ settings-restore-confirm = Restore
 
 menu-edit-tags = Edit tags…
 menu-loudness = Loudness…
+menu-show-in-library = Show in library
 menu-edit-tags-file = The file is missing or cannot be read
 menu-edit-tags-format = This format has no writable tags
 menu-edit-tags-unread = The tags have not been read yet

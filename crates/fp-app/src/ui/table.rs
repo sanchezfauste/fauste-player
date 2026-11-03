@@ -298,6 +298,7 @@ pub(crate) fn track_table(
     let mut edit_tags: Option<fp_model::TrackId> = None;
     // N20: the track whose Loudness… popup the operator asked for.
     let mut loudness: Option<fp_model::TrackId> = None;
+    let mut show: Option<fp_model::TrackId> = None;
     let mut dragged: Option<EntryId> = None;
     let drag_offset = drag_scroll_offset(
         ui,
@@ -583,6 +584,7 @@ pub(crate) fn track_table(
                     match context_menu(ui, scene, player, playlist, entry.id, i, track, phone) {
                         Some(RowMenuOutcome::EditTags(id)) => edit_tags = Some(id),
                         Some(RowMenuOutcome::Loudness(id)) => loudness = Some(id),
+                        Some(RowMenuOutcome::ShowInLibrary(id)) => show = Some(id),
                         None => {}
                     }
                 });
@@ -602,6 +604,9 @@ pub(crate) fn track_table(
     }
     if let Some(id) = loudness {
         view_state.loudness_popup = Some((id, Some(fp_model::Holder::PlayerMain(player))));
+    }
+    if let Some(id) = show {
+        super::library::show_track(scene, view_state, id);
     }
     // Q4: the drop target comes from the pointer and the body's geometry,
     // never from the widget under it, and belongs to this table alone: it is
@@ -802,6 +807,8 @@ fn header_menu(ui: &mut Ui, scene: &Scene<'_>, columns: &[TableColumn]) {
 pub(crate) enum RowMenuOutcome {
     EditTags(fp_model::TrackId),
     Loudness(fp_model::TrackId),
+    /// Show in library: the library window opens on the track.
+    ShowInLibrary(fp_model::TrackId),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -921,6 +928,18 @@ fn context_menu(
     if labelled(ui, icon::SPEAKER_HIGH, "menu-loudness", true).clicked() {
         outcome = Some(RowMenuOutcome::Loudness(track.id));
         ui.close();
+    }
+    // The library (track library spec §9): not on the phone, which has no
+    // library window.
+    if !phone {
+        let known = scene.state.library.get(track.id).is_some();
+        if labelled(ui, icon::BOOKS, "menu-show-in-library", known).clicked() {
+            outcome = Some(RowMenuOutcome::ShowInLibrary(track.id));
+            ui.close();
+        }
+        if known {
+            super::library::move_to_category(ui, scene, &[track.id]);
+        }
     }
     ui.separator();
     if labelled(ui, icon::PLUS, "menu-add-below", true).clicked() {

@@ -641,6 +641,7 @@ impl AppUi {
             && !self.view.confirm_apply_now
             && !self.view.pending_open
             && self.settings.confirm_restore.is_none()
+            && self.view.library.dialog.is_none()
             && self.settings.phone_back()
         {
             return true;
@@ -1101,7 +1102,7 @@ impl AppUi {
                 outdated: self.outdated.get(&state),
                 unmeasured: self.unmeasured.get(&state),
             };
-            let outcome = settings::show(&ctx, &scene, &mut self.settings, &deps);
+            let outcome = settings::show(&ctx, &scene, &mut self.view, &mut self.settings, &deps);
             self.view.settings_open = outcome.open;
             self.view.apply_now_requested |= outcome.apply_now;
         } else if !picking {

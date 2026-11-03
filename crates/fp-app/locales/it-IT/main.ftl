@@ -248,6 +248,8 @@ cart-kind-spot = Spot
 menu-cart-stop = Ferma
 menu-cart-edit = Modifica…
 settings-tab-cartwall = Cartwall
+settings-tab-library = Libreria
+settings-library-hint = Crea, rinomina, cambia il colore ed elimina le categorie che raggruppano i tuoi brani. Trascina una categoria per spostarla.
 settings-tab-shortcuts = Scorciatoie da tastiera
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Mostra
@@ -529,6 +531,7 @@ settings-restore-confirm = Ripristina
 
 menu-edit-tags = Modifica i tag…
 menu-loudness = Loudness…
+menu-show-in-library = Mostra nella libreria
 menu-edit-tags-file = Il file manca o non si può leggere
 menu-edit-tags-format = Questo formato non ha tag scrivibili
 menu-edit-tags-unread = I tag non sono ancora stati letti

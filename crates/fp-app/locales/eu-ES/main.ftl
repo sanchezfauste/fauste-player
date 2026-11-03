@@ -248,6 +248,8 @@ cart-kind-spot = Iragarkia
 menu-cart-stop = Gelditu
 menu-cart-edit = Editatu…
 settings-tab-cartwall = Kartutxoak
+settings-tab-library = Liburutegia
+settings-library-hint = Sortu, berrizendatu, aldatu kolorea eta ezabatu zure pistak taldekatzen dituzten kategoriak. Arrastatu kategoria bat mugitzeko.
 settings-tab-shortcuts = Laster-teklak
 settings-cartwall-outputs = Kartutxo-panela
 settings-outputs-view = Erakutsi
@@ -529,6 +531,7 @@ settings-restore-confirm = Leheneratu
 
 menu-edit-tags = Editatu etiketak…
 menu-loudness = Ozentasuna…
+menu-show-in-library = Erakutsi liburutegian
 menu-edit-tags-file = Fitxategia falta da edo ezin da irakurri
 menu-edit-tags-format = Formatu honek ez du etiketak idazteko aukerarik
 menu-edit-tags-unread = Etiketak ez dira oraindik irakurri

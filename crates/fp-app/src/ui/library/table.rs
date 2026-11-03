@@ -375,6 +375,7 @@ fn rows(
 ) {
     let library = &mut view_state.library;
     let count = library.rows(scene.state).len();
+    let reveal = library.take_reveal(scene.state);
     let mut clicked: Option<(TrackId, egui::Modifiers)> = None;
     // A right-click or a drag on a row outside the selection selects it.
     let mut taken: Option<TrackId> = None;
@@ -397,48 +398,53 @@ fn rows(
             }
         };
         ui.spacing_mut().item_spacing = Vec2::ZERO;
-        ScrollArea::vertical()
+        let mut area = ScrollArea::vertical()
             .id_salt("library-table-scroll")
-            .auto_shrink([false, false])
-            .show_rows(ui, ROW_HEIGHT, count, |ui, range| {
-                for i in range {
-                    let (rect, response) =
-                        ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), sense);
-                    let Some(&id) = rows.get(i) else { continue };
-                    let Some(track) = scene.state.library.get(id) else {
-                        continue;
-                    };
-                    let is_selected = selected.contains(&id);
-                    response.widget_info(|| {
-                        egui::WidgetInfo::selected(egui::Role::Row, true, is_selected, "")
-                    });
-                    if response.clicked() {
-                        clicked = Some((id, click_modifiers(ui)));
-                    }
-                    if response.drag_started() {
-                        egui::DragAndDrop::set_payload(
-                            ui.ctx(),
-                            DragTracks {
-                                tracks: targets(id),
-                            },
-                        );
-                        taken = Some(id);
-                    }
-                    // A right-click, or a long press on a touch screen
-                    // (egui counts it as a secondary click).
-                    if response.secondary_clicked() {
-                        taken = Some(id);
-                    }
-                    response.context_menu(|ui| {
-                        if let Some(o) = menu::row_menu(ui, scene, &targets(id)) {
-                            outcome = Some(o);
-                        }
-                    });
-                    if ui.is_rect_visible(rect) {
-                        row(ui, scene, track, rect, columns, px, is_selected);
-                    }
+            .auto_shrink([false, false]);
+        // Show in library: the row lands in the middle of the table.
+        if let Some(at) = reveal {
+            let middle = (ui.available_height() - ROW_HEIGHT) / 2.0;
+            area = area.vertical_scroll_offset((at as f32 * ROW_HEIGHT - middle).max(0.0));
+        }
+        area.show_rows(ui, ROW_HEIGHT, count, |ui, range| {
+            for i in range {
+                let (rect, response) =
+                    ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), sense);
+                let Some(&id) = rows.get(i) else { continue };
+                let Some(track) = scene.state.library.get(id) else {
+                    continue;
+                };
+                let is_selected = selected.contains(&id);
+                response.widget_info(|| {
+                    egui::WidgetInfo::selected(egui::Role::Row, true, is_selected, "")
+                });
+                if response.clicked() {
+                    clicked = Some((id, click_modifiers(ui)));
                 }
-            });
+                if response.drag_started() {
+                    egui::DragAndDrop::set_payload(
+                        ui.ctx(),
+                        DragTracks {
+                            tracks: targets(id),
+                        },
+                    );
+                    taken = Some(id);
+                }
+                // A right-click, or a long press on a touch screen
+                // (egui counts it as a secondary click).
+                if response.secondary_clicked() {
+                    taken = Some(id);
+                }
+                response.context_menu(|ui| {
+                    if let Some(o) = menu::row_menu(ui, scene, &targets(id)) {
+                        outcome = Some(o);
+                    }
+                });
+                if ui.is_rect_visible(rect) {
+                    row(ui, scene, track, rect, columns, px, is_selected);
+                }
+            }
+        });
     }
     if let Some((id, modifiers)) = clicked {
         let cache = library.rows.take();
@@ -454,6 +460,8 @@ fn rows(
         Some(MenuOutcome::Row(RowMenuOutcome::Loudness(id))) => {
             view_state.loudness_popup = Some((id, None));
         }
+        // Only the playlist's menu offers it.
+        Some(MenuOutcome::Row(RowMenuOutcome::ShowInLibrary(_))) => {}
         Some(MenuOutcome::Remove(tracks)) => {
             ask_removal(scene, view_state, Removal::Tracks(tracks));
         }

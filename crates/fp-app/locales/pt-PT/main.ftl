@@ -248,6 +248,8 @@ cart-kind-spot = Spot
 menu-cart-stop = Parar
 menu-cart-edit = Editar…
 settings-tab-cartwall = Cartucheira
+settings-tab-library = Biblioteca
+settings-library-hint = Crie, mude o nome e a cor e elimine as categorias que agrupam as suas faixas. Arraste uma categoria para a mover.
 settings-tab-shortcuts = Atalhos de teclado
 settings-cartwall-outputs = Cartucheira
 settings-outputs-view = Mostrar
@@ -529,6 +531,7 @@ settings-restore-confirm = Repor
 
 menu-edit-tags = Editar etiquetas…
 menu-loudness = Loudness…
+menu-show-in-library = Mostrar na biblioteca
 menu-edit-tags-file = O ficheiro não existe ou não pode ser lido
 menu-edit-tags-format = Este formato não tem etiquetas graváveis
 menu-edit-tags-unread = As etiquetas ainda não foram lidas

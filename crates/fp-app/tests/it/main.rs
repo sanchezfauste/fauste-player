@@ -26,6 +26,7 @@ mod header_overlap_ui;
 mod i18n;
 mod instance;
 mod layout_ui;
+mod library_links;
 mod library_menu;
 mod library_paths;
 mod library_table;

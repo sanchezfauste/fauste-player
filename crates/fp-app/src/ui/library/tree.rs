@@ -30,7 +30,6 @@ pub(crate) enum TreeMode {
     /// click selects what the table shows.
     Window,
     /// Settings → Library: the categories only, nothing to select.
-    #[expect(dead_code, reason = "Settings → Library (plan 3, task 7) shows it")]
     Settings,
 }
 

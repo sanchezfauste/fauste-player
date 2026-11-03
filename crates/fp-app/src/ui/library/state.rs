@@ -47,6 +47,10 @@ pub(crate) struct LibraryUi {
     /// The window's layer in the last frame: only a pointer on it is over
     /// the window (another window or a dialog may cover part of it).
     pub(crate) drawn_layer: Option<egui::LayerId>,
+    /// A track *Show in library* asked for, with the selection the window
+    /// was sent to: the table selects its row and scrolls to it once the
+    /// snapshot holds that selection and lists the track.
+    pub(crate) reveal: Option<(TrackId, LibrarySelection)>,
 }
 
 /// The table's rows and what they were computed from.
@@ -134,6 +138,30 @@ impl LibraryUi {
             });
         }
         self.rows.as_ref().map_or(&[], |c| c.rows.as_slice())
+    }
+
+    /// Acts on a pending *Show in library* (`rows` must be current): once
+    /// the snapshot shows the selection asked for and the track is listed,
+    /// the row alone is selected and its index is returned, to scroll to.
+    /// The request lapses when the library no longer holds the track.
+    pub(crate) fn take_reveal(&mut self, state: &AppState) -> Option<usize> {
+        let (track, selection) = self.reveal?;
+        if state.library.get(track).is_none() {
+            self.reveal = None;
+            return None;
+        }
+        let view = &state.library_view;
+        if view.selection != selection && !view.whole_library {
+            return None;
+        }
+        let at = self
+            .rows
+            .as_ref()
+            .and_then(|c| c.rows.iter().position(|r| *r == track))?;
+        self.reveal = None;
+        self.selected = vec![track];
+        self.anchor = Some(track);
+        Some(at)
     }
 
     /// The selected tracks in the table's order.
@@ -308,4 +336,69 @@ pub(crate) struct Pending<T> {
     /// The snapshot's view when the value was sent: once the snapshot
     /// differs from it, the snapshot has caught up.
     pub sent_against: Box<LibraryView>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fp_model::Command;
+    use std::path::PathBuf;
+
+    fn state_with(names: &[&str]) -> AppState {
+        let mut s = AppState::new(fp_model::Config::default(), "Main");
+        fp_model::apply(
+            &mut s,
+            Command::AddToLibrary {
+                paths: names
+                    .iter()
+                    .map(|n| PathBuf::from(format!("/lib/{n}.mp3")))
+                    .collect(),
+                category: None,
+            },
+        )
+        .unwrap();
+        s
+    }
+
+    fn id(s: &AppState, name: &str) -> TrackId {
+        s.library
+            .track_at(&PathBuf::from(format!("/lib/{name}.mp3")))
+            .unwrap()
+    }
+
+    #[test]
+    fn a_reveal_waits_for_the_selection_then_selects_the_row_once() {
+        use fp_model::library_view::LibrarySelection;
+        let mut s = state_with(&["a", "b", "c"]);
+        let b = id(&s, "b");
+        let mut ui = LibraryUi {
+            reveal: Some((b, LibrarySelection::Uncategorised)),
+            ..LibraryUi::default()
+        };
+        // The snapshot still shows All tracks.
+        ui.rows(&s);
+        assert_eq!(ui.take_reveal(&s), None, "not yet");
+        assert!(ui.selected.is_empty());
+        s.library_view.selection = LibrarySelection::Uncategorised;
+        ui.rows(&s);
+        let at = ui.take_reveal(&s).expect("listed now");
+        assert_eq!(ui.rows(&s).get(at), Some(&b));
+        assert_eq!(ui.selected, vec![b]);
+        assert_eq!(ui.anchor, Some(b));
+        assert_eq!(ui.take_reveal(&s), None, "only once");
+    }
+
+    #[test]
+    fn a_reveal_lapses_when_the_track_leaves_the_library() {
+        use fp_model::library_view::LibrarySelection;
+        let s = state_with(&["a"]);
+        let gone = TrackId(999_999);
+        let mut ui = LibraryUi {
+            reveal: Some((gone, LibrarySelection::All)),
+            ..LibraryUi::default()
+        };
+        ui.rows(&s);
+        assert_eq!(ui.take_reveal(&s), None);
+        assert!(ui.reveal.is_none());
+    }
 }

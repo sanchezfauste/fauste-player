@@ -248,6 +248,8 @@ cart-kind-spot = Spot
 menu-cart-stop = Stoppen
 menu-cart-edit = Bearbeiten…
 settings-tab-cartwall = Cartwall
+settings-tab-library = Bibliothek
+settings-library-hint = Lege die Kategorien an, die deine Titel gruppieren, benenne sie um, ändere ihre Farbe oder lösche sie. Ziehe eine Kategorie, um sie zu verschieben.
 settings-tab-shortcuts = Tastenkürzel
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Anzeigen
@@ -529,6 +531,7 @@ settings-restore-confirm = Wiederherstellen
 
 menu-edit-tags = Tags bearbeiten…
 menu-loudness = Lautheit…
+menu-show-in-library = In der Bibliothek anzeigen
 menu-edit-tags-file = Die Datei fehlt oder kann nicht gelesen werden
 menu-edit-tags-format = Dieses Format hat keine beschreibbaren Tags
 menu-edit-tags-unread = Die Tags wurden noch nicht gelesen

@@ -8,6 +8,7 @@
 mod category_dialog;
 pub(crate) mod confirm;
 mod menu;
+pub(crate) use menu::move_to_category;
 pub(crate) mod state;
 mod table;
 pub(crate) mod tree;
@@ -18,7 +19,7 @@ use egui::{
 };
 use egui_phosphor::regular as icon;
 use fp_model::library_view::{LibrarySelection, LibraryView};
-use fp_model::{CategoryId, Command};
+use fp_model::{CategoryId, Command, TrackId};
 
 use super::app::{Scene, ViewState};
 use super::panels;
@@ -125,6 +126,43 @@ pub(crate) fn current_view(saved: &LibraryView, library: &LibraryUi) -> LibraryV
         view.tree_width = Some(pending.value);
     }
     view
+}
+
+/// *Show in library* (track library spec §9): opens the window on the
+/// category of `track` (*Uncategorised* when it has none), clears the
+/// search and, once the table lists it, selects its row and scrolls to it.
+pub(crate) fn show_track(scene: &Scene<'_>, view_state: &mut ViewState, track: TrackId) {
+    let state = scene.state;
+    let Some(found) = state.library.get(track) else {
+        return;
+    };
+    let library = &mut view_state.library;
+    let mut view = current_view(&state.library_view, library);
+    let selection = match found.category {
+        Some(id) if state.categories.get(id).is_some() => LibrarySelection::Category(id),
+        _ => LibrarySelection::Uncategorised,
+    };
+    // The category is shown in the tree: its ancestors open.
+    if let LibrarySelection::Category(id) = selection {
+        let mut up = state.categories.get(id).and_then(|c| c.parent);
+        while let Some(parent) = up {
+            if !view.expanded.contains(&parent) {
+                view.expanded.push(parent);
+            }
+            up = state.categories.get(parent).and_then(|c| c.parent);
+        }
+    }
+    library.search.clear();
+    library.reveal = Some((track, selection));
+    send(
+        scene,
+        LibraryView {
+            open: true,
+            minimised: false,
+            selection,
+            ..view
+        },
+    );
 }
 
 /// Opens the window, or closes it (the top bar's Library tile, LB24).

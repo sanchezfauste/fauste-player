@@ -1059,6 +1059,30 @@ fn phone_settings_open_on_the_section_list() {
     assert!(h.query_by_label("Close").is_none(), "Settings closed");
 }
 
+/// PL20: a category dialog opened from Settings → Library closes on Back
+/// before Settings goes back to its list.
+#[test]
+fn back_closes_a_library_dialog_before_the_settings_section() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_by_label("Library").click();
+    h.run_steps(3);
+    h.get_by_label("New category").click();
+    h.run_steps(3);
+    assert!(h.query_all_by_label("Name").next().is_some(), "dialog open");
+    let ctx = h.ctx.clone();
+    assert!(h.state_mut().back(&ctx));
+    h.run_steps(3);
+    assert!(
+        h.query_all_by_label("Name").next().is_none(),
+        "dialog closed"
+    );
+    assert!(
+        h.query_by_label("Back to the sections").is_some(),
+        "still in the section"
+    );
+}
+
 /// PL20: the arrow goes back to the list too.
 #[test]
 fn the_arrow_returns_to_the_section_list() {
