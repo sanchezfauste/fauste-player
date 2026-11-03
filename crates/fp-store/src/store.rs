@@ -319,6 +319,7 @@ fn restore(
         players: sessions,
         cartwall: cartwall_session,
         layout,
+        library_view,
         cart_pages,
     } = snap;
     // RL19: the restore repairs the layout; a copy says what it repaired.
@@ -350,6 +351,7 @@ fn restore(
             cart_pages,
             cartwall_session,
             layout,
+            library_view,
             ids,
         },
         &sessions,

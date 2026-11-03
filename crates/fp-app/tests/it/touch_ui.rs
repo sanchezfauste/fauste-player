@@ -665,6 +665,17 @@ fn disabled(h: &Harness<'static, AppUi>, label: &str) -> bool {
     h.get_by_label(label).accesskit_node().is_disabled()
 }
 
+/// The library window is desktop only: the phone's row menu does not reach it.
+#[test]
+fn the_phones_row_menu_has_no_library_entries() {
+    let (mut h, _fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    row_menu(&mut h, "Song 2");
+    assert!(h.query_by_label("Move up").is_some(), "the menu is open");
+    assert!(h.query_by_label("Show in library").is_none());
+    assert!(h.query_by_label("Move to category").is_none());
+}
+
 /// PL10: Move up and Move down in the row menu.
 #[test]
 fn the_row_menu_moves_an_entry_up_and_down() {
@@ -1057,6 +1068,81 @@ fn phone_settings_open_on_the_section_list() {
     assert!(h.state_mut().back(&ctx));
     h.run_steps(3);
     assert!(h.query_by_label("Close").is_none(), "Settings closed");
+}
+
+/// PL20: a category dialog opened from Settings → Library closes on Back
+/// before Settings goes back to its list.
+#[test]
+fn back_closes_a_library_dialog_before_the_settings_section() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_by_label("Library").click();
+    h.run_steps(3);
+    h.get_by_label("New category").click();
+    h.run_steps(3);
+    assert!(h.query_all_by_label("Name").next().is_some(), "dialog open");
+    let ctx = h.ctx.clone();
+    assert!(h.state_mut().back(&ctx));
+    h.run_steps(3);
+    assert!(
+        h.query_all_by_label("Name").next().is_none(),
+        "dialog closed"
+    );
+    assert!(
+        h.query_by_label("Back to the sections").is_some(),
+        "still in the section"
+    );
+}
+
+/// A finger swipe over the category tree in Settings → Library scrolls; it
+/// never moves a category.
+#[test]
+fn a_touch_drag_over_the_category_tree_moves_no_category() {
+    let mut st = state(2, 3);
+    for name in ["Jingles", "Ads"] {
+        fp_model::apply(
+            &mut st,
+            fp_model::Command::CreateCategory {
+                parent: None,
+                name: name.into(),
+                color: None,
+                kind: fp_model::TrackKind::Music,
+            },
+        )
+        .unwrap();
+    }
+    let (mut h, fake) = harness_sized(st, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    more(&mut h, "Settings");
+    h.get_by_label("Library").click();
+    h.run_steps(3);
+    let from = h.get_by_label("Jingles").rect().center();
+    let to = h.get_by_label("Ads").rect().center();
+    fake.take_sent();
+    drag(&mut h, from, to);
+    h.run_steps(3);
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::MoveCategory { .. })),
+        "a swipe moved a category"
+    );
+}
+
+/// On a touch screen the tree only takes taps: the Settings → Library hint
+/// points to the menu, not to a drag.
+#[test]
+fn the_settings_library_hint_on_touch_points_to_the_menu() {
+    let (mut h, _fake) = touch(2, PORTRAIT);
+    more(&mut h, "Settings");
+    h.get_by_label("Library").click();
+    h.run_steps(3);
+    assert!(h.query_by_label_contains("Drag a category").is_none());
+    assert!(
+        h.query_by_label_contains("Touch and hold a category")
+            .is_some()
+    );
 }
 
 /// PL20: the arrow goes back to the list too.

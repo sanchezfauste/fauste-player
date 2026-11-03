@@ -9,6 +9,7 @@ mod db_fallback;
 mod db_schema;
 mod db_snapshot;
 mod import;
+mod library_view_store;
 mod playlist_io;
 mod session_layout;
 mod store_roundtrip;

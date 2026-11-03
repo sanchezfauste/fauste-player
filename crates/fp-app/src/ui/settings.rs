@@ -15,12 +15,13 @@ use fp_model::{
     SettingsSection,
 };
 
-use super::app::Scene;
+use super::app::{Scene, ViewState};
 
-mod carts;
+pub(crate) mod carts;
 mod columns;
 mod devices;
 mod keys;
+mod library;
 mod loudness;
 mod meters;
 #[cfg(not(target_os = "android"))]
@@ -66,6 +67,7 @@ pub(crate) enum Section {
     Loudness,
     Playlists,
     Cartwall,
+    Library,
     Shortcuts,
     #[cfg(not(target_os = "android"))]
     Midi,
@@ -241,6 +243,7 @@ pub(crate) struct Outcome {
 pub(crate) fn show(
     ctx: &egui::Context,
     scene: &Scene<'_>,
+    view_state: &mut ViewState,
     st: &mut SettingsState,
     deps: &SettingsDeps<'_>,
 ) -> Outcome {
@@ -312,7 +315,7 @@ pub(crate) fn show(
                     Layout::top_down(Align::Min),
                     |ui| {
                         if st.phone_section {
-                            body(ui, ctx, scene, st, deps, body_height);
+                            body(ui, ctx, scene, view_state, st, deps, body_height);
                         } else {
                             phone_sections(ui, scene, st, body_height);
                         }
@@ -327,7 +330,7 @@ pub(crate) fn show(
                         let (line, _) =
                             ui.allocate_exact_size(vec2(1.0, body_height), Sense::hover());
                         ui.painter().rect_filled(line, 0.0, theme::NEUTRAL_800);
-                        body(ui, ctx, scene, st, deps, body_height);
+                        body(ui, ctx, scene, view_state, st, deps, body_height);
                     },
                 );
             }
@@ -424,6 +427,7 @@ fn body(
     ui: &mut Ui,
     ctx: &egui::Context,
     scene: &Scene<'_>,
+    view_state: &mut ViewState,
     st: &mut SettingsState,
     deps: &SettingsDeps<'_>,
     height: f32,
@@ -456,6 +460,7 @@ fn body(
                             Section::Loudness => loudness::section(ui, scene, deps.unmeasured),
                             Section::Playlists => playlists(ui, scene, st),
                             Section::Cartwall => carts::section(ui, scene, st),
+                            Section::Library => library::section(ui, scene, view_state),
                             Section::Shortcuts => keys::section(ui, scene, st),
                             #[cfg(not(target_os = "android"))]
                             Section::Midi => midi::section(ui, scene, st, deps.midi),
@@ -605,6 +610,7 @@ const SECTIONS: &[(Section, &str, &str)] = &[
         icon::SQUARES_FOUR,
         "settings-tab-cartwall",
     ),
+    (Section::Library, icon::BOOKS, "settings-tab-library"),
     (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
     #[cfg(not(target_os = "android"))]
     (Section::Midi, icon::PIANO_KEYS, "settings-tab-midi"),
@@ -623,7 +629,7 @@ fn restorable(section: Section) -> Option<SettingsSection> {
         Section::Analysis => Some(SettingsSection::Analysis),
         Section::Loudness => Some(SettingsSection::Loudness),
         Section::Shortcuts => Some(SettingsSection::Shortcuts),
-        Section::Outputs | Section::Playlists | Section::Cartwall => None,
+        Section::Outputs | Section::Playlists | Section::Cartwall | Section::Library => None,
         #[cfg(not(target_os = "android"))]
         Section::Midi | Section::Remote => None,
     }

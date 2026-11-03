@@ -248,6 +248,9 @@ cart-kind-spot = Spot
 menu-cart-stop = Stop
 menu-cart-edit = Edit…
 settings-tab-cartwall = Cartwall
+settings-tab-library = Library
+settings-library-hint = Create, rename, recolour and delete the categories that group your tracks. Drag a category to move it.
+settings-library-hint-touch = Create, rename, recolour and delete the categories that group your tracks. Touch and hold a category for its menu.
 settings-tab-shortcuts = Keyboard shortcuts
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Show
@@ -529,6 +532,7 @@ settings-restore-confirm = Restore
 
 menu-edit-tags = Edit tags…
 menu-loudness = Loudness…
+menu-show-in-library = Show in library
 menu-edit-tags-file = The file is missing or cannot be read
 menu-edit-tags-format = This format has no writable tags
 menu-edit-tags-unread = The tags have not been read yet
@@ -759,3 +763,88 @@ error-category-name-taken = There is already a category with that name here.
 error-category-too-deep = Categories cannot be nested that deep.
 error-category-into-itself = A category cannot be moved into itself.
 error-library-on-air = Some of these tracks are on air: { $entries } in playlists and { $carts } on the cartwall. Nothing was removed.
+# The library window (track library spec §7.1)
+top-library = Library
+tip-library-open = Open the library
+tip-library-close = Close the library
+library-window-title = Library
+library-window-minimise = Minimize library
+library-window-expand = Expand library
+library-window-maximise = Maximize library
+library-window-restore = Restore library
+library-window-close = Close the library
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categories
+library-tree-new = New category
+library-tree-all = All tracks
+library-tree-uncategorised = Uncategorised
+library-tree-expand = Expand { $name }
+library-tree-collapse = Collapse { $name }
+library-menu-new-subcategory = New subcategory…
+library-menu-rename = Rename…
+library-menu-colour = Colour
+library-menu-kind = Kind
+library-menu-delete = Delete…
+kind-music = Music
+kind-jingle = Jingle
+kind-effect = Effect
+kind-ad = Ad
+kind-voice = Voice
+library-dialog-new-title = New category
+library-dialog-new-sub-title = New subcategory of “{ $parent }”
+library-dialog-rename-title = Rename “{ $name }”
+library-dialog-name = Name
+library-dialog-colour = Colour
+library-dialog-kind = Kind
+library-dialog-kind-hint = The kind is what tracks take when they join the category; changing it later leaves the tracks already in it as they are.
+library-dialog-cancel = Cancel
+library-dialog-create = Create
+library-dialog-rename = Rename
+library-delete-title = Delete “{ $name }”?
+library-delete-subcategories = { $count ->
+    [one] Its { $count } subcategory is deleted with it.
+   *[other] Its { $count } subcategories are deleted with it.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } track is removed from the library.
+   *[other] { $count } tracks are removed from the library.
+}
+library-delete-no-tracks = No track is removed from the library.
+library-delete-files-kept = The files themselves are not deleted.
+library-delete-confirm = Delete
+library-remove-title = { $count ->
+    [one] Remove { $count } track from the library?
+   *[other] Remove { $count } tracks from the library?
+}
+library-remove-confirm = Remove
+library-used-title = These tracks are in use
+library-used-body = { $entries ->
+    [one] { $entries } playlist entry
+   *[other] { $entries } playlist entries
+} and { $carts ->
+    [one] { $carts } cart
+   *[other] { $carts } carts
+} use these tracks. The entries are removed from their playlists and the carts are emptied.
+library-used-confirm = Remove anyway
+# The library's table and search (track library spec §7.4, §7.5)
+library-search-hint = Search
+library-search = Search the library
+library-whole-library = Whole library
+library-add-files = Add files
+library-col-category = Category
+library-col-kind = Kind
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } track selected
+   *[other] { $count } tracks selected
+}
+library-menu-add-to = Add to
+library-menu-add-to-cart = Add to cart
+library-menu-cart = Cart { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } track did not fit: the page has no more empty carts.
+   *[other] { $count } tracks did not fit: the page has no more empty carts.
+}
+library-menu-move-to-category = Move to category
+library-menu-show-file = Show file location
+library-menu-remove = Remove from library…

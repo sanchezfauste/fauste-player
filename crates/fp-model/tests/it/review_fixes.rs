@@ -13,6 +13,7 @@ use fp_model::{
 
 fn parts(state: &AppState) -> RestoreParts {
     RestoreParts {
+        library_view: Default::default(),
         config: state.config.clone(),
         library: state.library.clone(),
         categories: Default::default(),

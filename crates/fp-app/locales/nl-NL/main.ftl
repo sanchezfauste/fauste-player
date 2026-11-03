@@ -248,6 +248,9 @@ cart-kind-spot = Spot
 menu-cart-stop = Stoppen
 menu-cart-edit = Bewerken…
 settings-tab-cartwall = Cartwall
+settings-tab-library = Bibliotheek
+settings-library-hint = Maak de categorieën die je nummers groeperen, hernoem ze, geef ze een andere kleur of verwijder ze. Sleep een categorie om haar te verplaatsen.
+settings-library-hint-touch = Maak de categorieën die je nummers groeperen, hernoem ze, geef ze een andere kleur of verwijder ze. Houd een categorie ingedrukt voor haar menu.
 settings-tab-shortcuts = Sneltoetsen
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Tonen
@@ -529,6 +532,7 @@ settings-restore-confirm = Herstellen
 
 menu-edit-tags = Tags bewerken…
 menu-loudness = Loudness…
+menu-show-in-library = Tonen in bibliotheek
 menu-edit-tags-file = Het bestand ontbreekt of kan niet worden gelezen
 menu-edit-tags-format = Dit formaat heeft geen schrijfbare tags
 menu-edit-tags-unread = De tags zijn nog niet gelezen
@@ -759,3 +763,88 @@ error-category-name-taken = Er bestaat hier al een categorie met die naam.
 error-category-too-deep = Categorieën kunnen niet zo diep worden genest.
 error-category-into-itself = Een categorie kan niet in zichzelf worden verplaatst.
 error-library-on-air = Sommige van deze nummers zijn on air: { $entries } in afspeellijsten en { $carts } op de cartwall. Er is niets verwijderd.
+# The library window (track library spec §7.1)
+top-library = Bibliotheek
+tip-library-open = Bibliotheek openen
+tip-library-close = Bibliotheek sluiten
+library-window-title = Bibliotheek
+library-window-minimise = Bibliotheek minimaliseren
+library-window-expand = Bibliotheek uitklappen
+library-window-maximise = Bibliotheek maximaliseren
+library-window-restore = Bibliotheek herstellen
+library-window-close = Bibliotheek sluiten
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categorieën
+library-tree-new = Nieuwe categorie
+library-tree-all = Alle nummers
+library-tree-uncategorised = Zonder categorie
+library-tree-expand = { $name } uitklappen
+library-tree-collapse = { $name } inklappen
+library-menu-new-subcategory = Nieuwe subcategorie…
+library-menu-rename = Naam wijzigen…
+library-menu-colour = Kleur
+library-menu-kind = Soort
+library-menu-delete = Verwijderen…
+kind-music = Muziek
+kind-jingle = Jingle
+kind-effect = Effect
+kind-ad = Reclame
+kind-voice = Stem
+library-dialog-new-title = Nieuwe categorie
+library-dialog-new-sub-title = Nieuwe subcategorie van ‘{ $parent }’
+library-dialog-rename-title = Naam van ‘{ $name }’ wijzigen
+library-dialog-name = Naam
+library-dialog-colour = Kleur
+library-dialog-kind = Soort
+library-dialog-kind-hint = Nummers krijgen de soort van de categorie wanneer ze erin komen; wijzig je die later, dan blijven de nummers die er al in zitten ongewijzigd.
+library-dialog-cancel = Annuleren
+library-dialog-create = Maken
+library-dialog-rename = Naam wijzigen
+library-delete-title = ‘{ $name }’ verwijderen?
+library-delete-subcategories = { $count ->
+    [one] De { $count } subcategorie wordt mee verwijderd.
+   *[other] De { $count } subcategorieën worden mee verwijderd.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } nummer wordt uit de bibliotheek gehaald.
+   *[other] { $count } nummers worden uit de bibliotheek gehaald.
+}
+library-delete-no-tracks = Er wordt geen nummer uit de bibliotheek gehaald.
+library-delete-files-kept = De bestanden zelf worden niet verwijderd.
+library-delete-confirm = Verwijderen
+library-remove-title = { $count ->
+    [one] { $count } nummer uit de bibliotheek halen?
+   *[other] { $count } nummers uit de bibliotheek halen?
+}
+library-remove-confirm = Uit bibliotheek halen
+library-used-title = Deze nummers zijn in gebruik
+library-used-body = { $entries ->
+    [one] { $entries } item in een afspeellijst
+   *[other] { $entries } items in afspeellijsten
+} en { $carts ->
+    [one] { $carts } cart gebruiken
+   *[other] { $carts } carts gebruiken
+} deze nummers. De items worden uit hun afspeellijsten verwijderd en de carts worden leeggemaakt.
+library-used-confirm = Toch verwijderen
+# De tabel en zoekfunctie van de bibliotheek (track library spec §7.4, §7.5)
+library-search-hint = Zoeken
+library-search = Zoeken in de bibliotheek
+library-whole-library = Hele bibliotheek
+library-add-files = Bestanden toevoegen
+library-col-category = Categorie
+library-col-kind = Soort
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } nummer geselecteerd
+   *[other] { $count } nummers geselecteerd
+}
+library-menu-add-to = Toevoegen aan
+library-menu-add-to-cart = Toevoegen aan cart
+library-menu-cart = Cart { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } nummer paste niet: de pagina heeft geen lege carts meer.
+   *[other] { $count } nummers pasten niet: de pagina heeft geen lege carts meer.
+}
+library-menu-move-to-category = Verplaatsen naar categorie
+library-menu-show-file = Bestandslocatie tonen
+library-menu-remove = Uit de bibliotheek verwijderen…

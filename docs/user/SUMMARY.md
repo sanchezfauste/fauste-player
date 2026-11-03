@@ -6,6 +6,7 @@
 - [Players](players.md)
 - [Playlists](playlists.md)
 - [Cartwall](cartwall.md)
+- [Library](library.md)
 - [Layout](layout.md)
 - [Markers and mixing](markers-and-mixing.md)
 - [Settings](settings.md)

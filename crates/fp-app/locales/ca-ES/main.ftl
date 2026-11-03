@@ -248,6 +248,9 @@ cart-kind-spot = Falca
 menu-cart-stop = Aturar
 menu-cart-edit = Editar…
 settings-tab-cartwall = Cartutxera
+settings-tab-library = Biblioteca
+settings-library-hint = Crea, reanomena, canvia el color i elimina les categories que agrupen les teves pistes. Arrossega una categoria per moure-la.
+settings-library-hint-touch = Crea, reanomena, canvia el color i elimina les categories que agrupen les teves pistes. Mantén premuda una categoria per obrir-ne el menú.
 settings-tab-shortcuts = Dreceres de teclat
 settings-cartwall-outputs = Cartutxera
 settings-outputs-view = Mostrar
@@ -529,6 +532,7 @@ settings-restore-confirm = Restaurar
 
 menu-edit-tags = Editar les etiquetes…
 menu-loudness = Sonoritat…
+menu-show-in-library = Mostra a la biblioteca
 menu-edit-tags-file = El fitxer no existeix o no es pot llegir
 menu-edit-tags-format = Aquest format no admet escriure etiquetes
 menu-edit-tags-unread = Encara no s'han llegit les etiquetes
@@ -759,3 +763,88 @@ error-category-name-taken = Ja existeix una categoria amb aquest nom aquí.
 error-category-too-deep = Les categories no es poden niar tant.
 error-category-into-itself = Una categoria no es pot moure dins d'ella mateixa.
 error-library-on-air = Algunes d'aquestes pistes estan en emissió: { $entries } a llistes i { $carts } al cartwall. No s'ha eliminat res.
+# The library window (track library spec §7.1)
+top-library = Biblioteca
+tip-library-open = Obre la biblioteca
+tip-library-close = Tanca la biblioteca
+library-window-title = Biblioteca
+library-window-minimise = Minimitza la biblioteca
+library-window-expand = Desplega la biblioteca
+library-window-maximise = Maximitza la biblioteca
+library-window-restore = Restaura la biblioteca
+library-window-close = Tanca la biblioteca
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categories
+library-tree-new = Nova categoria
+library-tree-all = Totes les pistes
+library-tree-uncategorised = Sense categoria
+library-tree-expand = Desplega { $name }
+library-tree-collapse = Plega { $name }
+library-menu-new-subcategory = Nova subcategoria…
+library-menu-rename = Canvia el nom…
+library-menu-colour = Color
+library-menu-kind = Tipus
+library-menu-delete = Elimina…
+kind-music = Música
+kind-jingle = Jingle
+kind-effect = Efecte
+kind-ad = Anunci
+kind-voice = Veu
+library-dialog-new-title = Nova categoria
+library-dialog-new-sub-title = Nova subcategoria de «{ $parent }»
+library-dialog-rename-title = Canvia el nom de «{ $name }»
+library-dialog-name = Nom
+library-dialog-colour = Color
+library-dialog-kind = Tipus
+library-dialog-kind-hint = Les pistes prenen el tipus de la categoria quan hi entren; si el canvies després, les pistes que ja hi són no canvien.
+library-dialog-cancel = Cancel·la
+library-dialog-create = Crea
+library-dialog-rename = Canvia el nom
+library-delete-title = Vols eliminar «{ $name }»?
+library-delete-subcategories = { $count ->
+    [one] La seva { $count } subcategoria s'elimina amb ella.
+   *[other] Les seves { $count } subcategories s'eliminen amb ella.
+}
+library-delete-tracks = { $count ->
+    [one] Es treu { $count } pista de la biblioteca.
+   *[other] Es treuen { $count } pistes de la biblioteca.
+}
+library-delete-no-tracks = No es treu cap pista de la biblioteca.
+library-delete-files-kept = Els fitxers no s'esborren.
+library-delete-confirm = Elimina
+library-remove-title = { $count ->
+    [one] Vols treure { $count } pista de la biblioteca?
+   *[other] Vols treure { $count } pistes de la biblioteca?
+}
+library-remove-confirm = Treu
+library-used-title = Aquestes pistes s'estan fent servir
+library-used-body = { $entries ->
+    [one] { $entries } entrada de llista
+   *[other] { $entries } entrades de llistes
+} i { $carts ->
+    [one] { $carts } cart fan servir
+   *[other] { $carts } carts fan servir
+} aquestes pistes. Les entrades es treuen de les llistes i els carts es buiden.
+library-used-confirm = Treu igualment
+# La taula i la cerca de la biblioteca (track library spec §7.4, §7.5)
+library-search-hint = Cerca
+library-search = Cerca a la biblioteca
+library-whole-library = Tota la biblioteca
+library-add-files = Afegeix fitxers
+library-col-category = Categoria
+library-col-kind = Tipus
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } pista seleccionada
+   *[other] { $count } pistes seleccionades
+}
+library-menu-add-to = Afegeix a
+library-menu-add-to-cart = Afegeix a un cartutx
+library-menu-cart = Cartutx { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } pista no hi ha cabut: la pàgina no té més cartutxos buits.
+   *[other] { $count } pistes no hi han cabut: la pàgina no té més cartutxos buits.
+}
+library-menu-move-to-category = Mou a la categoria
+library-menu-show-file = Mostra la ubicació del fitxer
+library-menu-remove = Treu de la biblioteca…

@@ -26,6 +26,10 @@ track you cannot see. Files dropped on the window away from a list go to
 the last player you used, or to the first shown player; with every player
 hidden they are refused, and the status bar says so.
 
+The **Library** tile, after them, opens and closes the [library
+window](library.md), which floats over the panels; it is not a panel, so the
+last-lit-tile rule below does not apply to it. It is not shown on a phone.
+
 At least one panel stays shown: the last lit tile cannot be clicked.
 While the cartwall is hidden, the shortcut that collapses or expands it
 does nothing; click **Cartwall** to show it.

@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use fp_model::{
     AppState, CartPage, CartwallSession, Categories, Category, CategoryId, IdGen, Layout, Library,
-    PlayerId, PlayerSession, Playlist, PlaylistEntry, Playlists, Track,
+    LibraryView, PlayerId, PlayerSession, Playlist, PlaylistEntry, Playlists, Track,
 };
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
@@ -21,6 +21,7 @@ use crate::error::StoreError;
 const KV_IDS: &str = "ids";
 const KV_CARTWALL: &str = "cartwall_session";
 const KV_LAYOUT: &str = "layout";
+const KV_LIBRARY_VIEW: &str = "library_view";
 
 /// Everything the database holds, as plain model values.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -33,6 +34,7 @@ pub struct Snapshot {
     pub players: Vec<PlayerSession>,
     pub cartwall: CartwallSession,
     pub layout: Layout,
+    pub library_view: LibraryView,
     pub cart_pages: Vec<CartPage>,
 }
 
@@ -48,6 +50,7 @@ impl Snapshot {
             players: state.sessions(position_of),
             cartwall: state.cartwall.session(),
             layout: state.layout.clone(),
+            library_view: state.library_view.clone(),
             cart_pages: state.cartwall.pages.clone(),
         }
     }
@@ -111,6 +114,7 @@ pub fn read_checked(db: &Db) -> Read {
         players: read_players(conn, &mut warnings),
         cartwall: read_kv(conn, KV_CARTWALL, "the cartwall session", &mut warnings),
         layout: read_layout(conn, &mut warnings),
+        library_view: read_library_view(conn, &mut warnings),
         cart_pages: read_cart_pages(conn, &mut warnings),
     };
     Read {
@@ -442,6 +446,66 @@ fn read_layout(conn: &Connection, warnings: &mut Notes) -> Layout {
     fp_model::layout::lenient_layout(value).unwrap_or_default()
 }
 
+fn read_library_view(conn: &Connection, warnings: &mut Notes) -> LibraryView {
+    let Some(text) = kv_text(conn, KV_LIBRARY_VIEW, warnings) else {
+        return LibraryView::default();
+    };
+    let value: Value = match serde_json::from_str(&text) {
+        Ok(value) => value,
+        Err(e) => {
+            warnings.push(format!(
+                "session: the saved library window is not valid ({e}); the default is used"
+            ));
+            return LibraryView::default();
+        }
+    };
+    let view = fp_model::lenient_library_view(value.clone()).unwrap_or_default();
+    // A field that fell back on its default (or lost an element) is reported.
+    if let Value::Object(saved) = &value {
+        for (key, v) in saved {
+            if !library_view_field_kept(key, v, &view) {
+                warnings.push(format!(
+                    "session: the saved library window's `{key}` is not valid; its default is used"
+                ));
+            }
+        }
+    } else {
+        warnings
+            .push("session: the saved library window is not valid; the default is used".to_owned());
+    }
+    view
+}
+
+/// Whether the saved `key` was kept as it is in `view`: its value parses
+/// into the field's own type, equals what the lenient load kept, and is
+/// within range. Compared as typed values, never as JSON: an `f32` written
+/// back to JSON widens (268.8 becomes 268.799...), so a text or `Value`
+/// comparison would report every fractional size.
+fn library_view_field_kept(key: &str, saved: &Value, view: &LibraryView) -> bool {
+    use fp_model::library_view::{good_rect, good_size};
+    match key {
+        "open" => parses_to(saved, &view.open),
+        "rect" => parses_to(saved, &view.rect) && view.rect.is_none_or(good_rect),
+        "minimised" => parses_to(saved, &view.minimised),
+        "maximised" => parses_to(saved, &view.maximised),
+        "selection" => parses_to(saved, &view.selection),
+        "expanded" => parses_to(saved, &view.expanded),
+        "whole_library" => parses_to(saved, &view.whole_library),
+        "columns" => {
+            parses_to(saved, &view.columns) && view.columns.iter().all(|c| good_size(c.width))
+        }
+        "sort" => parses_to(saved, &view.sort),
+        "tree_width" => parses_to(saved, &view.tree_width) && view.tree_width.is_none_or(good_size),
+        // A key the view does not have is not kept.
+        _ => false,
+    }
+}
+
+/// Whether `saved` parses strictly into `T` and equals `kept`.
+fn parses_to<T: DeserializeOwned + PartialEq>(saved: &Value, kept: &T) -> bool {
+    T::deserialize(saved).is_ok_and(|v| v == *kept)
+}
+
 fn read_players(conn: &Connection, warnings: &mut Notes) -> Vec<PlayerSession> {
     let rows = rows(
         conn,
@@ -593,6 +657,7 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
     write_kv(&tx, KV_IDS, &snap.ids)?;
     write_kv(&tx, KV_CARTWALL, &snap.cartwall)?;
     write_kv(&tx, KV_LAYOUT, &snap.layout)?;
+    write_kv(&tx, KV_LIBRARY_VIEW, &snap.library_view)?;
     tx.commit().map_err(db_error)
 }
 
@@ -687,6 +752,9 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
     }
     if old.cartwall != new.cartwall {
         write_kv(&tx, KV_CARTWALL, &new.cartwall)?;
+    }
+    if old.library_view != new.library_view {
+        write_kv(&tx, KV_LIBRARY_VIEW, &new.library_view)?;
     }
     if old.layout != new.layout {
         write_kv(&tx, KV_LAYOUT, &new.layout)?;

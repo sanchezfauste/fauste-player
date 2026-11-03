@@ -104,6 +104,8 @@ pub struct RestoreParts {
     /// The saved layout (resizable layout spec RL19); `restore` repairs it
     /// for the players it builds.
     pub layout: Layout,
+    /// The saved library window state; `restore` repairs it for the categories.
+    pub library_view: crate::library_view::LibraryView,
     pub ids: IdGen,
 }
 
@@ -147,6 +149,7 @@ impl AppState {
             cart_pages,
             cartwall_session,
             layout,
+            library_view,
             mut ids,
         } = parts;
         ids.observe(library.max_raw_id());
@@ -189,6 +192,7 @@ impl AppState {
             live: crate::live::LiveSettings::default(),
             cue_on_air: crate::cue_on_air::CueOnAir::default(),
             layout: Layout::default(),
+            library_view: crate::library_view::LibraryView::default(),
         };
         // One track per file (LB14): a library saved before that rule, or
         // by a buggy build, may hold several. Unreferenced tracks stay (LB15).
@@ -204,6 +208,7 @@ impl AppState {
         // RL19: the saved layout, repaired for the players this start has
         // (`fp-store` reports the repairs).
         state.layout = layout;
+        state.library_view = library_view.repaired(&state.categories);
         let players = state.player_ids();
         let _ = crate::layout::settle_layout(&mut state.layout, &players);
         // N13: the gain of each source loaded paused, computed now from the

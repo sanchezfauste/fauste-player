@@ -35,13 +35,17 @@ impl<T> Lenient<T> {
 }
 
 /// RL19: a part that does not parse loads as its default.
-fn lenient<'de, D: Deserializer<'de>, T: Deserialize<'de> + Default>(d: D) -> Result<T, D::Error> {
+pub(crate) fn lenient<'de, D: Deserializer<'de>, T: Deserialize<'de> + Default>(
+    d: D,
+) -> Result<T, D::Error> {
     Ok(Lenient::<T>::deserialize(d)?.ok().unwrap_or_default())
 }
 
 /// RL19: a list keeps every element that parses; a value that is not a
 /// list is empty.
-fn lenient_items<'de, D: Deserializer<'de>, T: Deserialize<'de>>(d: D) -> Result<Vec<T>, D::Error> {
+pub(crate) fn lenient_items<'de, D: Deserializer<'de>, T: Deserialize<'de>>(
+    d: D,
+) -> Result<Vec<T>, D::Error> {
     let items = Lenient::<Vec<Lenient<T>>>::deserialize(d)?
         .ok()
         .unwrap_or_default();

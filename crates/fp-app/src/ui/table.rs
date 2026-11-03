@@ -6,11 +6,14 @@ use egui_extras::{Column, TableBuilder};
 use egui_phosphor::regular as icon;
 use fp_model::{ColumnWidths, Command, EntryId, PlayerId, PlaylistId, TableColumn, Transport};
 
-use super::app::{DragColumn, DragEntry, DropTarget, FollowScroll, Scene, ViewState};
+use super::app::{
+    DragColumn, DragEntry, DragTracks, DropTarget, FollowScroll, PickTarget, Scene, ViewState,
+};
 use super::format;
 use super::glyphs::{self, TransportAction};
 use super::table_layout;
 use super::theme;
+use super::track_cells;
 use super::view::{self, RowStatus};
 use super::widgets::{self, font, font_medium};
 
@@ -76,7 +79,7 @@ impl TableScroll {
 fn drag_scroll_offset(ui: &mut Ui, last: Option<TableScroll>, files_pointed: bool) -> Option<f32> {
     let ctx = ui.ctx().clone();
     let last = last?.current(ctx.cumulative_pass_nr())?;
-    let entry_drag = egui::DragAndDrop::has_payload_of_type::<DragEntry>(&ctx);
+    let entry_drag = rows_dragged(&ctx);
     let file_drag = files_pointed && ui.input(|i| !i.raw.hovered_files.is_empty());
     if !entry_drag && !file_drag {
         return None;
@@ -151,24 +154,6 @@ pub(crate) struct LiveResize {
     /// Set on release: the stored widths at that moment, and until when the
     /// released widths are still drawn.
     released: Option<(ColumnWidths, f64)>,
-}
-
-fn header_label(ui: &mut Ui, text: &str, right: bool) {
-    let label = egui::Label::new(
-        RichText::new(text.to_uppercase())
-            .font(font(10.0))
-            .color(theme::NEUTRAL_500),
-    )
-    .selectable(false);
-    if right {
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.add_space(8.0);
-            ui.add(label);
-        });
-    } else {
-        ui.add_space(8.0);
-        ui.add(label.truncate());
-    }
 }
 
 /// The widths to draw: the model's, or the ones of a column edge being
@@ -268,7 +253,6 @@ pub(crate) fn track_table(
     };
     let t = scene.i18n;
     let digits = format::number_width(list.entries.len());
-    let use_markers = scene.state.config.players.use_cue_markers;
     // O24: one list of columns for every table.
     let columns = fp_model::normalize_columns(&scene.state.config.ui.table_columns);
     let mins: Vec<f32> = columns
@@ -314,6 +298,7 @@ pub(crate) fn track_table(
     let mut edit_tags: Option<fp_model::TrackId> = None;
     // N20: the track whose Loudness… popup the operator asked for.
     let mut loudness: Option<fp_model::TrackId> = None;
+    let mut show: Option<fp_model::TrackId> = None;
     let mut dragged: Option<EntryId> = None;
     let drag_offset = drag_scroll_offset(
         ui,
@@ -381,8 +366,8 @@ pub(crate) fn track_table(
                     if phone && index + 1 == columns.len() {
                         ui.set_max_width((ui.max_rect().width() - HANDLE_WIDTH).max(0.0));
                     }
-                    let right = matches!(column, TableColumn::Duration | TableColumn::Intro);
-                    header_label(ui, &t.tr(&format!("col-{}", column.name())), right);
+                    let right = track_cells::right_aligned(*column);
+                    track_cells::header_label(ui, &t.tr(&format!("col-{}", column.name())), right);
                 });
                 if response.drag_started() {
                     response.dnd_set_drag_payload(DragColumn { index });
@@ -447,17 +432,9 @@ pub(crate) fn track_table(
                 let line = |ui: &mut Ui, index: usize| {
                     let r = ui.max_rect();
                     let full = Rect::from_min_max(r.min, pos2(r.max.x, r.min.y + ROW_HEIGHT));
-                    ui.painter().rect_filled(full, 0.0, bg);
-                    ui.painter().rect_filled(
-                        Rect::from_min_size(
-                            pos2(full.left(), full.bottom() - 1.0),
-                            vec2(full.width(), 1.0),
-                        ),
-                        0.0,
-                        theme::TEXT.gamma_multiply(0.06),
-                    );
+                    track_cells::row_background(ui, full, bg);
                     if is_selected {
-                        selection_outline(ui, full, index == 0, index == last_column);
+                        track_cells::selection_outline(ui, full, index == 0, index == last_column);
                     }
                 };
                 for (index, column) in columns.iter().enumerate() {
@@ -546,126 +523,35 @@ pub(crate) fn track_table(
                                 }
                             }
                             TableColumn::Title => {
-                                ui.add_space(8.0);
-                                // The entry's repeat and stop icons sit before the title,
-                                // in the row's text colour (feedback 2 spec O9); the
-                                // "analysed by an earlier version" flag stays at the right.
-                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    ui.spacing_mut().item_spacing.x = 4.0;
-                                    ui.add_space(4.0);
-                                    // Shown tracks are brought up to date anyway, so
-                                    // the flag only stays on the ones waiting.
-                                    if crate::services::outdated(track) {
-                                        flag(ui, &t.tr("flag-outdated"), |p, r| {
-                                            let c = theme::NEUTRAL_500;
-                                            widgets::glyph(
-                                                p,
-                                                r,
-                                                icon::ARROWS_CLOCKWISE,
-                                                13.0,
-                                                c,
-                                                false,
-                                            );
+                                track_cells::title_cell(ui, scene, track, &row_font, text, |ui| {
+                                    if entry.repeat {
+                                        track_cells::flag(ui, &t.tr("flag-repeat"), |p, r| {
+                                            widgets::glyph(p, r, icon::REPEAT, 13.0, text, false);
                                         });
                                     }
-                                    // Main spec §6.1: running, queued, or not
-                                    // analysed yet and not queued.
-                                    if let Some((glyph, key)) =
-                                        view::analysis_flag(track, scene.analysis)
-                                    {
-                                        flag(ui, &t.tr(key), |p, r| {
-                                            widgets::glyph(
-                                                p,
-                                                r,
-                                                glyph,
-                                                13.0,
-                                                theme::NEUTRAL_400,
-                                                false,
-                                            );
+                                    if entry.stop_after {
+                                        track_cells::flag(ui, &t.tr("flag-stop-after"), |p, r| {
+                                            // Drawn into the flag's own 16x12 box, as before
+                                            // (paint would centre the grid's 18x13 size instead).
+                                            if let Some(d) =
+                                                glyphs::drawn(TransportAction::StopAfter)
+                                            {
+                                                p.extend((d.draw)(r, text));
+                                            }
                                         });
                                     }
-                                    ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                                        ui.spacing_mut().item_spacing.x = 4.0;
-                                        if entry.repeat {
-                                            flag(ui, &t.tr("flag-repeat"), |p, r| {
-                                                widgets::glyph(
-                                                    p,
-                                                    r,
-                                                    icon::REPEAT,
-                                                    13.0,
-                                                    text,
-                                                    false,
-                                                );
-                                            });
-                                        }
-                                        if entry.stop_after {
-                                            flag(ui, &t.tr("flag-stop-after"), |p, r| {
-                                                // Drawn into the flag's own 16x12 box, as before (paint would
-                                                // centre the grid's 18x13 size instead).
-                                                if let Some(d) =
-                                                    glyphs::drawn(TransportAction::StopAfter)
-                                                {
-                                                    p.extend((d.draw)(r, text));
-                                                }
-                                            });
-                                        }
-                                        ui.add(
-                                            egui::Label::new(
-                                                RichText::new(&track.title)
-                                                    .font(row_font.clone())
-                                                    .color(text),
-                                            )
-                                            .selectable(false)
-                                            .truncate(),
-                                        );
-                                    });
                                 });
                             }
-                            TableColumn::Artist => {
-                                ui.add_space(8.0);
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(if track.artist.is_empty() {
-                                            t.tr("unknown-artist")
-                                        } else {
-                                            track.artist.clone()
-                                        })
-                                        .font(font(12.0))
-                                        .color(artist_color),
-                                    )
-                                    .selectable(false)
-                                    .truncate(),
-                                );
-                            }
-                            TableColumn::Duration | TableColumn::Intro => {
-                                // Times sit at the right, like the duration.
-                                let d = view::cell_text(track, *column, use_markers);
-                                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                                    ui.add_space(10.0);
-                                    ui.add(
-                                        egui::Label::new(
-                                            RichText::new(d).font(font(12.0)).color(text),
-                                        )
-                                        .selectable(false),
-                                    );
-                                });
-                            }
-                            TableColumn::Album
-                            | TableColumn::Date
-                            | TableColumn::Genre
-                            | TableColumn::FileName
-                            | TableColumn::Comment => {
-                                ui.add_space(8.0);
-                                ui.add(
-                                    egui::Label::new(
-                                        RichText::new(view::cell_text(track, *column, use_markers))
-                                            .font(font(12.0))
-                                            .color(artist_color),
-                                    )
-                                    .selectable(false)
-                                    .truncate(),
-                                );
-                            }
+                            other => track_cells::tag_cell(
+                                ui,
+                                scene,
+                                track,
+                                *other,
+                                track_cells::RowColours {
+                                    text,
+                                    secondary: artist_color,
+                                },
+                            ),
                         }
                     });
                 }
@@ -698,6 +584,7 @@ pub(crate) fn track_table(
                     match context_menu(ui, scene, player, playlist, entry.id, i, track, phone) {
                         Some(RowMenuOutcome::EditTags(id)) => edit_tags = Some(id),
                         Some(RowMenuOutcome::Loudness(id)) => loudness = Some(id),
+                        Some(RowMenuOutcome::ShowInLibrary(id)) => show = Some(id),
                         None => {}
                     }
                 });
@@ -717,6 +604,9 @@ pub(crate) fn track_table(
     }
     if let Some(id) = loudness {
         view_state.loudness_popup = Some((id, Some(fp_model::Holder::PlayerMain(player))));
+    }
+    if let Some(id) = show {
+        super::library::show_track(scene, view_state, id);
     }
     // Q4: the drop target comes from the pointer and the body's geometry,
     // never from the widget under it, and belongs to this table alone: it is
@@ -749,7 +639,7 @@ pub(crate) fn track_table(
         .filter(on_table_layer)
         .filter(|p| !table_layout::on_column_edge(&px, area.left(), grab, p.x))
         .and_then(|p| table_layout::drop_index(body_rect, drawn_y, ROW_HEIGHT, entries.len(), p));
-    if egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx()) {
+    if rows_dragged(ui.ctx()) {
         match target {
             Some(index) => {
                 view_state.drop = Some(DropTarget {
@@ -785,13 +675,21 @@ pub(crate) fn track_table(
         }
         if ui.input(|i| i.pointer.any_released())
             && let Some(index) = target
-            && let Some(payload) = egui::DragAndDrop::payload::<DragEntry>(ui.ctx())
         {
-            scene.ctl.send(Command::MoveEntry {
-                entry: payload.entry,
-                to: playlist,
-                index,
-            });
+            if let Some(payload) = egui::DragAndDrop::payload::<DragEntry>(ui.ctx()) {
+                scene.ctl.send(Command::MoveEntry {
+                    entry: payload.entry,
+                    to: playlist,
+                    index,
+                });
+            } else if let Some(payload) = egui::DragAndDrop::payload::<DragTracks>(ui.ctx()) {
+                // Library rows (track library spec §7.4): new entries.
+                scene.ctl.send(Command::InsertTracks {
+                    playlist,
+                    index,
+                    tracks: payload.tracks.clone(),
+                });
+            }
             view_state.drop = None;
         }
     }
@@ -829,7 +727,7 @@ pub(crate) fn track_table(
     // The operator is using the table: scrolling it (wheel or scroll bar),
     // pressing in it, dragging an entry (for as long as the drag lasts), or
     // with a row menu open. Following waits (feedback spec F18).
-    let entry_drag = egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx());
+    let entry_drag = rows_dragged(ui.ctx());
     if wheel_over_table || pressed_in_table || menu_open || dragged.is_some() || entry_drag {
         view_state.table_touched.insert(player, scene.time);
     }
@@ -906,9 +804,11 @@ fn header_menu(ui: &mut Ui, scene: &Scene<'_>, columns: &[TableColumn]) {
 }
 
 /// What a row's context menu asks the table to open.
-enum RowMenuOutcome {
+pub(crate) enum RowMenuOutcome {
     EditTags(fp_model::TrackId),
     Loudness(fp_model::TrackId),
+    /// Show in library: the library window opens on the track.
+    ShowInLibrary(fp_model::TrackId),
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -1029,9 +929,24 @@ fn context_menu(
         outcome = Some(RowMenuOutcome::Loudness(track.id));
         ui.close();
     }
+    // The library (track library spec §9): not on the phone, which has no
+    // library window.
+    if !phone {
+        let known = scene.state.library.get(track.id).is_some();
+        if labelled(ui, icon::BOOKS, "menu-show-in-library", known).clicked() {
+            outcome = Some(RowMenuOutcome::ShowInLibrary(track.id));
+            ui.close();
+        }
+        if known {
+            super::library::move_to_category(ui, scene, &[track.id]);
+        }
+    }
     ui.separator();
     if labelled(ui, icon::PLUS, "menu-add-below", true).clicked() {
-        scene.pick_files(playlist, index + 1);
+        scene.pick_files(PickTarget::Playlist {
+            playlist,
+            index: index + 1,
+        });
         ui.close();
     }
     if labelled(ui, icon::COPY, "menu-duplicate", true).clicked() {
@@ -1178,6 +1093,13 @@ fn phone_moves(
     });
 }
 
+/// Whether rows a table accepts are being dragged: a playlist entry, or
+/// library rows (track library spec §7.4).
+pub(crate) fn rows_dragged(ctx: &egui::Context) -> bool {
+    egui::DragAndDrop::has_payload_of_type::<DragEntry>(ctx)
+        || egui::DragAndDrop::has_payload_of_type::<DragTracks>(ctx)
+}
+
 /// Where a drag would drop. A finger lifted from a touch screen ends its
 /// touch in the frame it is released (egui-winit sends `PointerGone` with
 /// it), which clears the hover position; the interaction position outlives
@@ -1209,17 +1131,6 @@ fn drag_handle(ui: &mut Ui, label: &str, id: egui::Id) -> egui::Response {
     }
     ui.set_max_width((cell.width() - HANDLE_WIDTH).max(0.0));
     response
-}
-
-/// A small flag icon with `label` as its accessible name and tooltip.
-fn flag(ui: &mut Ui, label: &str, paint: impl FnOnce(&egui::Painter, Rect)) {
-    let (rect, response) = ui.allocate_exact_size(vec2(16.0, 12.0), Sense::hover());
-    let owned = label.to_owned();
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, owned.clone()));
-    if ui.is_rect_visible(rect) {
-        paint(ui.painter(), rect);
-    }
-    response.on_hover_text(label);
 }
 
 /// The row tooltip: the reason the file cannot be played, when there is one,
@@ -1318,43 +1229,6 @@ fn track_tip(
             on_air.as_ref(),
         ),
     );
-}
-
-/// Width of the selected row's outline.
-const SELECTION_OUTLINE_WIDTH: f32 = 2.0;
-
-/// The selected row's outline, on the part of the row that `cell` covers:
-/// its top and bottom edges, and the left or right edge when the cell is the
-/// row's first or last. Drawn on any row colour, so a selected on-air or
-/// next row still shows it is selected.
-fn selection_outline(ui: &Ui, cell: Rect, first: bool, last: bool) {
-    let w = SELECTION_OUTLINE_WIDTH;
-    let painter = ui.painter();
-    let colour = theme::SELECTION_OUTLINE;
-    painter.rect_filled(
-        Rect::from_min_size(cell.min, vec2(cell.width(), w)),
-        0.0,
-        colour,
-    );
-    painter.rect_filled(
-        Rect::from_min_size(pos2(cell.left(), cell.bottom() - w), vec2(cell.width(), w)),
-        0.0,
-        colour,
-    );
-    if first {
-        painter.rect_filled(
-            Rect::from_min_size(cell.min, vec2(w, cell.height())),
-            0.0,
-            colour,
-        );
-    }
-    if last {
-        painter.rect_filled(
-            Rect::from_min_size(pos2(cell.right() - w, cell.top()), vec2(w, cell.height())),
-            0.0,
-            colour,
-        );
-    }
 }
 
 #[cfg(test)]

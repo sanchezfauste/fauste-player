@@ -13,7 +13,8 @@ use fp_backends::AudioBackend;
 use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
 use fp_model::{
-    AppState, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId, ShortcutAction, TrackId,
+    AppState, CategoryId, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId,
+    ShortcutAction, TrackId,
 };
 
 use super::about::{self, Opener};
@@ -58,6 +59,14 @@ pub(crate) struct DragEntry {
     pub entry: EntryId,
 }
 
+/// The payload of library rows being dragged (track library spec §7.4):
+/// the selected tracks, in the table's order. A playlist inserts them, a
+/// cart takes the first.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct DragTracks {
+    pub tracks: Vec<TrackId>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct DropTarget {
     /// The player whose table shows the target: only that table draws the
@@ -67,10 +76,19 @@ pub(crate) struct DropTarget {
     pub index: usize,
 }
 
-/// Files chosen in a file dialog, to insert at `index` of `playlist`.
+/// Where files chosen in a file dialog or dropped on the window go.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum PickTarget {
+    /// Inserted at `index` of `playlist`.
+    Playlist { playlist: PlaylistId, index: usize },
+    /// Added to the library, under a category (`None`: uncategorised).
+    Library(Option<CategoryId>),
+}
+
+/// Files chosen in a file dialog or dropped on the window, read on a
+/// helper thread (folders become the audio files in them).
 pub(crate) struct Picked {
-    playlist: PlaylistId,
-    index: usize,
+    target: PickTarget,
     paths: Vec<PathBuf>,
 }
 
@@ -109,6 +127,11 @@ pub(crate) struct ViewState {
     /// Where this frame draws the interface (a phone: less its system
     /// bars); `None` before the first frame.
     pub area: Option<Rect>,
+    /// The area between the top bar and the status bar in this frame;
+    /// `None` before the first frame.
+    pub middle: Option<Rect>,
+    /// The library window's runtime state (track library spec §7).
+    pub(crate) library: super::library::state::LibraryUi,
     /// Touch mode: rows and column headers do not drag (a finger drag
     /// scrolls).
     pub touch: bool,
@@ -213,6 +236,14 @@ pub(crate) struct ViewState {
     notice: Option<(String, f64)>,
     /// Dropouts the engine counted, as the status bar alerts show them.
     dropouts: Dropouts,
+}
+
+impl ViewState {
+    /// Shows `text` in the status bar for a few seconds from `time`, as a
+    /// rejected command's error is shown.
+    pub(crate) fn set_notice(&mut self, text: String, time: f64) {
+        self.notice = Some((text, time + NOTICE_SECS));
+    }
 }
 
 /// Where a dropout was counted.
@@ -358,7 +389,7 @@ impl Scene<'_> {
     }
 
     /// Opens the native file dialog without blocking the interface.
-    pub fn pick_files(&self, playlist: PlaylistId, index: usize) {
+    pub(crate) fn pick_files(&self, target: PickTarget) {
         let tx = self.picks.clone();
         let ctx = self.ctx.clone();
         let filter = self.i18n.tr("dialog-audio-files");
@@ -369,11 +400,7 @@ impl Scene<'_> {
             .spawn(move || {
                 let picked = platform.pick_audio_files(&filter, dir);
                 let paths = audio_paths(&picked);
-                let _ = tx.send(Picked {
-                    playlist,
-                    index,
-                    paths,
-                });
+                let _ = tx.send(Picked { target, paths });
                 ctx.request_repaint();
             });
         if let Err(e) = spawned {
@@ -614,6 +641,7 @@ impl AppUi {
             && !self.view.confirm_apply_now
             && !self.view.pending_open
             && self.settings.confirm_restore.is_none()
+            && self.view.library.dialog.is_none()
             && self.settings.phone_back()
         {
             return true;
@@ -622,6 +650,7 @@ impl AppUi {
         if v.exit_guard.take().is_some()
             || v.tag_editor.take().is_some()
             || v.confirm_reset.take().is_some()
+            || v.library.dialog.take().is_some()
             || v.loudness_popup.take().is_some()
         {
             return true;
@@ -743,6 +772,12 @@ impl AppUi {
         self.view.cartwall_rect
     }
 
+    /// The library window's rectangle in the last frame; `None` while it
+    /// is closed (track library spec §7.1).
+    pub fn library_rect(&self) -> Option<Rect> {
+        self.view.library.drawn
+    }
+
     /// The panel maximised for the moment (resizable layout spec RL16).
     pub fn maximised(&self) -> Option<fp_model::layout::Panel> {
         self.view.maximised.as_ref().map(|m| m.panel)
@@ -843,14 +878,18 @@ impl AppUi {
             let text = self.file_outcome(outcome);
             self.view.notice = Some((text, time + NOTICE_SECS));
         }
-        while let Ok(picked) = self.picks_rx.try_recv() {
-            if !picked.paths.is_empty() {
-                self.ctl.send(Command::InsertPaths {
-                    playlist: picked.playlist,
-                    index: picked.index,
-                    paths: picked.paths,
-                });
+        while let Ok(Picked { target, paths }) = self.picks_rx.try_recv() {
+            if paths.is_empty() {
+                continue;
             }
+            self.ctl.send(match target {
+                PickTarget::Playlist { playlist, index } => Command::InsertPaths {
+                    playlist,
+                    index,
+                    paths,
+                },
+                PickTarget::Library(category) => Command::AddToLibrary { paths, category },
+            });
         }
         self.tag_outcomes(&state, time);
         self.cover_picks(&ctx, &state);
@@ -912,6 +951,7 @@ impl AppUi {
             egui::pos2(full.left(), top.bottom()),
             egui::pos2(full.right(), status.top()),
         );
+        self.view.middle = Some(middle);
         let mut top_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(top)
@@ -1008,7 +1048,9 @@ impl AppUi {
             status_bar(&mut status_ui, &scene, &self.view, faults);
         }
         ui.allocate_rect(full, Sense::hover());
-        // The CUE windows float over the screen; the dialogs below stay on top.
+        // The library window and the CUE windows float over the screen; the
+        // dialogs below stay on top.
+        super::library::draw(&ctx, &scene, &mut self.view);
         cue_window::show_all(&ctx, &scene, &mut self.view);
         super::loudness_edit::popup(&ctx, &scene, &mut self.view);
         // Once, at start-up: tracks an earlier version analysed wait for
@@ -1060,7 +1102,7 @@ impl AppUi {
                 outdated: self.outdated.get(&state),
                 unmeasured: self.unmeasured.get(&state),
             };
-            let outcome = settings::show(&ctx, &scene, &mut self.settings, &deps);
+            let outcome = settings::show(&ctx, &scene, &mut self.view, &mut self.settings, &deps);
             self.view.settings_open = outcome.open;
             self.view.apply_now_requested |= outcome.apply_now;
         } else if !picking {
@@ -1165,6 +1207,9 @@ impl AppUi {
                 }
             }
         }
+        // The library's category dialogs and removal questions (track
+        // library spec §7.3), from its window or from Settings.
+        super::library::dialogs(&ctx, &scene, &mut self.view);
         // O22: Reset played asks before it clears the marks of a playlist.
         if let Some(playlist) = self.view.confirm_reset {
             if state.playlists.get(playlist).is_none() {
@@ -1529,6 +1574,15 @@ impl AppUi {
             }
             return;
         }
+        // A library dialog or question owns the keyboard: Esc cancels it
+        // (consumed, so nothing under it closes on the same press) and no
+        // shortcut acts.
+        if self.view.library.dialog.is_some() {
+            if ctx.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Escape)) {
+                self.view.library.dialog = None;
+            }
+            return;
+        }
         if ctx.text_edit_focused() {
             return;
         }
@@ -1746,6 +1800,25 @@ impl AppUi {
         if dropped.is_empty() {
             return;
         }
+        // Over the library window: the files join the selected category
+        // (track library spec §7.4). A window or a dialog over it hides
+        // it: there the files go nowhere (as over a covered table, Q4.6).
+        let pointer = ctx.input(|i| i.pointer.hover_pos().or_else(|| i.pointer.interact_pos()));
+        match (
+            self.view.library.drawn,
+            self.view.library.drawn_layer,
+            pointer,
+        ) {
+            (Some(window), Some(layer), Some(p)) if window.contains(p) => {
+                if ctx.layer_id_at(p) == Some(layer) {
+                    let target =
+                        PickTarget::Library(super::library::added_category(&state.library_view));
+                    self.read_dropped(ctx, target, dropped);
+                }
+                return;
+            }
+            _ => {}
+        }
         // Over a table but not on a target: nothing is inserted (Q4.6).
         if self.view.file_drop.is_none() && self.view.file_drop_refused {
             return;
@@ -1777,16 +1850,24 @@ impl AppUi {
             }
             return;
         };
-        // Reading folders can be slow (network shares, sleeping disks): it
-        // happens on a helper thread and the result comes back as a pick.
+        let target = PickTarget::Playlist {
+            playlist: target.playlist,
+            index: target.index,
+        };
+        self.read_dropped(ctx, target, dropped);
+    }
+
+    /// Reads dropped files and folders for `target`. Reading folders can be
+    /// slow (network shares, sleeping disks): it happens on a helper thread
+    /// and the result comes back as a pick.
+    fn read_dropped(&self, ctx: &egui::Context, target: PickTarget, dropped: Vec<PathBuf>) {
         let tx = self.picks_tx.clone();
         let ctx = ctx.clone();
         let spawned = std::thread::Builder::new()
             .name("fp-drop-scan".to_owned())
             .spawn(move || {
                 let _ = tx.send(Picked {
-                    playlist: target.playlist,
-                    index: target.index,
+                    target,
                     paths: audio_paths(&dropped),
                 });
                 ctx.request_repaint();
@@ -2018,7 +2099,7 @@ fn top_bar(
     }
     // RL15: the panel tiles and the layout menu, on the left, 12 points
     // clear of the right-hand block.
-    panels::layout_controls(ui, scene, right_edge - 12.0);
+    panels::layout_controls(ui, scene, &view_state.library, right_edge - 12.0);
 }
 
 /// The top bar's right-hand block, laid out from the right end: the clock,

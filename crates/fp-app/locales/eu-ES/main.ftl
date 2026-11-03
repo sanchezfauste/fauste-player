@@ -248,6 +248,9 @@ cart-kind-spot = Iragarkia
 menu-cart-stop = Gelditu
 menu-cart-edit = Editatu…
 settings-tab-cartwall = Kartutxoak
+settings-tab-library = Liburutegia
+settings-library-hint = Sortu, berrizendatu, aldatu kolorea eta ezabatu zure pistak taldekatzen dituzten kategoriak. Arrastatu kategoria bat mugitzeko.
+settings-library-hint-touch = Sortu, berrizendatu, aldatu kolorea eta ezabatu zure pistak taldekatzen dituzten kategoriak. Eutsi sakatuta kategoria bat bere menua irekitzeko.
 settings-tab-shortcuts = Laster-teklak
 settings-cartwall-outputs = Kartutxo-panela
 settings-outputs-view = Erakutsi
@@ -529,6 +532,7 @@ settings-restore-confirm = Leheneratu
 
 menu-edit-tags = Editatu etiketak…
 menu-loudness = Ozentasuna…
+menu-show-in-library = Erakutsi liburutegian
 menu-edit-tags-file = Fitxategia falta da edo ezin da irakurri
 menu-edit-tags-format = Formatu honek ez du etiketak idazteko aukerarik
 menu-edit-tags-unread = Etiketak ez dira oraindik irakurri
@@ -759,3 +763,88 @@ error-category-name-taken = Hemen badago izen hori duen kategoria bat.
 error-category-too-deep = Kategoriak ezin dira hainbeste habiatu.
 error-category-into-itself = Kategoria bat ezin da bere baitara eraman.
 error-library-on-air = Pista hauetako batzuk airean daude: { $entries } zerrendetan eta { $carts } cartwall-ean. Ez da ezer kendu.
+# The library window (track library spec §7.1)
+top-library = Liburutegia
+tip-library-open = Ireki liburutegia
+tip-library-close = Itxi liburutegia
+library-window-title = Liburutegia
+library-window-minimise = Minimizatu liburutegia
+library-window-expand = Zabaldu liburutegia
+library-window-maximise = Maximizatu liburutegia
+library-window-restore = Leheneratu liburutegia
+library-window-close = Itxi liburutegia
+# The library's category tree (track library spec §7.3)
+library-tree-title = Kategoriak
+library-tree-new = Kategoria berria
+library-tree-all = Pista guztiak
+library-tree-uncategorised = Kategoriarik gabe
+library-tree-expand = Zabaldu { $name }
+library-tree-collapse = Tolestu { $name }
+library-menu-new-subcategory = Azpikategoria berria…
+library-menu-rename = Aldatu izena…
+library-menu-colour = Kolorea
+library-menu-kind = Mota
+library-menu-delete = Ezabatu…
+kind-music = Musika
+kind-jingle = Jingle
+kind-effect = Efektua
+kind-ad = Iragarkia
+kind-voice = Ahotsa
+library-dialog-new-title = Kategoria berria
+library-dialog-new-sub-title = «{ $parent }» kategoriaren azpikategoria berria
+library-dialog-rename-title = Aldatu «{ $name }» kategoriaren izena
+library-dialog-name = Izena
+library-dialog-colour = Kolorea
+library-dialog-kind = Mota
+library-dialog-kind-hint = Pistek kategoriaren mota hartzen dute bertan sartzean; geroago aldatzen baduzu, lehendik dauden pistak ez dira aldatzen.
+library-dialog-cancel = Utzi
+library-dialog-create = Sortu
+library-dialog-rename = Aldatu izena
+library-delete-title = «{ $name }» ezabatu?
+library-delete-subcategories = { $count ->
+    [one] Bere { $count } azpikategoria ere ezabatzen da.
+   *[other] Bere { $count } azpikategoriak ere ezabatzen dira.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } pista kentzen da liburutegitik.
+   *[other] { $count } pista kentzen dira liburutegitik.
+}
+library-delete-no-tracks = Ez da pistarik kentzen liburutegitik.
+library-delete-files-kept = Fitxategiak ez dira ezabatzen.
+library-delete-confirm = Ezabatu
+library-remove-title = { $count ->
+    [one] { $count } pista kendu liburutegitik?
+   *[other] { $count } pista kendu liburutegitik?
+}
+library-remove-confirm = Kendu
+library-used-title = Pista hauek erabiltzen ari dira
+library-used-body = { $entries ->
+    [one] Zerrendetako { $entries } sarrerak
+   *[other] Zerrendetako { $entries } sarrerek
+} eta { $carts ->
+    [one] { $carts } cart-ek
+   *[other] { $carts } cart-ek
+} erabiltzen dituzte pista hauek. Sarrerak beren zerrendetatik kentzen dira eta cart-ak hustu egiten dira.
+library-used-confirm = Kendu hala ere
+# Liburutegiaren taula eta bilaketa (track library spec §7.4, §7.5)
+library-search-hint = Bilatu
+library-search = Bilatu liburutegian
+library-whole-library = Liburutegi osoa
+library-add-files = Gehitu fitxategiak
+library-col-category = Kategoria
+library-col-kind = Mota
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] Pista { $count } hautatuta
+   *[other] { $count } pista hautatuta
+}
+library-menu-add-to = Gehitu hona
+library-menu-add-to-cart = Gehitu kartutxo batera
+library-menu-cart = { $n }. kartutxoa
+library-cart-left-out = { $count ->
+    [one] Pista { $count } ez da sartu: orrian ez dago kartutxo huts gehiago.
+   *[other] { $count } pista ez dira sartu: orrian ez dago kartutxo huts gehiago.
+}
+library-menu-move-to-category = Eraman kategoriara
+library-menu-show-file = Erakutsi fitxategiaren kokapena
+library-menu-remove = Kendu liburutegitik…

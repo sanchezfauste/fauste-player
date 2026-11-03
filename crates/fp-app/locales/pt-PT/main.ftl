@@ -248,6 +248,9 @@ cart-kind-spot = Spot
 menu-cart-stop = Parar
 menu-cart-edit = Editar…
 settings-tab-cartwall = Cartucheira
+settings-tab-library = Biblioteca
+settings-library-hint = Crie, mude o nome e a cor e elimine as categorias que agrupam as suas faixas. Arraste uma categoria para a mover.
+settings-library-hint-touch = Crie, mude o nome e a cor e elimine as categorias que agrupam as suas faixas. Mantenha premida uma categoria para abrir o respetivo menu.
 settings-tab-shortcuts = Atalhos de teclado
 settings-cartwall-outputs = Cartucheira
 settings-outputs-view = Mostrar
@@ -529,6 +532,7 @@ settings-restore-confirm = Repor
 
 menu-edit-tags = Editar etiquetas…
 menu-loudness = Loudness…
+menu-show-in-library = Mostrar na biblioteca
 menu-edit-tags-file = O ficheiro não existe ou não pode ser lido
 menu-edit-tags-format = Este formato não tem etiquetas graváveis
 menu-edit-tags-unread = As etiquetas ainda não foram lidas
@@ -759,3 +763,88 @@ error-category-name-taken = Já existe aqui uma categoria com esse nome.
 error-category-too-deep = As categorias não podem ser aninhadas tão fundo.
 error-category-into-itself = Uma categoria não pode ser movida para dentro de si própria.
 error-library-on-air = Algumas destas faixas estão no ar: { $entries } em listas e { $carts } no cartwall. Nada foi removido.
+# The library window (track library spec §7.1)
+top-library = Biblioteca
+tip-library-open = Abrir a biblioteca
+tip-library-close = Fechar a biblioteca
+library-window-title = Biblioteca
+library-window-minimise = Minimizar a biblioteca
+library-window-expand = Expandir a biblioteca
+library-window-maximise = Maximizar a biblioteca
+library-window-restore = Restaurar a biblioteca
+library-window-close = Fechar a biblioteca
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categorias
+library-tree-new = Nova categoria
+library-tree-all = Todas as faixas
+library-tree-uncategorised = Sem categoria
+library-tree-expand = Expandir { $name }
+library-tree-collapse = Recolher { $name }
+library-menu-new-subcategory = Nova subcategoria…
+library-menu-rename = Mudar o nome…
+library-menu-colour = Cor
+library-menu-kind = Tipo
+library-menu-delete = Eliminar…
+kind-music = Música
+kind-jingle = Jingle
+kind-effect = Efeito
+kind-ad = Anúncio
+kind-voice = Voz
+library-dialog-new-title = Nova categoria
+library-dialog-new-sub-title = Nova subcategoria de «{ $parent }»
+library-dialog-rename-title = Mudar o nome de «{ $name }»
+library-dialog-name = Nome
+library-dialog-colour = Cor
+library-dialog-kind = Tipo
+library-dialog-kind-hint = As faixas assumem o tipo da categoria quando entram nela; alterá-lo depois não muda as faixas que já lá estão.
+library-dialog-cancel = Cancelar
+library-dialog-create = Criar
+library-dialog-rename = Mudar o nome
+library-delete-title = Eliminar «{ $name }»?
+library-delete-subcategories = { $count ->
+    [one] A sua { $count } subcategoria é eliminada com ela.
+   *[other] As suas { $count } subcategorias são eliminadas com ela.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } faixa é removida da biblioteca.
+   *[other] { $count } faixas são removidas da biblioteca.
+}
+library-delete-no-tracks = Nenhuma faixa é removida da biblioteca.
+library-delete-files-kept = Os ficheiros não são apagados.
+library-delete-confirm = Eliminar
+library-remove-title = { $count ->
+    [one] Remover { $count } faixa da biblioteca?
+   *[other] Remover { $count } faixas da biblioteca?
+}
+library-remove-confirm = Remover
+library-used-title = Estas faixas estão em uso
+library-used-body = { $entries ->
+    [one] { $entries } entrada de lista
+   *[other] { $entries } entradas de listas
+} e { $carts ->
+    [one] { $carts } cart usam
+   *[other] { $carts } carts usam
+} estas faixas. As entradas são removidas das suas listas e os carts são esvaziados.
+library-used-confirm = Remover mesmo assim
+# A tabela e a pesquisa da biblioteca (track library spec §7.4, §7.5)
+library-search-hint = Pesquisar
+library-search = Pesquisar na biblioteca
+library-whole-library = Toda a biblioteca
+library-add-files = Adicionar ficheiros
+library-col-category = Categoria
+library-col-kind = Tipo
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } faixa selecionada
+   *[other] { $count } faixas selecionadas
+}
+library-menu-add-to = Adicionar a
+library-menu-add-to-cart = Adicionar a um cartucho
+library-menu-cart = Cartucho { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } faixa não coube: a página não tem mais cartuchos vazios.
+   *[other] { $count } faixas não couberam: a página não tem mais cartuchos vazios.
+}
+library-menu-move-to-category = Mover para a categoria
+library-menu-show-file = Mostrar a localização do ficheiro
+library-menu-remove = Remover da biblioteca…

@@ -248,6 +248,9 @@ cart-kind-spot = Spot
 menu-cart-stop = Arrêter
 menu-cart-edit = Modifier…
 settings-tab-cartwall = Cartouches
+settings-tab-library = Bibliothèque
+settings-library-hint = Créez, renommez, recolorez et supprimez les catégories qui regroupent vos pistes. Faites glisser une catégorie pour la déplacer.
+settings-library-hint-touch = Créez, renommez, recolorez et supprimez les catégories qui regroupent vos pistes. Appuyez longuement sur une catégorie pour ouvrir son menu.
 settings-tab-shortcuts = Raccourcis clavier
 settings-cartwall-outputs = Mur de cartouches
 settings-outputs-view = Afficher
@@ -529,6 +532,7 @@ settings-restore-confirm = Rétablir
 
 menu-edit-tags = Modifier les tags…
 menu-loudness = Loudness…
+menu-show-in-library = Afficher dans la bibliothèque
 menu-edit-tags-file = Le fichier est absent ou illisible
 menu-edit-tags-format = Ce format n'a pas de tags modifiables
 menu-edit-tags-unread = Les tags n'ont pas encore été lus
@@ -759,3 +763,88 @@ error-category-name-taken = Une catégorie portant ce nom existe déjà ici.
 error-category-too-deep = Les catégories ne peuvent pas être imbriquées aussi profondément.
 error-category-into-itself = Une catégorie ne peut pas être déplacée dans elle-même.
 error-library-on-air = Certains de ces titres sont à l'antenne : { $entries } dans des listes et { $carts } sur le cartwall. Rien n'a été supprimé.
+# The library window (track library spec §7.1)
+top-library = Bibliothèque
+tip-library-open = Ouvrir la bibliothèque
+tip-library-close = Fermer la bibliothèque
+library-window-title = Bibliothèque
+library-window-minimise = Réduire la bibliothèque
+library-window-expand = Déplier la bibliothèque
+library-window-maximise = Agrandir la bibliothèque
+library-window-restore = Restaurer la bibliothèque
+library-window-close = Fermer la bibliothèque
+# The library's category tree (track library spec §7.3)
+library-tree-title = Catégories
+library-tree-new = Nouvelle catégorie
+library-tree-all = Tous les titres
+library-tree-uncategorised = Sans catégorie
+library-tree-expand = Déplier { $name }
+library-tree-collapse = Replier { $name }
+library-menu-new-subcategory = Nouvelle sous-catégorie…
+library-menu-rename = Renommer…
+library-menu-colour = Couleur
+library-menu-kind = Type
+library-menu-delete = Supprimer…
+kind-music = Musique
+kind-jingle = Jingle
+kind-effect = Effet
+kind-ad = Publicité
+kind-voice = Voix
+library-dialog-new-title = Nouvelle catégorie
+library-dialog-new-sub-title = Nouvelle sous-catégorie de « { $parent } »
+library-dialog-rename-title = Renommer « { $name } »
+library-dialog-name = Nom
+library-dialog-colour = Couleur
+library-dialog-kind = Type
+library-dialog-kind-hint = Les titres prennent le type de la catégorie quand ils y entrent ; le changer ensuite ne modifie pas les titres qui s'y trouvent déjà.
+library-dialog-cancel = Annuler
+library-dialog-create = Créer
+library-dialog-rename = Renommer
+library-delete-title = Supprimer « { $name } » ?
+library-delete-subcategories = { $count ->
+    [one] Sa { $count } sous-catégorie est supprimée avec elle.
+   *[other] Ses { $count } sous-catégories sont supprimées avec elle.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } titre est retiré de la bibliothèque.
+   *[other] { $count } titres sont retirés de la bibliothèque.
+}
+library-delete-no-tracks = Aucun titre n'est retiré de la bibliothèque.
+library-delete-files-kept = Les fichiers eux-mêmes ne sont pas supprimés.
+library-delete-confirm = Supprimer
+library-remove-title = { $count ->
+    [one] Retirer { $count } titre de la bibliothèque ?
+   *[other] Retirer { $count } titres de la bibliothèque ?
+}
+library-remove-confirm = Retirer
+library-used-title = Ces titres sont utilisés
+library-used-body = { $entries ->
+    [one] { $entries } entrée de liste
+   *[other] { $entries } entrées de listes
+} et { $carts ->
+    [one] { $carts } cart utilisent
+   *[other] { $carts } carts utilisent
+} ces titres. Les entrées sont retirées de leurs listes et les carts sont vidés.
+library-used-confirm = Retirer quand même
+# Le tableau et la recherche de la bibliothèque (track library spec §7.4, §7.5)
+library-search-hint = Rechercher
+library-search = Rechercher dans la bibliothèque
+library-whole-library = Toute la bibliothèque
+library-add-files = Ajouter des fichiers
+library-col-category = Catégorie
+library-col-kind = Type
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } piste sélectionnée
+   *[other] { $count } pistes sélectionnées
+}
+library-menu-add-to = Ajouter à
+library-menu-add-to-cart = Ajouter à une cartouche
+library-menu-cart = Cartouche { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } piste n’a pas trouvé de place : la page n’a plus de cartouches vides.
+   *[other] { $count } pistes n’ont pas trouvé de place : la page n’a plus de cartouches vides.
+}
+library-menu-move-to-category = Déplacer vers la catégorie
+library-menu-show-file = Afficher l’emplacement du fichier
+library-menu-remove = Retirer de la bibliothèque…

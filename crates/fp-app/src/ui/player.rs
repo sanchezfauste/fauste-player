@@ -11,7 +11,7 @@ use egui_phosphor::regular as icon;
 use fp_model::layout::Panel;
 use fp_model::{Command, PlayMode, PlayerId, PlaylistId, TrackId};
 
-use super::app::{DragEntry, FollowScroll, Scene, ViewState};
+use super::app::{DragEntry, DragTracks, FollowScroll, Scene, ViewState};
 use super::format;
 use super::glyphs::{self, TransportAction};
 use super::header_layout;
@@ -1960,12 +1960,26 @@ fn tabs(
             .on_hover_text(&pl.name);
         let name = pl.name.clone();
         response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, name.clone()));
-        let dropping = response.dnd_hover_payload::<DragEntry>().is_some();
-        if let Some(payload) = response.dnd_release_payload::<DragEntry>() {
+        let dropping = response.dnd_hover_payload::<DragEntry>().is_some()
+            || response.dnd_hover_payload::<DragTracks>().is_some();
+        // egui's release takes the payload whatever its type: each kind is
+        // taken only when it is the one dragged.
+        if egui::DragAndDrop::has_payload_of_type::<DragEntry>(ui.ctx())
+            && let Some(payload) = response.dnd_release_payload::<DragEntry>()
+        {
             scene.ctl.send(Command::MoveEntry {
                 entry: payload.entry,
                 to: pl.id,
                 index: pl.entries.len(),
+            });
+            view_state.drop = None;
+        }
+        // Library rows join the playlist at its end (track library spec §7.4).
+        if let Some(payload) = response.dnd_release_payload::<DragTracks>() {
+            scene.ctl.send(Command::InsertTracks {
+                playlist: pl.id,
+                index: pl.entries.len(),
+                tracks: payload.tracks.clone(),
             });
             view_state.drop = None;
         }
@@ -2172,7 +2186,10 @@ fn footer(
             .playlists
             .get(playlist)
             .map_or(0, |p| p.entries.len());
-        scene.pick_files(playlist, len);
+        scene.pick_files(super::app::PickTarget::Playlist {
+            playlist,
+            index: len,
+        });
     }
     // O22: clear the played marks of this playlist, after a question. A
     // phone keeps only Add in sight and puts the rest behind ⋯ (PL11).

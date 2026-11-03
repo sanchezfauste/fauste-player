@@ -248,6 +248,9 @@ cart-kind-spot = Spot
 menu-cart-stop = Stoppen
 menu-cart-edit = Bearbeiten…
 settings-tab-cartwall = Cartwall
+settings-tab-library = Bibliothek
+settings-library-hint = Lege die Kategorien an, die deine Titel gruppieren, benenne sie um, ändere ihre Farbe oder lösche sie. Ziehe eine Kategorie, um sie zu verschieben.
+settings-library-hint-touch = Lege die Kategorien an, die deine Titel gruppieren, benenne sie um, ändere ihre Farbe oder lösche sie. Halte eine Kategorie gedrückt, um ihr Menü zu öffnen.
 settings-tab-shortcuts = Tastenkürzel
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Anzeigen
@@ -529,6 +532,7 @@ settings-restore-confirm = Wiederherstellen
 
 menu-edit-tags = Tags bearbeiten…
 menu-loudness = Lautheit…
+menu-show-in-library = In der Bibliothek anzeigen
 menu-edit-tags-file = Die Datei fehlt oder kann nicht gelesen werden
 menu-edit-tags-format = Dieses Format hat keine beschreibbaren Tags
 menu-edit-tags-unread = Die Tags wurden noch nicht gelesen
@@ -759,3 +763,88 @@ error-category-name-taken = Hier gibt es bereits eine Kategorie mit diesem Namen
 error-category-too-deep = Kategorien können nicht so tief verschachtelt werden.
 error-category-into-itself = Eine Kategorie kann nicht in sich selbst verschoben werden.
 error-library-on-air = Einige dieser Titel sind on Air: { $entries } in Playlists und { $carts } auf der Cartwall. Es wurde nichts entfernt.
+# The library window (track library spec §7.1)
+top-library = Bibliothek
+tip-library-open = Bibliothek öffnen
+tip-library-close = Bibliothek schließen
+library-window-title = Bibliothek
+library-window-minimise = Bibliothek minimieren
+library-window-expand = Bibliothek aufklappen
+library-window-maximise = Bibliothek maximieren
+library-window-restore = Bibliothek wiederherstellen
+library-window-close = Bibliothek schließen
+# The library's category tree (track library spec §7.3)
+library-tree-title = Kategorien
+library-tree-new = Neue Kategorie
+library-tree-all = Alle Titel
+library-tree-uncategorised = Ohne Kategorie
+library-tree-expand = { $name } aufklappen
+library-tree-collapse = { $name } zuklappen
+library-menu-new-subcategory = Neue Unterkategorie…
+library-menu-rename = Umbenennen…
+library-menu-colour = Farbe
+library-menu-kind = Art
+library-menu-delete = Löschen…
+kind-music = Musik
+kind-jingle = Jingle
+kind-effect = Effekt
+kind-ad = Werbung
+kind-voice = Sprache
+library-dialog-new-title = Neue Kategorie
+library-dialog-new-sub-title = Neue Unterkategorie von „{ $parent }“
+library-dialog-rename-title = „{ $name }“ umbenennen
+library-dialog-name = Name
+library-dialog-colour = Farbe
+library-dialog-kind = Art
+library-dialog-kind-hint = Titel übernehmen die Art der Kategorie, wenn sie ihr beitreten; eine spätere Änderung lässt die Titel darin unverändert.
+library-dialog-cancel = Abbrechen
+library-dialog-create = Erstellen
+library-dialog-rename = Umbenennen
+library-delete-title = „{ $name }“ löschen?
+library-delete-subcategories = { $count ->
+    [one] Ihre { $count } Unterkategorie wird mitgelöscht.
+   *[other] Ihre { $count } Unterkategorien werden mitgelöscht.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } Titel wird aus der Bibliothek entfernt.
+   *[other] { $count } Titel werden aus der Bibliothek entfernt.
+}
+library-delete-no-tracks = Kein Titel wird aus der Bibliothek entfernt.
+library-delete-files-kept = Die Dateien selbst werden nicht gelöscht.
+library-delete-confirm = Löschen
+library-remove-title = { $count ->
+    [one] { $count } Titel aus der Bibliothek entfernen?
+   *[other] { $count } Titel aus der Bibliothek entfernen?
+}
+library-remove-confirm = Entfernen
+library-used-title = Diese Titel werden verwendet
+library-used-body = { $entries ->
+    [one] { $entries } Playlist-Eintrag
+   *[other] { $entries } Playlist-Einträge
+} und { $carts ->
+    [one] { $carts } Cart
+   *[other] { $carts } Carts
+} verwenden diese Titel. Die Einträge werden aus ihren Playlists entfernt und die Carts geleert.
+library-used-confirm = Trotzdem entfernen
+# Tabelle und Suche der Bibliothek (track library spec §7.4, §7.5)
+library-search-hint = Suchen
+library-search = Bibliothek durchsuchen
+library-whole-library = Ganze Bibliothek
+library-add-files = Dateien hinzufügen
+library-col-category = Kategorie
+library-col-kind = Art
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } Titel ausgewählt
+   *[other] { $count } Titel ausgewählt
+}
+library-menu-add-to = Hinzufügen zu
+library-menu-add-to-cart = Zu Cart hinzufügen
+library-menu-cart = Cart { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } Titel passte nicht: Die Seite hat keine leeren Carts mehr.
+   *[other] { $count } Titel passten nicht: Die Seite hat keine leeren Carts mehr.
+}
+library-menu-move-to-category = In Kategorie verschieben
+library-menu-show-file = Dateispeicherort anzeigen
+library-menu-remove = Aus der Bibliothek entfernen…

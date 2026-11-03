@@ -54,6 +54,7 @@ pub fn p0(state: &AppState) -> PlayerId {
 /// and playlists, as after a restart.
 pub fn roundtrip(state: &AppState) -> AppState {
     let parts = fp_model::RestoreParts {
+        library_view: Default::default(),
         config: state.config.clone(),
         library: state.library.clone(),
         categories: Default::default(),

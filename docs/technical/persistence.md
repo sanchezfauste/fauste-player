@@ -57,6 +57,18 @@ The session's cartwall state and its layout (`player_shares`,
 in `kv`. A `doc` column holds the model value's JSON, and the key columns
 win over the same fields inside it. Foreign keys are on.
 
+The library window's state (`LibraryView`, `fp-model/src/library_view.rs`) is
+the `library_view` row of `kv`, written with the session by
+`Command::SetLibraryView`: whether the window is open, its rectangle
+(`[x, y, width, height]` in points, none for the default place), minimised and
+maximised, the selected item (`All`, `Uncategorised` or a category), the
+expanded categories, the Whole library scope, the column widths, the sort and
+the tree's width. The search text is not saved. It loads leniently
+(`lenient_library_view`: a value that is not a view is the default, each field
+falls back on its own) and is repaired against the categories on restore
+(`LibraryView::repaired`: an unknown selection becomes `All`, unknown expanded
+ids and unusable sizes are dropped).
+
 Schema 2 (track library, plan 2) adds the `categories` table, the
 `tracks.category` column and the two track indexes. A schema 1 database
 migrates in place: every track is uncategorised and nothing is lost. A build

@@ -262,6 +262,7 @@ fn a_restored_position_past_the_end_comes_back_at_the_start_of_the_range() {
         apply(&mut state, Command::Play(p)).unwrap();
         let sessions: Vec<PlayerSession> = state.sessions(|_| saved);
         let parts = RestoreParts {
+            library_view: Default::default(),
             config: state.config.clone(),
             library: state.library.clone(),
             categories: Default::default(),

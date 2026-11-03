@@ -328,7 +328,12 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             crate::library_rules::remove_tracks(state, &tracks, &mut out)?
         }
         Command::DeleteCategory(category) => {
-            crate::library_rules::delete_category(state, category, &mut out)?
+            crate::library_rules::delete_category(state, category, &mut out)?;
+            let view = std::mem::take(&mut state.library_view);
+            state.library_view = view.repaired(&state.categories);
+        }
+        Command::SetLibraryView(view) => {
+            state.library_view = view.repaired(&state.categories);
         }
         Command::AddToLibrary { paths, category } => {
             crate::library_rules::add_to_library(state, paths, category)?

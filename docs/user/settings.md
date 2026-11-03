@@ -11,7 +11,7 @@ The Players, Meters, Analysis, Loudness and Keyboard shortcuts sections have a
 **Restore defaults** button in their header. It asks for confirmation and then
 resets only that section (Players keeps the number of players and the
 language; Shortcuts has no other reset button). Audio outputs, Playlists,
-Cartwall, MIDI and Remote have none.
+Cartwall, Library, MIDI and Remote have none.
 
 ## Settings pending
 
@@ -248,6 +248,12 @@ covers all of them. Corrections are welcome as issues or pull requests.
 
 Pages, grid size, the cart editor, and cart page import and export. See
 [Cartwall](cartwall.md).
+
+## Library
+
+Create, rename, recolour, change the kind of, move (by dragging) and delete the
+categories that group your tracks, without opening the library window. See
+[Library](library.md#categories).
 
 ## Keyboard shortcuts
 

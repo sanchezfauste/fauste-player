@@ -540,7 +540,9 @@ agents work in parallel; expect rebases on `track.rs`, `playlist.rs` and
 2. **Categories in the model and the store** — §5 (LB9–LB18), commands and
    tests; no window yet.
 3. **Library window** — §7, §9, §10: tile, floating window, tree, table,
-   search, add/drag to playlists and carts, Settings → Library.
+   search, add/drag to playlists and carts, Settings → Library. The library
+   CUE route in Settings → Outputs (§9) and the preview bar (§7.2 item 1)
+   move to plan 4, which creates the holder they need.
 4. **Library pre-listen** — §8: holder, route, preview bar, marker editing.
 5. **Watched folders** — §6.
 6. **Phone library screen** — §11, after its design session.

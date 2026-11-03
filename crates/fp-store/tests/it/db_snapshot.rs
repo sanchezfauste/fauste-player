@@ -105,6 +105,11 @@ fn rich() -> Snapshot {
             page: Some(CartPageId(21)),
         },
         layout,
+        library_view: fp_model::LibraryView {
+            open: true,
+            rect: Some([10.0, 20.0, 800.0, 600.0]),
+            ..Default::default()
+        },
         cart_pages: vec![page(20, vec![cart]), page(21, Vec::new())],
     }
 }

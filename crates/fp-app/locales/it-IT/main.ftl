@@ -248,6 +248,9 @@ cart-kind-spot = Spot
 menu-cart-stop = Ferma
 menu-cart-edit = Modifica…
 settings-tab-cartwall = Cartwall
+settings-tab-library = Libreria
+settings-library-hint = Crea, rinomina, cambia il colore ed elimina le categorie che raggruppano i tuoi brani. Trascina una categoria per spostarla.
+settings-library-hint-touch = Crea, rinomina, cambia il colore ed elimina le categorie che raggruppano i tuoi brani. Tieni premuta una categoria per aprirne il menu.
 settings-tab-shortcuts = Scorciatoie da tastiera
 settings-cartwall-outputs = Cartwall
 settings-outputs-view = Mostra
@@ -529,6 +532,7 @@ settings-restore-confirm = Ripristina
 
 menu-edit-tags = Modifica i tag…
 menu-loudness = Loudness…
+menu-show-in-library = Mostra nella libreria
 menu-edit-tags-file = Il file manca o non si può leggere
 menu-edit-tags-format = Questo formato non ha tag scrivibili
 menu-edit-tags-unread = I tag non sono ancora stati letti
@@ -759,3 +763,88 @@ error-category-name-taken = Esiste già una categoria con questo nome qui.
 error-category-too-deep = Le categorie non possono essere annidate così in profondità.
 error-category-into-itself = Una categoria non può essere spostata dentro se stessa.
 error-library-on-air = Alcuni di questi brani sono in onda: { $entries } nelle playlist e { $carts } nel cartwall. Non è stato rimosso nulla.
+# The library window (track library spec §7.1)
+top-library = Libreria
+tip-library-open = Apri la libreria
+tip-library-close = Chiudi la libreria
+library-window-title = Libreria
+library-window-minimise = Riduci a icona la libreria
+library-window-expand = Espandi la libreria
+library-window-maximise = Ingrandisci la libreria
+library-window-restore = Ripristina la libreria
+library-window-close = Chiudi la libreria
+# The library's category tree (track library spec §7.3)
+library-tree-title = Categorie
+library-tree-new = Nuova categoria
+library-tree-all = Tutti i brani
+library-tree-uncategorised = Senza categoria
+library-tree-expand = Espandi { $name }
+library-tree-collapse = Comprimi { $name }
+library-menu-new-subcategory = Nuova sottocategoria…
+library-menu-rename = Rinomina…
+library-menu-colour = Colore
+library-menu-kind = Tipo
+library-menu-delete = Elimina…
+kind-music = Musica
+kind-jingle = Jingle
+kind-effect = Effetto
+kind-ad = Pubblicità
+kind-voice = Voce
+library-dialog-new-title = Nuova categoria
+library-dialog-new-sub-title = Nuova sottocategoria di «{ $parent }»
+library-dialog-rename-title = Rinomina «{ $name }»
+library-dialog-name = Nome
+library-dialog-colour = Colore
+library-dialog-kind = Tipo
+library-dialog-kind-hint = I brani prendono il tipo della categoria quando vi entrano; cambiarlo in seguito non modifica i brani già presenti.
+library-dialog-cancel = Annulla
+library-dialog-create = Crea
+library-dialog-rename = Rinomina
+library-delete-title = Eliminare «{ $name }»?
+library-delete-subcategories = { $count ->
+    [one] La sua { $count } sottocategoria viene eliminata con essa.
+   *[other] Le sue { $count } sottocategorie vengono eliminate con essa.
+}
+library-delete-tracks = { $count ->
+    [one] { $count } brano viene rimosso dalla libreria.
+   *[other] { $count } brani vengono rimossi dalla libreria.
+}
+library-delete-no-tracks = Nessun brano viene rimosso dalla libreria.
+library-delete-files-kept = I file non vengono cancellati.
+library-delete-confirm = Elimina
+library-remove-title = { $count ->
+    [one] Rimuovere { $count } brano dalla libreria?
+   *[other] Rimuovere { $count } brani dalla libreria?
+}
+library-remove-confirm = Rimuovi
+library-used-title = Questi brani sono in uso
+library-used-body = { $entries ->
+    [one] { $entries } voce di playlist
+   *[other] { $entries } voci di playlist
+} e { $carts ->
+    [one] { $carts } cart usano
+   *[other] { $carts } cart usano
+} questi brani. Le voci vengono rimosse dalle loro playlist e i cart vengono svuotati.
+library-used-confirm = Rimuovi comunque
+# La tabella e la ricerca della libreria (track library spec §7.4, §7.5)
+library-search-hint = Cerca
+library-search = Cerca nella libreria
+library-whole-library = Tutta la libreria
+library-add-files = Aggiungi file
+library-col-category = Categoria
+library-col-kind = Tipo
+# The library table's row menu (track library spec §7.4)
+library-menu-selected = { $count ->
+    [one] { $count } traccia selezionata
+   *[other] { $count } tracce selezionate
+}
+library-menu-add-to = Aggiungi a
+library-menu-add-to-cart = Aggiungi a un cart
+library-menu-cart = Cart { $n }
+library-cart-left-out = { $count ->
+    [one] { $count } traccia non è entrata: la pagina non ha altri cart vuoti.
+   *[other] { $count } tracce non sono entrate: la pagina non ha altri cart vuoti.
+}
+library-menu-move-to-category = Sposta nella categoria
+library-menu-show-file = Mostra la posizione del file
+library-menu-remove = Rimuovi dalla libreria…

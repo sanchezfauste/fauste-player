@@ -56,6 +56,13 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   while it is paused), maximize one for a moment, and
   lock the layout against stray drags. The layout is saved with the
   session.
+- **Track library window:** a floating **Library** window from the top bar
+  with a category tree (colours, kinds, nesting, drag to reorder), a table
+  of the library's tracks (the playlists' columns plus category and kind),
+  accent-insensitive search over the item or the whole library, add files,
+  move, set the kind, remove with confirmations, and drag the rows to
+  playlists and carts; the same tree is in Settings → Library. Its place and
+  state are saved with the session.
 - **About window:** the window's title bar shows "Fauste Player <version>";
   the info button next to Settings opens the author, the copyright, the
   licence, a short disclaimer and the licence notices of the bundled
