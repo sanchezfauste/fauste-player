@@ -616,6 +616,7 @@ fn on_engine_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction
         EngineEvent::CartEnded { cart } => cart_rules::ended(state, cart),
         EngineEvent::CartFailed { cart } => cart_rules::failed(state, cart),
         EngineEvent::CartCueEnded { cart } => cart_rules::cue_ended(state, cart),
+        EngineEvent::LibraryCueEnded { track } => crate::library_cue::ended(state, track),
         EngineEvent::CueEnded { player, entry } => {
             if let Ok(i) = state.player_index(player)
                 && state.players[i].cue.is_some_and(|c| c.entry == entry)

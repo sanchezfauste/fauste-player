@@ -4,6 +4,7 @@
 
 use crate::ids::TrackId;
 use crate::player::Transport;
+use crate::state::AppState;
 
 /// The library window's pre-listen.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -14,4 +15,15 @@ pub struct LibraryCue {
     pub transport: Transport,
     /// Where Play starts while stopped, in seconds.
     pub start_at: Option<f64>,
+}
+
+/// LB36: the engine reports that the preview of `track` ended (the end of
+/// its file, a file that cannot play, its output gone): the bar stops and
+/// keeps its track. Ignored unless `track` is still the bar's.
+pub(crate) fn ended(state: &mut AppState, track: TrackId) {
+    let cue = &mut state.library_cue;
+    if cue.track == Some(track) {
+        cue.transport = Transport::Stopped;
+        cue.start_at = None;
+    }
 }

@@ -374,6 +374,10 @@ pub enum EngineEvent {
     /// The pre-listen of `cart` reached its end (or could not start).
     /// Ignored unless `cart` is still the one pre-listened.
     CartCueEnded { cart: CartId },
+    /// The library CUE of `track` reached the end of its file (or could not
+    /// start, or its output went away). Ignored unless `track` is still the
+    /// one previewed (library plan 4, LB36).
+    LibraryCueEnded { track: TrackId },
     /// `entry` reaches its Main device as DSD, unchanged (spec O25).
     /// `hold_others` is the mix policy in force (`DsdMix::HoldOthers`).
     /// Ignored unless `entry` is the player's current.
@@ -551,6 +555,21 @@ pub enum EngineAction {
     /// Pre-listen a cart on the cartwall Cue route.
     StartCartCue(CartRequest),
     StopCartCue,
+    /// Pre-listen a track on the library CUE route (library plan 4, LB32);
+    /// `paused` opens it held, silent until released.
+    StartLibraryCue {
+        request: LibraryCueRequest,
+        paused: bool,
+    },
+    StopLibraryCue,
+    /// Replace the library CUE's source by one at `secs` (LB33).
+    SeekLibraryCue {
+        secs: f64,
+    },
+    /// Hold or release the library CUE (LB33).
+    SetLibraryCuePaused {
+        paused: bool,
+    },
     /// L10: the configuration the engine takes for new buses and new
     /// holders, and the tuning it reads live. It changes no open bus.
     UpdateSettings(Box<Config>),
@@ -581,6 +600,19 @@ pub enum EngineAction {
         track: TrackId,
         path: PathBuf,
     },
+}
+
+/// Everything the engine needs to pre-listen one track in the library
+/// (library plan 4, LB32): it plays from `from_secs` to the end of its file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LibraryCueRequest {
+    pub track: TrackId,
+    pub path: PathBuf,
+    pub from_secs: f64,
+    /// The file's format, once analysed.
+    pub format: Option<AudioFormat>,
+    /// The fixed gain of this preview (loudness normalization spec N9).
+    pub normalization: crate::loudness::Normalization,
 }
 
 /// Everything the engine needs to play one cart.

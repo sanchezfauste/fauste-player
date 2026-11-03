@@ -20,11 +20,12 @@ use crate::atomic::AtomicF32;
 use crate::bus::{Bus, BusHealth, BusKey, BusTiming};
 use crate::mixer::{BusCommand, BusEvent, MixerConfig};
 use crate::ramp::Curve;
-use crate::source::{SourceShared, source_pair};
+use crate::source::{SourceProducer, SourceShared, source_pair};
 use crate::worker::{PlayerWorker, SourceKey, SourceOpener, WorkerFailure};
 
 mod carts;
 mod dsd;
+mod library;
 pub use carts::{CartTelemetry, CartwallTelemetry};
 
 /// DSD output (feedback 2 spec O25), derived from the model `Config`.
@@ -394,6 +395,8 @@ pub struct Engine {
     tones: Vec<(BusKey, usize)>,
     /// Created on the first cart action.
     cartwall: Option<carts::CartwallRuntime>,
+    /// The library CUE (library plan 4); created on its first preview.
+    library: Option<library::LibraryCueRuntime>,
     /// The latest time `execute` or `tick` was given, for bus reopens made
     /// deep inside an action.
     now: Instant,
@@ -549,6 +552,7 @@ impl Engine {
             slot_exhaustions: 0,
             tones: Vec::new(),
             cartwall: None,
+            library: None,
             now: Instant::now(),
             true_peak: false,
             integration: (0.0, 0.0, 0.0),
@@ -614,6 +618,7 @@ impl Engine {
             })
             .sum::<usize>()
             + self.unsettled_carts()
+            + self.unsettled_library()
     }
 
     /// Mixer slots in use across all buses (a leak shows up here).
@@ -704,7 +709,8 @@ impl Engine {
                     + rt.outgoing.len()
                     + rt.cue_outgoing.len()
             })
-            .sum()
+            .sum::<usize>()
+            + self.attached_library()
     }
 
     /// Bus commands that could not be queued, plus test tones refused because
@@ -754,8 +760,9 @@ impl Engine {
             self.report_cartwall_route(Holder::CartwallMain, routes.main);
             self.report_cartwall_route(Holder::CartwallCue, routes.cue);
         }
-        // The library Cue has no bus until Task 2: it is placed the same way.
-        if self.settings.library_routes != library_before {
+        // The library CUE has no bus before its first preview: it is
+        // placed the same way.
+        if self.library.is_none() && self.settings.library_routes != library_before {
             let route = self.settings.library_routes.cue.clone();
             self.report_library_route(route);
         }
@@ -874,6 +881,7 @@ impl Engine {
             .values()
             .all(|rt| self.player_quiet(rt, |p| &p.bus == bus))
             && !self.carts_sounding(bus)
+            && self.library_quiet_on(bus)
             && !self.tones.iter().any(|(b, _)| b == bus)
             && !self.dsd_silence_running(bus)
     }
@@ -1126,8 +1134,7 @@ impl Engine {
                 .is_none_or(|rt| self.player_quiet(rt, |s| s.cue)),
             Holder::CartwallMain => self.cart_path_quiet(false),
             Holder::CartwallCue => self.cart_path_quiet(true),
-            // Until the library playback exists there is nothing to wait for.
-            Holder::LibraryCue => true,
+            Holder::LibraryCue => self.library_path_quiet(),
         }
     }
 
@@ -1180,10 +1187,7 @@ impl Engine {
             Holder::CartwallMain | Holder::CartwallCue => {
                 self.move_cartwall(holder, route.clone(), force)
             }
-            Holder::LibraryCue => {
-                self.report_library_route(route.clone());
-                Some(Ok(()))
-            }
+            Holder::LibraryCue => self.move_library_cue(route.clone(), force),
         };
         let Some(outcome) = done else {
             return false;
@@ -1316,13 +1320,14 @@ impl Engine {
         }
     }
 
-    /// Whether a holder (a player's Main or Cue, the cartwall) plays on
-    /// `key`.
+    /// Whether a holder (a player's Main or Cue, the cartwall, the library
+    /// CUE) plays on `key`.
     fn bus_in_use(&self, key: &BusKey) -> bool {
         self.players
             .values()
             .any(|rt| rt.main.0 == *key || rt.cue.as_ref().is_some_and(|c| c.0 == *key))
             || self.cartwall_uses(key)
+            || self.library_uses(key)
     }
 
     /// L13: closes the buses holders left, once no holder uses them,
@@ -1510,7 +1515,10 @@ impl Engine {
                 .chain(rt.cue_outgoing.iter())
                 .any(|p| &p.bus == bus && sounding(p.start))
         });
-        players || self.carts_sounding(bus) || self.tones.iter().any(|(b, _)| b == bus)
+        players
+            || self.carts_sounding(bus)
+            || self.library_sounding(bus)
+            || self.tones.iter().any(|(b, _)| b == bus)
     }
 
     /// BR8: the rate `player`'s hard start of a file with `format` reopens
@@ -2156,7 +2164,7 @@ impl Engine {
             .values()
             .filter(|p| p.cue.as_ref().is_some_and(|c| &c.0 == key))
             .count();
-        let carts = self.cart_sources_on(key);
+        let carts = self.cart_sources_on(key) + self.library_sources_on(key);
         let wanted = ((mains * 5 + cues * 2 + carts + 2) as f64
             * self.settings.tuning.mixer_headroom)
             .ceil() as usize;
@@ -2173,6 +2181,12 @@ impl Engine {
             EngineAction::StopCart { cart } => self.stop_cart(cart),
             EngineAction::StartCartCue(request) => self.start_cart_cue(&request, now),
             EngineAction::StopCartCue => self.stop_cart_cue(),
+            EngineAction::StartLibraryCue { request, paused } => {
+                self.start_library_cue(&request, paused, now)
+            }
+            EngineAction::StopLibraryCue => self.stop_library_cue(),
+            // Task 3 of library plan 4 handles seek and pause.
+            EngineAction::SeekLibraryCue { .. } | EngineAction::SetLibraryCuePaused { .. } => {}
             EngineAction::AddPlayer { player } => self.add_player(player, now),
             EngineAction::RemovePlayer { player } => self.remove_player(player),
             EngineAction::Preload { player, request } => self.preload(player, request),
@@ -3255,7 +3269,7 @@ impl Engine {
     fn handle_failures(&mut self) {
         let failures: Vec<WorkerFailure> = self.failures_rx.try_iter().collect();
         for failure in failures {
-            if self.cart_failure(&failure) {
+            if self.cart_failure(&failure) || self.library_failure(&failure) {
                 continue;
             }
             let Some(player) = self.owners.get(&failure.key).copied() else {
@@ -3336,7 +3350,7 @@ impl Engine {
             self.send(&bus, BusCommand::Detach { slot });
             return;
         }
-        if self.cart_bus_event(bus, &event) {
+        if self.cart_bus_event(bus, &event) || self.library_bus_event(bus, &event) {
             return;
         }
         match event {
@@ -3618,6 +3632,7 @@ impl Engine {
             }
         }
         self.start_ready_carts();
+        self.start_ready_library();
         // (bus, slot, fade in, earliest frame).
         let mut starts: Vec<(BusKey, usize, bool, u64)> = Vec::new();
         for rt in self.players.values_mut() {

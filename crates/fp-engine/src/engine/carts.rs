@@ -146,33 +146,31 @@ impl Engine {
         })
     }
 
-    fn cart_source(&mut self, request: &CartRequest, cue: bool) -> Result<CartSource, AttachError> {
-        let c = self.cartwall.as_ref().ok_or(AttachError::NoPlayer)?;
-        let (bus_key, channel) = if cue {
-            c.cue.clone().ok_or(AttachError::NoRoute)?
-        } else {
-            c.main.clone()
-        };
-        let volume = c.volume.clone();
+    /// Attaches a fresh ring to a free slot of `bus_key` at `channel`, for a
+    /// source a worker of its own fills (a cart, the library CUE). The ring
+    /// holds the configured pre-buffer at the bus's rate.
+    pub(super) fn attach_worker_source(
+        &mut self,
+        bus_key: &BusKey,
+        channel: u16,
+        volume: Arc<AtomicF32>,
+        gain: f32,
+    ) -> Result<(usize, SourceProducer, Arc<SourceShared>), AttachError> {
         // A bus running faster than configured needs more frames for the
         // same seconds of buffer.
-        let rate = self.rate_of(&bus_key).max(self.settings.sample_rate);
+        let rate = self.rate_of(bus_key).max(self.settings.sample_rate);
         let ring = ((self.settings.tuning.prebuffer_secs * f64::from(rate)) as usize).max(1024);
-        let bus = self.buses.get_mut(&bus_key).ok_or(AttachError::NoRoute)?;
+        let bus = self.buses.get_mut(bus_key).ok_or(AttachError::NoRoute)?;
         if bus.command_room() < 2 {
             self.dropped_commands += 1;
             return Err(AttachError::QueueFull);
         }
         let Some(slot) = bus.alloc_slot() else {
             self.slot_exhaustions += 1;
-            tracing::error!(cart = ?request.cart, bus = ?bus_key, "no free mixer slot");
             return Err(AttachError::NoSlot);
         };
         let (producer, consumer) = source_pair(ring);
         let shared = consumer.shared.clone();
-        // The cart's fixed normalization gain (N14); a reopen passes the
-        // same request and keeps it (N15).
-        let gain = request.normalization.linear_gain();
         if !bus.send(BusCommand::Attach {
             slot,
             source: consumer,
@@ -182,6 +180,27 @@ impl Engine {
         }) {
             return Err(AttachError::QueueFull);
         }
+        Ok((slot, producer, shared))
+    }
+
+    fn cart_source(&mut self, request: &CartRequest, cue: bool) -> Result<CartSource, AttachError> {
+        let c = self.cartwall.as_ref().ok_or(AttachError::NoPlayer)?;
+        let (bus_key, channel) = if cue {
+            c.cue.clone().ok_or(AttachError::NoRoute)?
+        } else {
+            c.main.clone()
+        };
+        let volume = c.volume.clone();
+        // The cart's fixed normalization gain (N14); a reopen passes the
+        // same request and keeps it (N15).
+        let gain = request.normalization.linear_gain();
+        let (slot, producer, shared) = self
+            .attach_worker_source(&bus_key, channel, volume, gain)
+            .inspect_err(|e| {
+            if *e == AttachError::NoSlot {
+                tracing::error!(cart = ?request.cart, bus = ?bus_key, "no free mixer slot");
+            }
+        })?;
         self.next_key += 1;
         let key = SourceKey(self.next_key);
         let rate = self.rate_of(&bus_key);
@@ -510,12 +529,21 @@ impl Engine {
             self.release_cart(&source);
             return;
         }
-        let frames = self.frames_on(&source.bus, self.settings.tuning.declick_ms);
-        let now = self.now_frame(&source.bus);
+        self.declick_stop(&source.bus, source.slot);
+        if let Some(c) = self.cartwall.as_mut() {
+            c.stopping.push(source);
+        }
+    }
+
+    /// Ramps `slot` of `bus` down over the de-click time and stops it there;
+    /// the mixer reports `Finished` when it has.
+    pub(super) fn declick_stop(&mut self, bus: &BusKey, slot: usize) {
+        let frames = self.frames_on(bus, self.settings.tuning.declick_ms);
+        let now = self.now_frame(bus);
         self.send(
-            &source.bus,
+            bus,
             BusCommand::Ramp {
-                slot: source.slot,
+                slot,
                 to: 0.0,
                 frames: u32::try_from(frames).unwrap_or(u32::MAX),
                 curve: Curve::Linear,
@@ -523,15 +551,12 @@ impl Engine {
             },
         );
         self.send(
-            &source.bus,
+            bus,
             BusCommand::StopAt {
-                slot: source.slot,
+                slot,
                 at_frame: now + frames,
             },
         );
-        if let Some(c) = self.cartwall.as_mut() {
-            c.stopping.push(source);
-        }
     }
 
     fn release_cart(&mut self, source: &CartSource) {
@@ -643,12 +668,17 @@ impl Engine {
             }
         }
         for (bus, slot, fade_in) in starts {
-            let now = self.now_frame(&bus);
-            // A bus carrying DSD switches to PCM first, or mutes the cart
-            // (feedback 2 spec O25).
-            let at = self.before_start_on(&bus, now);
-            self.send_start(&bus, slot, at, fade_in);
+            self.start_on_now(&bus, slot, fade_in);
         }
+    }
+
+    /// Starts `slot` of `bus` at once (a cart, the library CUE).
+    pub(super) fn start_on_now(&mut self, bus: &BusKey, slot: usize, fade_in: bool) {
+        let now = self.now_frame(bus);
+        // A bus carrying DSD switches to PCM first, or mutes the source
+        // (feedback 2 spec O25).
+        let at = self.before_start_on(bus, now);
+        self.send_start(bus, slot, at, fade_in);
     }
 
     /// BR17: carts waiting for their Main bus's device to play the end of

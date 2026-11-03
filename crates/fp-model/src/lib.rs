@@ -54,8 +54,8 @@ pub use columns::{
     with_column_shown,
 };
 pub use command::{
-    CartRequest, Command, CueStart, EngineAction, EngineEvent, SOURCE_END, SourceRequest,
-    TransitionPlan,
+    CartRequest, Command, CueStart, EngineAction, EngineEvent, LibraryCueRequest, SOURCE_END,
+    SourceRequest, TransitionPlan,
 };
 pub use config::{
     AnalysisSettings, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes, Config, ConfigWarning,

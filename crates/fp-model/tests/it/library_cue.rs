@@ -4,8 +4,8 @@
 use crate::common::fixture;
 use fp_model::library_cue::LibraryCue;
 use fp_model::{
-    AppState, BusyCause, Config, Holder, OutputDevice, Route, Transport, causes, configured_route,
-    holders,
+    AppState, BusyCause, Config, EngineEvent, Holder, OutputDevice, Route, TrackId, Transport,
+    causes, configured_route, holders, on_event,
 };
 
 fn route(device: &str, first_channel: u16) -> Route {
@@ -86,4 +86,29 @@ fn rule10_a_fresh_state_has_the_library_cue_stopped() {
     assert_eq!(s.library_cue, LibraryCue::default());
     assert_eq!(s.library_cue.transport, Transport::Stopped);
     assert_eq!(s.library_cue.track, None);
+}
+
+#[test]
+fn lb36_the_engines_end_stops_the_preview() {
+    let (a, b) = (TrackId(1), TrackId(2));
+    let mut s = fixture(1);
+    s.library_cue = LibraryCue {
+        track: Some(a),
+        transport: Transport::Playing,
+        start_at: Some(3.0),
+    };
+    let before = s.library_cue.clone();
+    let out = on_event(&mut s, EngineEvent::LibraryCueEnded { track: b });
+    assert!(out.is_empty(), "{out:?}");
+    assert_eq!(s.library_cue, before, "another track's end changes nothing");
+    let out = on_event(&mut s, EngineEvent::LibraryCueEnded { track: a });
+    assert!(out.is_empty(), "{out:?}");
+    assert_eq!(
+        s.library_cue,
+        LibraryCue {
+            track: Some(a),
+            transport: Transport::Stopped,
+            start_at: None,
+        }
+    );
 }
