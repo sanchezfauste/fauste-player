@@ -25,7 +25,7 @@ use super::app::{Scene, ViewState};
 use super::panels;
 use super::theme;
 use super::widgets::{self, font, font_semibold};
-use state::{Grip, LibraryUi, LiveRect, LiveTree, Pending};
+use state::{Grip, LibraryUi, LiveRect, LiveTree, Pending, Reveal};
 
 /// The height of the window's title bar.
 pub(crate) const TITLE_BAR_HEIGHT: f32 = 28.0;
@@ -153,7 +153,7 @@ pub(crate) fn show_track(scene: &Scene<'_>, view_state: &mut ViewState, track: T
         }
     }
     library.search.clear();
-    library.reveal = Some((track, selection));
+    library.reveal = Some(Reveal::new(track, selection, &state.library_view));
     send(
         scene,
         LibraryView {

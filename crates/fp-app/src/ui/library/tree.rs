@@ -150,6 +150,7 @@ pub(crate) fn category_tree(
     let shown = items(&scene.state.categories, &view.expanded, mode);
     let counts = view_state.library.counts.as_ref().map(|c| &c.counts);
     let dragging = view_state.library.tree_drag;
+    let touch = view_state.touch;
     let mut drawn: Vec<(Item, Rect)> = Vec::new();
     let body = ui.available_rect_before_wrap();
     egui::ScrollArea::vertical()
@@ -166,6 +167,7 @@ pub(crate) fn category_tree(
                     mode,
                     &view,
                     dragging,
+                    touch,
                     &mut actions,
                 );
                 drawn.push((*item, rect));
@@ -246,6 +248,7 @@ fn row(
     mode: TreeMode,
     view: &LibraryView,
     dragging: Option<CategoryId>,
+    touch: bool,
     actions: &mut Vec<Action>,
 ) -> Rect {
     let t = scene.i18n;
@@ -269,7 +272,9 @@ fn row(
     };
     let selected = mode == TreeMode::Window && view.selection == selection;
     let sense = match item {
-        Item::Category { .. } => Sense::click_and_drag(),
+        // On touch a finger drag scrolls, as in the table: a category is
+        // moved with a pointer.
+        Item::Category { .. } if !touch => Sense::click_and_drag(),
         _ => Sense::click(),
     };
     let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), ROW_HEIGHT), sense);

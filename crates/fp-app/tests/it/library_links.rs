@@ -182,3 +182,31 @@ fn settings_library_lists_the_categories_and_creates_one() {
         Command::CreateCategory { name, parent: None, .. } if name == "Ads"
     )));
 }
+
+/// The labels of the buttons in the open playlist menu, top to bottom.
+fn menu_order(h: &H) -> Vec<String> {
+    let mut found: Vec<(f32, String)> = Vec::new();
+    for label in ["Loudness…", "Show in library", "Move to category"] {
+        for n in h.query_all_by_label(label) {
+            found.push((n.rect().top(), label.to_owned()));
+        }
+    }
+    found.sort_by(|a, b| a.0.total_cmp(&b.0));
+    found.into_iter().map(|(_, l)| l).collect()
+}
+
+#[test]
+fn the_library_entries_come_right_after_loudness_on_the_desktop() {
+    let (mut h, _fake) = open(state(1, 3));
+    playlist_menu(&mut h, "Song 2");
+    assert_eq!(
+        menu_order(&h),
+        vec!["Loudness…", "Show in library", "Move to category"]
+    );
+    // Nothing between Loudness… and the entries.
+    let loud = item(&h, "Loudness…");
+    let show = item(&h, "Show in library");
+    let mv = item(&h, "Move to category");
+    assert!(loud.bottom() <= show.top() + 1.0 && show.bottom() <= mv.top() + 1.0);
+    assert!(show.top() - loud.bottom() < 12.0, "right after Loudness…");
+}

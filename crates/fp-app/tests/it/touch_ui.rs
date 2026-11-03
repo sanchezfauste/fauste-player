@@ -665,6 +665,17 @@ fn disabled(h: &Harness<'static, AppUi>, label: &str) -> bool {
     h.get_by_label(label).accesskit_node().is_disabled()
 }
 
+/// The library window is desktop only: the phone's row menu does not reach it.
+#[test]
+fn the_phones_row_menu_has_no_library_entries() {
+    let (mut h, _fake) = touch(1, PORTRAIT);
+    tab(&mut h, "Playlists");
+    row_menu(&mut h, "Song 2");
+    assert!(h.query_by_label("Move up").is_some(), "the menu is open");
+    assert!(h.query_by_label("Show in library").is_none());
+    assert!(h.query_by_label("Move to category").is_none());
+}
+
 /// PL10: Move up and Move down in the row menu.
 #[test]
 fn the_row_menu_moves_an_entry_up_and_down() {
@@ -1080,6 +1091,42 @@ fn back_closes_a_library_dialog_before_the_settings_section() {
     assert!(
         h.query_by_label("Back to the sections").is_some(),
         "still in the section"
+    );
+}
+
+/// A finger swipe over the category tree in Settings → Library scrolls; it
+/// never moves a category.
+#[test]
+fn a_touch_drag_over_the_category_tree_moves_no_category() {
+    let mut st = state(2, 3);
+    for name in ["Jingles", "Ads"] {
+        fp_model::apply(
+            &mut st,
+            fp_model::Command::CreateCategory {
+                parent: None,
+                name: name.into(),
+                color: None,
+                kind: fp_model::TrackKind::Music,
+            },
+        )
+        .unwrap();
+    }
+    let (mut h, fake) = harness_sized(st, PORTRAIT, |ui| ui.with_touch());
+    h.run_steps(3);
+    more(&mut h, "Settings");
+    h.get_by_label("Library").click();
+    h.run_steps(3);
+    let from = h.get_by_label("Jingles").rect().center();
+    let to = h.get_by_label("Ads").rect().center();
+    fake.take_sent();
+    drag(&mut h, from, to);
+    h.run_steps(3);
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, fp_model::Command::MoveCategory { .. })),
+        "a swipe moved a category"
     );
 }
 

@@ -47,10 +47,30 @@ pub(crate) struct LibraryUi {
     /// The window's layer in the last frame: only a pointer on it is over
     /// the window (another window or a dialog may cover part of it).
     pub(crate) drawn_layer: Option<egui::LayerId>,
-    /// A track *Show in library* asked for, with the selection the window
-    /// was sent to: the table selects its row and scrolls to it once the
-    /// snapshot holds that selection and lists the track.
-    pub(crate) reveal: Option<(TrackId, LibrarySelection)>,
+    /// A track *Show in library* asked for: the table selects its row and
+    /// scrolls to it once the snapshot holds the selection it sent and
+    /// lists the track.
+    pub(crate) reveal: Option<Reveal>,
+}
+
+/// A *Show in library* waiting for the snapshot (track library spec §9).
+pub(crate) struct Reveal {
+    pub track: TrackId,
+    /// The selection the window was sent to.
+    pub selection: LibrarySelection,
+    /// The snapshot's view when it was sent: a snapshot that differs from
+    /// it without holding the selection is the operator's own change.
+    pub against: Box<LibraryView>,
+}
+
+impl Reveal {
+    pub(crate) fn new(track: TrackId, selection: LibrarySelection, against: &LibraryView) -> Self {
+        Reveal {
+            track,
+            selection,
+            against: Box::new(against.clone()),
+        }
+    }
 }
 
 /// The table's rows and what they were computed from.
@@ -145,13 +165,24 @@ impl LibraryUi {
     /// the row alone is selected and its index is returned, to scroll to.
     /// The request lapses when the library no longer holds the track.
     pub(crate) fn take_reveal(&mut self, state: &AppState) -> Option<usize> {
-        let (track, selection) = self.reveal?;
-        if state.library.get(track).is_none() {
+        let reveal = self.reveal.as_ref()?;
+        let view = &state.library_view;
+        let (track, selection) = (reveal.track, reveal.selection);
+        // It lapses when the track is gone, or when the operator has
+        // moved on before it landed: typed a search, changed the scope, or
+        // closed the window or picked another category.
+        let moved_on = !self.search.is_empty()
+            || view.whole_library != reveal.against.whole_library
+            || if view.selection == selection {
+                !view.open
+            } else {
+                *view != *reveal.against
+            };
+        if moved_on || state.library.get(track).is_none() {
             self.reveal = None;
             return None;
         }
-        let view = &state.library_view;
-        if view.selection != selection && !view.whole_library {
+        if view.selection != selection {
             return None;
         }
         let at = self
@@ -342,10 +373,12 @@ pub(crate) struct Pending<T> {
 mod tests {
     use super::*;
     use fp_model::Command;
+    use fp_model::library_view::LibrarySelection;
     use std::path::PathBuf;
 
     fn state_with(names: &[&str]) -> AppState {
         let mut s = AppState::new(fp_model::Config::default(), "Main");
+        s.library_view.open = true;
         fp_model::apply(
             &mut s,
             Command::AddToLibrary {
@@ -368,11 +401,14 @@ mod tests {
 
     #[test]
     fn a_reveal_waits_for_the_selection_then_selects_the_row_once() {
-        use fp_model::library_view::LibrarySelection;
         let mut s = state_with(&["a", "b", "c"]);
         let b = id(&s, "b");
         let mut ui = LibraryUi {
-            reveal: Some((b, LibrarySelection::Uncategorised)),
+            reveal: Some(Reveal::new(
+                b,
+                LibrarySelection::Uncategorised,
+                &s.library_view,
+            )),
             ..LibraryUi::default()
         };
         // The snapshot still shows All tracks.
@@ -390,13 +426,64 @@ mod tests {
 
     #[test]
     fn a_reveal_lapses_when_the_track_leaves_the_library() {
-        use fp_model::library_view::LibrarySelection;
         let s = state_with(&["a"]);
         let gone = TrackId(999_999);
         let mut ui = LibraryUi {
-            reveal: Some((gone, LibrarySelection::All)),
+            reveal: Some(Reveal::new(gone, LibrarySelection::All, &s.library_view)),
             ..LibraryUi::default()
         };
+        ui.rows(&s);
+        assert_eq!(ui.take_reveal(&s), None);
+        assert!(ui.reveal.is_none());
+    }
+
+    fn pending(s: &AppState, track: TrackId) -> LibraryUi {
+        LibraryUi {
+            reveal: Some(Reveal::new(
+                track,
+                LibrarySelection::Uncategorised,
+                &s.library_view,
+            )),
+            ..LibraryUi::default()
+        }
+    }
+
+    #[test]
+    fn a_reveal_lapses_when_the_operator_picks_another_category_first() {
+        let mut s = state_with(&["a", "b"]);
+        let b = id(&s, "b");
+        let mut ui = pending(&s, b);
+        // The snapshot changes, to something else than the target.
+        s.library_view.selection = LibrarySelection::Category(fp_model::CategoryId(7));
+        ui.rows(&s);
+        assert_eq!(ui.take_reveal(&s), None);
+        assert!(ui.reveal.is_none(), "dropped");
+    }
+
+    #[test]
+    fn a_reveal_lapses_when_the_operator_searches_or_closes_the_window() {
+        let mut s = state_with(&["a", "b"]);
+        let b = id(&s, "b");
+        let mut ui = pending(&s, b);
+        ui.search = "a".into();
+        ui.rows(&s);
+        assert_eq!(ui.take_reveal(&s), None);
+        assert!(ui.reveal.is_none(), "a search drops it");
+
+        let mut ui = pending(&s, b);
+        s.library_view.selection = LibrarySelection::Uncategorised;
+        s.library_view.open = false;
+        ui.rows(&s);
+        assert_eq!(ui.take_reveal(&s), None);
+        assert!(ui.reveal.is_none(), "closing drops it");
+    }
+
+    #[test]
+    fn a_reveal_lapses_when_the_scope_changes() {
+        let mut s = state_with(&["a", "b"]);
+        let b = id(&s, "b");
+        let mut ui = pending(&s, b);
+        s.library_view.whole_library = true;
         ui.rows(&s);
         assert_eq!(ui.take_reveal(&s), None);
         assert!(ui.reveal.is_none());
