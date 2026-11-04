@@ -104,6 +104,9 @@ pub(crate) struct SettingsState {
     player_count_draft: Option<usize>,
     /// On a phone, a section shows instead of the list of sections (PL20).
     pub(crate) phone_section: bool,
+    /// Outputs scrolls the library's row into view the next time it is
+    /// drawn (Settings opened from the library's preview bar).
+    reveal_library_route: bool,
 }
 
 impl SettingsState {
@@ -134,6 +137,7 @@ impl SettingsState {
     pub(crate) fn show_outputs(&mut self) {
         self.section = Section::Outputs;
         self.phone_section = true;
+        self.reveal_library_route = true;
     }
 
     /// Back on a phone (PL20): from a section to the list. False on the
@@ -1279,25 +1283,32 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, phone: bool) 
     // The library and its pre-listen are desktop only (for now).
     let library_routes = config.outputs.library.clone();
     if !phone {
-        row(ui, &t.tr("settings-library-outputs"), None, |ui| {
-            ui.vertical(|ui| {
-                route_picker(
-                    ui,
-                    scene,
-                    Owner::Library,
-                    Bus::Cue,
-                    library_routes.cue.clone(),
-                    backend_id.as_deref(),
-                    &devices,
-                );
-                let cue = fp_model::Holder::LibraryCue;
-                if config.outputs.cue_shares_main(cue)
-                    || fp_model::cue_on_air::cue_is_on_air(scene.state, cue)
-                {
-                    cue_on_air_note(ui, scene);
-                }
+        let library_row = ui.scope(|ui| {
+            row(ui, &t.tr("settings-library-outputs"), None, |ui| {
+                ui.vertical(|ui| {
+                    route_picker(
+                        ui,
+                        scene,
+                        Owner::Library,
+                        Bus::Cue,
+                        library_routes.cue.clone(),
+                        backend_id.as_deref(),
+                        &devices,
+                    );
+                    let cue = fp_model::Holder::LibraryCue;
+                    if config.outputs.cue_shares_main(cue)
+                        || fp_model::cue_on_air::cue_is_on_air(scene.state, cue)
+                    {
+                        cue_on_air_note(ui, scene);
+                    }
+                });
             });
         });
+        // Opened from the library's preview bar: its row is what the
+        // operator came for.
+        if std::mem::take(&mut st.reveal_library_route) {
+            ui.scroll_to_rect(library_row.response.rect, Some(egui::Align::Center));
+        }
     }
     match view {
         OutputsView::Advanced => devices::section(ui, scene, &backends),

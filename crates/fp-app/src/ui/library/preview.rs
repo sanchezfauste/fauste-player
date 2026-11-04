@@ -173,9 +173,12 @@ fn top_row(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &Libra
                         note_label(ui, note, theme::AMBER_TEXT);
                     }
                     if !v.has_route {
+                        // The accent, given here: the theme's text colour
+                        // override would paint a link like plain text.
                         let link = ui.add(egui::Link::new(
                             RichText::new(scene.i18n.tr("library-preview-open-settings"))
-                                .font(font(11.0)),
+                                .font(font(11.0))
+                                .color(theme::ACCENT_400),
                         ));
                         if link.clicked() {
                             view_state.open_outputs = true;

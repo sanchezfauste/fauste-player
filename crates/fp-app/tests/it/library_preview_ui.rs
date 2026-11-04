@@ -66,7 +66,12 @@ fn id_of(s: &AppState, title: &str) -> TrackId {
 /// (Alpha, Bravo, Charlie; Bravo by Artist B in Jingles), the library CUE
 /// routed when `routed`, and the library window open.
 fn base(routed: bool) -> AppState {
-    let mut s = state(1, 0);
+    base_with(1, routed)
+}
+
+/// As `base`, with `players` players.
+fn base_with(players: usize, routed: bool) -> AppState {
+    let mut s = state(players, 0);
     if routed {
         support::give_library_cue_route(&mut s);
     }
@@ -286,7 +291,11 @@ fn a_click_on_the_waveform_seeks_the_preview() {
             })
             .collect()
     };
-    assert!(seeks(fake.take_sent()).len() <= 1, "never one per frame");
+    assert_eq!(
+        seeks(fake.take_sent()),
+        Vec::<f64>::new(),
+        "a drag never seeks"
+    );
     // A click seeks once.
     let at = pos2(wave.center().x, wave.center().y);
     h.event(Event::PointerMoved(at));
@@ -332,7 +341,8 @@ fn without_a_route_the_bar_says_why_and_opens_settings_on_outputs() {
     let backend = OfflineBackend::new();
     backend.add_device("speakers", 2);
     let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
-    let (mut h, fake) = harness_sized(base(false), vec2(1200.0, 800.0), |ui| {
+    // Four players: their outputs push the library's row below the fold.
+    let (mut h, fake) = harness_sized(base_with(4, false), vec2(1200.0, 800.0), |ui| {
         ui.with_backends(backends)
     });
     h.run_steps(2);
@@ -363,11 +373,24 @@ fn without_a_route_the_bar_says_why_and_opens_settings_on_outputs() {
         }
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
+    h.run_steps(5);
     assert_eq!(
         h.query_all_by_role_and_label(Role::Label, "Library")
             .count(),
         1,
         "Settings shows the library CUE row of Outputs"
+    );
+    // The row is scrolled into the visible body, above the footer.
+    let row = h.get_by_role_and_label(Role::Label, "Library").rect();
+    let close = h.get_by_role_and_label(Role::Button, "Close").rect();
+    let heading = h
+        .query_all_by_label("Audio outputs")
+        .map(|n| n.rect())
+        .max_by(|a, b| a.left().total_cmp(&b.left()))
+        .unwrap();
+    assert!(
+        row.top() >= heading.bottom() && row.bottom() <= close.top(),
+        "the Library row {row:?} is between the heading {heading:?} and the footer {close:?}"
     );
     assert_eq!(preview_commands(&fake.take_sent()), vec![]);
 }
@@ -446,4 +469,40 @@ fn the_player_countdown_is_unchanged() {
     let (h, _fake) = support::harness(s);
     let countdown = h.get_by_label("-03:00.0");
     assert_eq!(countdown.accesskit_node().role(), Role::Label);
+}
+
+/// The colours the text `text` is painted in on the last frame, as seen on
+/// screen (an override, else the section's colour, else the fallback).
+fn text_colours(h: &H, text: &str) -> Vec<egui::Color32> {
+    fn find(shape: &egui::Shape, text: &str, out: &mut Vec<egui::Color32>) {
+        match shape {
+            egui::Shape::Text(t) if t.galley.text() == text => {
+                let section = t.galley.job.sections[0].format.color;
+                out.push(t.override_text_color.unwrap_or(
+                    if section == egui::Color32::PLACEHOLDER {
+                        t.fallback_color
+                    } else {
+                        section
+                    },
+                ));
+            }
+            egui::Shape::Vec(v) => v.iter().for_each(|s| find(s, text, out)),
+            _ => {}
+        }
+    }
+    let mut found = Vec::new();
+    for clipped in &h.output().shapes {
+        find(&clipped.shape, text, &mut found);
+    }
+    found
+}
+
+#[test]
+fn the_open_settings_link_is_in_the_accent_colour() {
+    let (mut h, _fake) = open(base(false));
+    click_row(&mut h, "Bravo");
+    assert_eq!(
+        text_colours(&h, OPEN_SETTINGS),
+        vec![fp_app::ui::theme::ACCENT_400]
+    );
 }
