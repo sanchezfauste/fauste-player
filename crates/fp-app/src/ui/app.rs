@@ -121,8 +121,11 @@ pub(crate) struct TabScroll {
 pub(crate) struct ViewState {
     /// What a phone shows (mobile spec §6); unused elsewhere.
     pub phone: super::touch::PhoneView,
-    /// The phone's Music screen (phone layout spec §9).
+    /// The phone's Music screen (phone layout spec §9), the Library tab's
+    /// Device music.
     pub music: super::music::MusicView,
+    /// The phone's Library tab (track library spec §11.1).
+    pub phone_library: super::phone_library::PhoneLibraryView,
     /// The device's music, where the platform lists it (Android).
     pub media: Option<MediaBrowser>,
     /// Whether this frame draws a phone's views (no desktop panel buttons).
@@ -721,18 +724,26 @@ impl AppUi {
             v.wave_menu.clear();
             return true;
         }
-        // PL2: the Music screen goes up a folder before leaving.
+        // PL2: Device music goes up a folder, and the Library tab back to
+        // its selector, before leaving.
         if self.music_back() {
+            return true;
+        }
+        if self.view.phone.screen == super::touch::PhoneScreen::Library
+            && self.view.phone_library.back()
+        {
             return true;
         }
         self.view.phone.back()
     }
 
-    /// The phone's Music screen one step up (PL2); false elsewhere or at
+    /// The phone's Device music one step up (PL2); false elsewhere or at
     /// its top.
     fn music_back(&mut self) -> bool {
         let v = &mut self.view;
-        if v.phone.screen != super::touch::PhoneScreen::Music {
+        let device = v.music.pick.is_some()
+            || v.phone_library.page == super::phone_library::LibraryPage::Device;
+        if v.phone.screen != super::touch::PhoneScreen::Library || !device {
             return false;
         }
         let mut files = v

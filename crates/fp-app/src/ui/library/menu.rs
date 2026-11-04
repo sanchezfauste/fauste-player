@@ -44,7 +44,7 @@ pub(crate) fn cart_targets(page: &CartPage, chosen: usize, count: usize) -> Vec<
 }
 
 /// The categories in the tree's order, each with its depth.
-fn tree_order(categories: &Categories) -> Vec<(CategoryId, String, usize)> {
+pub(crate) fn tree_order(categories: &Categories) -> Vec<(CategoryId, String, usize)> {
     fn walk(
         categories: &Categories,
         parent: Option<CategoryId>,

@@ -11,6 +11,7 @@ use fp_model::{Command, PlayerId, PlaylistId};
 
 use super::app::{Scene, ViewState};
 use super::media_browser::{BrowseMode, MediaBrowser, MediaFile};
+use super::phone_library::LibraryPage;
 use super::widgets::font;
 use super::{format, theme, touch};
 
@@ -58,7 +59,7 @@ pub struct MusicView {
     /// The picker request the screen answers (PL19b), and the screen it
     /// returns to.
     pub pick: Option<u64>,
-    pub before_pick: Option<touch::PhoneScreen>,
+    pub before_pick: Option<(touch::PhoneScreen, LibraryPage)>,
 }
 
 /// What to show: groups to open, then tracks (indices into the files).
@@ -227,16 +228,17 @@ enum Action {
     Answer(Vec<PathBuf>),
 }
 
-/// PL19b: a picker's request turns a phone to its Music screen, which
-/// answers it; once answered or cancelled, the earlier screen returns. The
-/// selection starts and ends empty.
+/// PL19b: a picker's request turns a phone to the Library tab's Device
+/// music, which answers it; once answered or cancelled, the earlier screen
+/// (and the Library tab's page) returns. The selection starts and ends
+/// empty.
 pub(crate) fn follow_request(view_state: &mut ViewState) {
     let pending = view_state.media.as_ref().and_then(MediaBrowser::pending);
     let music = &mut view_state.music;
     match pending {
         Some((id, _, start)) if music.pick != Some(id) => {
             if music.pick.is_none() {
-                music.before_pick = Some(view_state.phone.screen);
+                music.before_pick = Some((view_state.phone.screen, view_state.phone_library.page));
             }
             music.pick = Some(id);
             music.ticked.clear();
@@ -248,15 +250,20 @@ pub(crate) fn follow_request(view_state: &mut ViewState) {
                 music.browse = Browse::Folders;
                 music.folder = start;
             }
-            view_state.phone.screen = touch::PhoneScreen::Music;
+            view_state.phone.screen = touch::PhoneScreen::Library;
+            view_state.phone_library.page = LibraryPage::Device;
         }
         // The request waits on this screen: other tabs wait with it.
-        Some(_) => view_state.phone.screen = touch::PhoneScreen::Music,
+        Some(_) => {
+            view_state.phone.screen = touch::PhoneScreen::Library;
+            view_state.phone_library.page = LibraryPage::Device;
+        }
         None if music.pick.is_some() => {
             music.pick = None;
             music.ticked.clear();
-            if let Some(screen) = music.before_pick.take() {
+            if let Some((screen, page)) = music.before_pick.take() {
                 view_state.phone.screen = screen;
+                view_state.phone_library.page = page;
             }
         }
         _ => {}

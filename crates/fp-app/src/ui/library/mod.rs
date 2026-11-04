@@ -8,7 +8,7 @@
 
 mod category_dialog;
 pub(crate) mod confirm;
-mod menu;
+pub(crate) mod menu;
 pub(crate) use menu::move_to_category;
 mod preview;
 pub(crate) use preview::PREVIEW_BAR_HEIGHT;

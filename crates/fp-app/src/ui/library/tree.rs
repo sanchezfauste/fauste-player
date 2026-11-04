@@ -121,7 +121,7 @@ fn items(categories: &Categories, expanded: &[CategoryId], mode: TreeMode) -> Ve
 
 /// The counts, computed again only when the library or the categories
 /// changed since the last time.
-fn refresh_counts(library: &mut LibraryUi, state: &AppState) {
+pub(crate) fn refresh_counts(library: &mut LibraryUi, state: &AppState) {
     let fresh = library.counts.as_ref().is_some_and(|c| {
         c.library.shares_storage(&state.library) && c.categories == state.categories
     });

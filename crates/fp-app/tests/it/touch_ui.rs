@@ -1100,7 +1100,8 @@ fn a_phones_outputs_have_no_library_cue_row() {
 fn back_closes_a_library_dialog_before_the_settings_section() {
     let (mut h, _fake) = touch(2, PORTRAIT);
     more(&mut h, "Settings");
-    h.get_by_label("Library").click();
+    // The top bar's tab is behind Settings: the section is the last.
+    h.get_all_by_label("Library").last().unwrap().click();
     h.run_steps(3);
     h.get_by_label("New category").click();
     h.run_steps(3);
@@ -1138,7 +1139,8 @@ fn a_touch_drag_over_the_category_tree_moves_no_category() {
     let (mut h, fake) = harness_sized(st, PORTRAIT, |ui| ui.with_touch());
     h.run_steps(3);
     more(&mut h, "Settings");
-    h.get_by_label("Library").click();
+    // The top bar's tab is behind Settings: the section is the last.
+    h.get_all_by_label("Library").last().unwrap().click();
     h.run_steps(3);
     let from = h.get_by_label("Jingles").rect().center();
     let to = h.get_by_label("Ads").rect().center();
@@ -1160,7 +1162,8 @@ fn a_touch_drag_over_the_category_tree_moves_no_category() {
 fn the_settings_library_hint_on_touch_points_to_the_menu() {
     let (mut h, _fake) = touch(2, PORTRAIT);
     more(&mut h, "Settings");
-    h.get_by_label("Library").click();
+    // The top bar's tab is behind Settings: the section is the last.
+    h.get_all_by_label("Library").last().unwrap().click();
     h.run_steps(3);
     assert!(h.query_by_label_contains("Drag a category").is_none());
     assert!(
@@ -1623,7 +1626,7 @@ fn german(size: Vec2) -> Harness<'static, AppUi> {
 fn a_phones_tabs_are_icons_and_none_is_cut_short() {
     for size in [PORTRAIT, LANDSCAPE, A56] {
         let (h, _fake) = touch(2, size);
-        for name in ["Live", "Carts", "Playlists", "Music"] {
+        for name in ["Live", "Carts", "Playlists", "Library"] {
             assert!(h.query_by_label(name).is_some(), "{name} {size:?}");
         }
         let cut = cut_in_top_bar(&h);
@@ -1899,7 +1902,7 @@ fn every_settings_section_fits_a_phone() {
 fn every_phone_screen_fits() {
     let mut found = Vec::new();
     for size in [A56, A56_LANDSCAPE] {
-        for screen in ["Live", "Carts", "Playlists", "Music", "About"] {
+        for screen in ["Live", "Carts", "Playlists", "Library", "About"] {
             let (mut h, _fake) = touch(4, size);
             if screen == "About" {
                 more(&mut h, "About");
