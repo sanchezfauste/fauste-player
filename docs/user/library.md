@@ -157,7 +157,7 @@ one you clicked is the one it uses.
 **What stops it.** Stop; removing its track from the library; closing the
 window (minimizing it does not). It never plays after a restart.
 
-**Without a Library output** the buttons are dimmed (hover them for the
+**Without a Library output** Play is dimmed (hover it for the
 reason) and a line next to them says that pre-listening needs a library CUE
 output, with a link that opens Settings → Audio outputs on the **Library**
 row. The bar still shows the track, its waveform and its markers.
