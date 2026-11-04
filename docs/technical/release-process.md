@@ -600,7 +600,7 @@ same images), rewrites its paths to the device's `Music/Demo` and
 `Music/Carts` and pushes it into the app's files folder. That needs root:
 an emulator image without the Play Store (`google_apis`), where `adb root`
 works; the script refuses a real phone, replaces the emulator's `Music`
-folder and stops when there is audio anywhere else on it (the Music screen
+folder and stops when there is audio anywhere else on it (Device music
 would list it). It fixes the screen at 1080 × 2160 (Play refuses a taller
 ratio) and 420 dpi, puts the status bar in demo mode (9:00, full battery
 and signal, no notifications), opens each screen with a tap on its
@@ -615,8 +615,9 @@ as `<name>.failed.png` (the workflow uploads it as the
 `play-screenshots-failed` artefact). The songs are analysed once;
 then the app starts again in each language (`ui.language` in its
 `config.json`). The
-taps are pixels of that fixed screen: after a change to the top bar or the
-Music screen, check them. The app's clock and a paused player's blinking
+taps are pixels of that fixed screen: after a change to the top bar, the
+Library tab's categories or Device music, check them (the music screenshot
+taps the Library tab, then its *Device music* row). The app's clock and a paused player's blinking
 Play and Pause buttons change all the time:
 `packaging/android/play/screenshot-masks.txt` lists them (patterns
 shared by every language), for `scripts/site/compare-screenshots.sh` and
