@@ -80,6 +80,15 @@ fn add(path: PathBuf, found: &mut Vec<Found>, seen: &mut HashSet<PathBuf>) {
     }
 }
 
+/// The file is certainly not there: not found, or not a file. Any other
+/// error (permission denied, a flaky share) says nothing, so no mark.
+fn is_gone(path: &Path) -> bool {
+    match std::fs::metadata(path) {
+        Ok(meta) => !meta.is_file(),
+        Err(e) => matches!(e.kind(), ErrorKind::NotFound | ErrorKind::NotADirectory),
+    }
+}
+
 /// Runs one job (file-system work: helper thread only).
 pub fn scan(job: &ScanJob) -> ScanAnswer {
     let mut answer = ScanAnswer::default();
@@ -110,7 +119,9 @@ pub fn scan(job: &ScanJob) -> ScanAnswer {
     }
     for path in &job.paths {
         // A path that vanished again, or cannot be read, adds nothing.
-        if path.is_dir() {
+        // Not followed when it is a link to a folder, as in the walk.
+        let kind = std::fs::symlink_metadata(path).map(|m| m.file_type());
+        if kind.as_ref().is_ok_and(|k| k.is_dir()) {
             walk(path, &mut answer.found, &mut seen, &mut skipped);
         } else if path.is_file() && is_audio(path) {
             add(path.clone(), &mut answer.found, &mut seen);
@@ -126,7 +137,7 @@ pub fn scan(job: &ScanJob) -> ScanAnswer {
     answer.gone = job
         .known
         .iter()
-        .filter(|(_, path)| !blocked.iter().any(|root| path.starts_with(root)) && !path.is_file())
+        .filter(|(_, path)| !blocked.iter().any(|root| path.starts_with(root)) && is_gone(path))
         .map(|(id, _)| *id)
         .collect();
     answer
@@ -136,8 +147,11 @@ pub fn scan(job: &ScanJob) -> ScanAnswer {
 pub struct Scanner {
     jobs: Sender<ScanJob>,
     answers: Receiver<ScanAnswer>,
-    /// A job was sent and its answer has not come back.
-    busy: bool,
+    /// Jobs sent and answers received: busy while they differ.
+    sent: u64,
+    received: u64,
+    /// The thread has ended.
+    dead: bool,
 }
 
 impl Scanner {
@@ -159,7 +173,9 @@ impl Scanner {
             Ok(_) => Some(Scanner {
                 jobs,
                 answers,
-                busy: false,
+                sent: 0,
+                received: 0,
+                dead: false,
             }),
             Err(e) => {
                 tracing::error!(error = %e, "cannot start the folder scanner; watched folders are not scanned");
@@ -168,26 +184,37 @@ impl Scanner {
         }
     }
 
+    /// A job was sent and not answered yet (never while the thread is gone).
     pub fn busy(&self) -> bool {
-        self.busy
+        !self.dead && self.received < self.sent
     }
 
     /// Queues a job; `false` if the thread is gone.
     pub fn send(&mut self, job: ScanJob) -> bool {
-        if self.jobs.send(job).is_ok() {
-            self.busy = true;
-            true
-        } else {
-            false
+        if self.dead || self.jobs.send(job).is_err() {
+            self.dead = true;
+            return false;
         }
+        self.sent += 1;
+        true
     }
 
     /// The answers that came back; never blocks.
     pub fn answers(&mut self) -> Vec<ScanAnswer> {
-        let answers: Vec<ScanAnswer> = self.answers.try_iter().collect();
-        if !answers.is_empty() {
-            self.busy = false;
+        let mut out = Vec::new();
+        loop {
+            match self.answers.try_recv() {
+                Ok(answer) => {
+                    self.received += 1;
+                    out.push(answer);
+                }
+                Err(crossbeam_channel::TryRecvError::Empty) => break,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    self.dead = true;
+                    break;
+                }
+            }
         }
-        answers
+        out
     }
 }

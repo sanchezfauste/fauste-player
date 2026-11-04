@@ -174,3 +174,121 @@ fn notify_watcher_refuses_a_missing_folder() {
     assert!(w.watch(&dir.path().join("absent")).is_err());
     assert!(w.watch(dir.path()).is_ok());
 }
+
+#[cfg(unix)]
+#[test]
+fn scan_does_not_mark_tracks_gone_when_a_stat_is_refused() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    touch(&root.join("sub/x.mp3"));
+    let sub = root.join("sub");
+    std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o000)).unwrap();
+    let job = ScanJob {
+        roots: vec![root.clone()],
+        paths: vec![],
+        known: vec![(TrackId(1), root.join("sub/x.mp3"))],
+    };
+    let answer = scan(&job);
+    std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o755)).unwrap();
+    assert!(answer.gone.is_empty());
+}
+
+#[cfg(unix)]
+#[test]
+fn scan_does_not_walk_a_touched_folder_symlink() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    touch(&root.join("real/a.mp3"));
+    std::os::unix::fs::symlink(root.join("real"), root.join("link")).unwrap();
+    let job = ScanJob {
+        roots: vec![],
+        paths: vec![root.join("link")],
+        known: vec![],
+    };
+    assert!(scan(&job).found.is_empty());
+}
+
+#[test]
+fn the_scanner_is_busy_until_every_job_is_answered() {
+    use fp_app::watch::scan::Scanner;
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = Scanner::spawn().unwrap();
+    assert!(!s.busy());
+    assert!(s.send(root_job(dir.path())));
+    assert!(s.send(root_job(dir.path())));
+    assert!(s.busy());
+    let mut got = 0;
+    let end = Instant::now() + Duration::from_secs(10);
+    while got < 2 && Instant::now() < end {
+        got += s.answers().len();
+        if got == 1 {
+            assert!(s.busy());
+        }
+        std::thread::yield_now();
+    }
+    assert_eq!(got, 2);
+    assert!(!s.busy());
+}
+
+#[cfg(not(target_os = "android"))]
+mod convert {
+    use fp_app::watch::FolderEvent;
+    use fp_app::watch::notify_watcher::convert;
+    use notify::event::{AccessKind, AccessMode, CreateKind, ModifyKind, RemoveKind, RenameMode};
+    use notify::{Event, EventKind};
+    use std::path::PathBuf;
+
+    fn ev(kind: EventKind) -> Event {
+        Event::new(kind).add_path(PathBuf::from("/m/a.mp3"))
+    }
+    fn touched() -> Vec<FolderEvent> {
+        vec![FolderEvent::Touched(PathBuf::from("/m/a.mp3"))]
+    }
+
+    #[test]
+    fn access_events_are_dropped_except_a_finished_write() {
+        assert!(convert(Ok(ev(EventKind::Access(AccessKind::Open(AccessMode::Any))))).is_empty());
+        assert!(
+            convert(Ok(ev(EventKind::Access(AccessKind::Close(
+                AccessMode::Read
+            )))))
+            .is_empty()
+        );
+        assert_eq!(
+            convert(Ok(ev(EventKind::Access(AccessKind::Close(
+                AccessMode::Write
+            ))))),
+            touched()
+        );
+    }
+
+    #[test]
+    fn changes_are_touched() {
+        for kind in [
+            EventKind::Create(CreateKind::File),
+            EventKind::Modify(ModifyKind::Any),
+            EventKind::Remove(RemoveKind::File),
+        ] {
+            assert_eq!(convert(Ok(ev(kind))), touched());
+        }
+        let rename = Event::new(EventKind::Modify(ModifyKind::Name(RenameMode::Both)))
+            .add_path(PathBuf::from("/m/old.mp3"))
+            .add_path(PathBuf::from("/m/new.mp3"));
+        assert_eq!(
+            convert(Ok(rename)),
+            vec![
+                FolderEvent::Touched(PathBuf::from("/m/old.mp3")),
+                FolderEvent::Touched(PathBuf::from("/m/new.mp3"))
+            ]
+        );
+    }
+
+    #[test]
+    fn a_rescan_flag_or_an_error_is_a_rescan() {
+        let flagged = ev(EventKind::Other).set_flag(notify::event::Flag::Rescan);
+        assert_eq!(convert(Ok(flagged)), vec![FolderEvent::Rescan]);
+        let err = notify::Error::generic("lost");
+        assert_eq!(convert(Err(err)), vec![FolderEvent::Rescan]);
+    }
+}

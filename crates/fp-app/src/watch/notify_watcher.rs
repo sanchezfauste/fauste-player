@@ -40,16 +40,41 @@ impl FolderWatcher for NotifyWatcher {
 
     fn events(&mut self) -> Vec<FolderEvent> {
         let mut out = Vec::new();
-        for event in self.events.try_iter() {
-            match event {
-                Ok(event) if event.need_rescan() => out.push(FolderEvent::Rescan),
-                Ok(event) => out.extend(event.paths.into_iter().map(FolderEvent::Touched)),
-                Err(e) => {
-                    tracing::warn!(error = %e, "folder watcher error; watched folders are scanned again");
-                    out.push(FolderEvent::Rescan);
-                }
+        let mut errors = 0usize;
+        for result in self.events.try_iter() {
+            if result.is_err() {
+                errors += 1;
             }
+            out.extend(convert(result));
+        }
+        if errors > 0 {
+            tracing::warn!(
+                errors,
+                "folder watcher errors; watched folders are scanned again"
+            );
         }
         out
+    }
+}
+
+/// What one notification means for the library. Opens and reads of a file
+/// (the system raises them for our own scans and for playback) are not
+/// changes and are dropped; a finished write is one.
+pub fn convert(result: notify::Result<notify::Event>) -> Vec<FolderEvent> {
+    use notify::EventKind;
+    use notify::event::{AccessKind, AccessMode};
+    match result {
+        Err(_) => vec![FolderEvent::Rescan],
+        Ok(event) if event.need_rescan() => vec![FolderEvent::Rescan],
+        Ok(event) => {
+            let finished_write = matches!(
+                event.kind,
+                EventKind::Access(AccessKind::Close(AccessMode::Write))
+            );
+            if matches!(event.kind, EventKind::Access(_)) && !finished_write {
+                return Vec::new();
+            }
+            event.paths.into_iter().map(FolderEvent::Touched).collect()
+        }
     }
 }
