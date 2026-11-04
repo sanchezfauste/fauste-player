@@ -341,6 +341,48 @@ Today a track is forgotten when nothing references it. From now on:
   of thousands of files may take a while; the library shows the progress the
   analysis already reports.
 
+### 6.1 Implementation notes (plan 5)
+
+Where the implementation settles or differs from the text above:
+
+- **LB19.** Nested watched folders are allowed; only the same folder on two
+  categories is refused (`ModelError::FolderAlreadyWatched`, naming the
+  category). A file under two goes to the innermost folder
+  (`watching_category`, the longest matching ancestor by path components).
+  Folders compare as stored (canonicalised by the folder dialog's helper
+  thread). On restore `Categories::repaired` keeps a duplicated folder on the
+  first category in stored order. Setting, changing or clearing a folder
+  never moves tracks.
+- **Threads.** The services thread never touches the file system. Scans run
+  on `fp-folder-scan`; the watcher's `watch` and `unwatch` calls run on
+  `fp-folder-watch`; the `notify` watcher has its own thread. Only an access
+  event from a closed write counts: opening or reading a file is ignored.
+- **LB21/LB22.** A watched folder whose stored path is empty or relative is
+  ignored with a log line (the reducer accepts it; a hand-edited path must not
+  watch every file). A folder that is missing, unreadable or refused by the
+  system is still scanned where it can be and retried every
+  `tuning.missing_recheck_ms` (30 s); an unreadable or missing root marks
+  nothing missing. Only a file that is really not there (`NotFound`) marks a
+  track missing; a permission error does not. Lost events (the rescan flag or
+  a watcher error) rescan every watched folder.
+- **Scanning.** Folder symlinks are not followed (no cycles); file symlinks
+  are read and their canonical path joins. The category is decided from the
+  path as found under the watched folder.
+- **Config.** `library.watch_debounce_ms`: default 1 000, range 100–60 000,
+  config file only.
+- **Remove missing tracks…** is offered on every category and covers it and
+  its subcategories. The count is taken when the item is clicked; with none, a
+  notice replaces the question. The model recomputes the set when the command
+  arrives, so a track that became used or came back meanwhile is kept.
+- **UI.** The ⟳ mark and the items show in the window and in Settings →
+  Library on every desktop build, the narrow layout included; the gate is the
+  Android build.
+- **Licence.** `notify` is CC0-1.0, allowed for that crate alone (a
+  `deny.toml` exception and the narrowest `about.toml` acceptance), as CC0
+  grants no patent licence.
+- Analysis of tracks that are not yet analysed still marks the tracks of an
+  unmounted share missing; it predates the watch and only marks.
+
 ## 7. The library window (plan 3)
 
 ### 7.1 Window

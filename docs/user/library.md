@@ -45,7 +45,11 @@ belongs to at most one category.
   it later leaves the tracks already in it as they are. A name cannot be empty
   and cannot repeat a sibling's name; categories nest only up to a limit.
 - **Right-click** a category (or long-press on a touch screen) for **New
-  subcategory…**, **Rename…**, **Colour**, **Kind** and **Delete…**.
+  subcategory…**, **Rename…**, **Colour**, **Kind** and **Delete…**. On the
+  desktop the menu also has **Watch folder…** (**Change watched folder…** and
+  **Stop watching folder** once it watches one) and **Remove missing
+  tracks…**; see [Watched folders](#watched-folders) and
+  [Removing tracks](#removing-tracks).
 - **Drag** a category to move it: onto another category to nest it, or into
   the gap between two categories to place it there. A category cannot go into
   itself. On a touch screen the tree only takes taps and scrolls under a
@@ -61,6 +65,48 @@ says what plays.
 The same tree is in **Settings → Library**, to create, rename, recolour,
 change the kind of, move and delete categories without opening the window (it
 has no *All tracks*, *Uncategorised* or selection).
+
+## Watched folders
+
+On the desktop a category can watch one folder. Right-click it and choose
+**Watch folder…**, then pick the folder. The category shows a ⟳ mark before
+its count; hover it to read the folder.
+
+- Every audio file in the folder and its subfolders joins the category.
+  Subfolders do not create subcategories.
+- A track that is already in another category stays there. A track that is
+  in no category joins this one. Setting, changing or stopping a watch never
+  moves a track: the tracks of a folder that is no longer watched stay in their
+  category.
+- While the application runs, the folder is followed: a new file joins once it
+  has been quiet for a moment (`library.watch_debounce_ms`, 1 second by
+  default, so a file that is still being copied is not read half-written). The
+  folder is also scanned every time the application starts, to catch what
+  changed while it was closed.
+- A file that vanishes from the folder (deleted, moved or renamed) leaves its
+  track in the library, marked missing, with its markers. If the file comes
+  back, the track is normal again by itself. A renamed file joins as a new
+  track under its new name.
+- Watched folders can be nested. A file under two of them goes to the category
+  of the innermost one. The same folder cannot be watched by two categories:
+  the application says which category already has it.
+- Nothing a watched folder does loads or plays a track.
+
+If the folder cannot be followed, the ⟳ mark changes colour and its
+tooltip says why: *Watched folder not found: …. It is looked for again.* (for
+example a drive that is not mounted), *Watched folder cannot be read: …. It is
+tried again.*, or *Changes in … are not followed; it is scanned at start and
+tried again.* (the system refused to watch it). The folder is tried again
+every 30 seconds (`tuning.missing_recheck_ms`) and scanned as soon as it
+appears. No track is marked missing or removed because its folder is not
+there. A subfolder that cannot be read is skipped and the log says so; folder
+links (symbolic links to folders) are not followed.
+
+New files go to the analysis behind anything a player or a cart needs, so a
+folder with thousands of files takes a while; the analysis progress shows it.
+
+The same menu and mark are in **Settings → Library**. They are not on Android,
+which does not watch folders.
 
 ## The track table
 
@@ -188,6 +234,13 @@ tracks is used, a second question counts the playlist entries and carts that
 lose them. A track that is on air (playing in a
 player or on the cartwall) cannot be removed: nothing is removed and a notice
 says what plays.
+
+**Remove missing tracks…** (in the category's menu, on any category) removes
+the tracks of that category and its subcategories whose file is missing and
+that no playlist entry or cart uses. It asks first, with their number; no file
+is touched. Tracks in use are kept, and a category with none says so in a
+notice. Use it to clean up after files left a watched folder: the application
+never removes them by itself.
 
 ## From a playlist
 
