@@ -1074,3 +1074,82 @@ fn a_dead_watch_thread_shows_every_folder_not_followed() {
     });
     r.run_until("still scanned", |r| tracks(r) == 1);
 }
+
+/// `/m` and `/m/gold` watched, a file analysed in each, the watch settled.
+fn nested_settled(retry_ms: f64) -> (tempfile::TempDir, PathBuf, Rig, FakeWatcher, CategoryId) {
+    let dir = tempfile::tempdir().unwrap();
+    let music = folder(&dir, "m");
+    let gold_folder = folder(&dir, "m/gold");
+    wav(&music, "1.wav", 1);
+    wav(&gold_folder, "2.wav", 1);
+    let keep = tempfile::tempdir().unwrap();
+    let mut g = None;
+    let (mut r, fake) = watching(dir, |s| {
+        create(s, "Music", TrackKind::Music, Some(&music));
+        g = Some(create(s, "Gold", TrackKind::Music, Some(&gold_folder)));
+        set_debounce(s, 100);
+        s.config.tuning.missing_recheck_ms = retry_ms;
+    });
+    r.run_until("both analysed", |r| {
+        let m = r.handle.model.load();
+        m.library.len() == 2 && m.library.iter().all(|t| t.analyzed)
+    });
+    r.run_until("both watched", |_| fake.watched().len() == 2);
+    quiet_for(&mut r, 300);
+    (keep, gold_folder, r, fake, g.unwrap())
+}
+
+#[test]
+fn a_lost_nested_folder_is_not_marked_by_the_outer_walk() {
+    let (keep, gold_folder, mut r, fake, gold) = nested_settled(2_000.0);
+    std::fs::rename(&gold_folder, keep.path().join("away")).unwrap();
+    fake.refuse(gold_folder.clone(), true);
+    let until = r.now + Duration::from_millis(2_500);
+    run_to(&mut r, until);
+    r.run_until("reported missing", |r| {
+        troubles(r).get(&gold) == Some(&FolderTrouble::Missing)
+    });
+    // The outer folder is watched and walked again meanwhile.
+    quiet_for(&mut r, 1_000);
+    assert!(
+        all_ok(&r),
+        "the outer walk marks nothing under the lost folder"
+    );
+}
+
+#[test]
+fn an_unmounted_nested_folder_at_start_is_not_marked_by_the_outer_walk() {
+    let dir = tempfile::tempdir().unwrap();
+    let music = folder(&dir, "m");
+    // A nested mount point with nothing mounted: there and empty.
+    let gold_folder = folder(&dir, "m/gold");
+    touch(&music.join("1.mp3"));
+    let mut g = None;
+    let mut r = rig_with(&[], dir, Duration::ZERO, |s| {
+        create(s, "Music", TrackKind::Music, Some(&music));
+        g = Some(create(s, "Gold", TrackKind::Music, Some(&gold_folder)));
+        apply(
+            s,
+            Command::AddToLibrary {
+                paths: vec![gold_folder.join("c.mp3")],
+                category: g,
+            },
+        )
+        .unwrap();
+        let id = s.library.iter().next().unwrap().id;
+        let track = s.library.get_mut(id).unwrap();
+        track.analyzed = true;
+        track.tags_read = true;
+        track.loudness_pass = Some(fp_model::loudness::LOUDNESS_VERSION);
+        track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+    });
+    let fake = FakeWatcher::default();
+    r.services.set_watcher(Box::new(fake.clone()));
+    let gold = g.unwrap();
+    r.run_until("reported missing", |r| {
+        troubles(r).get(&gold) == Some(&FolderTrouble::Missing)
+    });
+    quiet_for(&mut r, 1_000);
+    let c = track_of(&r, &gold_folder.join("c.mp3")).unwrap();
+    assert_eq!(c.file_state, FileState::Ok, "the outer walk marks nothing");
+}

@@ -535,8 +535,17 @@ impl FolderWatch {
         }
         let roots: Vec<PathBuf> = std::mem::take(&mut self.roots).into_iter().collect();
         let mut checks = std::mem::take(&mut self.checks);
+        // A watched folder nested in a root is looked at with it: one lost
+        // at that moment blocks the marks of its own tracks.
+        checks.extend(
+            self.folders
+                .keys()
+                .filter(|folder| roots.iter().any(|root| folder.starts_with(root)))
+                .cloned(),
+        );
         checks.retain(|folder| !roots.contains(folder));
-        // The retry's checks: an empty one that holds tracks is not there.
+        // The retry's and the nested checks: an empty one that holds
+        // tracks is not there.
         let holding = checks
             .iter()
             .filter(|folder| {
@@ -557,10 +566,18 @@ impl FolderWatch {
             );
         }
         let checks: Vec<PathBuf> = checks.into_iter().collect();
+        // The tracks of a folder in trouble wait for its own walk: a walk
+        // of a folder holding it must not mark them.
+        let troubled: Vec<&PathBuf> = self
+            .troubles
+            .keys()
+            .filter(|folder| !roots.contains(*folder))
+            .collect();
         let known = state
             .library
             .iter()
             .filter(|t| t.file_state != FileState::Missing)
+            .filter(|t| !troubled.iter().any(|folder| t.path.starts_with(folder)))
             .filter(|t| {
                 roots
                     .iter()
