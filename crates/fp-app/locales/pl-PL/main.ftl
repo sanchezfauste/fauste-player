@@ -799,6 +799,13 @@ library-window-expand = Rozwiń bibliotekę
 library-window-maximise = Maksymalizuj bibliotekę
 library-window-restore = Przywróć bibliotekę
 library-window-close = Zamknij bibliotekę
+library-preview-play = Odsłuch
+library-preview-pause = Wstrzymaj odsłuch
+library-preview-stop = Zatrzymaj odsłuch
+library-preview-empty = Wybierz utwór, aby go odsłuchać
+library-preview-no-route = Odsłuch wymaga wyjścia CUE biblioteki
+library-preview-open-settings = Wybierz je w Ustawienia › Wyjścia audio
+library-preview-not-available = Nie można odtworzyć pliku
 # The library's category tree (track library spec §7.3)
 library-tree-title = Kategorie
 library-tree-new = Nowa kategoria

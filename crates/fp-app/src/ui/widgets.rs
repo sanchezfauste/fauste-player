@@ -491,6 +491,58 @@ pub fn paint_tabular_right(
     )
 }
 
+/// The smallest the big digits of [`countdown`] shrink to, in points.
+const COUNTDOWN_MIN_FONT: f32 = 10.5;
+/// The tenths' size, and the lift of their baseline, against the big
+/// digits' size.
+const COUNTDOWN_TENTHS_SHARE: f32 = 17.0 / 38.0;
+const COUNTDOWN_TENTHS_LIFT: f32 = 4.0 / 38.0;
+
+/// The big remaining time: `-mm:ss` in `colour`, its tenths smaller and
+/// dimmed, the big digits `size` points tall when they fit the width left
+/// and smaller (down to 10.5 points) when not, so the time never runs into
+/// its neighbours. A remaining time that is not finite (a length not known
+/// yet) reads `--:--` without tenths. Its accessible name is the text.
+pub fn countdown(ui: &mut Ui, remaining: f64, colour: Color32, size: f32) {
+    ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
+    let (main, tenths) = if remaining.is_finite() {
+        format::countdown(remaining)
+    } else {
+        ("--:--".to_owned(), String::new())
+    };
+    let natural = tabular_size(ui.painter(), &main, &font_medium(size)).x
+        + tabular_size(
+            ui.painter(),
+            &tenths,
+            &font_medium(size * COUNTDOWN_TENTHS_SHARE),
+        )
+        .x;
+    let min_scale = (COUNTDOWN_MIN_FONT / size.max(1.0)).min(1.0);
+    let scale = (ui.available_width() / natural.max(1.0)).clamp(min_scale, 1.0);
+    let big = font_medium(size * scale);
+    let tenths_font = font_medium(size * COUNTDOWN_TENTHS_SHARE * scale);
+    let main_size = tabular_size(ui.painter(), &main, &big);
+    let tenths_size = tabular_size(ui.painter(), &tenths, &tenths_font);
+    let (rect, response) = ui.allocate_exact_size(
+        vec2(main_size.x + tenths_size.x, main_size.y),
+        Sense::hover(),
+    );
+    let spoken = format!("{main}{tenths}");
+    response.widget_info(|| WidgetInfo::labeled(Role::Label, true, spoken.clone()));
+    paint_tabular(ui.painter(), rect.left_top(), &main, &big, colour);
+    // The tenths sit on the bottom of the big digits, smaller and dimmed.
+    paint_tabular(
+        ui.painter(),
+        pos2(
+            rect.left() + main_size.x,
+            rect.bottom() - tenths_size.y - size * COUNTDOWN_TENTHS_LIFT * scale,
+        ),
+        &tenths,
+        &tenths_font,
+        theme::NEUTRAL_500,
+    );
+}
+
 /// A label whose digits keep their width (see [`paint_tabular`]). Its
 /// accessible name is the text.
 pub fn tabular_label(ui: &mut Ui, text: &str, font: &FontId, color: Color32) -> Response {

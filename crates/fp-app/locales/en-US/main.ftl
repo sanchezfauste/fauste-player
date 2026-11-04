@@ -778,6 +778,13 @@ library-window-expand = Expand library
 library-window-maximise = Maximize library
 library-window-restore = Restore library
 library-window-close = Close the library
+library-preview-play = Pre-listen
+library-preview-pause = Pause pre-listen
+library-preview-stop = Stop pre-listen
+library-preview-empty = Select a track to pre-listen to it
+library-preview-no-route = Pre-listen needs a library CUE output
+library-preview-open-settings = Choose it in Settings › Audio outputs
+library-preview-not-available = The file cannot be played
 # The library's category tree (track library spec §7.3)
 library-tree-title = Categories
 library-tree-new = New category

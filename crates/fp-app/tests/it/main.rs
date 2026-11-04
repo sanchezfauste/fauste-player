@@ -29,6 +29,7 @@ mod layout_ui;
 mod library_links;
 mod library_menu;
 mod library_paths;
+mod library_preview_ui;
 mod library_table;
 mod library_tree;
 mod library_window;

@@ -83,10 +83,11 @@ fn open(s: AppState) -> (H, Arc<Fake>) {
     open_with(s, None)
 }
 
-/// The commands sent, without the library views.
+/// The commands sent, without the library views and the selected row
+/// reported to the preview bar.
 fn others(sent: Vec<Command>) -> Vec<Command> {
     sent.into_iter()
-        .filter(|c| !matches!(c, Command::SetLibraryView(_)))
+        .filter(|c| !matches!(c, Command::SetLibraryView(_) | Command::SelectLibraryCue(_)))
         .collect()
 }
 
@@ -97,10 +98,14 @@ fn library_rect(h: &H) -> Rect {
 }
 
 /// The cell labelled `label` in the library window's table (right of its
-/// category tree; the decks under the window name tracks too).
+/// category tree, under the title bar and the preview bar, which names the
+/// selected track; the decks under the window name tracks too).
 fn in_library(h: &H, label: &str) -> Rect {
     let window = library_rect(h);
-    let table = Rect::from_min_max(pos2(window.left() + 240.0, window.top()), window.max);
+    let table = Rect::from_min_max(
+        pos2(window.left() + 240.0, window.top() + 28.0 + 112.0),
+        window.max,
+    );
     let found: Vec<Rect> = h
         .query_all_by_label(label)
         .map(|n| n.rect())

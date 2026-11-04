@@ -778,6 +778,13 @@ library-window-expand = Expandir a biblioteca
 library-window-maximise = Maximizar a biblioteca
 library-window-restore = Restaurar a biblioteca
 library-window-close = Fechar a biblioteca
+library-preview-play = Pré-escutar
+library-preview-pause = Pausar a pré-escuta
+library-preview-stop = Parar a pré-escuta
+library-preview-empty = Selecione uma faixa para a pré-escutar
+library-preview-no-route = A pré-escuta precisa de uma saída CUE da biblioteca
+library-preview-open-settings = Escolha-a em Definições › Saídas de áudio
+library-preview-not-available = Não é possível reproduzir o ficheiro
 # The library's category tree (track library spec §7.3)
 library-tree-title = Categorias
 library-tree-new = Nova categoria

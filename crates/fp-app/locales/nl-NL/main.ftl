@@ -778,6 +778,13 @@ library-window-expand = Bibliotheek uitklappen
 library-window-maximise = Bibliotheek maximaliseren
 library-window-restore = Bibliotheek herstellen
 library-window-close = Bibliotheek sluiten
+library-preview-play = Voorbeluisteren
+library-preview-pause = Voorbeluisteren pauzeren
+library-preview-stop = Voorbeluisteren stoppen
+library-preview-empty = Selecteer een track om hem voor te beluisteren
+library-preview-no-route = Voorbeluisteren heeft een CUE-uitgang van de bibliotheek nodig
+library-preview-open-settings = Kies die in Instellingen › Audio-uitgangen
+library-preview-not-available = Het bestand kan niet worden afgespeeld
 # The library's category tree (track library spec §7.3)
 library-tree-title = Categorieën
 library-tree-new = Nieuwe categorie

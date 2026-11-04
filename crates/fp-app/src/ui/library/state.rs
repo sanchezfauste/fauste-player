@@ -54,6 +54,9 @@ pub(crate) struct LibraryUi {
     /// scrolls to it once the snapshot holds the selection it sent and
     /// lists the track.
     pub(crate) reveal: Option<Reveal>,
+    /// The selected track last reported to the preview with
+    /// `SelectLibraryCue` (LB34); `None` until the open window reports one.
+    pub(crate) preview_sent: Option<Option<TrackId>>,
 }
 
 /// A *Show in library* waiting for the snapshot (track library spec §9).

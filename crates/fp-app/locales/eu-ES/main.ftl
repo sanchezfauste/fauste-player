@@ -778,6 +778,13 @@ library-window-expand = Zabaldu liburutegia
 library-window-maximise = Maximizatu liburutegia
 library-window-restore = Leheneratu liburutegia
 library-window-close = Itxi liburutegia
+library-preview-play = Aurrez entzun
+library-preview-pause = Pausatu aurrez entzutea
+library-preview-stop = Gelditu aurrez entzutea
+library-preview-empty = Hautatu pista bat aurrez entzuteko
+library-preview-no-route = Aurrez entzuteko liburutegiaren CUE irteera bat behar da
+library-preview-open-settings = Aukeratu Ezarpenak › Audio-irteerak atalean
+library-preview-not-available = Ezin da fitxategia erreproduzitu
 # The library's category tree (track library spec §7.3)
 library-tree-title = Kategoriak
 library-tree-new = Kategoria berria

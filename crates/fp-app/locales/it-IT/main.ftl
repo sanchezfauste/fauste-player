@@ -778,6 +778,13 @@ library-window-expand = Espandi la libreria
 library-window-maximise = Ingrandisci la libreria
 library-window-restore = Ripristina la libreria
 library-window-close = Chiudi la libreria
+library-preview-play = Preascolto
+library-preview-pause = Metti in pausa il preascolto
+library-preview-stop = Ferma il preascolto
+library-preview-empty = Seleziona una traccia per preascoltarla
+library-preview-no-route = Il preascolto richiede un'uscita CUE della libreria
+library-preview-open-settings = Sceglila in Impostazioni › Uscite audio
+library-preview-not-available = Impossibile riprodurre il file
 # The library's category tree (track library spec §7.3)
 library-tree-title = Categorie
 library-tree-new = Nuova categoria

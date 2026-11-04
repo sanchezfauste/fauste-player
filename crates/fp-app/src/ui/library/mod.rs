@@ -3,12 +3,15 @@
 //! maximise or restore, close), moved by its title bar and resized from its
 //! edges. Its place and state are `AppState::library_view`; a move, resize
 //! or split drag is drawn here and sent as one `Command::SetLibraryView`
-//! when it ends.
+//! when it ends. Under the title bar, the preview bar pre-listens the
+//! selected row on the library CUE (spec §8, `preview`).
 
 mod category_dialog;
 pub(crate) mod confirm;
 mod menu;
 pub(crate) use menu::move_to_category;
+mod preview;
+pub(crate) use preview::PREVIEW_BAR_HEIGHT;
 pub(crate) mod state;
 mod table;
 pub(crate) mod tree;
@@ -209,6 +212,8 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
             library.live_tree = None;
             library.pending_rect = None;
             library.pending_tree = None;
+            // The open window reports its selection again (LB34).
+            library.preview_sent = None;
             return;
         }
     };
@@ -252,7 +257,24 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
                     shown.max,
                 )
                 .shrink(1.0);
-                split(ui, scene, view_state, body, tree, table);
+                // The preview bar above the tree and the table (LB32); a
+                // minimised window draws neither and keeps the preview
+                // (LB35).
+                let bar = Rect::from_min_size(
+                    body.min,
+                    vec2(body.width(), PREVIEW_BAR_HEIGHT.min(body.height())),
+                );
+                let mut bar_ui = ui.new_child(
+                    UiBuilder::new()
+                        .max_rect(bar)
+                        .id_salt("library-preview")
+                        .layout(Layout::top_down(Align::Min)),
+                );
+                bar_ui.set_clip_rect(bar.intersect(ui.clip_rect()));
+                preview::preview_bar(&mut bar_ui, scene, view_state);
+                let rest = Rect::from_min_max(pos2(body.left(), bar.bottom()), body.max);
+                split(ui, scene, view_state, rest, tree, table);
+                preview::follow_selection(scene, &mut view_state.library);
             }
             if movable && !saved.minimised {
                 edges(ui, scene, &mut view_state.library, shown, area);

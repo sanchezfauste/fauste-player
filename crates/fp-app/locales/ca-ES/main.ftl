@@ -778,6 +778,13 @@ library-window-expand = Desplega la biblioteca
 library-window-maximise = Maximitza la biblioteca
 library-window-restore = Restaura la biblioteca
 library-window-close = Tanca la biblioteca
+library-preview-play = Preescolta
+library-preview-pause = Posa en pausa la preescolta
+library-preview-stop = Atura la preescolta
+library-preview-empty = Selecciona una pista per preescoltar-la
+library-preview-no-route = La preescolta necessita una sortida CUE de la biblioteca
+library-preview-open-settings = Tria-la a Configuració › Sortides d'àudio
+library-preview-not-available = No es pot reproduir el fitxer
 # The library's category tree (track library spec §7.3)
 library-tree-title = Categories
 library-tree-new = Nova categoria
