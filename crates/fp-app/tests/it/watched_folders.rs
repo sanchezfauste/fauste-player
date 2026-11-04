@@ -12,6 +12,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use fp_app::ui::files::canonical_path;
 use fp_app::watch::{FolderEvent, FolderTrouble, FolderWatcher};
 use fp_model::{AppState, CategoryId, Command, FileState, TrackKind, apply};
 
@@ -52,11 +53,13 @@ fn create(state: &mut AppState, name: &str, kind: TrackKind, folder: Option<&Pat
     id
 }
 
-/// A folder under the test's directory, in its canonical form.
+/// A folder under the test's directory, in the canonical form the folder
+/// dialog stores (on Windows without the verbatim `\\?\` prefix and with
+/// long names; on macOS under `/private/var`), the form of the tracks' paths.
 fn folder(dir: &tempfile::TempDir, name: &str) -> PathBuf {
     let path = dir.path().join(name);
     std::fs::create_dir_all(&path).unwrap();
-    std::fs::canonicalize(&path).unwrap()
+    canonical_path(&path)
 }
 
 fn touch(path: &Path) {
@@ -581,7 +584,8 @@ fn a_removed_subfolder_marks_its_tracks_missing() {
 #[test]
 fn a_missing_folder_is_reported_retried_and_scanned_when_it_appears() {
     let dir = tempfile::tempdir().unwrap();
-    let gone = dir.path().join("not-mounted");
+    // Not there yet: the canonical form of the directory holding it.
+    let gone = canonical_path(dir.path()).join("not-mounted");
     let known = folder(&dir, "elsewhere");
     let old = known.join("old.mp3");
     touch(&old);

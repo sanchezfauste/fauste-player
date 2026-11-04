@@ -43,7 +43,17 @@ fn create(s: &mut AppState, name: &str) -> CategoryId {
     s.categories.iter().find(|c| c.name == name).unwrap().id
 }
 
-/// *Rock* (watching `/m/rock`, Song 1 in it) and *Jingles* (no folder),
+/// The folder *Rock* watches: absolute on every system (a path without a
+/// drive is relative on Windows, and ignored).
+fn rock_folder() -> PathBuf {
+    if cfg!(windows) {
+        PathBuf::from(r"C:\m\rock")
+    } else {
+        PathBuf::from("/m/rock")
+    }
+}
+
+/// *Rock* (watching [`rock_folder`], Song 1 in it) and *Jingles* (no folder),
 /// the library window open.
 fn tree_state() -> (AppState, Tree) {
     let mut s = state(1, 3);
@@ -62,7 +72,7 @@ fn tree_state() -> (AppState, Tree) {
         &mut s,
         Command::SetWatchedFolder {
             category: rock,
-            folder: Some(PathBuf::from("/m/rock")),
+            folder: Some(rock_folder()),
         },
     )
     .unwrap();
@@ -102,7 +112,8 @@ fn menu(h: &mut H, item: &str) {
 fn a_watching_category_shows_the_mark_with_its_folder() {
     let (s, _) = tree_state();
     let (h, _) = open(s);
-    assert!(h.query_by_label("Watches /m/rock").is_some());
+    let label = format!("Watches {}", rock_folder().display());
+    assert!(h.query_by_label(&label).is_some());
     assert_eq!(h.query_all_by_label_contains("Watches").count(), 1);
 }
 
@@ -114,10 +125,11 @@ fn a_folder_in_trouble_shows_why() {
     status.troubles.insert(tree.rock, FolderTrouble::Missing);
     cell.store(Arc::new(status));
     let (h, _) = open_with(s, Arc::new(FakePlatform::default()), cell);
-    assert!(
-        h.query_by_label("Watched folder not found: /m/rock. It is looked for again.")
-            .is_some()
+    let label = format!(
+        "Watched folder not found: {}. It is looked for again.",
+        rock_folder().display()
     );
+    assert!(h.query_by_label(&label).is_some());
 }
 
 /// Steps the harness until `done` or about a second has passed.
