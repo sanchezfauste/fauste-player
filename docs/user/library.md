@@ -88,19 +88,32 @@ its count; hover it to read the folder.
   back, the track is normal again by itself. A renamed file joins as a new
   track under its new name.
 - Watched folders can be nested. A file under two of them goes to the category
-  of the innermost one. The same folder cannot be watched by two categories:
-  the application says which category already has it.
+  of the innermost one; stopping one of them leaves the other followed. The
+  same folder cannot be watched by two categories: the application says
+  which category already has it.
 - Nothing a watched folder does loads or plays a track.
 
 If the folder cannot be followed, the ⟳ mark changes colour and its
 tooltip says why: *Watched folder not found: …. It is looked for again.* (for
 example a drive that is not mounted), *Watched folder cannot be read: …. It is
 tried again.*, or *Changes in … are not followed; it is scanned at start and
-tried again.* (the system refused to watch it). The folder is tried again
-every 30 seconds (`tuning.missing_recheck_ms`) and scanned as soon as it
-appears. No track is marked missing or removed because its folder is not
-there. A subfolder that cannot be read is skipped and the log says so; folder
-links (symbolic links to folders) are not followed.
+tried again.* (the system refused to watch it). A folder stored as a path that
+is not complete (edited by hand) is not watched at all, and the mark says so.
+
+Every 30 seconds (`tuning.missing_recheck_ms`) the application checks that
+each watched folder is still there, so a drive unplugged while it runs is
+reported too. A folder in trouble is tried again at that pace and scanned as
+soon as it is back. A folder that is not there, cannot be read, or is empty
+while the library still has tracks from it (a drive or share that is not
+mounted often looks like an empty folder) counts as not found: the watch
+marks none of its tracks missing and removes nothing. If you empty such a
+folder on purpose, the warning stays until files are back in it or you stop
+watching it, and its tracks are not marked missing. One exception: a
+track that has never been analysed is still marked missing when the analysis
+cannot find its file, wherever it is.
+
+A subfolder that cannot be read is skipped and the log says so; folder links
+(symbolic links to folders) are not followed.
 
 New files go to the analysis behind anything a player or a cart needs, so a
 folder with thousands of files takes a while; the analysis progress shows it.

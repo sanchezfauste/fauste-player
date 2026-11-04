@@ -130,15 +130,24 @@ followed; hover it for the reason. See [Watched
 folders](library.md#watched-folders).
 
 - **Not found or cannot be read**: the drive or share is not mounted or not
-  reachable. Nothing is removed; the folder is looked for again every 30
-  seconds and scanned when it appears.
-- **Changes are not followed**: the system would not watch it. This is common
-  on a network share (it may not report changes at all) and for a folder with
-  very many subfolders. The folder is still scanned at every start and at each
-  retry, so new files appear then, not at once. On Linux, a folder tree larger
-  than the limit of watches per user needs a higher `fs.inotify.max_user_watches`
-  (for example `sudo sysctl fs.inotify.max_user_watches=524288`; make it
-  permanent in `/etc/sysctl.d/`).
+  reachable. An empty folder that should hold tracks of the library counts as
+  not found too, as an unmounted share often looks like one. Nothing is
+  marked or removed; the folder is looked for again every 30 seconds and
+  scanned when it appears.
+- **Changes are not followed**: the system would not watch it, usually a
+  folder with very many subfolders. The folder is still scanned at every
+  start and at each retry, so new files appear then, not at once. On Linux, a
+  folder tree larger than the limit of watches per user needs a higher
+  `fs.inotify.max_user_watches` (for example `sudo sysctl
+  fs.inotify.max_user_watches=524288`; make it permanent in
+  `/etc/sysctl.d/`).
+- **Not a full path**: the stored folder was edited by hand into a path
+  that is not complete. Choose **Change watched folder…** to pick it again.
+- **A network share shows no warning, but files added from another computer
+  do not appear**: on a network share (SMB/CIFS, NFS) the system usually
+  accepts the watch but only reports the changes made from this computer.
+  Changes made elsewhere are seen at the next start, not while the
+  application runs.
 - **A folder with thousands of files** takes a while to scan at start; the
   analysis progress shows it.
 - Tracks whose file left a watched folder stay in the library marked missing.
