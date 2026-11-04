@@ -166,6 +166,13 @@ pub fn cue_start(state: &AppState, command: &Command) -> Option<CueStart> {
         Command::CueCart(cart) | Command::SetCartCue(cart, true) => {
             (state.cartwall.cue != Some(*cart)).then_some(CueStart::Cart(*cart))
         }
+        Command::PlayLibraryCue => {
+            let cue = &state.library_cue;
+            (cue.transport == Transport::Stopped)
+                .then_some(cue.track)
+                .flatten()
+                .map(CueStart::Library)
+        }
         _ => None,
     }
 }
@@ -185,6 +192,13 @@ fn starts_fresh(state: &AppState, start: CueStart) -> bool {
             state.cartwall.cue.is_none()
                 && state.config.outputs.cartwall_has_cue()
                 && crate::cart_rules::cue_request(state, cart).is_some()
+        }
+        CueStart::Library(track) => {
+            let cue = &state.library_cue;
+            cue.transport == Transport::Stopped
+                && cue.track == Some(track)
+                && state.config.outputs.library_has_cue()
+                && crate::library_cue::request(state, track, cue.start_at).is_some()
         }
     }
 }
@@ -257,7 +271,12 @@ pub(crate) fn before_step(state: &AppState) -> Before {
     Before(
         holders(state)
             .into_iter()
-            .filter(|h| matches!(h, Holder::PlayerCue(_) | Holder::CartwallCue))
+            .filter(|h| {
+                matches!(
+                    h,
+                    Holder::PlayerCue(_) | Holder::CartwallCue | Holder::LibraryCue
+                )
+            })
             .filter(|h| audible(state, *h) && !state.cue_on_air.confirmed.contains(h))
             .map(|h| (h, audible_mains(state, h)))
             .collect(),

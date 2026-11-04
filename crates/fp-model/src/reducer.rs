@@ -1176,6 +1176,15 @@ fn force_cue(
                 cart_rules::cue(state, cart, true, out)?;
             }
         }
+        CueStart::Library(track) => {
+            if state.library.get(track).is_none() {
+                return Err(ModelError::UnknownTrack(track));
+            }
+            crate::library_cue::select(state, Some(track), out);
+            if state.library_cue.transport == Transport::Stopped {
+                crate::library_cue::play(state, true, out);
+            }
+        }
     }
     crate::cue_on_air::forced(state, start.holder());
     Ok(())

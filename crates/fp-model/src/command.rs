@@ -343,6 +343,8 @@ pub enum CueStart {
     Entry { player: PlayerId, entry: EntryId },
     /// A cart on the cartwall's Cue.
     Cart(CartId),
+    /// A library track on the library CUE.
+    Library(TrackId),
 }
 
 impl CueStart {
@@ -351,6 +353,7 @@ impl CueStart {
         match self {
             Self::Entry { player, .. } => Holder::PlayerCue(player),
             Self::Cart(_) => Holder::CartwallCue,
+            Self::Library(_) => Holder::LibraryCue,
         }
     }
 }

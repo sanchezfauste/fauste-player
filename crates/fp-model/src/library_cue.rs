@@ -2,7 +2,7 @@
 //! the library window runs on its own holder. Runtime only, never saved
 //! (rule 10: nothing goes on air by itself after a start).
 
-use crate::command::{EngineAction, LibraryCueRequest};
+use crate::command::{CueStart, EngineAction, LibraryCueRequest};
 use crate::ids::TrackId;
 use crate::live::Holder;
 use crate::player::Transport;
@@ -92,8 +92,9 @@ pub(crate) fn select(state: &mut AppState, track: Option<TrackId>, out: &mut Vec
 }
 
 /// LB33: plays the bar's track, or releases a held preview. `force` is the
-/// answer to a confirmation (CA4); nothing asks yet.
-pub(crate) fn play(state: &mut AppState, _force: bool, out: &mut Vec<EngineAction>) {
+/// answer to a confirmation (CA4); a fresh start on a sounding on-air
+/// output asks first otherwise (CA3).
+pub(crate) fn play(state: &mut AppState, force: bool, out: &mut Vec<EngineAction>) {
     match state.library_cue.transport {
         Transport::Playing => {}
         Transport::Paused => set_paused(state, false, out),
@@ -107,6 +108,9 @@ pub(crate) fn play(state: &mut AppState, _force: bool, out: &mut Vec<EngineActio
             let Some(request) = request(state, track, state.library_cue.start_at) else {
                 return;
             };
+            if !force && crate::cue_on_air::ask(state, CueStart::Library(track)) {
+                return;
+            }
             state.library_cue.start_at = None;
             state.library_cue.transport = Transport::Playing;
             out.push(EngineAction::StartLibraryCue {
