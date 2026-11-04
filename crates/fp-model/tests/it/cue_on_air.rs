@@ -927,3 +927,15 @@ fn lb37_forcing_an_unknown_track_is_an_error() {
     let gone = fp_model::TrackId(999_999);
     assert!(apply(&mut s, Command::ForceCue(CueStart::Library(gone))).is_err());
 }
+
+#[test]
+fn lb47_a_default_output_preview_asks_while_main_sounds_there() {
+    let (mut s, _, p2) = shared();
+    s.config.outputs.library.default_output = true;
+    place(&mut s, Holder::LibraryCue, None, "desk");
+    let a = track_a(&s);
+    apply(&mut s, Command::SelectLibraryCue(Some(a))).unwrap();
+    assert!(!needs_confirmation(&s, &Command::PlayLibraryCue), "quiet");
+    apply(&mut s, Command::Play(p2)).unwrap();
+    assert!(needs_confirmation(&s, &Command::PlayLibraryCue));
+}

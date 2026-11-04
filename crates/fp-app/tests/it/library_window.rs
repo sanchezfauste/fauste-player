@@ -125,7 +125,12 @@ fn the_tile_is_not_on_a_phone() {
     let (h, _) = harness_sized(with_view(open()), vec2(412.0, 892.0), |ui| ui.with_touch());
     assert!(h.query_by_label(OPEN).is_none());
     assert!(h.query_by_label(CLOSE_TILE).is_none());
-    assert!(h.query_by_label(TITLE).is_none(), "no window on a phone");
+    // The phone's Library tab alone: no window on a phone.
+    assert_eq!(
+        h.query_all_by_label(TITLE).count(),
+        1,
+        "no window on a phone"
+    );
     assert!(h.query_all_by_label(CLOSE).next().is_none());
 }
 

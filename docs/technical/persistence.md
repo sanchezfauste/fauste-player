@@ -379,6 +379,7 @@ any field this version does not have.
 | `buffer_frames` | 512 | frames per block |
 | `routes[]` | empty | `{ player, main: Route?, cue: Route? }`, where `Route` is `{ backend, device, first_channel }` |
 | `cartwall` | none | `{ main: Route?, cue: Route? }` for the cartwall |
+| `library` | none, `default_output` per platform | `{ cue: Route?, default_output: bool }` for the library's pre-listen. `default_output` (LB46) lets the library CUE play on the default output when `cue` is empty; it defaults to true on Android and false elsewhere, has no Settings control and is config file only; an older file without it loads the platform default |
 | `bit_perfect[]` | empty | `{ backend, device }` of devices played bit-perfect (exclusive access, rate follows the files) |
 | `dsd_output[]` | empty | `{ backend, device, mode }` with `mode` `Pcm`, `Dop` or `Native`: what a bit-perfect device receives from a DSD track. A device not listed here, or not in `bit_perfect`, converts DSD to PCM. A device listed twice keeps its first mode (warning) |
 | `dsd_mix` | `ConvertToPcm` | `ConvertToPcm` or `HoldOthers`: what happens when another source needs an output carrying DSD |

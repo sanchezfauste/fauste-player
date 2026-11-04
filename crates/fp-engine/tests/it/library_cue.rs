@@ -773,3 +773,27 @@ fn two_quick_seeks_ramp_every_tail_out() {
     assert_eq!(r.engine.used_slots(), 1, "every tail is released");
     assert!(r.position() > 6.0);
 }
+
+#[test]
+fn lb46_the_library_cue_without_a_route_plays_on_the_default_output() {
+    let mut r = play_rig_with(2, None, 48_000, |c| c.outputs.library.default_output = true);
+    r.act(start(preview(1)));
+    r.settle();
+    r.run(10);
+    let device = fp_model::OutputDevice {
+        backend: "offline".into(),
+        device: "card".into(),
+    };
+    assert!(
+        r.events.iter().any(|e| matches!(
+            e,
+            EngineEvent::Placed { holder: Holder::LibraryCue, route: None, device: d, .. }
+                if *d == device
+        )),
+        "{:?}",
+        r.events
+    );
+    assert!(audible(&r.channel(0)) > 0 && audible(&r.channel(1)) > 0);
+    assert!(r.ends().is_empty(), "{:?}", r.events);
+    assert!(r.engine.library_cue_position().is_some());
+}

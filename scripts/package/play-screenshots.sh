@@ -18,7 +18,7 @@
 # which needs root: an emulator image without the Play Store (google_apis,
 # `adb root`). It replaces the emulator's Music folder with the demo songs
 # and carts, and stops when there is audio elsewhere on the emulator (the
-# Music screen would list it). Then it fixes the screen at 1080 × 2160
+# Device music would list it). Then it fixes the screen at 1080 × 2160
 # (Play refuses a taller ratio) and 420 dpi, puts the status bar in demo
 # mode, opens each screen with a tap on its top-bar button and saves the
 # screenshots as 24-bit PNG (Play refuses an alpha channel) once the
@@ -26,7 +26,8 @@
 # starts again in each language (ui.language in its config.json).
 #
 # The taps are in pixels of that fixed screen: after a change to the phone
-# top bar or the Music screen, check them (TABS and music_scene below).
+# top bar, the Library tab's categories or Device music, check them (TABS
+# and music_scene below).
 # The app's own clock and a paused player's blinking buttons change all the
 # time: packaging/android/play/screenshot-masks.txt lists them, for
 # scripts/site/compare-screenshots.sh and for the wait for a still screen.
@@ -94,9 +95,9 @@ device_carts=$device_root/Carts
 WIDTH=1080
 HEIGHT=2160
 DENSITY=420
-# The top-bar buttons (live, carts, playlists, music), in pixels.
+# The top-bar buttons (live, carts, playlists, library), in pixels.
 TABS_Y=187
-declare -A TABS_X=([live]=88 [carts]=225 [playlists]=362 [music]=500)
+declare -A TABS_X=([live]=88 [carts]=225 [playlists]=362 [library]=500)
 # What changes all the time on each screen, left out when waiting for it
 # to settle.
 masks=$root/packaging/android/play/screenshot-masks.txt
@@ -331,8 +332,11 @@ settled_capture() {
 
 tap() { shell input tap "$1" "$2"; sleep "${3:-1}"; }
 
-# The Music screen: the Demo folder, three songs chosen.
+# Device music: the Demo folder, three songs chosen.
 music_scene() {
+    # The Library tab opens on its categories: the demo state has none, so
+    # the rows are All tracks, Uncategorised and Device music (48 dp each).
+    tap 300 596 1.5 # Device music
     tap 300 840 1.5 # Demo: the root lists the folders of Music, Carts first
     for y in 866 1017 1320; do
         tap 80 "$y" 0.7
@@ -373,5 +377,5 @@ for lang in "${langs[@]}"; do
     shoot "$dir" 1-live live
     shoot "$dir" 2-carts carts
     shoot "$dir" 3-playlists playlists
-    shoot "$dir" 4-music music music_scene
+    shoot "$dir" 4-music library music_scene
 done

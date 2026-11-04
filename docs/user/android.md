@@ -22,10 +22,10 @@ settings stay. The app is not in Google Play yet.
   background. As on the desktop, nothing goes on air by itself after a
   start or a crash.
 - **Back and closing.** Back first closes what is open (the music
-  browser, Settings, About, an open player). With nothing left to close,
-  Back puts the app away while something sounds (a player, a cart or a
-  CUE pre-listen) and keeps playing; when nothing sounds, it saves and
-  closes the app. Swiping the app away in the app switcher does the same:
+  browser, Settings, About, an open player, a page of the Library tab).
+  With nothing left to close, Back puts the app away while something
+  sounds (a player, a cart or a CUE pre-listen) and keeps
+  playing; when nothing sounds, it saves and closes the app. Swiping the app away in the app switcher does the same:
   a swipe never stops what is playing, and the app closes once it falls
   silent.
 - **Other apps' sound.** When another app takes the audio, Fauste Player
@@ -34,7 +34,7 @@ settings stay. The app is not in Google Play yet.
 ## The screen
 
 On a **phone** the top bar has four tabs, **Live**, **Carts**,
-**Playlists** and **Music**, shown as icons (the chosen one also with its
+**Playlists** and **Library**, shown as icons (the chosen one also with its
 name when there is room), then the **padlock** and **⋮** (More: Settings
 and About). The clock shows when there is room for it. Turned sideways,
 the Playlists screen puts its player chips (P1, P2…) in the top bar, and
@@ -44,7 +44,7 @@ the status bar at the bottom shows only when it has something to say.
 <img src="../images/android/1-live.png" width="180" alt="Live on a phone: two players as cards, one whole and the start of the next, and the cartwall below">
 <img src="../images/android/2-carts.png" width="180" alt="Carts on a phone: the General page turned upright, two carts per row">
 <img src="../images/android/3-playlists.png" width="180" alt="Playlists on a phone: the P1 to P4 chips, the playlist tabs, the track list and the player's card at the bottom">
-<img src="../images/android/4-music.png" width="180" alt="Music on a phone: the Demo folder with three songs ticked and the bar to add them to P1's Morning playlist">
+<img src="../images/android/4-music.png" width="180" alt="Device music on a phone: the Demo folder with three songs ticked and the bar to add them to P1's Morning playlist">
 </p>
 
 - *Live:* every player as a card, and the cartwall. Each card has, top
@@ -86,10 +86,11 @@ the status bar at the bottom shows only when it has something to say.
   and, behind **⋯**, **Reset played**. A long press on the waveform sets
   a marker at that point (cue in, intro end, outro start, MIX, cue out)
   or removes one you set; markers are edited here only, not on Live.
-- *Music:* the device's music (see [Music](#music)).
+- *Library:* the track library and the device's music (see
+  [Library](#library)).
 
-Back from another screen goes to Live; on Music it first goes up a
-folder.
+Back from another screen goes to Live; on Library it first goes back to
+the list of categories (on Device music, up a folder first).
 
 When nothing moves on the screen, the app draws it once a second (for
 the clock) to spare the battery; a meter still falling after a pause or
@@ -123,20 +124,84 @@ Editing a cart opens its section directly.
 About → **Third-party licences** opens the notices of the libraries the
 app is built with in a browser or HTML viewer.
 
-## Music
+## Library
 
-On a **phone** the **Music** tab shows the device's audio files by
-**Folders** (with the path above the list; tap a part of it to go back
-up), **Artists** or **Albums**, and a search over title, artist, album
-and file name. Each row shows the title, the artist and the duration; tap
-rows to tick them. While something is ticked, a bar at the bottom shows
-how many, the player and playlist they go to (tap it to choose another),
-**Add at the end** and, when that player's next track is in that
-playlist, **Add after the next**. The tracks go in the order you ticked
-them.
+On a **phone** the **Library** tab opens on a list of categories:
+**All tracks**, your categories (each subcategory under its parent, with
+its colour and how many tracks it holds), **Uncategorised** and **Device
+music**. The library is the same one the desktop's [library
+window](library.md) shows: every file added to a playlist, a cart or the
+library is in it. Categories are created, renamed, recoloured and deleted
+in **Settings → Library**.
+
+**A category's tracks.** Tap a category to open its tracks (with those of
+its subcategories). The arrow in its header, or Back, returns to the
+categories. Another tab and back finds the list as you left it. Search
+filters the list by title, artist, album and the other tags the library
+window searches; **Whole library** searches every
+category. Each row shows the title (or the file name), the artist, the
+duration and the window's marks for a missing, unreadable or not yet
+analysed file.
+
+Tap rows to tick them. While something is ticked, the bar of Device music
+appears at the bottom: how many, the player and playlist they go to (tap
+it to choose another), **Add at the end** and **Add after the next**, as
+on Device music. The tracks go in the order you ticked them, and adding
+clears the ticks.
+Going back to the categories clears them too.
+
+**The row menu.** A long press on a row opens its menu: **Add to ▸** (a
+player's playlist, at the end), **Pre-listen**, **Move to category ▸**,
+**Re-analyse** and **Remove from library**, which asks as on the desktop
+(see [Removing tracks](library.md#removing-tracks)). While rows are
+ticked, a long press on another row ticks it too and the menu acts on
+every ticked row, in the order you ticked them; **Pre-listen** is then
+not offered. The ticks stay after the menu's action.
+
+**Pre-listen.** The 🎧 at a row's right plays its track from its cue-in
+on the library's pre-listen output; the 🎧 of another row switches to
+that track. While it plays (or is paused), a slim strip over the list
+shows the title, the time left, **Pause**/**Play** and **Stop**. The 🎧
+is dimmed when the file is missing or cannot be played.
+The preview stops when its track leaves the library and when you leave
+the Library tab (for another tab, or by Back); on the categories or on
+Device music it goes on, but its strip shows only on the track list.
+
+Unlike the desktop, Android (a phone or a tablet) plays the library's
+pre-listen on the default output when no output is chosen for it: in
+**Settings → Audio outputs → Library** the empty choice reads *System default*, and its
+**Test Cue** plays there. Choose another output there (wired headphones,
+for example) to pre-listen away from the air. The default output is
+usually also the players' and the cartwall's, so the pre-listen may be
+heard on air: while something plays on that output, the 🎧 asks first
+(**Pre-listen anyway** or **Cancel**), and a pre-listen you did not
+confirm stops when something starts there, as a player's CUE does (see
+[CUE (pre-listen)](players.md#cue-pre-listen)).
+
+**Adding device music to a category.** The **＋** in a track list's
+header opens Device music for that category. Its bar then has only **Add
+to <category>** (**Add to Uncategorised** from *All tracks* or
+*Uncategorised*), which adds the ticked files to the library in that
+category and returns to the list; a file already in the library joins it
+if it has no category and keeps the one it has otherwise, as on the
+desktop. Device music keeps its ticks between visits,
+so files ticked on an earlier visit are added too: check the count on the
+bar first. Back returns to the list without adding.
+
+### Device music
+
+**Device music** shows the device's audio files by **Folders** (with the
+path above the list; tap a part of it to go back up), **Artists** or
+**Albums**, and a search over title, artist, album and file name. Each
+row shows the title, the artist and the duration; tap rows to tick them.
+While something is ticked, a bar at the bottom shows how many, the player
+and playlist they go to (tap it to choose another), **Add at the end**
+and, when that player's next track is in that playlist, **Add after the
+next**. The tracks go in the order you ticked them. A device file has no
+pre-listen.
 
 **Add** in a playlist footer, a cart's file and Settings → Playlists →
-Music folder open the Music tab on a phone (on a tablet, the **music
+Music folder open Device music on a phone (on a tablet, the **music
 browser** window, by folder). Tick files and tap **Add**, tap one file for
 a cart, or **Use this folder**; **Cancel** or Back goes back to where you
 were. Copy music to the device (for example to its *Music* folder) to see it
@@ -144,12 +209,16 @@ there. Fauste Player only reads your music: tags and covers are not
 written, and playlists and cart pages are not imported or exported on
 Android yet.
 
+On a **tablet** the library is the desktop's [library
+window](library.md), opened from the top bar.
+
 ## Outputs
 
 Settings → Audio outputs lists the phone's outputs by kind: the speaker,
 wired headphones, a USB interface, a Bluetooth speaker ("JBL Flip
 (Bluetooth)"). Each player, the cartwall and their CUE pick one, as on the
-desktop. A Bluetooth speaker that is turned off and on again is found
+desktop, and so does the library's pre-listen (see [Library](#library)).
+A Bluetooth speaker that is turned off and on again is found
 again by its route; while it is away its players behave as with a missing
 device on the desktop. Whether two outputs can sound at the same time
 depends on the phone.

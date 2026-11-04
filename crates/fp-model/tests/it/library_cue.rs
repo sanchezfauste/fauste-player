@@ -4,8 +4,8 @@
 use crate::common::fixture;
 use fp_model::library_cue::LibraryCue;
 use fp_model::{
-    AppState, BusyCause, Config, EngineEvent, Holder, OutputDevice, Route, TrackId, Transport,
-    causes, configured_route, holders, on_event,
+    AppState, BusyCause, Config, EngineEvent, Holder, LibraryRoutes, OutputDevice, Route, TrackId,
+    Transport, causes, configured_route, holders, on_event,
 };
 
 fn route(device: &str, first_channel: u16) -> Route {
@@ -419,6 +419,23 @@ fn lb35_closing_the_window_stops_it_and_minimising_does_not() {
     assert_eq!(s.library_cue.transport, Transport::Stopped);
 }
 
+/// LB35, LB45: only closing the window stops the preview; a view change
+/// while it is closed (the phone's Library tab opening a category or
+/// toggling *Whole library*) leaves it playing.
+#[test]
+fn lb35_a_view_change_with_the_window_closed_keeps_it() {
+    let mut s = bar();
+    run(&mut s, Command::PlayLibraryCue);
+    let view = LibraryView {
+        whole_library: true,
+        ..LibraryView::default()
+    };
+    assert!(!view.open);
+    let out = run(&mut s, Command::SetLibraryView(Box::new(view)));
+    assert!(out.is_empty(), "{out:?}");
+    assert_eq!(s.library_cue.transport, Transport::Playing);
+}
+
 #[test]
 fn lb36_the_request_carries_the_library_cue_normalization() {
     let mut s = bar();
@@ -464,4 +481,37 @@ fn rule10_a_restored_state_has_the_library_cue_stopped() {
             .any(|a| matches!(a, EngineAction::StartLibraryCue { .. })),
         "{actions:?}"
     );
+}
+
+// ---- LB46: the default output as the library CUE's fallback ----
+
+#[test]
+fn lb46_the_default_output_gives_the_library_a_cue() {
+    let mut config = Config::default();
+    config.outputs.library = LibraryRoutes {
+        cue: None,
+        default_output: true,
+    };
+    assert!(config.outputs.library_has_cue());
+    config.outputs.library.default_output = false;
+    assert!(!config.outputs.library_has_cue());
+}
+
+#[test]
+fn lb46_an_old_config_without_the_field_loads_the_platform_default() {
+    let routes: LibraryRoutes = serde_json::from_str(r#"{"cue": null}"#).unwrap();
+    assert_eq!(routes.default_output, cfg!(target_os = "android"));
+    assert_eq!(routes, LibraryRoutes::default());
+}
+
+#[test]
+fn lb46_play_is_available_without_a_route_on_the_default_output() {
+    let mut s = bar();
+    s.config.outputs.library = LibraryRoutes {
+        cue: None,
+        default_output: true,
+    };
+    assert!(command_available(&s, &Command::PlayLibraryCue));
+    s.config.outputs.library.default_output = false;
+    assert!(!command_available(&s, &Command::PlayLibraryCue));
 }

@@ -38,7 +38,7 @@ fn library() -> Vec<MediaFile> {
     ]
 }
 
-/// A phone with the library, on the Music screen.
+/// A phone with the library, on the Library tab's Device music.
 fn music() -> (Harness<'static, AppUi>, MediaBrowser) {
     let (h, browser, _fake) = music_in(state(2, 3));
     (h, browser)
@@ -52,7 +52,9 @@ fn music_in(s: fp_model::AppState) -> (Harness<'static, AppUi>, MediaBrowser, Ar
         ui.with_touch().with_media_browser(given)
     });
     h.run_steps(3);
-    h.get_by_label("Music").click();
+    h.get_by_label("Library").click();
+    h.run_steps(3);
+    h.get_by_label("Device music").click();
     h.run_steps(3);
     (h, browser, fake)
 }
@@ -68,7 +70,8 @@ fn ticked(h: &Harness<'static, AppUi>, label: &str) -> bool {
     h.get_by_label(label).accesskit_node().toggled() == Some(egui::accesskit::Toggled::True)
 }
 
-/// PL1, PL17: a fourth tab with a search and the three ways to browse.
+/// PL1, PL17, LB38: Device music has a search and the three ways to
+/// browse.
 #[test]
 fn the_music_tab_has_a_search_and_three_ways_to_browse() {
     let (h, _browser) = music();
@@ -99,9 +102,10 @@ fn a_tap_on_a_row_ticks_it() {
     assert!(!ticked(&h, row));
 }
 
-/// PL17, PL2: a folder opens with a breadcrumb; Back goes up, then to Live.
+/// PL17, PL2: a folder opens with a breadcrumb; Back goes up, then to the
+/// Library tab's selector (LB38), then to Live.
 #[test]
-fn a_folder_opens_and_back_goes_up_then_to_live() {
+fn a_folder_opens_and_back_goes_up_then_to_the_selector_then_to_live() {
     let (mut h, _browser) = music();
     h.get_by_label("Rock").click();
     h.run_steps(3);
@@ -115,7 +119,13 @@ fn a_folder_opens_and_back_goes_up_then_to_live() {
     assert!(back(&mut h));
     assert!(h.query_by_label("Alpha · Other · 01:00").is_some());
     assert!(back(&mut h));
-    assert!(h.query_by_label("Folders").is_none(), "on Live");
+    assert!(h.query_by_label("Folders").is_none());
+    assert!(
+        h.query_by_label("Device music").is_some(),
+        "on the selector"
+    );
+    assert!(back(&mut h));
+    assert!(h.query_by_label("Device music").is_none(), "on Live");
 }
 
 /// PL17: Artists lists the artists, and one opens its tracks.
@@ -367,7 +377,8 @@ fn in_landscape_the_header_and_the_bar_are_one_row() {
         ui.with_touch().with_media_browser(given)
     });
     h.run_steps(3);
-    tap(&mut h, "Music");
+    tap(&mut h, "Library");
+    tap(&mut h, "Device music");
     tap(&mut h, ALPHA);
     let search = h.get_by_label("Search music").rect();
     let folders = h.get_by_label("Folders").rect();
@@ -424,7 +435,8 @@ fn a_pick_clears_the_search_and_holds_the_screen() {
         ui.with_touch().with_media_browser(given)
     });
     h.run_steps(3);
-    tap(&mut h, "Music");
+    tap(&mut h, "Library");
+    tap(&mut h, "Device music");
     h.get_by_label("Search music").click();
     h.run_steps(2);
     h.get_by_label("Search music").type_text("gam");

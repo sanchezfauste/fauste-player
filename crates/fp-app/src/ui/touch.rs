@@ -44,8 +44,9 @@ pub enum PhoneScreen {
     Carts,
     /// One player with its playlists.
     Playlists,
-    /// The device's music (§9).
-    Music,
+    /// The track library and the device's music (track library spec
+    /// §11.1).
+    Library,
 }
 
 /// What the phone shows: the screen and the player the Playlists screen
@@ -230,7 +231,7 @@ const TABS: [(PhoneScreen, &str, &str); 4] = [
     (PhoneScreen::Live, "touch-live", icon::BROADCAST),
     (PhoneScreen::Carts, "touch-carts", icon::SQUARES_FOUR),
     (PhoneScreen::Playlists, "touch-playlists", icon::PLAYLIST),
-    (PhoneScreen::Music, "touch-music", icon::MUSIC_NOTES),
+    (PhoneScreen::Library, "touch-library", icon::BOOKS),
 ];
 
 /// The gap between the top bar's tiles.
@@ -489,12 +490,13 @@ pub(crate) fn phone_middle(
     let players = scene.state.player_ids();
     view_state.phone.settle(&players);
     super::music::follow_request(view_state);
+    super::phone_library::follow_screen(scene, view_state);
     view_state.player_rects.clear();
     match view_state.phone.screen {
         PhoneScreen::Live => live(ui, scene, view_state, covers, &players, landscape),
         PhoneScreen::Carts => carts(ui, scene, view_state),
         PhoneScreen::Playlists => playlists(ui, scene, view_state, covers, &players, landscape),
-        PhoneScreen::Music => super::music::screen(ui, scene, view_state),
+        PhoneScreen::Library => super::phone_library::screen(ui, scene, view_state),
     }
 }
 

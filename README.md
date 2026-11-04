@@ -68,7 +68,11 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   pre-listens the selected track on its own Library output (Play, Pause and
   Stop, a waveform to seek and edit markers on, a meter), following the
   selection and asking first on an on-air output like any CUE. Its place and
-  state are saved with the session.
+  state are saved with the session. On an Android phone the **Library** tab
+  shows the categories, then a category's tracks with search, ticks to add
+  them to a playlist, a long-press menu, pre-listen (on the default output
+  when no Library output is chosen) and **＋** to add the device's music to
+  the category.
 - **About window:** the window's title bar shows "Fauste Player <version>";
   the info button next to Settings opens the author, the copyright, the
   licence, a short disclaimer and the licence notices of the bundled
@@ -384,7 +388,7 @@ See [Release process](docs/technical/release-process.md).
 | 6. Audio path | Audio path audit and its fixes (no clicks at starts, joins and cue-outs; clipped integer conversion; xrun reporting), DSD output as DoP or native DSD on bit-perfect devices, "No output (silent)" device | done (DoP and native DSD need a check on real hardware) |
 | 7. Website and guide | Project website on GitHub Pages with per-platform downloads, the landing page, privacy policy and user guide online (mdBook) in every interface language with AI translations and a shared language menu, screenshots of every screen from a scripted scene | done |
 | 8. Stores | Publishing every release to the Microsoft Store, the Snap Store, Google Play, Flathub, WinGet and the AUR from CI | in progress (the Microsoft Store and the Snap Store since 0.11.0; Google Play ready, with its listing and screenshots in every interface language, for the first release with the Android app; Flathub, WinGet and the AUR not yet submitted) |
-| 9. Mobile | An Android app on the same Rust core: one or more players and the cartwall with music on the device, a foreground service so playout survives the screen and the app switcher, a touch layout; iOS later ([mobile spec](docs/superpowers/specs/2026-10-25-mobile-design.md)) | in progress (the app, its touch layout, output choice and music browser are built, and releases are signed; the first Google Play release and checks on real phones are next) |
+| 9. Mobile | An Android app on the same Rust core: one or more players and the cartwall with music on the device, a foreground service so playout survives the screen and the app switcher, a touch layout; iOS later ([mobile spec](docs/superpowers/specs/2026-10-25-mobile-design.md)) | in progress (the app, its touch layout, output choice, music browser and library tab are built, and releases are signed; the first Google Play release and checks on real phones are next) |
 
 ## Documentation
 

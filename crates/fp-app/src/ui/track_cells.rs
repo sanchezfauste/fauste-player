@@ -76,7 +76,6 @@ pub(crate) fn title_cell(
     text: Color32,
     leading: impl FnOnce(&mut Ui),
 ) {
-    let t = scene.i18n;
     ui.add_space(8.0);
     // The entry's flags sit before the title, in the row's text colour
     // (feedback 2 spec O9); the "analysed by an earlier version" flag stays
@@ -84,27 +83,7 @@ pub(crate) fn title_cell(
     ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.add_space(4.0);
-        // Shown tracks are brought up to date anyway, so the flag only stays
-        // on the ones waiting.
-        if crate::services::outdated(track) {
-            flag(ui, &t.tr("flag-outdated"), |p, r| {
-                widgets::glyph(
-                    p,
-                    r,
-                    icon::ARROWS_CLOCKWISE,
-                    13.0,
-                    theme::NEUTRAL_500,
-                    false,
-                );
-            });
-        }
-        // Main spec §6.1: running, queued, or not analysed yet and not
-        // queued.
-        if let Some((glyph, key)) = view::analysis_flag(track, scene.analysis) {
-            flag(ui, &t.tr(key), |p, r| {
-                widgets::glyph(p, r, glyph, 13.0, theme::NEUTRAL_400, false);
-            });
-        }
+        analysis_flags(ui, scene, track);
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             leading(ui);
@@ -119,6 +98,33 @@ pub(crate) fn title_cell(
             );
         });
     });
+}
+
+/// The analysis flags of a track, in a right-to-left layout: analysed by
+/// an earlier version, then running, queued or waiting (main spec §6.1).
+pub(crate) fn analysis_flags(ui: &mut Ui, scene: &Scene<'_>, track: &Track) {
+    let t = scene.i18n;
+    // Shown tracks are brought up to date anyway, so the flag only stays
+    // on the ones waiting.
+    if crate::services::outdated(track) {
+        flag(ui, &t.tr("flag-outdated"), |p, r| {
+            widgets::glyph(
+                p,
+                r,
+                icon::ARROWS_CLOCKWISE,
+                13.0,
+                theme::NEUTRAL_500,
+                false,
+            );
+        });
+    }
+    // Main spec §6.1: running, queued, or not analysed yet and not
+    // queued.
+    if let Some((glyph, key)) = view::analysis_flag(track, scene.analysis) {
+        flag(ui, &t.tr(key), |p, r| {
+            widgets::glyph(p, r, glyph, 13.0, theme::NEUTRAL_400, false);
+        });
+    }
 }
 
 /// A tag column's cell: every column but `#` (which draws an entry's

@@ -139,7 +139,7 @@ screen whose shortest side is 600 points (Android's dp) or more is a
 tablet and keeps the desktop layout; a smaller one is a phone.
 
 A phone's top bar (phone layout spec PL1, PL26, PL27) has the tabs Live |
-Carts | Playlists | Music as icon tiles (`touch::screen_tiles`, `touch::TABS`;
+Carts | Playlists | Library as icon tiles (`touch::screen_tiles`, `touch::TABS`;
 the chosen tab adds its name when the room left over the icons takes it,
 nothing is cut short), on the Playlists screen in landscape the player
 chips (`touch::player_chips`, scrolling sideways), the lock tile
@@ -200,7 +200,40 @@ stops or changes playout.
   played* behind a ⋯ menu (`footer_more`), and the waveform's menu (a long
   press) offers *Remove* for each marker set by hand
   (`SetMarker { secs: None }`, which gives it back to the analysis).
-- *Music* (`music::screen`, PL17–PL19b): the pure part
+- *Library* (`phone_library::screen`, track library spec §11.1, plan 6):
+  `PhoneLibraryView` (in `ViewState::phone_library`) keeps the page
+  (`LibraryPage::Selector`, `Tracks` or `Device`), the ticked tracks in tick
+  order, the list shown, the bar's target and `adding_to` (Device music
+  opened from a list's ＋). The open category is the shared
+  `AppState::library_view.selection`, sent with `SetLibraryView` (so it is
+  saved with the session like the window's), and the search is the
+  window's `LibraryUi` search with its `SearchIndex` rows. The selector
+  (LB38) lists *All tracks*, `menu::tree_order`'s categories with
+  `tree::refresh_counts`'s counts, *Uncategorised* and Device music; a list
+  whose category is deleted returns to it (`PhoneLibraryView::settle`). The
+  list (LB39–LB42) is virtualised (`show_rows`) and shares Device music's
+  selection bar (`music::selection_bar` with `Picked::Tracks`, sending
+  `InsertTracks`); its ticks are cleared when it is left. A long press opens
+  the window's row menu in `MenuScope::Phone` (LB43): rows are ticked first
+  when others are, the menu acts on `menu_targets` in tick order, *Pre-listen*
+  shows only with nothing ticked, the ticks stay after an action, and a row
+  tap is ignored while a popup is open (egui's long touch ends with a
+  primary click). The header's ＋ (LB44) opens Device music with
+  `adding_to` set to `library::added_category` (the window's *Add files*
+  rule); its bar (`music::category_bar`) offers only *Add to <category>*
+  and sends `AddToLibrary`. A row's 🎧 (LB45) calls `prelisten`, which
+  starts the library CUE (`SelectLibraryCue` and `PlayLibraryCue`, so the
+  model's on-air check of LB47 applies) or switches a running one; it is
+  disabled when `prelisten_blocked` names a reason (no Cue output, a
+  missing or unreadable file). The strip over the list
+  (`preview_strip`) shows only on the list page. `follow_screen` stops the
+  preview when the phone leaves the Library tab and `follow_layout` when
+  the frame stops being a phone's. Back (`AppUi::back`) goes up Device
+  music's folders, then `PhoneLibraryView::back` (Device music to the list
+  it was opened from or to the selector, a list to the selector), then to
+  Live (PL2). A pick (PL19b) holds the tab on Device music and leaves the
+  page it returns to alone.
+- *Device music* (`music::screen`, PL17–PL19b): the pure part
   (`music::listing`, `MusicView`) lists the device's files by folder
   (from `top_folder`, the deepest folder holding every file), by artist or
   by album (untagged files in a group of their own), or every file whose
@@ -208,9 +241,10 @@ stops or changes playout.
   list in tap order; the bar adds it with `InsertPaths` at the end or at
   `fp_model::after_next`'s index when the target playlist is the one the
   player shows and its next is in it. Back (`AppUi::back`) goes up a
-  folder or out of an artist or album before leaving the screen. The 🎧
-  pre-listen of PL18 is not built: a file outside a playlist has no CUE
-  source yet.
+  folder or out of an artist or album before leaving the page. Its
+  selection is kept across visits (also into the ＋ mode). A device
+  file has no 🎧: the pre-listen of PL18 is only for library tracks, and a
+  loose file has none (track library spec §11.1).
 
 **The lock** (PL12, PL13) is `Layout::touch_locked`, saved with the
 session and set by `Command::SetTouchLocked` (the layout lock does not
@@ -286,7 +320,7 @@ thread they already run on, and it waits for the operator: adding tracks
 ticks files (`AudioFiles`), a cart takes one file with the cart
 extensions (`OneFile`) and Settings takes the music folder (`Folder`).
 `AppUi` draws the browser window while a request is pending; on a phone
-`music::follow_request` turns to the Music screen instead, which answers
+`music::follow_request` turns to the Library tab's Device music instead, which answers
 it (a tap for one file, *Use this folder*, *Add* for the ticked files)
 and returns to the earlier screen once the request is gone (PL19b). The handle
 is process-wide (`fp_mobile::platform::MEDIA`); a request still pending

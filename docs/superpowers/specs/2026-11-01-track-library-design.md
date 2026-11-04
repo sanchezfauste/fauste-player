@@ -7,7 +7,8 @@
   section; [persistence](../../technical/persistence.md) (the JSON state
   documents are replaced); [the on-air pre-listen spec](2026-10-15-cue-on-air-output-design.md)
   (a new Cue holder); [the phone layout spec](2026-10-28-phone-layout-design.md)
-  PL19b (the Music screen, in plan 6 only).
+  PL19b (the Music screen becomes the Library tab's Device music, in plan
+  6 only).
 - **Numbering:** rules are `LB<n>`. Each rule is testable and gets at least
   one test (§14).
 - **Line numbers** are those of `master` at `0c3d7f34`.
@@ -511,7 +512,10 @@ look follows the Nocturne design system):
   (playing stays playing, paused stays paused). A stopped preview stays
   stopped.
 - **LB35.** The preview stops when its track is removed from the library,
-  and when the window is closed (not when it is minimised).
+  and when the window is closed (not when it is minimised): when the
+  window goes from open to closed. A change of the library view while the
+  window stays closed (the phone's Library tab, which has no window,
+  §11.1) does not stop it.
 - **LB36.** The preview plays the whole file and shows its markers, as the
   players' CUE does; loudness normalization applies as on the players' CUE.
 
@@ -558,8 +562,9 @@ look follows the Nocturne design system):
   no output), and a line says why with a link that opens Settings → Audio
   outputs on the Library row.
 - The Library row of Settings → Outputs (CUE route, Test Cue, on-air note)
-  is in the Basic and Advanced views and is hidden on the phone layout until
-  plan 6 gives the phone a library screen.
+  is in the Basic and Advanced views. It was hidden on the phone layout
+  until plan 6 gave the phone a library screen; it is now on every layout
+  (LB46).
 - The CA5 notice's "by" is always a Main holder; the library CUE folds into
   the cartwall's wording.
 - The preview stops when the window closes (not when minimised), and a
@@ -595,6 +600,175 @@ look follows the Nocturne design system):
   folder through the existing observer). Pre-listen on a phone, which often
   has a single output, is decided then.
 
+### 11.1 The phone's library screen (plan 6)
+
+Decided with the maintainer on 2026-11-04. It applies to the **phone
+layout** only; a tablet keeps what it has today.
+
+**Screens.**
+
+- **LB38.** The phone's Music tab becomes the **Library** tab. It opens on
+  the **category selector**: *All tracks*, the category tree (each
+  subcategory indented under its parent, with its colour and its track
+  count as in §7.3), *Uncategorised*, and **Device music**, which is the
+  Music screen of the phone layout spec (PL17–PL19) unchanged. *(My
+  call.)* Device music stays because it is how files reach the library on
+  a phone: no file dialogs, no drops, no watched folders.
+- **LB39.** A tap on a category opens its **track list** on a screen of
+  its own. The list shows the category's tracks and its subcategories'
+  tracks, as in the window. A back button in the list's header, and the
+  system Back (PL2), return to the selector. The tab remembers the open
+  category while the app runs.
+- **LB40.** The track list has a search field. It filters the open
+  category as LB29–LB31 do. A **Whole library** toggle searches
+  everything, and the scope is remembered as in LB26.
+- **LB41.** A track row shows the title, the artist and the duration
+  (the file name when the title tag is missing), the status marks of §7.4
+  (missing, unreadable, waiting for analysis) and a check box. Only
+  visible rows are laid out (LB28).
+
+**Sending tracks to a playlist.**
+
+- **LB42.** A tap on a row ticks or unticks it, as on the Music screen
+  (PL18). While something is ticked, the selection bar of PL19 appears,
+  with the same target, the same **Add at the end** and **Add after the
+  next**, and the same rule: the tracks keep the order they were ticked
+  in, and adding clears the selection. Both screens use one bar.
+- **LB43.** Touching and holding a row opens its **menu**:
+  - **Add to ▸**: each player's playlists, at the end;
+  - **Pre-listen** (LB45);
+  - **Move to category ▸**: LB12, with the categories and
+    *Uncategorised*;
+  - **Re-analyse**;
+  - **Remove from library**: LB17, with its confirmations.
+  
+  While rows are ticked, the menu acts on every ticked row and **Pre-listen**
+  is not shown. *(My call.)* Carts, tag and loudness editing and marker
+  editing stay desktop-only in this plan.
+- **LB44.** *(My call.)* The track list's header has a **＋** button that
+  opens Device music for that category. There the selection bar also
+  offers **Add to <category>**, which runs *Add to library* with that
+  category, with the plan 2 rule for tracks that already have a category
+  (§5.1b). Back returns to the category's list. Device music opened from
+  the selector has no such button.
+
+**Pre-listen.**
+
+- **LB45.** A row's **🎧** button (and *Pre-listen* in its menu) plays the
+  track on the library CUE (`Holder::LibraryCue`, §8), from its cue-in. A
+  slim strip at the top of the track list shows the track's title, its
+  remaining time and **Pause/Play** and **Stop**. It has no waveform and no
+  marker editing *(my call)*. The 🎧 of another row switches the preview to
+  that track, as LB34 does. The preview stops when its track is removed
+  (LB35) and when the operator leaves the Library tab.
+- **LB46.** On the phone, a library CUE with no route plays on the
+  **default output** (maintainer: "by default the default one"). The
+  desktop keeps LB32: no route means no preview. The route can still be
+  chosen in Settings → Outputs → Library, which the phone layout now
+  shows (§8.4 hid it until this plan). *As built:* the fallback is the
+  config field `outputs.library.default_output`, true by default on
+  Android (phones and tablets) and false elsewhere, with no Settings
+  control. While it is true, the Library picker's empty choice reads
+  *System default*, as the Main pickers' does, and its Test Cue plays on
+  the default output.
+- **LB47.** The preview may share its output with what is on air
+  (maintainer). When that output already sounds, the on-air pre-listen
+  rules apply unchanged (LB37, CA1–CA6). The preview asks with **Pre-listen
+  anyway** before it starts, and it stops when something starts on that
+  output. Nothing else warns or blocks it.
+
+**Categories.**
+
+- **LB48.** Categories are created, renamed, recoloured, given a kind and
+  deleted in **Settings → Library**, which already works by touch. *(My
+  call.)* The selector has no menu of its own.
+
+**Settled details** *(my calls, after a builder check)*.
+
+- The track list's ticks and Device music's ticks are **two separate
+  selections**: library tracks in one, device files in the other. The
+  track list's selection is cleared when the operator leaves the list
+  (back to the selector, or another category). Device music keeps its
+  own selection as it does today (PL19).
+- Device music opened from a category's **＋** has a selection bar with
+  **Add to <category>** only: no player target, and no pick-one mode.
+  Device music still has no 🎧, because a loose file has no pre-listen
+  (maintainer, 2026-10-31).
+- When rows are ticked, touching and holding a row that is not ticked
+  ticks it first. The menu then acts on every ticked row, and its header
+  names how many. Removing from the library keeps its LB17 confirmations.
+- With no route, the phone's library CUE is placed on the default output
+  the way a Main without a route is (L16). The on-air check is then the
+  existing one (`cue_is_on_air` on the placed outputs). "Something starts
+  on that output" means what CA1–CA6 already mean, so there is no new
+  confirmation path.
+- The open category is remembered while the app runs (as built, it is
+  also saved: see the implementation notes below). A category that no
+  longer exists sends the tab back to the selector. Back goes from the
+  list to the selector, and from the selector it follows PL2.
+- "Phone layout" is the existing phone layout of the touch interface, as
+  the other PL rules use it. The tablet's Music tab and media browser
+  window are untouched.
+- Plan 6 is checked on the emulator with the release APK, as plan 1 was,
+  in addition to its `egui_kittest` tests.
+
+**Implementation notes (plan 6).**
+
+- The default-output fallback of LB46 is a config field,
+  `outputs.library.default_output`, whose default is the platform
+  (`cfg!(target_os = "android")`): the model and the engine cannot see the
+  layout, so an Android tablet gets it too. It has no Settings control; an
+  operator who wants no preview on Android sets it to false in
+  `config.json`. The library CUE without a route is placed on the default
+  output as a route-less Main is (L16), and moves with it when the default
+  output changes (L17).
+- The open category is the shared `library_view.selection`, sent with
+  `SetLibraryView`; the phone keeps only the page (selector, list, Device
+  music) in its view state. The selection is therefore saved with the
+  session (the window uses it after a restart), while the phone's tab
+  always opens on the selector; the settled detail first said "for the
+  session only".
+- LB35 stops the preview only when the window goes from open to closed.
+  The earlier rule (any `SetLibraryView` with the window closed) stopped
+  every phone preview on a category change or a *Whole library* toggle,
+  against LB45; the desktop's behaviour is unchanged.
+- The preview strip is drawn only on the track list. A preview started
+  there goes on while the operator is on the selector or on Device music;
+  only leaving the Library tab (by a tab or by Back) stops it, and so does
+  a window that stops being a phone frame (a resize, a foldable opened),
+  since that leaves the tab too.
+- A 🎧 on a track that cannot be played (no Cue output, a missing or
+  unreadable file) is disabled with the window's reason and sends nothing;
+  a running preview of another track keeps running. (§8.4's "a track that
+  cannot be played stops the preview" is about the window's selection, not
+  a button.)
+- LB42's "same target" is read as the same rule: the track list keeps its
+  own bar target, separate from Device music's, since the two selections
+  are separate (settled details). The operator picks the target once on
+  each page.
+- A tick the search hides is dropped, as in the window and on Device
+  music. Durations read `03:25` (`format::clock`), as Device music's do.
+- The menu is the window's row menu in a phone scope
+  (`MenuScope::Phone { ticked }`), whose header names the count as the
+  window's does. The ticks stay after a menu action, so the
+  operator may chain actions (move, then add). Row taps are ignored while
+  a popup is open, because egui's long touch ends with a primary click and
+  would otherwise toggle the held row's tick.
+- The *Add to <category>* bar of LB44 is its own small bar beside the
+  selection bar: *Selected: N* and one button (*Add to Uncategorised*
+  from *All tracks* and *Uncategorised*, the window's *Add files* rule).
+  The ＋ has its own label, *Add from device music*. Device music keeps its ticks
+  between visits (PL19), so ticks left from an earlier visit are added by
+  *Add to <category>* too; the bar shows their count. A system Back during
+  a pick (PL19b) leaves the ＋ mode as it was.
+
+**Not in plan 6.**
+
+- Watched folders on Android (maintainer: "OK, no watched folders"). The
+  maintainer's later idea is a category bound to a device folder, with a
+  button that re-reads it on demand. It is recorded here and not built.
+- Carts from the library, tag, loudness and marker editing on the phone.
+
 ## 12. What the automation phase will need (not built now)
 
 Recorded so this phase does not close doors:
@@ -629,7 +803,7 @@ The JSON-specific `limits.max_state_file_bytes` keeps applying to
 
 ## 14. Testing
 
-- One test per rule LB1–LB37 at the lowest level that can see it: `fp-model`
+- One test per rule LB1–LB48 at the lowest level that can see it: `fp-model`
   for LB9–LB18 (LB12b measured), LB29–LB30, LB33–LB37; `fp-store` (temporary directories) for
   LB1, LB4–LB7, LB14 on reload; `fp-app` services for LB2–LB3, LB19–LB23
   (with a fake watcher and a temporary folder; no sleeping, as the engine
@@ -663,7 +837,7 @@ agents work in parallel; expect rebases on `track.rs`, `playlist.rs` and
    move to plan 4, which creates the holder they need.
 4. **Library pre-listen** — §8: holder, route, preview bar, marker editing.
 5. **Watched folders** — §6.
-6. **Phone library screen** — §11, after its design session.
+6. **Phone library screen** — §11.1 (LB38–LB48).
 
 ## 17. Documentation
 

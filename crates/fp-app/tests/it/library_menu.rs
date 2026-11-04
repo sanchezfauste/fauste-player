@@ -797,3 +797,31 @@ fn a_long_press_on_an_unselected_row_selects_it_alone() {
     assert!(row_selected(&h, b), "the row is selected");
     assert!(!row_selected(&h, a), "alone");
 }
+
+/// LB43: the phone's menu is a reduced one; the window keeps every item.
+#[test]
+fn the_window_menu_keeps_every_item() {
+    let s = base(&["Lib A"]);
+    let (mut h, _) = open(s);
+    let labels = [
+        "Add to",
+        "Add to cart",
+        "Move to category",
+        "Kind",
+        "Edit tags…",
+        "Loudness…",
+        "Re-analyse",
+        "Reset markers to automatic",
+        "Show file location",
+        "Remove from library…",
+    ];
+    // Some also name a column or a button outside the menu.
+    let before: Vec<usize> = labels
+        .iter()
+        .map(|l| h.query_all_by_label(l).count())
+        .collect();
+    menu(&mut h, "Lib A");
+    for (label, before) in labels.iter().zip(before) {
+        assert!(h.query_all_by_label(label).count() > before, "{label}");
+    }
+}

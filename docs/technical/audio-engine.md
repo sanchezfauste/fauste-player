@@ -539,7 +539,7 @@ plus the mixer's DSD mode.
 | `StartCue`, `StopCue` | a separate source on the player's Cue route. The model sends `StartCue` only for a player with a Cue route (`OutputsConfig::player_has_cue`); a Cue route on the Main output is placed there like any holder (on-air pre-listen spec CA8), and the model decides when such a pre-listen may sound (CA3–CA5). A Cue route to a backend this machine does not have (`cue_target`) ends the CUE at once with `CueEnded`. A pre-listen that shares a channel with a Main (`Engine::cue_on_air`) never reopens a bit-perfect bus at its file's rate (CA7). Its meters never reach a player's or the cartwall's readings (CA9), and over a DSD stream it follows the device's DSD mix policy like a cart (CA10) |
 | `SeekCue` | replace the CUE source by one at the target (the CUE plays whole files); it starts idle when the CUE is held, so a held CUE stays held |
 | `SetCuePaused` | `BusCommand::Pause`/`Resume` with the pause ramp for an audible source; a source that has not started yet is held idle and started on release. `PlayerRuntime::cue_paused` remembers the state and a new CUE clears it |
-| `StartLibraryCue`, `StopLibraryCue`, `SeekLibraryCue`, `SetLibraryCuePaused` | the library window's pre-listen (see "Library CUE"). The model sends `StartLibraryCue` only with a library Cue route (`OutputsConfig::library_has_cue`); a route to a missing backend ends it at once with `LibraryCueEnded { track }` |
+| `StartLibraryCue`, `StopLibraryCue`, `SeekLibraryCue`, `SetLibraryCuePaused` | the library window's pre-listen, and the phone's Library tab's (see "Library CUE"). The model sends `StartLibraryCue` only when the library has a Cue output (`OutputsConfig::library_has_cue`: a usable route, or no route with `outputs.library.default_output`); a route to a missing backend ends it at once with `LibraryCueEnded { track }` |
 | `AddPlayer`, `RemovePlayer` | create or retire a worker and its bookkeeping |
 | `LoadPaused` | restore a session: load the source at a position, paused |
 | `UpdateSettings` | take a new configuration for new buses and holders, and the tuning (see "Live settings") |
@@ -627,13 +627,18 @@ added.
 
 ## Library CUE
 
-The library window pre-listens one track at a time on `Holder::LibraryCue`
+The library window (and on a phone the Library tab, track library spec
+§11.1) pre-listens one track at a time on `Holder::LibraryCue`
 (`engine/library.rs`, track library spec §8), on the cartwall's pattern. No
 real-time code is added.
 
 - **Worker and route:** a worker of its own (`fp-library-cue`), created on
   the first `StartLibraryCue`, decodes it. It plays on the route
-  `outputs.library.cue`; a route on a Main output plays there (CA8), and
+  `outputs.library.cue`, or on the default output when it has no route and
+  `outputs.library.default_output` is set (LB46, `library_target`), placed
+  there as a route-less Main is (L16) and moved with it when the default
+  output changes (`apply_audio_system`, L17); a route
+  on a Main output plays there (CA8), and
   `Engine::cue_on_air` applies (CA7: it never reopens a bit-perfect bus).
 - **Placement before first use:** the engine reports the holder's `Placed`
   (or `Unplaced`) from its start and after each settings update until the

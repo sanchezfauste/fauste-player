@@ -858,9 +858,10 @@ impl Engine {
 
     /// LB32: reports where the library Cue plays from its `route`, as its
     /// playback will place it, without opening a stream or creating a
-    /// worker. A route that cannot carry a Cue has no bus.
+    /// worker. A route that cannot carry a Cue has no bus; without a route
+    /// it goes to the default output when the configuration allows (LB46).
     fn report_library_route(&mut self, route: Option<Route>) {
-        let target = route.as_ref().and_then(|r| self.cue_target(r));
+        let target = self.library_target(route.as_ref());
         self.report_placement(Holder::LibraryCue, route, target.as_ref().map(|t| &t.0));
     }
 
@@ -1037,6 +1038,15 @@ impl Engine {
             self.move_cartwall(Holder::CartwallMain, route, true);
         } else if let Some(route) = unopened {
             self.report_cartwall_route(Holder::CartwallMain, route);
+        }
+        // LB46: a library CUE without a route follows the default output.
+        if self.settings.library_routes.cue.is_none() && self.settings.library_routes.default_output
+        {
+            if self.library.is_some() {
+                self.move_library_cue(None, true);
+            } else {
+                self.report_library_route(None);
+            }
         }
         self.events.push(EngineEvent::AudioSystemInUse {
             configured: backend.clone(),

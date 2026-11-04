@@ -343,9 +343,12 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             state.library_view = view.repaired(&state.categories);
         }
         Command::SetLibraryView(view) => {
+            let was_open = state.library_view.open;
             state.library_view = view.repaired(&state.categories);
-            // LB35: closing the window ends the preview (minimising keeps it).
-            if !state.library_view.open {
+            // LB35: closing the window ends the preview (minimising keeps
+            // it); a change while it is closed (the phone's Library tab,
+            // LB45) does not.
+            if was_open && !state.library_view.open {
                 crate::library_cue::stop(state, &mut out);
             }
         }

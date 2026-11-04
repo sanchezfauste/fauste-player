@@ -45,12 +45,23 @@ impl LibraryCueRuntime {
 }
 
 impl Engine {
+    /// Where the library CUE plays from its `route` (LB46): a Cue route's
+    /// target, else the default output when the configuration allows it,
+    /// else nowhere.
+    pub(super) fn library_target(&self, route: Option<&Route>) -> Option<(BusKey, u16)> {
+        match route {
+            Some(r) => self.cue_target(r),
+            None if self.settings.library_routes.default_output => Some((self.default_output(), 0)),
+            None => None,
+        }
+    }
+
     /// Creates the library CUE worker on first use and opens its bus.
     fn ensure_library(&mut self, now: Instant) -> bool {
         let mut created = None;
         if self.library.is_none() {
             let route = self.settings.library_routes.cue.clone();
-            let cue = route.as_ref().and_then(|r| self.cue_target(r));
+            let cue = self.library_target(route.as_ref());
             let ready = self
                 .settings
                 .frames(self.settings.tuning.ready_threshold_ms) as usize;
@@ -293,7 +304,7 @@ impl Engine {
             self.report_library_route(route);
             return Some(Ok(()));
         }
-        let cue = route.as_ref().and_then(|r| self.cue_target(r));
+        let cue = self.library_target(route.as_ref());
         let outcome = match &cue {
             Some(target) => self.make_room(target, force)?,
             None => Ok(()),
