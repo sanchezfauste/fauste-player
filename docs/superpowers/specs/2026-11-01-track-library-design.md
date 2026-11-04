@@ -702,9 +702,9 @@ layout** only; a tablet keeps what it has today.
   existing one (`cue_is_on_air` on the placed outputs). "Something starts
   on that output" means what CA1–CA6 already mean, so there is no new
   confirmation path.
-- The open category is remembered (as built, across restarts too: see the
-  implementation notes below). A category that
-  no longer exists sends the tab back to the selector. Back goes from the
+- The open category is remembered while the app runs (as built, it is
+  also saved: see the implementation notes below). A category that no
+  longer exists sends the tab back to the selector. Back goes from the
   list to the selector, and from the selector it follows PL2.
 - "Phone layout" is the existing phone layout of the touch interface, as
   the other PL rules use it. The tablet's Music tab and media browser
@@ -724,9 +724,10 @@ layout** only; a tablet keeps what it has today.
   output changes (L17).
 - The open category is the shared `library_view.selection`, sent with
   `SetLibraryView`; the phone keeps only the page (selector, list, Device
-  music) in its view state. The category is therefore saved with the
-  session and comes back after a restart; the settled
-  detail first said "for the session only".
+  music) in its view state. The selection is therefore saved with the
+  session (the window uses it after a restart), while the phone's tab
+  always opens on the selector; the settled detail first said "for the
+  session only".
 - LB35 stops the preview only when the window goes from open to closed.
   The earlier rule (any `SetLibraryView` with the window closed) stopped
   every phone preview on a category change or a *Whole library* toggle,
