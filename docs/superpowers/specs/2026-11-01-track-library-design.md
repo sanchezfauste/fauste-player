@@ -7,7 +7,8 @@
   section; [persistence](../../technical/persistence.md) (the JSON state
   documents are replaced); [the on-air pre-listen spec](2026-10-15-cue-on-air-output-design.md)
   (a new Cue holder); [the phone layout spec](2026-10-28-phone-layout-design.md)
-  PL19b (the Music screen, in plan 6 only).
+  PL19b (the Music screen becomes the Library tab's Device music, in plan
+  6 only).
 - **Numbering:** rules are `LB<n>`. Each rule is testable and gets at least
   one test (§14).
 - **Line numbers** are those of `master` at `0c3d7f34`.
@@ -511,7 +512,10 @@ look follows the Nocturne design system):
   (playing stays playing, paused stays paused). A stopped preview stays
   stopped.
 - **LB35.** The preview stops when its track is removed from the library,
-  and when the window is closed (not when it is minimised).
+  and when the window is closed (not when it is minimised): when the
+  window goes from open to closed. A change of the library view while the
+  window stays closed (the phone's Library tab, which has no window,
+  §11.1) does not stop it.
 - **LB36.** The preview plays the whole file and shows its markers, as the
   players' CUE does; loudness normalization applies as on the players' CUE.
 
@@ -558,8 +562,9 @@ look follows the Nocturne design system):
   no output), and a line says why with a link that opens Settings → Audio
   outputs on the Library row.
 - The Library row of Settings → Outputs (CUE route, Test Cue, on-air note)
-  is in the Basic and Advanced views and is hidden on the phone layout until
-  plan 6 gives the phone a library screen.
+  is in the Basic and Advanced views. It was hidden on the phone layout
+  until plan 6 gave the phone a library screen; it is now on every layout
+  (LB46).
 - The CA5 notice's "by" is always a Main holder; the library CUE folds into
   the cartwall's wording.
 - The preview stops when the window closes (not when minimised), and a
@@ -660,7 +665,12 @@ layout** only; a tablet keeps what it has today.
   **default output** (maintainer: "by default the default one"). The
   desktop keeps LB32: no route means no preview. The route can still be
   chosen in Settings → Outputs → Library, which the phone layout now
-  shows (§8.4 hid it until this plan).
+  shows (§8.4 hid it until this plan). *As built:* the fallback is the
+  config field `outputs.library.default_output`, true by default on
+  Android (phones and tablets) and false elsewhere, with no Settings
+  control. While it is true, the Library picker's empty choice reads
+  *System default*, as the Main pickers' does, and its Test Cue plays on
+  the default output.
 - **LB47.** The preview may share its output with what is on air
   (maintainer). When that output already sounds, the on-air pre-listen
   rules apply unchanged (LB37, CA1–CA6). The preview asks with **Pre-listen
@@ -700,6 +710,55 @@ layout** only; a tablet keeps what it has today.
   window are untouched.
 - Plan 6 is checked on the emulator with the release APK, as plan 1 was,
   in addition to its `egui_kittest` tests.
+
+**Implementation notes (plan 6).**
+
+- The default-output fallback of LB46 is a config field,
+  `outputs.library.default_output`, whose default is the platform
+  (`cfg!(target_os = "android")`): the model and the engine cannot see the
+  layout, so an Android tablet gets it too. It has no Settings control; an
+  operator who wants no preview on Android sets it to false in
+  `config.json`. The library CUE without a route is placed on the default
+  output as a route-less Main is (L16), and moves with it when the default
+  output changes (L17).
+- The open category is the shared `library_view.selection`, sent with
+  `SetLibraryView`; the phone keeps only the page (selector, list, Device
+  music) in its view state. The category is therefore saved with the
+  session and comes back after a restart, instead of being remembered for
+  the session only as the settled details say.
+- LB35 stops the preview only when the window goes from open to closed.
+  The earlier rule (any `SetLibraryView` with the window closed) stopped
+  every phone preview on a category change or a *Whole library* toggle,
+  against LB45; the desktop's behaviour is unchanged.
+- The preview strip is drawn only on the track list. A preview started
+  there goes on while the operator is on the selector or on Device music;
+  only leaving the Library tab (by a tab or by Back) stops it, and so does
+  a window that stops being a phone frame (a resize, a foldable opened),
+  since that leaves the tab too.
+- A 🎧 on a track that cannot be played (no Cue output, a missing or
+  unreadable file) is disabled with the window's reason and sends nothing;
+  a running preview of another track keeps running. (§8.4's "a track that
+  cannot be played stops the preview" is about the window's selection, not
+  a button.)
+- LB42's "same target" is read as the same rule: the track list keeps its
+  own bar target, separate from Device music's, since the two selections
+  are separate (settled details). The operator picks the target once on
+  each page.
+- A tick the search hides is dropped, as in the window and on Device
+  music. Durations read `03:25` (`format::clock`), as Device music's do.
+- The menu is the window's row menu in a phone scope
+  (`MenuScope::Phone { ticked }`), whose header names the count as the
+  window's does. The ticks stay after a menu action, so the
+  operator may chain actions (move, then add). Row taps are ignored while
+  a popup is open, because egui's long touch ends with a primary click and
+  would otherwise toggle the held row's tick.
+- The *Add to <category>* bar of LB44 is its own small bar beside the
+  selection bar: *Selected: N* and one button (*Add to Uncategorised*
+  from *All tracks* and *Uncategorised*, the window's *Add files* rule).
+  The ＋ has its own label, *Add from device music*. Device music keeps its ticks
+  between visits (PL19), so ticks left from an earlier visit are added by
+  *Add to <category>* too; the bar shows their count. A system Back during
+  a pick (PL19b) leaves the ＋ mode as it was.
 
 **Not in plan 6.**
 

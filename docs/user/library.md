@@ -4,7 +4,8 @@ The library is every track Fauste Player knows: each file you have added to a
 playlist, a cart or the library itself is one track, with its tags, markers
 and loudness settings. The library window lists them, groups them in
 *categories*, finds them by text and sends them to the playlists and the
-cartwall. It is a desktop window; the phone has no library window.
+cartwall. It is a window on the desktop and on a tablet; a phone shows the
+library in its **Library** tab instead (see [On a phone](#on-a-phone)).
 
 ## Opening the window
 
@@ -186,8 +187,8 @@ selected when it is for several.
 
 The bar under the title bar pre-listens the selected track on the library's
 own **Library** output (chosen in [Settings → Audio
-outputs](settings.md#audio-outputs)), for example headphones. It is not on
-the phone.
+outputs](settings.md#audio-outputs)), for example headphones. A phone
+pre-listens from its track list instead (see [On a phone](#on-a-phone)).
 
 The bar shows:
 
@@ -224,8 +225,9 @@ one you clicked is the one it uses.
 **What stops it.** Stop; removing its track from the library; closing the
 window (minimizing it does not). It never plays after a restart.
 
-**Without a Library output** Play is dimmed (hover it for the
-reason) and a line next to them says that pre-listening needs a library CUE
+**Without a Library output** (on the desktop; Android plays on the default
+output instead, see [Android → Library](android.md#library)) Play is dimmed
+(hover it for the reason) and a line next to them says that pre-listening needs a library CUE
 output, with a link that opens Settings → Audio outputs on the **Library**
 row. The bar still shows the track, its waveform and its markers.
 
@@ -270,3 +272,13 @@ On the desktop, the track menu of a playlist row has **Show in library** and
 window on the track's category and selects its row; *Move to category* files
 the track without opening the window. For a track that is not in the library,
 *Show in library* is shown disabled and *Move to category* is not shown.
+
+## On a phone
+
+A phone has no library window: its **Library** tab opens on the categories
+(*All tracks*, your categories, *Uncategorised* and **Device music**), and a
+tap on one lists its tracks with a search and **Whole library**. Tick tracks
+to add them to a playlist, touch and hold a row for its menu, pre-listen a
+track with its 🎧, and add the device's music to a category with the **＋**
+of its list. On Android, without a Library output, the pre-listen plays
+on the default output. See [Android → Library](android.md#library).

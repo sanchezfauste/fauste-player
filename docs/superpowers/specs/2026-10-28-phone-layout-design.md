@@ -194,6 +194,11 @@ room.
   cart's file or a folder opens it in a *pick one* mode (no target bar;
   a tap on a file, or *Choose this folder*, answers the request and
   returns to the screen that asked). Tablets keep the window.
+  *Since track library plan 6:* the Music tab is the **Library** tab
+  (track library spec §11.1, LB38), and the Music screen is its **Device
+  music** page, unchanged; a request opens that page and returns to the
+  tab and page that were shown. The 🎧 of PL18 is for library tracks
+  only: a device file has no pre-listen.
 - The browser stays read-only (mobile spec non-goal: no writing to music
   files).
 
