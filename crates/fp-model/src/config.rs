@@ -526,11 +526,30 @@ pub struct CartwallRoutes {
     pub cue: Option<Route>,
 }
 
-/// The library outputs: without a Cue route the library cannot pre-listen.
-#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+/// The library outputs: without a Cue route the library cannot pre-listen,
+/// unless `default_output` lets it play on the default output (LB46).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LibraryRoutes {
     pub cue: Option<Route>,
+    /// Without a Cue route, the library CUE plays on the default output
+    /// (the only output of a phone). Default: on for Android, off elsewhere.
+    #[serde(default = "default_library_default_output")]
+    pub default_output: bool,
+}
+
+/// The platform default of [`LibraryRoutes::default_output`].
+fn default_library_default_output() -> bool {
+    cfg!(target_os = "android")
+}
+
+impl Default for LibraryRoutes {
+    fn default() -> Self {
+        Self {
+            cue: None,
+            default_output: default_library_default_output(),
+        }
+    }
 }
 
 impl Default for OutputsConfig {
@@ -570,16 +589,18 @@ impl OutputsConfig {
         cue_is_usable(self.cartwall.cue.as_ref())
     }
 
-    /// Whether the library has a Cue output a track pre-listen can be heard on.
+    /// Whether the library has a Cue output a track pre-listen can be heard
+    /// on: a usable route, or no route and the default output allowed (LB46).
     pub fn library_has_cue(&self) -> bool {
         cue_is_usable(self.library.cue.as_ref())
+            || (self.library.cue.is_none() && self.library.default_output)
     }
 
     /// On-air pre-listen spec: whether `cue`'s configured route overlaps
     /// a configured Main route (any player's or the cartwall's). A missing
     /// Main route goes to the default output, which only the engine
     /// resolves: it is not counted here (`cue_on_air::cue_is_on_air` sees
-    /// it once placed). False for a holder that is not a Cue.
+    /// it once placed), and neither is a library CUE on the default output. False for a holder that is not a Cue.
     pub fn cue_shares_main(&self, cue: crate::live::Holder) -> bool {
         use crate::live::Holder;
         let route = match cue {

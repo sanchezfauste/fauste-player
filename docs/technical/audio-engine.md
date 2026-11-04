@@ -633,7 +633,9 @@ real-time code is added.
 
 - **Worker and route:** a worker of its own (`fp-library-cue`), created on
   the first `StartLibraryCue`, decodes it. It plays on the route
-  `outputs.library.cue`; a route on a Main output plays there (CA8), and
+  `outputs.library.cue`, or on the default output when it has no route and
+  `outputs.library.default_output` is set (LB46, `library_target`); a route
+  on a Main output plays there (CA8), and
   `Engine::cue_on_air` applies (CA7: it never reopens a bit-perfect bus).
 - **Placement before first use:** the engine reports the holder's `Placed`
   (or `Unplaced`) from its start and after each settings update until the

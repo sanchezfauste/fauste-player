@@ -465,3 +465,38 @@ fn rule10_a_restored_state_has_the_library_cue_stopped() {
         "{actions:?}"
     );
 }
+
+// ---- LB46: the default output as the library CUE's fallback ----
+
+use fp_model::LibraryRoutes;
+
+#[test]
+fn lb46_the_default_output_gives_the_library_a_cue() {
+    let mut config = Config::default();
+    config.outputs.library = LibraryRoutes {
+        cue: None,
+        default_output: true,
+    };
+    assert!(config.outputs.library_has_cue());
+    config.outputs.library.default_output = false;
+    assert!(!config.outputs.library_has_cue());
+}
+
+#[test]
+fn lb46_an_old_config_without_the_field_loads_the_platform_default() {
+    let routes: LibraryRoutes = serde_json::from_str(r#"{"cue": null}"#).unwrap();
+    assert_eq!(routes.default_output, cfg!(target_os = "android"));
+    assert_eq!(routes, LibraryRoutes::default());
+}
+
+#[test]
+fn lb46_play_is_available_without_a_route_on_the_default_output() {
+    let mut s = bar();
+    s.config.outputs.library = LibraryRoutes {
+        cue: None,
+        default_output: true,
+    };
+    assert!(command_available(&s, &Command::PlayLibraryCue));
+    s.config.outputs.library.default_output = false;
+    assert!(!command_available(&s, &Command::PlayLibraryCue));
+}
