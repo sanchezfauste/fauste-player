@@ -4,8 +4,8 @@
     clippy::panic,
     clippy::indexing_slicing
 )]
-//! The phone's Library tab (track library spec §11.1, LB38, LB39): the
-//! category selector, a category's list and Device music.
+//! The phone's Library tab (track library spec §11.1, LB38–LB42): the
+//! category selector, a category's track list and Device music.
 
 use crate::support;
 
@@ -20,7 +20,7 @@ use fp_app::ui::controller::Controller;
 use fp_app::ui::media_browser::{BrowseMode, MediaBrowser, MediaFile};
 use fp_app::ui::phone_library::{LibraryPage, PhoneLibraryView};
 use fp_model::library_view::LibrarySelection;
-use fp_model::{AppState, Categories, CategoryId, Command, TrackId, TrackKind};
+use fp_model::{AppState, Categories, CategoryId, Command, FileState, TrackId, TrackKind};
 use support::{Fake, harness_sized, state};
 
 type H = Harness<'static, AppUi>;
@@ -238,6 +238,234 @@ fn a_deleted_open_category_returns_to_the_selector() {
     assert!(h.query_by_label("Rock").is_none());
 }
 
+// --- The track list (LB40–LB42) ---
+
+const SEARCH: &str = "Search tracks";
+const WHOLE: &str = "Whole library";
+const END: &str = "Add at the end";
+const AFTER: &str = "Add after the next";
+
+/// Adds a library track from `/lib/<file>.mp3` with these tags.
+fn track(
+    s: &mut AppState,
+    file: &str,
+    title: &str,
+    artist: &str,
+    category: Option<CategoryId>,
+) -> TrackId {
+    let path = PathBuf::from(format!("/lib/{file}.mp3"));
+    fp_model::apply(
+        s,
+        Command::AddToLibrary {
+            paths: vec![path.clone()],
+            category,
+        },
+    )
+    .unwrap();
+    let id = s.library.track_at(&path).unwrap();
+    let t = s.library.get_mut(id).unwrap();
+    t.title = title.into();
+    t.artist = artist.into();
+    t.duration_secs = 205.0;
+    id
+}
+
+/// A row's accessible name: title · artist · duration.
+fn row(title: &str, artist: &str) -> String {
+    format!("{title} · {artist} · 03:25")
+}
+
+/// A phone on Rock's list.
+fn rock_list(s: AppState) -> (H, Arc<Fake>) {
+    let (mut h, _browser, fake) = phone(s);
+    tap(&mut h, "Library");
+    tap(&mut h, "Rock");
+    fake.take_sent();
+    (h, fake)
+}
+
+fn search(h: &mut H, text: &str) {
+    h.get_by_label(SEARCH).click();
+    h.run_steps(2);
+    h.get_by_label(SEARCH).type_text(text);
+    h.run_steps(3);
+}
+
+fn is_ticked(h: &H, label: &str) -> bool {
+    h.get_by_label(label).accesskit_node().toggled() == Some(egui::accesskit::Toggled::True)
+}
+
+fn inserted(fake: &Fake) -> Vec<(fp_model::PlaylistId, usize, Vec<TrackId>)> {
+    fake.take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::InsertTracks {
+                playlist,
+                index,
+                tracks,
+            } => Some((playlist, index, tracks)),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn lb40_the_search_filters_the_open_category() {
+    let (mut s, rock) = with_categories();
+    track(&mut s, "one", "Canción uno", "Band", Some(rock));
+    track(&mut s, "other", "Other", "Band", Some(rock));
+    let (mut h, _fake) = rock_list(s);
+    assert!(h.query_by_label(&row("Other", "Band")).is_some());
+    search(&mut h, "cancion");
+    assert!(h.query_by_label(&row("Canción uno", "Band")).is_some());
+    assert!(h.query_by_label(&row("Other", "Band")).is_none());
+}
+
+#[test]
+fn lb40_whole_library_searches_everything() {
+    let (mut s, rock) = with_categories();
+    track(&mut s, "one", "Canción uno", "Band", Some(rock));
+    track(&mut s, "two", "Canción dos", "Band", None);
+    let (mut h, fake) = rock_list(s);
+    search(&mut h, "cancion");
+    assert!(h.query_by_label(&row("Canción dos", "Band")).is_none());
+    fake.take_sent();
+    tap(&mut h, WHOLE);
+    let sent = fake.take_sent();
+    assert!(
+        sent.iter().any(|c| matches!(c, Command::SetLibraryView(v)
+            if v.whole_library && v.selection == LibrarySelection::Category(rock))),
+        "{sent:?}"
+    );
+    assert!(h.query_by_label(&row("Canción uno", "Band")).is_some());
+    assert!(
+        h.query_by_label(&row("Canción dos", "Band")).is_some(),
+        "the whole library is searched"
+    );
+}
+
+#[test]
+fn lb41_a_row_shows_title_artist_duration_and_status() {
+    let (mut s, rock) = with_categories();
+    let id = track(&mut s, "gone", "Gone", "Band", Some(rock));
+    s.library.get_mut(id).unwrap().file_state = FileState::Missing;
+    // No title tag: the file name stands in.
+    track(&mut s, "untitled", "", "Band", Some(rock));
+    let (h, _fake) = rock_list(s);
+    let label = row("Gone", "Band");
+    let gone = h.get_by_label(&label);
+    assert_eq!(
+        gone.accesskit_node().role(),
+        egui::accesskit::Role::CheckBox
+    );
+    let mark = h.get_by_label_contains("File not found");
+    assert!(
+        gone.rect().contains(mark.rect().center()),
+        "the missing mark sits in its row"
+    );
+    assert!(h.query_by_label(&row("untitled.mp3", "Band")).is_some());
+}
+
+#[test]
+fn lb41_rows_are_finger_sized() {
+    let (mut s, rock) = with_categories();
+    track(&mut s, "a", "A", "Band", Some(rock));
+    let (h, _fake) = rock_list(s);
+    assert!(h.get_by_label(&row("A", "Band")).rect().height() >= 48.0);
+}
+
+#[test]
+fn lb42_ticks_add_in_tick_order_and_clear() {
+    let (mut s, rock) = with_categories();
+    let a = track(&mut s, "a", "A", "Band", Some(rock));
+    let b = track(&mut s, "b", "B", "Band", Some(rock));
+    let playlist = s.playlists.first_id().unwrap();
+    let len = s.playlists.get(playlist).unwrap().entries.len();
+    let (mut h, fake) = rock_list(s);
+    assert!(h.query_by_label(END).is_none(), "no bar without ticks");
+    tap(&mut h, &row("B", "Band"));
+    tap(&mut h, &row("A", "Band"));
+    assert!(is_ticked(&h, &row("A", "Band")));
+    assert!(h.query_by_label("Selected: 2").is_some());
+    fake.take_sent();
+    tap(&mut h, END);
+    assert_eq!(inserted(&fake), [(playlist, len, vec![b, a])]);
+    assert!(!is_ticked(&h, &row("A", "Band")));
+    assert!(!is_ticked(&h, &row("B", "Band")));
+    assert!(h.query_by_label(END).is_none(), "the bar goes");
+}
+
+#[test]
+fn lb42_add_after_the_next_uses_the_players_next() {
+    let (mut s, rock) = with_categories();
+    let a = track(&mut s, "a", "A", "Band", Some(rock));
+    let playlist = s.playlists.first_id().unwrap();
+    let first = s.playlists.get(playlist).unwrap().entries[0].id;
+    let player = s.player_ids()[0];
+    fp_model::apply(&mut s, Command::SetNext(player, first)).unwrap();
+    let (mut h, fake) = rock_list(s);
+    tap(&mut h, &row("A", "Band"));
+    fake.take_sent();
+    tap(&mut h, AFTER);
+    assert_eq!(inserted(&fake), [(playlist, 1, vec![a])]);
+}
+
+#[test]
+fn ticks_hidden_by_the_search_are_not_added() {
+    let (mut s, rock) = with_categories();
+    let a = track(&mut s, "a", "Alpha", "Band", Some(rock));
+    track(&mut s, "b", "Beta", "Band", Some(rock));
+    let playlist = s.playlists.first_id().unwrap();
+    let len = s.playlists.get(playlist).unwrap().entries.len();
+    let (mut h, fake) = rock_list(s);
+    tap(&mut h, &row("Alpha", "Band"));
+    tap(&mut h, &row("Beta", "Band"));
+    search(&mut h, "alpha");
+    assert!(h.query_by_label("Selected: 1").is_some());
+    fake.take_sent();
+    tap(&mut h, END);
+    assert_eq!(inserted(&fake), [(playlist, len, vec![a])]);
+}
+
+#[test]
+fn lb39_leaving_the_list_clears_its_ticks() {
+    let (mut s, rock) = with_categories();
+    track(&mut s, "a", "A", "Band", Some(rock));
+    let (mut h, _fake) = rock_list(s);
+    tap(&mut h, &row("A", "Band"));
+    tap(&mut h, BACK);
+    tap(&mut h, "Rock");
+    assert!(!is_ticked(&h, &row("A", "Band")));
+    assert!(h.query_by_label(END).is_none());
+}
+
+#[test]
+fn an_empty_list_says_so() {
+    let (s, _rock) = with_categories();
+    let (h, _fake) = rock_list(s);
+    assert!(h.query_by_label("No tracks here").is_some());
+}
+
+#[test]
+fn lb41_twenty_thousand_tracks_lay_out_only_visible_rows() {
+    let (mut s, rock) = with_categories();
+    let paths: Vec<PathBuf> = (0..20_000)
+        .map(|n| PathBuf::from(format!("/lib/Row {n:05}.mp3")))
+        .collect();
+    fp_model::apply(
+        &mut s,
+        Command::AddToLibrary {
+            paths,
+            category: Some(rock),
+        },
+    )
+    .unwrap();
+    let (h, _fake) = rock_list(s);
+    let laid_out = h.query_all_by_label_contains("Row ").count();
+    assert!(laid_out > 0, "some rows are shown");
+    assert!(laid_out < 100, "{laid_out} rows laid out");
+}
+
 // --- The page rules, without a screen ---
 
 fn categories() -> (Categories, CategoryId) {
@@ -297,7 +525,7 @@ fn a_list_whose_category_is_gone_settles_on_the_selector() {
         ticked: ticked(),
         ..PhoneLibraryView::default()
     };
-    view.shown = Some(rock);
+    view.shown = Some(LibrarySelection::Category(rock));
     view.settle(&categories);
     assert_eq!(view.page, LibraryPage::Tracks, "Rock is still there");
     view.settle(&Categories::default());

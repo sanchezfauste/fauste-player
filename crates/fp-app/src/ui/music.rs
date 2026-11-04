@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use egui::{Align2, Rect, Role, Sense, Ui, WidgetInfo, vec2};
 use egui_phosphor::regular as icon;
-use fp_model::{Command, PlayerId, PlaylistId};
+use fp_model::{Command, PlayerId, PlaylistId, TrackId};
 
 use super::app::{Scene, ViewState};
 use super::media_browser::{BrowseMode, MediaBrowser, MediaFile};
@@ -23,7 +23,34 @@ const WIDE_BAR: f32 = 60.0;
 const WIDE: f32 = 600.0;
 /// The height of a group's row and of a track's row, for a finger.
 const GROUP_ROW: f32 = 48.0;
-const TRACK_ROW: f32 = 56.0;
+pub(crate) const TRACK_ROW: f32 = 56.0;
+
+/// Whether `ui` is wide enough for one-line bars (a phone on its side).
+pub(crate) fn is_wide(ui: &Ui) -> bool {
+    ui.available_width() >= WIDE
+}
+
+/// The selection bar's height (PL19).
+pub(crate) fn bar_height(wide: bool) -> f32 {
+    if wide { WIDE_BAR } else { BAR }
+}
+
+/// What the selection bar adds: device files (PL19) or library tracks
+/// (LB42). Each screen keeps its own selection (track library spec §11.1,
+/// settled details).
+pub(crate) enum Picked<'a> {
+    Files(&'a mut Vec<PathBuf>),
+    Tracks(&'a mut Vec<TrackId>),
+}
+
+impl Picked<'_> {
+    fn len(&self) -> usize {
+        match self {
+            Self::Files(files) => files.len(),
+            Self::Tracks(tracks) => tracks.len(),
+        }
+    }
+}
 
 /// How the screen groups the music (PL17).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -315,7 +342,7 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
     {
         action = Some(Action::Answer(Vec::new()));
     }
-    let wide = ui.available_width() >= WIDE;
+    let wide = is_wide(ui);
     if wide {
         ui.horizontal(|ui| {
             browse_switch(ui, t, view);
@@ -360,7 +387,7 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
     let listed = listing(&files, view);
     let bar = !view.ticked.is_empty();
     let list_height = if bar {
-        (ui.available_height() - if wide { WIDE_BAR } else { BAR }).max(0.0)
+        (ui.available_height() - bar_height(wide)).max(0.0)
     } else {
         ui.available_height()
     };
@@ -415,7 +442,9 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
         }
     } else if bar {
         let shown = view_state.phone.shown_player(&scene.state.player_ids());
-        selection_bar(ui, scene, &mut view_state.music, shown, wide);
+        let view = &mut view_state.music;
+        let picked = Picked::Files(&mut view.ticked);
+        selection_bar(ui, scene, picked, &mut view.target, shown, wide);
     }
     let view = &mut view_state.music;
     match action {
@@ -545,65 +574,85 @@ fn track_row(ui: &mut Ui, file: &MediaFile, ticked: bool) -> bool {
         ui.allocate_exact_size(vec2(ui.available_width(), TRACK_ROW), Sense::click());
     let title = file.title_or_name();
     let duration = file.duration_secs.map(format::clock);
-    let label = [Some(title.clone()), file.artist.clone(), duration.clone()]
+    let label = row_label(&title, file.artist.as_deref(), duration.as_deref());
+    response.widget_info(|| WidgetInfo::selected(Role::CheckBox, true, ticked, &label));
+    if ui.is_rect_visible(rect) {
+        paint_check(ui, rect, ticked);
+        let right = rect.right() - 12.0;
+        let text_right = match &duration {
+            Some(d) => paint_duration(ui, rect, right, d) - 8.0,
+            None => right,
+        };
+        paint_lines(ui, rect, text_right, &title, file.artist.as_deref());
+    }
+    response.clicked()
+}
+
+/// A track row's accessible name: the title, the artist and the duration.
+pub(crate) fn row_label(title: &str, artist: Option<&str>, duration: Option<&str>) -> String {
+    [Some(title), artist.filter(|a| !a.is_empty()), duration]
         .into_iter()
         .flatten()
         .collect::<Vec<_>>()
-        .join(" · ");
-    response.widget_info(|| WidgetInfo::selected(Role::CheckBox, true, ticked, &label));
-    if ui.is_rect_visible(rect) {
-        let p = ui.painter();
-        if ticked {
-            p.rect_filled(rect, 4.0, theme::NEUTRAL_800);
-        }
-        let check = Rect::from_center_size(rect.left_center() + vec2(22.0, 0.0), vec2(20.0, 20.0));
-        p.rect_stroke(
-            check,
-            3.0,
-            egui::Stroke::new(1.5, theme::NEUTRAL_400),
-            egui::StrokeKind::Inside,
-        );
-        if ticked {
-            p.text(
-                check.center(),
-                Align2::CENTER_CENTER,
-                icon::CHECK,
-                font(14.0),
-                theme::TEXT,
-            );
-        }
-        let right = rect.right() - 12.0;
-        let text_right = match &duration {
-            Some(d) => {
-                let galley = p.text(
-                    egui::pos2(right, rect.center().y),
-                    Align2::RIGHT_CENTER,
-                    d,
-                    font(13.0),
-                    theme::NEUTRAL_400,
-                );
-                galley.left() - 8.0
-            }
-            None => right,
-        };
-        let left = rect.left() + 44.0;
-        let width = (text_right - left).max(0.0);
-        let line = |text: &str, size: f32, color, y: f32| {
-            let mut job =
-                egui::text::LayoutJob::simple_singleline(text.to_owned(), font(size), color);
-            job.wrap = egui::text::TextWrapping::truncate_at_width(width);
-            let galley = p.layout_job(job);
-            p.galley(egui::pos2(left, y), galley, color);
-        };
-        let artist = file.artist.as_deref().unwrap_or_default();
-        if artist.is_empty() {
-            line(&title, 15.0, theme::TEXT, rect.center().y - 9.0);
-        } else {
-            line(&title, 15.0, theme::TEXT, rect.top() + 9.0);
-            line(artist, 12.0, theme::NEUTRAL_400, rect.top() + 31.0);
-        }
+        .join(" · ")
+}
+
+/// A track row's tick background and check box (PL18).
+pub(crate) fn paint_check(ui: &Ui, rect: Rect, ticked: bool) {
+    let p = ui.painter();
+    if ticked {
+        p.rect_filled(rect, 4.0, theme::NEUTRAL_800);
     }
-    response.clicked()
+    let check = Rect::from_center_size(rect.left_center() + vec2(22.0, 0.0), vec2(20.0, 20.0));
+    p.rect_stroke(
+        check,
+        3.0,
+        egui::Stroke::new(1.5, theme::NEUTRAL_400),
+        egui::StrokeKind::Inside,
+    );
+    if ticked {
+        p.text(
+            check.center(),
+            Align2::CENTER_CENTER,
+            icon::CHECK,
+            font(14.0),
+            theme::TEXT,
+        );
+    }
+}
+
+/// A track row's duration, ending at `right`; returns its left edge.
+pub(crate) fn paint_duration(ui: &Ui, rect: Rect, right: f32, duration: &str) -> f32 {
+    ui.painter()
+        .text(
+            egui::pos2(right, rect.center().y),
+            Align2::RIGHT_CENTER,
+            duration,
+            font(13.0),
+            theme::NEUTRAL_400,
+        )
+        .left()
+}
+
+/// A track row's title over its artist (or the title alone, centred),
+/// cut short at `right`.
+pub(crate) fn paint_lines(ui: &Ui, rect: Rect, right: f32, title: &str, artist: Option<&str>) {
+    let p = ui.painter();
+    let left = rect.left() + 44.0;
+    let width = (right - left).max(0.0);
+    let line = |text: &str, size: f32, color, y: f32| {
+        let mut job = egui::text::LayoutJob::simple_singleline(text.to_owned(), font(size), color);
+        job.wrap = egui::text::TextWrapping::truncate_at_width(width);
+        let galley = p.layout_job(job);
+        p.galley(egui::pos2(left, y), galley, color);
+    };
+    let artist = artist.unwrap_or_default();
+    if artist.is_empty() {
+        line(title, 15.0, theme::TEXT, rect.center().y - 9.0);
+    } else {
+        line(title, 15.0, theme::TEXT, rect.top() + 9.0);
+        line(artist, 12.0, theme::NEUTRAL_400, rect.top() + 31.0);
+    }
 }
 
 /// The target's name: "P1 · Playlist 1".
@@ -628,12 +677,14 @@ fn target_name(scene: &Scene<'_>, player: PlayerId, playlist: PlaylistId) -> Str
     )
 }
 
-/// The bar under the list while something is selected (PL19): the count,
-/// the target (a menu of every player and playlist) and the add buttons.
-fn selection_bar(
+/// The bar under a list while something is selected (PL19, LB42): the
+/// count, the target (a menu of every player and playlist) and the add
+/// buttons. Adding sends `picked` in its order and clears it.
+pub(crate) fn selection_bar(
     ui: &mut Ui,
     scene: &Scene<'_>,
-    view: &mut MusicView,
+    picked: Picked<'_>,
+    chosen: &mut Option<(PlayerId, PlaylistId)>,
     shown: Option<PlayerId>,
     wide: bool,
 ) {
@@ -641,8 +692,7 @@ fn selection_bar(
     let state = scene.state;
     // The chosen target while it exists, else the Playlists screen's player
     // with the playlist it shows.
-    let target = view
-        .target
+    let target = chosen
         .filter(|(player, playlist)| {
             state.player(*player).is_ok() && state.playlists.get(*playlist).is_some()
         })
@@ -659,14 +709,13 @@ fn selection_bar(
         .filter(|(shown, index)| *shown == playlist && *index < len)
         .map(|(_, index)| index);
     ui.separator();
+    let count = picked.len();
     let mut add = None;
     let mut head = |ui: &mut Ui| {
         ui.label(
-            egui::RichText::new(
-                t.tr_args("music-selected", &[("count", view.ticked.len().into())]),
-            )
-            .font(font(13.0))
-            .color(theme::TEXT),
+            egui::RichText::new(t.tr_args("music-selected", &[("count", count.into())]))
+                .font(font(13.0))
+                .color(theme::TEXT),
         );
         let name = target_name(scene, player, playlist);
         ui.menu_button(egui::RichText::new(&name).font(font(13.0)), |ui| {
@@ -678,7 +727,7 @@ fn selection_bar(
                         .add(egui::Button::selectable(on, item).min_size(vec2(200.0, 40.0)))
                         .clicked()
                     {
-                        view.target = Some((p, list.id));
+                        *chosen = Some((p, list.id));
                         ui.close();
                     }
                 }
@@ -714,10 +763,17 @@ fn selection_bar(
         ui.horizontal(|ui| buttons(ui));
     }
     if let Some(index) = add {
-        scene.ctl.send(Command::InsertPaths {
-            playlist,
-            index,
-            paths: std::mem::take(&mut view.ticked),
+        scene.ctl.send(match picked {
+            Picked::Files(paths) => Command::InsertPaths {
+                playlist,
+                index,
+                paths: std::mem::take(paths),
+            },
+            Picked::Tracks(tracks) => Command::InsertTracks {
+                playlist,
+                index,
+                tracks: std::mem::take(tracks),
+            },
         });
     }
 }
