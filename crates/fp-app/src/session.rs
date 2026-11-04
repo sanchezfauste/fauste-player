@@ -87,6 +87,14 @@ impl AppSession {
         if let Some(cap) = report_cap {
             services = services.with_report_cap(cap);
         }
+        // File-system watching is desktop only (track library spec §11).
+        #[cfg(not(target_os = "android"))]
+        match crate::watch::notify_watcher::NotifyWatcher::new() {
+            Ok(watcher) => services.set_watcher(Box::new(watcher)),
+            Err(why) => {
+                tracing::warn!(%why, "cannot watch folders; watched folders are not followed")
+            }
+        }
         let requests = services.requests();
         let faults = services.faults();
         let activity = services.activity();

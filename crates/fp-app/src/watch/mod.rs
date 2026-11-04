@@ -13,6 +13,7 @@ use arc_swap::ArcSwap;
 use fp_model::CategoryId;
 
 pub mod debounce;
+pub(crate) mod folders;
 #[cfg(not(target_os = "android"))]
 pub mod notify_watcher;
 pub mod scan;

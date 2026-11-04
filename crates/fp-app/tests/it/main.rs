@@ -83,6 +83,7 @@ mod track_tags_ui;
 mod ui_polish;
 mod view;
 mod watch_parts;
+mod watched_folders;
 mod waveform_ui;
 mod waveform_view;
 mod window_system;
