@@ -23,5 +23,6 @@ pub mod services;
 pub mod session;
 pub mod tags;
 pub mod ui;
+pub mod watch;
 #[cfg(not(target_os = "android"))]
 pub mod window_system;

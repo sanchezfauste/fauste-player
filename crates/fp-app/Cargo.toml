@@ -42,6 +42,7 @@ fp-control.workspace = true
 fp-remote.workspace = true
 rfd.workspace = true
 open.workspace = true
+notify.workspace = true
 # The window's size, position and maximized state, kept between runs.
 eframe = { workspace = true, features = ["persistence"] }
 

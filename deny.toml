@@ -39,3 +39,9 @@ multiple-versions = "warn"
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
+
+# `notify` (file-system watching of the library's watched folders) is CC0-1.0,
+# which grants no patent licence: allowed for that crate alone, never globally.
+[[licenses.exceptions]]
+crate = "notify"
+allow = ["CC0-1.0"]
