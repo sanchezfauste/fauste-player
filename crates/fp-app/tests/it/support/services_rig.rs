@@ -248,3 +248,12 @@ impl Rig {
         }
     }
 }
+
+/// How many analyses started before the first one of `path`.
+pub fn started_before(r: &Rig, path: &Path) -> usize {
+    let started = r.started.lock().unwrap();
+    started
+        .iter()
+        .position(|p| p == path)
+        .unwrap_or_else(|| panic!("{} was never analysed: {started:?}", path.display()))
+}

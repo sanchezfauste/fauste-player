@@ -69,6 +69,12 @@ impl WatchThread {
     }
 }
 
+/// The retry interval, the one missing files are looked for at.
+fn retry_interval(state: &AppState) -> Duration {
+    Duration::try_from_secs_f64(state.config.tuning.missing_recheck_ms / 1_000.0)
+        .unwrap_or(Duration::from_secs(30))
+}
+
 pub(crate) struct FolderWatch {
     watcher: SharedWatcher,
     thread: Option<WatchThread>,
@@ -91,6 +97,8 @@ pub(crate) struct FolderWatch {
     /// Commands the conductor could not queue.
     unsent: Vec<Command>,
     published: WatchStatus,
+    /// When folders with a trouble are tried again; `None` while none has one.
+    retry_at: Option<Instant>,
     /// Scan jobs sent.
     scans: u64,
 }
@@ -112,6 +120,7 @@ impl FolderWatch {
             warned: BTreeSet::new(),
             unsent: Vec::new(),
             published: WatchStatus::default(),
+            retry_at: None,
             scans: 0,
         }
     }
@@ -135,6 +144,7 @@ impl FolderWatch {
         };
         self.follow_categories(state);
         self.take_watch_results();
+        self.retry_troubled(state, now);
         self.take_events(now);
         for answer in self
             .scanner
@@ -210,16 +220,59 @@ impl FolderWatch {
             return;
         };
         for (folder, result) in thread.results.try_iter() {
-            if let Err(why) = result
-                && self.folders.contains_key(&folder)
-            {
-                tracing::warn!(
-                    folder = %folder.display(),
-                    %why,
-                    "a watched folder is not followed; it is scanned at start and on retries only"
-                );
-                self.not_followed.insert(folder);
+            if !self.folders.contains_key(&folder) {
+                continue;
             }
+            match result {
+                Err(why) => {
+                    // Retries fail the same way: the log says it once.
+                    if self.not_followed.insert(folder.clone()) {
+                        tracing::warn!(
+                            folder = %folder.display(),
+                            %why,
+                            "a watched folder is not followed; it is scanned at start and on retries only"
+                        );
+                    }
+                }
+                // Also ends a refusal from an earlier call that was stale by
+                // the time it answered. Events may have been missed meanwhile.
+                Ok(()) => {
+                    if self.not_followed.remove(&folder) {
+                        tracing::info!(folder = %folder.display(), "a watched folder is followed again");
+                        self.roots.insert(folder);
+                    }
+                }
+            }
+        }
+    }
+
+    /// Every `tuning.missing_recheck_ms`, the folders with a trouble are
+    /// watched again and walked again. The watch call goes through the
+    /// helper thread like every other.
+    fn retry_troubled(&mut self, state: &AppState, now: Instant) {
+        let troubled: Vec<PathBuf> = self
+            .folders
+            .keys()
+            .filter(|f| self.troubles.contains_key(*f) || self.not_followed.contains(*f))
+            .cloned()
+            .collect();
+        if troubled.is_empty() {
+            self.retry_at = None;
+            return;
+        }
+        let Some(due) = self.retry_at else {
+            self.retry_at = Some(now + retry_interval(state));
+            return;
+        };
+        if now < due {
+            return;
+        }
+        self.retry_at = Some(now + retry_interval(state));
+        for folder in troubled {
+            if let Some(thread) = &self.thread {
+                let _ = thread.requests.send(Request::Watch(folder.clone()));
+            }
+            self.roots.insert(folder);
         }
     }
 

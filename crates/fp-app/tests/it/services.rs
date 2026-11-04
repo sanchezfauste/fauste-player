@@ -664,15 +664,6 @@ fn a_file_is_still_looked_for_after_looks_that_found_nothing() {
     });
 }
 
-/// How many analyses started before the first one of `path`.
-fn started_before(r: &Rig, path: &Path) -> usize {
-    let started = r.started.lock().unwrap();
-    started
-        .iter()
-        .position(|p| p == path)
-        .unwrap_or_else(|| panic!("{} was never analysed: {started:?}", path.display()))
-}
-
 /// A track loaded on a player gets its waveform ahead of the library being
 /// analysed, not after it.
 #[test]
