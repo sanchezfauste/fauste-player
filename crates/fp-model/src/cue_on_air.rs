@@ -280,9 +280,7 @@ fn stop(state: &mut AppState, cue: Holder, out: &mut Vec<EngineAction>) {
             }
         }
         Holder::LibraryCue => {
-            // Task 4 adds the engine action that stops the playback.
-            state.library_cue.transport = Transport::Stopped;
-            state.library_cue.start_at = None;
+            crate::library_cue::stop(state, out);
         }
         Holder::PlayerMain(_) | Holder::CartwallMain => {}
     }

@@ -110,6 +110,13 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::CueEntry(id, entry) => cue_entry(state, id, entry, false, &mut out)?,
         Command::SeekCue(id, secs) => seek_cue(state, id, secs, &mut out)?,
         Command::SetCuePaused(id, paused) => set_cue_paused(state, id, paused, &mut out)?,
+        Command::SelectLibraryCue(track) => crate::library_cue::select(state, track, &mut out),
+        Command::PlayLibraryCue => crate::library_cue::play(state, false, &mut out),
+        Command::SetLibraryCuePaused(paused) => {
+            crate::library_cue::set_paused(state, paused, &mut out)
+        }
+        Command::StopLibraryCue => crate::library_cue::stop(state, &mut out),
+        Command::SeekLibraryCue(secs) => crate::library_cue::seek(state, secs, &mut out),
         Command::CueToNext(id) => {
             let i = state.player_index(id)?;
             if let Some(cue) = state.players[i].cue {
@@ -334,6 +341,10 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         }
         Command::SetLibraryView(view) => {
             state.library_view = view.repaired(&state.categories);
+            // LB35: closing the window ends the preview (minimising keeps it).
+            if !state.library_view.open {
+                crate::library_cue::stop(state, &mut out);
+            }
         }
         Command::AddToLibrary { paths, category } => {
             crate::library_rules::add_to_library(state, paths, category)?
@@ -1654,6 +1665,8 @@ pub(crate) fn reconcile(state: &mut AppState, out: &mut Vec<EngineAction>) {
     // Rule 3a (Q8.4): a pending start lives only while its player is
     // stopped with that entry next, inside the entry's play range.
     crate::pending_start::settle(state);
+    // LB35: the preview lives only while its track is in the library.
+    crate::library_cue::settle(state, out);
     // N11: a gain record lives as long as its source.
     for p in &mut state.players {
         if p.current.is_none() {

@@ -50,6 +50,20 @@ pub enum Command {
     /// Spec O12: holds or releases the running CUE. Idempotent; without a
     /// CUE it does nothing.
     SetCuePaused(PlayerId, bool),
+    /// Library plan 4 LB34: the library table's selected row changed. A
+    /// running preview switches to the new track; a stopped one only
+    /// follows the bar. `None` leaves a running preview alone.
+    SelectLibraryCue(Option<TrackId>),
+    /// LB33: plays the bar's track from its cue-in (or where a seek set),
+    /// or releases a held preview. Does nothing while it plays.
+    PlayLibraryCue,
+    /// LB33: holds or releases the library preview. Idempotent.
+    SetLibraryCuePaused(bool),
+    /// LB33: ends the library preview. Does nothing while stopped.
+    StopLibraryCue,
+    /// LB33: moves the running preview to `secs` (clamped to the file); while
+    /// stopped it sets where Play starts. A broken value does nothing.
+    SeekLibraryCue(f64),
     /// Spec O12 ("Set as next"): the cued entry becomes the player's
     /// explicit next and the CUE keeps running. Without a CUE it does
     /// nothing.
