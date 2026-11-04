@@ -339,6 +339,9 @@ pub(crate) enum LibraryDialog {
         /// What the question shows, and the library it was counted in.
         asked: Box<Asked>,
     },
+    /// *Remove missing tracks…* waiting for the answer (LB21): how many
+    /// tracks of `category` it would remove, counted when it was asked.
+    RemoveMissing { category: CategoryId, count: usize },
 }
 
 /// The two questions of a removal (LB11).

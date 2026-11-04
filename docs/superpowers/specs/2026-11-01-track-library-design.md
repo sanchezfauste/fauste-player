@@ -341,6 +341,81 @@ Today a track is forgotten when nothing references it. From now on:
   of thousands of files may take a while; the library shows the progress the
   analysis already reports.
 
+### 6.1 Implementation notes (plan 5)
+
+Where the implementation settles or differs from the text above:
+
+- **LB19.** Nested watched folders are allowed; only the same folder on two
+  categories is refused (`ModelError::FolderAlreadyWatched`, naming the
+  category). A file under two goes to the innermost folder
+  (`watching_category`, the longest matching ancestor by path components).
+  Folders compare as stored (canonicalised by the folder dialog's helper
+  thread). On restore `Categories::repaired` keeps a duplicated folder on the
+  first category in stored order. Setting, changing or clearing a folder
+  never moves tracks.
+- **Threads.** The services thread never touches the file system. Scans run
+  on `fp-folder-scan`; the watcher's `watch` and `unwatch` calls run on
+  `fp-folder-watch`; the `notify` watcher has its own thread. Only an access
+  event from a closed write counts: opening or reading a file is ignored.
+- **LB21/LB22.** A watched folder whose stored path is empty or relative is
+  ignored with a log line (the reducer accepts it; a hand-edited path must not
+  watch every file), and its ⟳ mark shows it as not watched. A folder that is
+  missing, unreadable or refused by the system is still scanned where it can
+  be and retried every `tuning.missing_recheck_ms` (30 s).
+  - A watched folder that is not there, cannot be read, or is empty while
+    tracks of the library are under it (a mount point with nothing mounted)
+    is a *Missing* or *Unreadable* trouble: nothing under it is marked
+    missing, its watch is dropped, and the retry watches and walks it again.
+    The empty rule applies to the folder's own walk and to the retry, not to
+    the folder of an event (that event may have removed its last file). A
+    folder emptied on purpose while tracks of it are still known therefore
+    stays a trouble until the operator stops watching it or puts files
+    back; its tracks are cleared by removing them from the table or by
+    re-analysing them (the analysis marks them missing).
+  - A walk of a folder holding a watched folder in trouble leaves the
+    tracks under the troubled one out, and every watched folder nested in a
+    root is looked at in the same job: an outer walk never marks the tracks
+    of a lost nested folder.
+  - An event on the watched folder itself, or on a folder holding it (moved,
+    renamed, unmounted), walks that folder under the rule above instead of
+    checking its tracks one by one. The folder of any other event path is
+    looked at in the same job, so a file event racing an unmount marks
+    nothing either.
+  - At every retry each followed folder is looked at (not walked), so a
+    folder lost while the application runs (a drive unplugged; the system
+    drops its watch without an event) becomes a trouble.
+  - Unwatching a folder (stopped, changed, deleted or lost) watches again,
+    and walks, every followed folder nested in it or holding it: the Linux
+    watch drops every path under the one removed.
+  - A retry sends no new watch call for a folder while one is unanswered (a
+    share that hangs), and walks a refused folder once per retry. If the watch
+    thread ends, every folder shows *not followed* and is scanned at start and
+    on retries only.
+  - Only a file that is really not there (`NotFound`) marks a track missing;
+    a permission error does not. Lost events (the rescan flag or a watcher
+    error) rescan every watched folder.
+- **Scanning.** Folder symlinks are not followed (no cycles), by the scans
+  nor by the system watch (`notify` with `follow_symlinks` off); file
+  symlinks are read and their canonical path joins. The category is decided from the
+  path as found under the watched folder.
+- **Config.** `library.watch_debounce_ms`: default 1 000, range 100–60 000,
+  config file only.
+- **Remove missing tracks…** is offered on every category and covers it and
+  its subcategories. The count is taken when the item is clicked; with none, a
+  notice replaces the question. The model recomputes the set when the command
+  arrives, so a track that became used or came back meanwhile is kept.
+- **UI.** The ⟳ mark and the items show in the window and in Settings →
+  Library on every desktop build, the narrow layout included; the gate is the
+  Android build.
+- **Licence.** `notify` is CC0-1.0, allowed for that crate alone (a
+  `deny.toml` exception and the narrowest `about.toml` acceptance), as CC0
+  grants no patent licence.
+- **The analysis exception.** The analysis of a track that is not analysed
+  yet still marks it missing when its file is not there, also under an
+  unmounted watched folder; it predates the watch, applies to every library
+  track and only marks. The watch's guarantee (nothing marked because its
+  folder is not there) covers the watch's own scans.
+
 ## 7. The library window (plan 3)
 
 ### 7.1 Window

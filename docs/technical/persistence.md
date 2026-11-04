@@ -47,7 +47,7 @@ transaction. The tables:
 |---|---|
 | `kv` | Key-value documents: the library's id counter and the other small values |
 | `tracks` | `id`, `path`, `category` (schema 2; null: uncategorised) and `doc`: the track's JSON (tags, markers and the `analysis_version` of the automatic ones, `analyzed`, `loudness`, `loudness_pass`, `loudness_edit`, `tags_read`). Indexes `tracks_by_path` and `tracks_by_category` (schema 2) |
-| `categories` | `id`, `position` and `doc`: the category tree as a flat list in display order (`parent`, `name`, `color`, `kind`). `position` is the category's place in `Categories`; siblings keep their relative order |
+| `categories` | `id`, `position` and `doc`: the category tree as a flat list in display order (`parent`, `name`, `color`, `kind`, `watched_folder`: an absolute path or absent, plan 5). `position` is the category's place in `Categories`; siblings keep their relative order |
 | `playlists`, `entries` | A playlist's `position` and `name`; its entries with `playlist`, `position`, `track` and `doc` (`played_by`, `repeat`, `stop_after`). Deleting a playlist deletes its entries |
 | `cart_pages` | `id`, `position`, and `doc`: the page with its carts (`color` is a lower-case name, left out when the cart has none) |
 | `players` | `id`, `position`, and `doc`: playlist, current, next, `next_explicit`, mode, `stop_after_current`, position, volume, columns, history, `pending_start` |
@@ -108,6 +108,12 @@ track on every add) are merged by `merge_duplicate_paths`: the survivor is the
 lowest id among the tracks with an operator edit (a manual marker, a loudness
 edit other than the default, or a category), else the lowest id; playlist
 entries and carts are re-pointed to it.
+
+Two categories that watch the same folder (a hand-edited or old database):
+`Categories::repaired` keeps the folder on the first category in stored order
+and clears it on the others, one warning each. A `watched_folder` that is empty
+or relative loads as stored, but the watch ignores it with a log line (see
+[Architecture](architecture.md)).
 Unreferenced tracks are kept.
 
 A new field that loads as its default when it is missing and that older
@@ -482,6 +488,13 @@ default, and one out of range is clamped, each with a warning.
 
 A source on a bit-perfect device gets no gain (N8). The meter's own
 `meter.loudness_target_lufs` is a separate value.
+
+### `library` (config file only)
+
+| Field | Default | Meaning |
+|---|---|---|
+| `max_category_depth` | 8 | the deepest category tree a new category or a move may build; restore repairs anything deeper than 32 levels |
+| `watch_debounce_ms` | 1000 | quiet time a path of a watched folder needs after its last event before it is read (100–60000); read while the application runs |
 
 ### `limits` (config file only)
 

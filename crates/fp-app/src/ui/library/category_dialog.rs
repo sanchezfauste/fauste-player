@@ -170,7 +170,7 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
             };
             (answer, (send, None))
         }
-        LibraryDialog::Removal { .. } => return,
+        LibraryDialog::Removal { .. } | LibraryDialog::RemoveMissing { .. } => return,
     };
     match answer {
         Some(Answer::Cancel) => view_state.library.dialog = None,

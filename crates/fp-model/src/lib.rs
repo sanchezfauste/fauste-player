@@ -48,7 +48,7 @@ pub use cartwall::{
     Cart, CartColor, CartEdit, CartFileChange, CartKind, CartPage, CartPageImport, Cartwall,
     CartwallSession, PlayingCart,
 };
-pub use category::{Categories, Category, check_name};
+pub use category::{Categories, Category, check_name, watching_category};
 pub use columns::{
     TableColumn, column_rows, default_columns, move_column, move_column_before, normalize_columns,
     with_column_shown,
@@ -80,7 +80,9 @@ pub use layout::{
     CartwallLayout, DEFAULT_SIDE_SHARE, Dock, Layout, MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE,
     Panel, settle_layout,
 };
-pub use library_rules::{OnAirHolds, RemovalImpact, category_deletion, removal_impact};
+pub use library_rules::{
+    OnAirHolds, RemovalImpact, category_deletion, missing_tracks, removal_impact,
+};
 pub use library_view::{
     LibraryColumn, LibraryColumnWidth, LibrarySelection, LibrarySort, LibraryView,
     lenient_library_view,

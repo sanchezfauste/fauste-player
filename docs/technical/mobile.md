@@ -368,6 +368,15 @@ precondition check in its text-input callback, which only debug builds
 make. Check on a device or emulator with a release build. CI's `android` job runs the isolation check, the
 `fp-mobile` tests and the debug build, and uploads the APK.
 
+## No watched folders
+
+Watched folders (library spec §6) are desktop only. `notify` is a
+`cfg(not(target_os = "android"))` dependency of `fp-app` and its module
+`watch::notify_watcher` is not built there (`cargo tree -p fp-app --target
+aarch64-linux-android -i notify` finds nothing); the tree shows no ⟳ mark and
+offers no *Watch folder…* items on Android. *Remove missing tracks…* is
+offered.
+
 ## Interim parts
 
 These hold until the plans that replace them:

@@ -28,6 +28,7 @@ fn cat(id: u64, parent: Option<u64>, name: &str) -> Category {
         name: name.into(),
         color: None,
         kind: TrackKind::Music,
+        watched_folder: None,
     }
 }
 

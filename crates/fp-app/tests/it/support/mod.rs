@@ -12,8 +12,11 @@ use fp_app::i18n::I18n;
 use fp_app::services::MediaCache;
 use fp_app::ui::app::AppUi;
 use fp_app::ui::controller::Controller;
+use fp_app::watch::{FolderEvent, FolderWatcher};
 use fp_engine::conductor::Telemetry;
 use fp_model::{AppState, Command, Config, EntryId, ModelError, PlayerId, Route};
+
+pub mod services_rig;
 
 pub struct Fake {
     pub state: ArcSwap<AppState>,
@@ -394,6 +397,8 @@ pub struct FakePlatform {
     pub asked: Mutex<Vec<String>>,
     /// Folders are picked through this browser, as on Android (MB7).
     pub browser: Option<fp_app::ui::media_browser::MediaBrowser>,
+    /// The folder a desktop dialog answers with when there is no browser.
+    pub folder: Option<PathBuf>,
 }
 
 impl fp_app::platform::Platform for FakePlatform {
@@ -414,7 +419,9 @@ impl fp_app::platform::Platform for FakePlatform {
 
     fn pick_folder(&self, start: Option<PathBuf>) -> Option<PathBuf> {
         self.asked.lock().unwrap().push("folder".into());
-        let browser = self.browser.as_ref()?;
+        let Some(browser) = self.browser.as_ref() else {
+            return self.folder.clone();
+        };
         let mode = fp_app::ui::media_browser::BrowseMode::Folder;
         browser.browse(mode, start).into_iter().next()
     }
@@ -440,5 +447,75 @@ impl fp_app::platform::Platform for FakePlatform {
 
     fn can_write_user_files(&self) -> bool {
         !self.read_only
+    }
+}
+
+#[derive(Default)]
+pub struct FakeWatch {
+    watched: Vec<PathBuf>,
+    refused: Vec<PathBuf>,
+    queued: Vec<FolderEvent>,
+    calls: Vec<WatchCall>,
+}
+
+/// A call the services made on the watcher, in order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WatchCall {
+    Watch(PathBuf),
+    Unwatch(PathBuf),
+}
+
+/// A folder watcher that records what it is asked to follow and reports the
+/// events a test pushes.
+#[derive(Clone, Default)]
+pub struct FakeWatcher(Arc<Mutex<FakeWatch>>);
+
+impl FakeWatcher {
+    pub fn push(&self, event: FolderEvent) {
+        self.0.lock().unwrap().queued.push(event);
+    }
+
+    pub fn watched(&self) -> Vec<PathBuf> {
+        self.0.lock().unwrap().watched.clone()
+    }
+
+    /// Every `watch` and `unwatch` call so far.
+    pub fn calls(&self) -> Vec<WatchCall> {
+        self.0.lock().unwrap().calls.clone()
+    }
+
+    /// Makes `watch` fail (or work again) for `folder`.
+    pub fn refuse(&self, folder: PathBuf, refused: bool) {
+        let mut inner = self.0.lock().unwrap();
+        inner.refused.retain(|f| f != &folder);
+        if refused {
+            inner.refused.push(folder);
+        }
+    }
+}
+
+impl FolderWatcher for FakeWatcher {
+    fn watch(&mut self, folder: &std::path::Path) -> Result<(), String> {
+        let mut inner = self.0.lock().unwrap();
+        inner.calls.push(WatchCall::Watch(folder.to_path_buf()));
+        if inner.refused.iter().any(|f| f == folder) {
+            return Err("refused".into());
+        }
+        if !inner.watched.iter().any(|f| f == folder) {
+            inner.watched.push(folder.to_path_buf());
+        }
+        Ok(())
+    }
+
+    /// As the system's recursive watch on Linux: every watch under the
+    /// folder goes with it, a nested folder watched on its own too.
+    fn unwatch(&mut self, folder: &std::path::Path) {
+        let mut inner = self.0.lock().unwrap();
+        inner.calls.push(WatchCall::Unwatch(folder.to_path_buf()));
+        inner.watched.retain(|f| !f.starts_with(folder));
+    }
+
+    fn events(&mut self) -> Vec<FolderEvent> {
+        std::mem::take(&mut self.0.lock().unwrap().queued)
     }
 }

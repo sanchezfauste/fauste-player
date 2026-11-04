@@ -13,7 +13,7 @@
 | `fp-analysis` | Tags and covers (lofty, image), waveform peaks, automatic markers, the loudness measurement, the analysis cache and the background pool | `fp-model`, `fp-decode`, `fp-dsp` |
 | `fp-control` | Control surfaces: MIDI parsing, bindings to commands (edge detection, soft takeover, availability), LED feedback, learn, reconnect on request, the diagnostics log, and the MIDI service thread over `midir` (ALSA, CoreMIDI, WinMM) | `fp-model` |
 | `fp-remote` | Remote control over the network: the HTTP/JSON API with SSE events (axum on a tokio current-thread runtime), OSC over UDP (rosc), the security guard and the remote thread; reaches the application through the `RemoteControl` trait ([Remote control API](remote-api.md)) | `fp-model` |
-| `fp-app` | The egui application and the `fauste-player` binary: bootstrap, logging, crash reports, the shared session start-up (`AppSession`), the platform seam (`Platform`), services thread, UI. On Android it builds without `fp-control`, `fp-remote` and the desktop dialogs | all of the above |
+| `fp-app` | The egui application and the `fauste-player` binary: bootstrap, logging, crash reports, the shared session start-up (`AppSession`), the platform seam (`Platform`), services thread, the `watch` module (watched folders, desktop only: `notify` is not built on Android), UI. On Android it builds without `fp-control`, `fp-remote` and the desktop dialogs | all of the above |
 | `fp-mobile` | The Android library: `android_main`, the IME bridge, the safe area, the Android platform and the JNI calls of the Kotlin shell in `mobile/android` ([Mobile](mobile.md)). Never a dependency of the desktop build | `fp-app`, `fp-model`, `fp-store`, `fp-backends` |
 
 ```

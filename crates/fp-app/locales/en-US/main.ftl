@@ -763,6 +763,8 @@ flag-analysis-queued = Waiting for analysis
 flag-analysis-running = Analysing now
 menu-reanalyse-queued = Already waiting for analysis
 menu-reanalyse-running = Being analysed now
+error-folder-watched = Another category already watches this folder.
+error-folder-watched-by = The category “{ $category }” already watches this folder.
 error-category-name-empty = A category name cannot be empty.
 error-category-name-taken = There is already a category with that name here.
 error-category-too-deep = Categories cannot be nested that deep.
@@ -824,6 +826,22 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = No track is removed from the library.
 library-delete-files-kept = The files themselves are not deleted.
 library-delete-confirm = Delete
+library-menu-watch-folder = Watch folder…
+library-menu-change-watched-folder = Change watched folder…
+library-menu-stop-watching = Stop watching folder
+library-menu-remove-missing = Remove missing tracks…
+library-tree-watching = Watches { $folder }
+library-tree-folder-missing = Watched folder not found: { $folder }. It is looked for again.
+library-tree-folder-unreadable = Watched folder cannot be read: { $folder }. It is tried again.
+library-tree-folder-not-followed = Changes in { $folder } are not followed; it is scanned at start and tried again.
+library-tree-folder-ignored = Watched folder is not a full path: { $folder }. It is not watched.
+library-remove-missing-title = Remove missing tracks
+library-remove-missing-question = { $count ->
+    [one] { $count } track of { $name } has a missing file and is not used.
+   *[other] { $count } tracks of { $name } have a missing file and are not used.
+} Remove them from the library? Tracks in use are kept; no file is touched.
+library-remove-missing-confirm = Remove
+library-remove-missing-none = { $name } has no unused tracks with a missing file.
 library-remove-title = { $count ->
     [one] Remove { $count } track from the library?
    *[other] Remove { $count } tracks from the library?

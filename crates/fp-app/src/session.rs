@@ -30,6 +30,8 @@ pub struct AppSession {
     pub handle: Arc<ConductorHandle>,
     pub requests: Sender<ServiceRequest>,
     pub activity: ActivityCell,
+    /// The watched folders in trouble (empty where nothing is watched).
+    pub watch: crate::watch::WatchCell,
     pub faults: Arc<AtomicU64>,
     pub media: MediaCache,
     /// The audio systems in use, Null last.
@@ -87,14 +89,24 @@ impl AppSession {
         if let Some(cap) = report_cap {
             services = services.with_report_cap(cap);
         }
+        // File-system watching is desktop only (track library spec §11).
+        #[cfg(not(target_os = "android"))]
+        match crate::watch::notify_watcher::NotifyWatcher::new() {
+            Ok(watcher) => services.set_watcher(Box::new(watcher)),
+            Err(why) => {
+                tracing::warn!(%why, "cannot watch folders; watched folders are not followed")
+            }
+        }
         let requests = services.requests();
         let faults = services.faults();
         let activity = services.activity();
+        let watch = services.watch_status();
         let services = services.spawn()?;
         Ok(Self {
             handle,
             requests,
             activity,
+            watch,
             faults,
             media,
             backends,
@@ -114,6 +126,7 @@ impl AppSession {
         )
         .with_services(self.requests.clone())
         .with_analysis_activity(self.activity.clone())
+        .with_watch_status(self.watch.clone())
         .with_service_faults(self.faults.clone())
         .with_backends(self.backends.clone())
     }

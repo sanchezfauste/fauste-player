@@ -61,7 +61,10 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   of the library's tracks (the playlists' columns plus category and kind),
   accent-insensitive search over the item or the whole library, add files,
   move, set the kind, remove with confirmations, and drag the rows to
-  playlists and carts; the same tree is in Settings → Library. A preview bar
+  playlists and carts; the same tree is in Settings → Library. A category can
+  watch a folder (desktop): its audio files join the category, followed
+  while the application runs and rescanned at start, and **Remove missing
+  tracks…** cleans up. A preview bar
   pre-listens the selected track on its own Library output (Play, Pause and
   Stop, a waveform to seek and edit markers on, a meter), following the
   selection and asking first on an on-air output like any CUE. Its place and

@@ -1571,6 +1571,7 @@ fn the_library_cue_view_shows_the_track_and_its_category() {
         name: "Jingles".into(),
         color: None,
         kind: Default::default(),
+        watched_folder: None,
     }]
     .into();
     s.library.get_mut(t).unwrap().category = Some(id);

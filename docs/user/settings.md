@@ -253,8 +253,10 @@ Pages, grid size, the cart editor, and cart page import and export. See
 ## Library
 
 Create, rename, recolour, change the kind of, move (by dragging) and delete the
-categories that group your tracks, without opening the library window. See
-[Library](library.md#categories).
+categories that group your tracks, watch a folder with a category and remove
+its missing tracks, without opening the library window. See
+[Library](library.md#categories) and
+[Watched folders](library.md#watched-folders).
 
 ## Keyboard shortcuts
 

@@ -201,6 +201,7 @@ fn a_damaged_category_tree_is_repaired_on_load() {
         name: format!("c{id}"),
         color: None,
         kind: TrackKind::Music,
+        watched_folder: None,
     };
     edit_db(&s, |db| {
         for (pos, c) in [cat(2, Some(1)), cat(1, None), cat(3, Some(77))]
@@ -287,4 +288,65 @@ fn a_changed_track_category_and_a_deleted_category_are_saved() {
     };
     assert_eq!((rows(&s, a), rows(&s, b)), (0, 1));
     assert_eq!(category_of(&s), b.0 as i64);
+}
+
+#[test]
+fn a_watched_folder_round_trips() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let mut state = AppState::new(Config::default(), "Main");
+    apply(
+        &mut state,
+        Command::CreateCategory {
+            parent: None,
+            name: "IDs".into(),
+            color: None,
+            kind: TrackKind::Music,
+        },
+    )
+    .unwrap();
+    let id = state.categories.iter().next().unwrap().id;
+    apply(
+        &mut state,
+        Command::SetWatchedFolder {
+            category: id,
+            folder: Some(PathBuf::from("/m/ids")),
+        },
+    )
+    .unwrap();
+    save_all(&mut s, &state, 0.0);
+    let loaded = store(&dir).load("Main");
+    assert_eq!(
+        loaded.state.categories.get(id).unwrap().watched_folder,
+        Some(PathBuf::from("/m/ids"))
+    );
+    assert_eq!(loaded.state.categories, state.categories);
+}
+
+#[test]
+fn a_category_document_without_a_folder_loads_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = AppState::new(Config::default(), "Main");
+    save_all(&mut s, &state, 0.0);
+    edit_db(&s, |db| {
+        db.conn()
+            .execute(
+                "INSERT INTO categories (id, position, doc) VALUES (1, 0, ?1)",
+                rusqlite::params![
+                    r#"{"id":1,"parent":null,"name":"Old","color":null,"kind":"Music"}"#
+                ],
+            )
+            .unwrap();
+    });
+    let loaded = store(&dir).load("Main");
+    assert_eq!(
+        loaded
+            .state
+            .categories
+            .get(CategoryId(1))
+            .unwrap()
+            .watched_folder,
+        None
+    );
 }

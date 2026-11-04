@@ -763,6 +763,8 @@ flag-analysis-queued = Wacht op analyse
 flag-analysis-running = Wordt nu geanalyseerd
 menu-reanalyse-queued = Wacht al op analyse
 menu-reanalyse-running = Wordt nu geanalyseerd
+error-folder-watched = Een andere categorie bewaakt deze map al.
+error-folder-watched-by = De categorie “{ $category }” bewaakt deze map al.
 error-category-name-empty = De naam van een categorie mag niet leeg zijn.
 error-category-name-taken = Er bestaat hier al een categorie met die naam.
 error-category-too-deep = Categorieën kunnen niet zo diep worden genest.
@@ -824,6 +826,22 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = Er wordt geen nummer uit de bibliotheek gehaald.
 library-delete-files-kept = De bestanden zelf worden niet verwijderd.
 library-delete-confirm = Verwijderen
+library-menu-watch-folder = Map bewaken…
+library-menu-change-watched-folder = Bewaakte map wijzigen…
+library-menu-stop-watching = Map niet meer bewaken
+library-menu-remove-missing = Ontbrekende nummers verwijderen…
+library-tree-watching = Bewaakt { $folder }
+library-tree-folder-missing = Bewaakte map niet gevonden: { $folder }. Er wordt opnieuw naar gezocht.
+library-tree-folder-unreadable = Bewaakte map kan niet worden gelezen: { $folder }. Het wordt opnieuw geprobeerd.
+library-tree-folder-not-followed = Wijzigingen in { $folder } worden niet gevolgd; de map wordt bij het starten doorzocht en opnieuw geprobeerd.
+library-tree-folder-ignored = De bewaakte map is geen volledig pad: { $folder }. Hij wordt niet bewaakt.
+library-remove-missing-title = Ontbrekende nummers verwijderen
+library-remove-missing-question = { $count ->
+    [one] { $count } nummer van { $name } heeft geen bestand meer en wordt niet gebruikt.
+   *[other] { $count } nummers van { $name } hebben geen bestand meer en worden niet gebruikt.
+} Uit de bibliotheek verwijderen? Nummers in gebruik blijven behouden; er wordt geen bestand aangeraakt.
+library-remove-missing-confirm = Verwijderen
+library-remove-missing-none = { $name } heeft geen ongebruikte nummers met een ontbrekend bestand.
 library-remove-title = { $count ->
     [one] { $count } nummer uit de bibliotheek halen?
    *[other] { $count } nummers uit de bibliotheek halen?

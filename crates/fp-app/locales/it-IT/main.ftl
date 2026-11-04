@@ -763,6 +763,8 @@ flag-analysis-queued = In attesa di analisi
 flag-analysis-running = In analisi ora
 menu-reanalyse-queued = Già in attesa di analisi
 menu-reanalyse-running = In analisi in questo momento
+error-folder-watched = Un'altra categoria controlla già questa cartella.
+error-folder-watched-by = La categoria «{ $category }» controlla già questa cartella.
 error-category-name-empty = Il nome di una categoria non può essere vuoto.
 error-category-name-taken = Esiste già una categoria con questo nome qui.
 error-category-too-deep = Le categorie non possono essere annidate così in profondità.
@@ -824,6 +826,22 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = Nessun brano viene rimosso dalla libreria.
 library-delete-files-kept = I file non vengono cancellati.
 library-delete-confirm = Elimina
+library-menu-watch-folder = Sorveglia cartella…
+library-menu-change-watched-folder = Cambia cartella sorvegliata…
+library-menu-stop-watching = Smetti di sorvegliare la cartella
+library-menu-remove-missing = Rimuovi i brani mancanti…
+library-tree-watching = Sorveglia { $folder }
+library-tree-folder-missing = Cartella sorvegliata non trovata: { $folder }. Viene cercata di nuovo.
+library-tree-folder-unreadable = Impossibile leggere la cartella sorvegliata: { $folder }. Si riprova.
+library-tree-folder-not-followed = Le modifiche in { $folder } non vengono seguite; la cartella è analizzata all'avvio e si riprova.
+library-tree-folder-ignored = La cartella sorvegliata non è un percorso completo: { $folder }. Non viene sorvegliata.
+library-remove-missing-title = Rimuovi i brani mancanti
+library-remove-missing-question = { $count ->
+    [one] { $count } brano di { $name } ha il file mancante e non è in uso.
+   *[other] { $count } brani di { $name } hanno il file mancante e non sono in uso.
+} Rimuoverli dalla libreria? I brani in uso vengono mantenuti; nessun file viene toccato.
+library-remove-missing-confirm = Rimuovi
+library-remove-missing-none = { $name } non ha brani inutilizzati con il file mancante.
 library-remove-title = { $count ->
     [one] Rimuovere { $count } brano dalla libreria?
    *[other] Rimuovere { $count } brani dalla libreria?

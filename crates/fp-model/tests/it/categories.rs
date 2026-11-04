@@ -170,6 +170,7 @@ fn repaired_moves_orphans_and_cycles_to_the_root() {
         name: format!("c{id}"),
         color: None,
         kind: TrackKind::Music,
+        watched_folder: None,
     };
     let (fixed, warnings) = Categories::from(vec![
         cat(1, Some(99)),
@@ -200,6 +201,7 @@ fn cat(id: u64, parent: Option<u64>) -> Category {
         name: format!("c{id}"),
         color: None,
         kind: TrackKind::Music,
+        watched_folder: None,
     }
 }
 

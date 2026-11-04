@@ -763,6 +763,8 @@ flag-analysis-queued = En espera de análisis
 flag-analysis-running = Analizándose ahora
 menu-reanalyse-queued = Ya está en espera de análisis
 menu-reanalyse-running = Se está analizando ahora
+error-folder-watched = Otra categoría ya vigila esta carpeta.
+error-folder-watched-by = La categoría «{ $category }» ya vigila esta carpeta.
 error-category-name-empty = El nombre de una categoría no puede estar vacío.
 error-category-name-taken = Ya existe una categoría con ese nombre aquí.
 error-category-too-deep = Las categorías no se pueden anidar tanto.
@@ -824,6 +826,22 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = No se quita ninguna pista de la biblioteca.
 library-delete-files-kept = Los archivos no se borran.
 library-delete-confirm = Eliminar
+library-menu-watch-folder = Vigilar carpeta…
+library-menu-change-watched-folder = Cambiar carpeta vigilada…
+library-menu-stop-watching = Dejar de vigilar la carpeta
+library-menu-remove-missing = Quitar pistas que faltan…
+library-tree-watching = Vigila { $folder }
+library-tree-folder-missing = No se encuentra la carpeta vigilada: { $folder }. Se vuelve a buscar.
+library-tree-folder-unreadable = No se puede leer la carpeta vigilada: { $folder }. Se vuelve a intentar.
+library-tree-folder-not-followed = Los cambios en { $folder } no se siguen; se revisa al iniciar y se vuelve a intentar.
+library-tree-folder-ignored = La carpeta vigilada no es una ruta completa: { $folder }. No se vigila.
+library-remove-missing-title = Quitar pistas que faltan
+library-remove-missing-question = { $count ->
+    [one] { $count } pista de { $name } no tiene su archivo y no se usa.
+   *[other] { $count } pistas de { $name } no tienen su archivo y no se usan.
+} ¿Quitarlas de la biblioteca? Las pistas en uso se conservan; no se toca ningún archivo.
+library-remove-missing-confirm = Quitar
+library-remove-missing-none = { $name } no tiene pistas sin uso a las que les falte el archivo.
 library-remove-title = { $count ->
     [one] ¿Quitar { $count } pista de la biblioteca?
    *[other] ¿Quitar { $count } pistas de la biblioteca?

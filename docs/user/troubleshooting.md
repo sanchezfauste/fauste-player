@@ -123,6 +123,39 @@ be a DTS-CD rip: the file holds a DTS bitstream instead of audio. The
 application refuses it (the log says "encoded bitstream stored as PCM") and
 does not decode DTS. Convert it to ordinary PCM with another tool first.
 
+## A watched folder shows a warning
+
+A category that watches a folder shows ⟳, in another colour when the folder is not
+followed; hover it for the reason. See [Watched
+folders](library.md#watched-folders).
+
+- **Not found or cannot be read**: the drive or share is not mounted or not
+  reachable. An empty folder that should hold tracks of the library counts as
+  not found too, as an unmounted share often looks like one. Nothing is
+  marked or removed; the folder is looked for again every 30 seconds and
+  scanned when it appears. If you emptied the folder on purpose, clear its
+  tracks by selecting them in the library table and choosing **Remove from
+  library…**, or by choosing **Re-analyse** on them, which marks those whose
+  file is gone missing so **Remove missing tracks…** can remove them.
+- **Changes are not followed**: the system would not watch it, usually a
+  folder with very many subfolders. The folder is still scanned at every
+  start and at each retry, so new files appear then, not at once. On Linux, a
+  folder tree larger than the limit of watches per user needs a higher
+  `fs.inotify.max_user_watches` (for example `sudo sysctl
+  fs.inotify.max_user_watches=524288`; make it permanent in
+  `/etc/sysctl.d/`).
+- **Not a full path**: the stored folder was edited by hand into a path
+  that is not complete. Choose **Change watched folder…** to pick it again.
+- **A network share shows no warning, but files added from another computer
+  do not appear**: on a network share (SMB/CIFS, NFS) the system usually
+  accepts the watch but only reports the changes made from this computer.
+  Changes made elsewhere are seen at the next start, not while the
+  application runs.
+- **A folder with thousands of files** takes a while to scan at start; the
+  analysis progress shows it.
+- Tracks whose file left a watched folder stay in the library marked missing.
+  Remove them with **Remove missing tracks…** in the category's menu.
+
 ## Audio dropouts
 
 The status bar warns for 5 seconds after each dropout the application

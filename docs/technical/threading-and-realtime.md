@@ -15,6 +15,9 @@
 | Remote | `fp-remote` | normal | the tokio runtime of the HTTP API, the event publisher (every 50 ms) and the OSC socket; follows `config.remote` every 250 ms | network I/O (async); covers and peaks in `spawn_blocking` |
 | Analysis pool (2) | `fp-analysis-<n>` | low (`fp_decode::priority`) | one job at a time each | file I/O, CPU |
 | Helpers | `fp-file-dialog`, `fp-folder-dialog`, `fp-drop-scan`, `fp-device-scan` | normal | native dialogs, folder scans and device enumeration, off the UI thread | yes (by design) |
+| Folder scan (desktop) | `fp-folder-scan` | normal | walks watched folders and answers with the audio files found (`watch::scan::Scanner`), and looks at every watched folder at each retry; the services thread only sends jobs and polls answers | file I/O (an offline share may block it) |
+| Folder watch (desktop) | `fp-folder-watch` | normal | the calls `watch` and `unwatch` of the `FolderWatcher`, so the services thread never touches the file system; requests and results go over channels. A retry sends no new call for a folder while one is unanswered; if the thread ends, every watched folder shows as not followed | file system calls |
+| `notify` watcher (desktop) | created by the `notify` crate | normal | the platform's change notifications; the services thread drains its events without blocking | yes (by design) |
 | UI | main thread | normal | view state only | no |
 
 ## Thread priority

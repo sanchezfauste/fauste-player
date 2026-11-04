@@ -23,6 +23,8 @@ use fp_store::Store;
 use crate::activity::{ActivityCell, AnalysisActivity, PassProgress};
 use crate::header::HeaderReader;
 use crate::tags::{TagJob, TagOutcome, TagWorker};
+use crate::watch::folders::FolderWatch;
+use crate::watch::{FolderWatcher, WatchCell, idle_watch_cell};
 
 /// How often the services thread wakes up when running on its own.
 const PERIOD: Duration = Duration::from_millis(50);
@@ -484,6 +486,10 @@ pub struct Services {
     last_recheck: Option<Instant>,
     /// Looks for them; `None` if its thread could not start.
     probe: Option<Probe>,
+    /// The categories' watched folders; `None` until `set_watcher`.
+    folders: Option<FolderWatch>,
+    /// What the watched folders are doing, for the interface.
+    watch_status: WatchCell,
     /// Reads the tags of tracks that wait for the tag-only pass (feedback 2
     /// spec O23); `None` if its thread could not start.
     tag_worker: Option<TagWorker>,
@@ -576,6 +582,8 @@ impl Services {
             report_cap: None,
             last_recheck: None,
             probe: Probe::spawn(),
+            folders: None,
+            watch_status: idle_watch_cell(),
             tag_worker: TagWorker::spawn(Box::new(|| {}))
                 .map_err(|e| {
                     tracing::error!(error = %e, "cannot start the tag worker; tags stay unread");
@@ -653,6 +661,13 @@ impl Services {
         self.tag_pass(state, true);
     }
 
+    /// How many folder scans were sent. Used to test that an idle watch
+    /// does no file-system work.
+    #[cfg(feature = "test-hooks")]
+    pub fn folder_scans(&self) -> u64 {
+        self.folders.as_ref().map_or(0, FolderWatch::scans)
+    }
+
     /// How many steps walked the whole library. Used to test that an
     /// unchanged library is not walked again.
     #[cfg(feature = "test-hooks")]
@@ -725,6 +740,45 @@ impl Services {
         }
     }
 
+    /// Watches the categories' folders (desktop). Without it nothing is
+    /// watched.
+    pub fn set_watcher(&mut self, watcher: Box<dyn FolderWatcher>) {
+        self.folders = Some(FolderWatch::new(watcher, self.watch_status.clone()));
+    }
+
+    /// What the watched folders are doing.
+    pub fn watch_status(&self) -> WatchCell {
+        self.watch_status.clone()
+    }
+
+    /// One round of the folder watch: its commands go to the conductor and
+    /// the files that came back are analysed at once.
+    fn watch_step(&mut self, state: &AppState, now: Instant) {
+        let Some(folders) = &mut self.folders else {
+            return;
+        };
+        let outcome = folders.step(state, now);
+        let mut unsent = Vec::new();
+        for command in outcome.commands {
+            if unsent.is_empty() && self.conductor.send(command.clone()) {
+                continue;
+            }
+            // Order is kept: once one is refused, the rest wait with it.
+            unsent.push(command);
+        }
+        if !unsent.is_empty() {
+            folders.requeue(unsent);
+        }
+        for id in outcome.returned {
+            if self.in_flight.contains(&id) {
+                continue;
+            }
+            self.failed.remove(&id);
+            self.forced.insert(id);
+            self.walk_again = true;
+        }
+    }
+
     fn analysis_step(&mut self, state: &AppState, now: Instant) {
         #[cfg(feature = "test-hooks")]
         if self.fail_steps > 0 {
@@ -756,6 +810,7 @@ impl Services {
         self.follow_settings(state);
         self.follow_limits(state);
         self.recheck_missing(state, now);
+        self.watch_step(state, now);
         let now_inputs = self.walk_inputs(state);
         let walk = std::mem::take(&mut self.walk_again)
             || !self

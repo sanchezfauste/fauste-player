@@ -763,6 +763,8 @@ flag-analysis-queued = En attente d’analyse
 flag-analysis-running = En cours d’analyse
 menu-reanalyse-queued = Déjà en attente d’analyse
 menu-reanalyse-running = En cours d’analyse
+error-folder-watched = Une autre catégorie surveille déjà ce dossier.
+error-folder-watched-by = La catégorie « { $category } » surveille déjà ce dossier.
 error-category-name-empty = Le nom d'une catégorie ne peut pas être vide.
 error-category-name-taken = Une catégorie portant ce nom existe déjà ici.
 error-category-too-deep = Les catégories ne peuvent pas être imbriquées aussi profondément.
@@ -824,6 +826,22 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = Aucun titre n'est retiré de la bibliothèque.
 library-delete-files-kept = Les fichiers eux-mêmes ne sont pas supprimés.
 library-delete-confirm = Supprimer
+library-menu-watch-folder = Surveiller un dossier…
+library-menu-change-watched-folder = Changer le dossier surveillé…
+library-menu-stop-watching = Arrêter de surveiller le dossier
+library-menu-remove-missing = Retirer les pistes manquantes…
+library-tree-watching = Surveille { $folder }
+library-tree-folder-missing = Dossier surveillé introuvable : { $folder }. Il est recherché de nouveau.
+library-tree-folder-unreadable = Dossier surveillé illisible : { $folder }. Une nouvelle tentative aura lieu.
+library-tree-folder-not-followed = Les changements dans { $folder } ne sont pas suivis ; le dossier est analysé au démarrage et une nouvelle tentative aura lieu.
+library-tree-folder-ignored = Le dossier surveillé n'est pas un chemin complet : { $folder }. Il n'est pas surveillé.
+library-remove-missing-title = Retirer les pistes manquantes
+library-remove-missing-question = { $count ->
+    [one] { $count } piste de { $name } n'a plus son fichier et n'est pas utilisée.
+   *[other] { $count } pistes de { $name } n'ont plus leur fichier et ne sont pas utilisées.
+} Les retirer de la bibliothèque ? Les pistes en cours d'utilisation sont conservées ; aucun fichier n'est touché.
+library-remove-missing-confirm = Retirer
+library-remove-missing-none = { $name } n'a aucune piste inutilisée dont le fichier manque.
 library-remove-title = { $count ->
     [one] Retirer { $count } titre de la bibliothèque ?
    *[other] Retirer { $count } titres de la bibliothèque ?

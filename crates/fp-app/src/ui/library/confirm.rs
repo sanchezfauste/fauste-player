@@ -7,7 +7,7 @@
 use egui::{RichText, vec2};
 use fp_model::{
     CategoryId, Command, Library, ModelError, RemovalImpact, TrackId, category_deletion,
-    removal_impact,
+    missing_tracks, removal_impact,
 };
 
 use super::super::app::{Scene, ViewState, error_text};
@@ -66,7 +66,11 @@ fn refused(scene: &Scene<'_>, view_state: &mut ViewState, impact: &RemovalImpact
     if impact.on_air.is_empty() {
         return false;
     }
-    let text = error_text(scene.i18n, &ModelError::LibraryOnAir(impact.on_air.clone()));
+    let text = error_text(
+        scene.i18n,
+        &ModelError::LibraryOnAir(impact.on_air.clone()),
+        &scene.state.categories,
+    );
     view_state.set_notice(text, scene.time);
     true
 }
@@ -87,6 +91,56 @@ pub(crate) fn ask_removal(scene: &Scene<'_>, view_state: &mut ViewState, removal
     });
 }
 
+/// Starts *Remove missing tracks…* (LB21): the tracks it would remove are
+/// counted now; with none, a notice says so instead of a question.
+pub(crate) fn ask_remove_missing(
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    category: CategoryId,
+) {
+    let Some(name) = scene.state.categories.get(category).map(|c| c.name.clone()) else {
+        return;
+    };
+    let count = missing_tracks(scene.state, category).len();
+    if count == 0 {
+        let text = scene
+            .i18n
+            .tr_args("library-remove-missing-none", &[("name", name.into())]);
+        view_state.set_notice(text, scene.time);
+        return;
+    }
+    view_state.library.dialog = Some(LibraryDialog::RemoveMissing { category, count });
+}
+
+/// Draws the *Remove missing tracks…* question, if open. The model counts
+/// again when the command arrives, so tracks that became used or came back
+/// meanwhile are kept.
+fn draw_remove_missing(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
+    let Some(LibraryDialog::RemoveMissing { category, count }) = view_state.library.dialog.clone()
+    else {
+        return;
+    };
+    let Some(name) = scene.state.categories.get(category).map(|c| c.name.clone()) else {
+        view_state.library.dialog = None;
+        return;
+    };
+    let t = scene.i18n;
+    let question = t.tr_args(
+        "library-remove-missing-question",
+        &[("count", count.into()), ("name", name.into())],
+    );
+    let title = t.tr("library-remove-missing-title");
+    let confirm = t.tr("library-remove-missing-confirm");
+    match ask(ctx, scene, title, vec![question], &confirm) {
+        Some(true) => {
+            view_state.library.dialog = None;
+            scene.ctl.send(Command::RemoveMissingTracks(category));
+        }
+        Some(false) => view_state.library.dialog = None,
+        None => {}
+    }
+}
+
 fn command(removal: Removal) -> Command {
     match removal {
         Removal::Tracks(tracks) => Command::RemoveTracks(tracks),
@@ -103,6 +157,7 @@ pub(crate) fn draw_confirmations(
     scene: &Scene<'_>,
     view_state: &mut ViewState,
 ) {
+    draw_remove_missing(ctx, scene, view_state);
     if !matches!(
         view_state.library.dialog,
         Some(LibraryDialog::Removal { .. })
@@ -213,6 +268,19 @@ fn question(
             t.tr("library-used-confirm"),
         ),
     };
+    ask(ctx, scene, title, lines, &confirm)
+}
+
+/// The modal question: a title, lines of text, *Cancel* and a confirm
+/// button. `Some(true)` goes on, `Some(false)` cancels, `None` keeps it open.
+fn ask(
+    ctx: &egui::Context,
+    scene: &Scene<'_>,
+    title: String,
+    lines: Vec<String>,
+    confirm: &str,
+) -> Option<bool> {
+    let t = scene.i18n;
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 420.0);
     let mut answer = None;
     let modal = egui::Modal::new(egui::Id::unique("library-removal"))
@@ -246,7 +314,7 @@ fn question(
                 if button(ui, &t.tr("library-dialog-cancel"), None) {
                     answer = Some(false);
                 }
-                if button(ui, &confirm, Some(theme::ON_AIR_ROW)) {
+                if button(ui, confirm, Some(theme::ON_AIR_ROW)) {
                     answer = Some(true);
                 }
             });

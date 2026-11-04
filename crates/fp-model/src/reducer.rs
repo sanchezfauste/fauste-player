@@ -334,6 +334,9 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::RemoveTracks(tracks) => {
             crate::library_rules::remove_tracks(state, &tracks, &mut out)?
         }
+        Command::RemoveMissingTracks(category) => {
+            crate::library_rules::remove_missing_tracks(state, category, &mut out)?
+        }
         Command::DeleteCategory(category) => {
             crate::library_rules::delete_category(state, category, &mut out)?;
             let view = std::mem::take(&mut state.library_view);
@@ -372,6 +375,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
                 name,
                 color,
                 kind,
+                watched_folder: None,
             });
         }
         Command::RenameCategory { category, name } => {
@@ -399,6 +403,22 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
                 .get_mut(category)
                 .ok_or(ModelError::UnknownCategory(category))?
                 .kind = kind;
+        }
+        Command::SetWatchedFolder { category, folder } => {
+            if state.categories.get(category).is_none() {
+                return Err(ModelError::UnknownCategory(category));
+            }
+            if let Some(folder) = &folder
+                && let Some(other) = state
+                    .categories
+                    .iter()
+                    .find(|c| c.id != category && c.watched_folder.as_ref() == Some(folder))
+            {
+                return Err(ModelError::FolderAlreadyWatched(other.id));
+            }
+            if let Some(c) = state.categories.get_mut(category) {
+                c.watched_folder = folder;
+            }
         }
         Command::MoveCategory {
             category,

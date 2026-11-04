@@ -763,6 +763,8 @@ flag-analysis-queued = En espera de análise
 flag-analysis-running = Analizándose agora
 menu-reanalyse-queued = Xa está en espera de análise
 menu-reanalyse-running = Estase analizando agora
+error-folder-watched = Outra categoría xa vixía este cartafol.
+error-folder-watched-by = A categoría «{ $category }» xa vixía este cartafol.
 error-category-name-empty = O nome dunha categoría non pode estar baleiro.
 error-category-name-taken = Xa existe unha categoría con ese nome aquí.
 error-category-too-deep = As categorías non se poden aniñar tanto.
@@ -824,6 +826,22 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = Non se quita ningunha pista da biblioteca.
 library-delete-files-kept = Os ficheiros non se borran.
 library-delete-confirm = Eliminar
+library-menu-watch-folder = Vixiar cartafol…
+library-menu-change-watched-folder = Cambiar cartafol vixiado…
+library-menu-stop-watching = Deixar de vixiar o cartafol
+library-menu-remove-missing = Quitar pistas que faltan…
+library-tree-watching = Vixía { $folder }
+library-tree-folder-missing = Non se atopa o cartafol vixiado: { $folder }. Búscase de novo.
+library-tree-folder-unreadable = Non se pode ler o cartafol vixiado: { $folder }. Tentarase de novo.
+library-tree-folder-not-followed = Os cambios en { $folder } non se seguen; revísase ao iniciar e tentarase de novo.
+library-tree-folder-ignored = O cartafol vixiado non é unha ruta completa: { $folder }. Non se vixía.
+library-remove-missing-title = Quitar pistas que faltan
+library-remove-missing-question = { $count ->
+    [one] { $count } pista de { $name } non ten o seu ficheiro e non se usa.
+   *[other] { $count } pistas de { $name } non teñen o seu ficheiro e non se usan.
+} Quitalas da biblioteca? As pistas en uso consérvanse; non se toca ningún ficheiro.
+library-remove-missing-confirm = Quitar
+library-remove-missing-none = { $name } non ten pistas sen uso ás que lles falte o ficheiro.
 library-remove-title = { $count ->
     [one] Quitar { $count } pista da biblioteca?
    *[other] Quitar { $count } pistas da biblioteca?

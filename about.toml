@@ -6,3 +6,8 @@ accepted = [
 ]
 # Workspace crates are not published; only third-party crates are listed.
 private = { ignore = true }
+
+# `notify` is CC0-1.0, which grants no patent licence: accepted for that crate
+# alone, never for every crate.
+[notify]
+accepted = ["CC0-1.0"]
