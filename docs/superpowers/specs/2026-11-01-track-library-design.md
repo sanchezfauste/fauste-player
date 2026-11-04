@@ -447,6 +447,49 @@ look follows the Nocturne design system):
   it does not start without **Pre-listen anyway**, and it stops when
   something starts there. `CueStart` gains `Library(TrackId)`.
 
+### 8.4 Implementation notes (plan 4)
+
+- The selected track is the most recently selected row (the last one
+  clicked when several are selected).
+- Play on a paused preview resumes it; Play on a playing one does nothing
+  (Stop, then Play, restarts from the cue-in).
+- A click on the waveform while the preview is stopped sets where the next
+  Play starts, as a stopped player's seek does; it is dropped when the bar's
+  track changes. While playing or paused it seeks. A click or the release
+  seeks; a drag does not. NaN is ignored and other times are clamped into the
+  file.
+- Selecting nothing (no row selected, or the selected row filtered out)
+  leaves a running preview as it is; a stopped bar empties.
+- Selecting a track that cannot be played stops a running preview: the bar
+  always shows the selected track and never shows one track while another
+  sounds.
+- A running preview that switches to another track moves without asking (CA3
+  asks only for a pre-listen that starts from nothing); a switch while paused
+  starts the new track held.
+- LB17b: the library CUE does not hold a track on air; removing its track
+  stops it (LB35).
+- Engine: the library CUE has its own worker (`fp-library-cue`) created on
+  the first start. Its placement is reported from the engine's start and
+  after each settings update until then, so Settings never shows a route
+  change that needs no apply. Pause and seek keep a held preview held; every
+  tail (stop, seek, replacement) is de-clicked, because a preview may share a
+  channel with a Main (CA7); a forced rate change reopens it at its position,
+  also while held.
+- The small meter has its own reading in the telemetry; it is not a
+  programme meter (CA9). Its maximum restarts when the bar's track changes
+  and when it is clicked.
+- Without a route the transport is dimmed with the reason as its tooltip;
+  the bar still shows the track, its waveform and marker editing (LB18 needs
+  no output), and a line says why with a link that opens Settings → Audio
+  outputs on the Library row.
+- The Library row of Settings → Outputs (CUE route, Test Cue, on-air note)
+  is in the Basic and Advanced views and is hidden on the phone layout until
+  plan 6 gives the phone a library screen.
+- The CA5 notice's "by" is always a Main holder; the library CUE folds into
+  the cartwall's wording.
+- The preview stops when the window closes (not when minimised), and a
+  preview never runs after a restart (nothing goes on air by itself).
+
 ## 9. Settings (plan 3)
 
 - **Settings → Library:** the category tree with the same actions as the

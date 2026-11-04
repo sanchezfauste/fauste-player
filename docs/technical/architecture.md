@@ -68,6 +68,9 @@ or `panic` outside tests.
    with the configuration; the reducer sends each change once nothing it
    affects is playing, and the engine applies it once its buses are quiet
    and answers with `Applied`.
+   The holders are a player's Main and Cue, the cartwall's Main and Cue
+   and the library's Cue (`Holder::LibraryCue`, with its worker
+   `fp-library-cue`).
 
 6. Loudness normalization (loudness normalization spec §6): every
    `SourceRequest` and `CartRequest` carries its `Normalization`, decided

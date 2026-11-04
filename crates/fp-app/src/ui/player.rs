@@ -20,7 +20,7 @@ use super::table;
 use super::theme;
 use super::view::{self, PlayerStatus, PlayerView};
 use super::wave_panel::{self, WaveBadges, WavePanelInput};
-use super::wave_view::WaveKey;
+use super::wave_view::{WaveKey, WaveSubject};
 use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 
 const PLAY_SIZE: f32 = 64.0;
@@ -1027,11 +1027,10 @@ const DIVIDER_WIDTH: f32 = 1.0;
 const METER_COLUMN_GAP: f32 = 6.0;
 /// Vertical gap between the info row and the transport.
 const ROW_GAP: f32 = 8.0;
-/// The countdown shrinks to fit down to this share of its size (38 → 10.5 px:
-/// a ten-hour time in a player at its minimum width, beside the widest
-/// meter, EBU's, with its two rulers, and the fader with its scale).
-const COUNTDOWN_MIN_SCALE: f32 = 10.5 / COUNTDOWN_SIZE;
-/// The countdown's digits at full size.
+/// The countdown's digits at full size; `widgets::countdown` shrinks them
+/// to 10.5 px for a ten-hour time in a player at its minimum width, beside
+/// the widest meter, EBU's, with its two rulers, and the fader with its
+/// scale.
 const COUNTDOWN_SIZE: f32 = 38.0;
 
 /// How a player's top block is laid out.
@@ -1755,36 +1754,7 @@ fn transport(
 /// The remaining time, large, its tenths small; red on the end warning's
 /// beat. Full size when it fits, smaller in a narrow player.
 fn countdown(ui: &mut Ui, pv: &PlayerView) {
-    ui.spacing_mut().item_spacing = vec2(8.0, 0.0);
-    let (main, tenths) = format::countdown(pv.remaining);
-    let colour = countdown_colour(pv);
-    // Full size when it fits; smaller in a narrow player or for an
-    // hour-long time, so it never runs into the buttons.
-    let natural = widgets::tabular_size(ui.painter(), &main, &font_medium(COUNTDOWN_SIZE)).x
-        + widgets::tabular_size(ui.painter(), &tenths, &font_medium(17.0)).x;
-    let scale = (ui.available_width() / natural.max(1.0)).clamp(COUNTDOWN_MIN_SCALE, 1.0);
-    let big = font_medium(COUNTDOWN_SIZE * scale);
-    let tenths_font = font_medium(17.0 * scale);
-    let main_size = widgets::tabular_size(ui.painter(), &main, &big);
-    let tenths_size = widgets::tabular_size(ui.painter(), &tenths, &tenths_font);
-    let (rect, response) = ui.allocate_exact_size(
-        vec2(main_size.x + tenths_size.x, main_size.y),
-        Sense::hover(),
-    );
-    let spoken = format!("{main}{tenths}");
-    response.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, spoken.clone()));
-    widgets::paint_tabular(ui.painter(), rect.left_top(), &main, &big, colour);
-    // The tenths sit on the bottom of the big digits, smaller and dimmed.
-    widgets::paint_tabular(
-        ui.painter(),
-        pos2(
-            rect.left() + main_size.x,
-            rect.bottom() - tenths_size.y - 4.0 * scale,
-        ),
-        &tenths,
-        &tenths_font,
-        theme::NEUTRAL_500,
-    );
+    widgets::countdown(ui, pv.remaining, countdown_colour(pv), COUNTDOWN_SIZE);
 }
 
 /// The player's waveform, `height` tall, its markers editable or not;
@@ -1808,7 +1778,7 @@ fn wave_sized(
     let media = track.and_then(|t| scene.media.get(t));
     let input = WavePanelInput {
         key: WaveKey::Player(id),
-        entry,
+        subject: entry.map(WaveSubject::Entry),
         track,
         media: media.as_ref(),
         total: pv.total,

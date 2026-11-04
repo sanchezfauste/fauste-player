@@ -7,13 +7,13 @@
 use std::sync::Arc;
 
 use egui::{Rect, RichText, Stroke, Ui, UiBuilder, pos2, vec2};
-use fp_model::{Command, EntryId, MarkerKind, MarkerSource, TrackId};
+use fp_model::{Command, MarkerKind, MarkerSource, TrackId};
 
 use super::app::{Scene, ViewState};
 use super::format;
 use super::theme;
 use super::view::MarkerFractions;
-use super::wave_view::{WaveKey, WaveView, WaveZoom, min_span, wheel_notches};
+use super::wave_view::{WaveKey, WaveSubject, WaveView, WaveZoom, min_span, wheel_notches};
 use super::widgets::{self, TileStyle, font};
 use crate::services::TrackMedia;
 
@@ -32,8 +32,8 @@ pub(crate) struct WaveBadges {
 /// What the panel shows and allows (Q7.1).
 pub(crate) struct WavePanelInput<'a> {
     pub key: WaveKey,
-    /// The entry shown: a zoom belongs to it.
-    pub entry: Option<EntryId>,
+    /// The entry or track shown: a zoom belongs to it.
+    pub subject: Option<WaveSubject>,
     /// Its track: edited markers belong to it.
     pub track: Option<TrackId>,
     pub media: Option<&'a Arc<TrackMedia>>,
@@ -63,6 +63,7 @@ fn label_key(key: WaveKey) -> &'static str {
     match key {
         WaveKey::Player(_) => "tip-waveform",
         WaveKey::Cue(_) => "tip-cue-waveform",
+        WaveKey::Library => "tip-library-waveform",
     }
 }
 
@@ -76,10 +77,10 @@ pub(crate) fn show(
     let t = scene.i18n;
     let key = input.key;
     let total = input.total.filter(|t| *t > 0.0);
-    // A zoom belongs to the entry it was made on.
+    // A zoom belongs to the subject it was made on.
     let mut zoom = view_state
         .wave_zoom
-        .get(key, input.entry)
+        .get(key, input.subject)
         .filter(|_| total.is_some());
     let wave_id = key.id();
     // While zoomed, follow the position once the operator's last move is
@@ -154,7 +155,7 @@ pub(crate) fn show(
     );
     let min = min_span(bucket, inner.width());
     // The wheel zooms around the pointer; Shift or a sideways wheel pans.
-    if let (Some(entry), Some(total), Some(p)) = (input.entry, total, response.hover_pos()) {
+    if let (Some(subject), Some(total), Some(p)) = (input.subject, total, response.hover_pos()) {
         let wheels: Vec<(egui::Vec2, bool)> = ui.input(|i| {
             i.events
                 .iter()
@@ -178,7 +179,7 @@ pub(crate) fn show(
             }
             zoom = (!v.is_full(total)).then_some(WaveZoom {
                 view: v,
-                entry,
+                subject,
                 moved_at: scene.time,
             });
             // The wheel was for the waveform, not for a scroll area around it.
@@ -190,7 +191,7 @@ pub(crate) fn show(
     // A two-finger pinch on the waveform zooms around the fingers' centre,
     // with the wheel's limits (phone layout spec PL16).
     let touch = ui.input(|i| i.multi_touch());
-    if let (Some(entry), Some(total), Some(touch)) = (input.entry, total, touch)
+    if let (Some(subject), Some(total), Some(touch)) = (input.subject, total, touch)
         && rect.contains(touch.center_pos)
         && touch.zoom_delta.is_finite()
         && touch.zoom_delta > 0.0
@@ -207,7 +208,7 @@ pub(crate) fn show(
             );
         zoom = (!v.is_full(total)).then_some(WaveZoom {
             view: v,
-            entry,
+            subject,
             moved_at: scene.time,
         });
         ui.ctx().request_repaint();
@@ -403,6 +404,7 @@ fn edit_markers(
         let holder = match key {
             WaveKey::Player(p) => fp_model::Holder::PlayerMain(p),
             WaveKey::Cue(p) => fp_model::Holder::PlayerCue(p),
+            WaveKey::Library => fp_model::Holder::LibraryCue,
         };
         view_state.loudness_popup = Some((track, Some(holder)));
     }

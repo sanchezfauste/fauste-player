@@ -5,25 +5,35 @@
 use std::collections::HashMap;
 
 use egui::{MouseWheelUnit, Rect, Vec2, pos2};
-use fp_model::{EntryId, PlayerId};
+use fp_model::{EntryId, PlayerId, TrackId};
 
-/// A player's zoomed waveform: the view, the entry it belongs to (another
-/// entry returns to the full view) and when the operator last moved it.
+/// What a waveform shows: a playlist entry (a player's or its CUE's) or a
+/// library track (the library CUE's). A zoom belongs to one of them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum WaveSubject {
+    Entry(EntryId),
+    Track(TrackId),
+}
+
+/// A zoomed waveform: the view, the subject it belongs to (another subject
+/// returns to the full view) and when the operator last moved it.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WaveZoom {
     pub view: WaveView,
-    pub entry: EntryId,
+    pub subject: WaveSubject,
     /// `Scene::time` of the last zoom or pan.
     pub moved_at: f64,
 }
 
 /// Which waveform a view state belongs to (operator feedback 4, Q7.2): a
-/// player's, or its CUE window's. Their zoom, menu and marker drag are
-/// independent.
+/// player's, its CUE window's, or the library preview bar's. Their zoom,
+/// menu and marker drag are independent.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum WaveKey {
     Player(PlayerId),
     Cue(PlayerId),
+    /// The library CUE's bar (library plan 4).
+    Library,
 }
 
 impl WaveKey {
@@ -33,6 +43,7 @@ impl WaveKey {
         match self {
             Self::Player(p) => egui::Id::unique(("waveform", p)),
             Self::Cue(p) => egui::Id::unique(("cue-waveform", p)),
+            Self::Library => egui::Id::unique("library-waveform"),
         }
     }
 }
@@ -42,10 +53,13 @@ impl WaveKey {
 pub struct WaveZooms(HashMap<WaveKey, WaveZoom>);
 
 impl WaveZooms {
-    /// The zoom of `key`, when it was made on `entry`: another entry, or
+    /// The zoom of `key`, when it was made on `subject`: another subject, or
     /// none, shows the whole track.
-    pub fn get(&self, key: WaveKey, entry: Option<EntryId>) -> Option<WaveZoom> {
-        self.0.get(&key).copied().filter(|z| Some(z.entry) == entry)
+    pub fn get(&self, key: WaveKey, subject: Option<WaveSubject>) -> Option<WaveZoom> {
+        self.0
+            .get(&key)
+            .copied()
+            .filter(|z| Some(z.subject) == subject)
     }
 
     /// Keeps `zoom` for `key`; `None` returns it to the whole track.

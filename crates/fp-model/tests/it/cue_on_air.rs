@@ -46,6 +46,7 @@ fn place(s: &mut AppState, holder: Holder, route: Option<Route>, on: &str) -> Ve
         }
         Holder::CartwallMain => outputs.cartwall.main = route.clone(),
         Holder::CartwallCue => outputs.cartwall.cue = route.clone(),
+        Holder::LibraryCue => outputs.library.cue = route.clone(),
     }
     let running = device_settings(&s.config.outputs, &device(on));
     on_event(
@@ -792,4 +793,137 @@ fn ca3_a_request_whose_entry_is_removed_is_dropped() {
     assert!(s.cue_on_air.request.is_some());
     apply(&mut s, Command::RemoveEntry(entry)).unwrap();
     assert!(s.cue_on_air.request.is_none());
+}
+
+// ---- LB37: the library CUE follows the same rules ----
+
+fn track_a(s: &AppState) -> fp_model::TrackId {
+    s.library.ids()[0]
+}
+
+fn track_b(s: &AppState) -> fp_model::TrackId {
+    s.library.ids()[1]
+}
+
+/// `shared()` with the library CUE on `desk` 1–2 and the bar on the
+/// first track; player 2's Main shares that output.
+fn library_bar() -> (AppState, PlayerId, PlayerId, fp_model::TrackId) {
+    let (mut s, p1, p2) = shared();
+    on_desk(&mut s, Holder::LibraryCue, 0);
+    let a = track_a(&s);
+    apply(&mut s, Command::SelectLibraryCue(Some(a))).unwrap();
+    (s, p1, p2, a)
+}
+
+fn starts_library(actions: &[EngineAction]) -> bool {
+    actions
+        .iter()
+        .any(|a| matches!(a, EngineAction::StartLibraryCue { .. }))
+}
+
+#[test]
+fn lb37_a_quiet_on_air_output_starts_the_library_preview_at_once() {
+    let (mut s, _, _, _) = library_bar();
+    let actions = apply(&mut s, Command::PlayLibraryCue).unwrap();
+    assert!(starts_library(&actions), "{actions:?}");
+    assert_eq!(s.cue_on_air.request, None);
+}
+
+#[test]
+fn lb37_a_sounding_on_air_output_asks_first() {
+    let (mut s, _, p2, a) = library_bar();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    let actions = apply(&mut s, Command::PlayLibraryCue).unwrap();
+    assert!(!starts_library(&actions), "{actions:?}");
+    assert_eq!(s.library_cue.transport, fp_model::Transport::Stopped);
+    let request = s.cue_on_air.request.clone().unwrap();
+    assert_eq!(request.holder, Holder::LibraryCue);
+    assert_eq!(request.start, CueStart::Library(a));
+    assert_eq!(request.sounding, vec![Holder::PlayerMain(p2)]);
+}
+
+#[test]
+fn lb37_pre_listen_anyway_starts_it_and_confirms_it() {
+    let (mut s, _, p2, a) = library_bar();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    apply(&mut s, Command::PlayLibraryCue).unwrap();
+    let actions = apply(&mut s, Command::ForceCue(CueStart::Library(a))).unwrap();
+    assert!(starts_library(&actions), "{actions:?}");
+    assert_eq!(s.library_cue.transport, fp_model::Transport::Playing);
+    assert_eq!(s.cue_on_air.request, None, "answered");
+    assert_eq!(s.cue_on_air.confirmed, vec![Holder::LibraryCue]);
+}
+
+#[test]
+fn lb37_an_unconfirmed_preview_stops_when_a_player_starts_there() {
+    let (mut s, _, p2, _) = library_bar();
+    apply(&mut s, Command::PlayLibraryCue).unwrap();
+    let actions = apply(&mut s, Command::Play(p2)).unwrap();
+    assert_eq!(actions.first(), Some(&EngineAction::StopLibraryCue));
+    assert_eq!(s.library_cue.transport, fp_model::Transport::Stopped);
+    assert_eq!(
+        s.cue_on_air.notice.map(|n| (n.cue, n.by)),
+        Some((Holder::LibraryCue, Holder::PlayerMain(p2)))
+    );
+}
+
+#[test]
+fn lb37_a_confirmed_preview_keeps_playing() {
+    let (mut s, _, p2, a) = library_bar();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    apply(&mut s, Command::ForceCue(CueStart::Library(a))).unwrap();
+    apply(&mut s, Command::Stop(p2)).unwrap();
+    let actions = apply(&mut s, Command::Play(p2)).unwrap();
+    assert!(
+        !actions.contains(&EngineAction::StopLibraryCue),
+        "{actions:?}"
+    );
+    assert_eq!(s.library_cue.transport, fp_model::Transport::Playing);
+    assert_eq!(s.cue_on_air.notice, None);
+}
+
+#[test]
+fn lb37_needs_confirmation_for_play_library_cue() {
+    let (mut s, _, p2, _) = library_bar();
+    assert!(!needs_confirmation(&s, &Command::PlayLibraryCue), "quiet");
+    apply(&mut s, Command::Play(p2)).unwrap();
+    assert!(needs_confirmation(&s, &Command::PlayLibraryCue), "asks");
+    let a = track_a(&s);
+    apply(&mut s, Command::ForceCue(CueStart::Library(a))).unwrap();
+    assert!(!needs_confirmation(&s, &Command::PlayLibraryCue), "playing");
+    apply(&mut s, Command::SetLibraryCuePaused(true)).unwrap();
+    assert!(
+        !needs_confirmation(&s, &Command::PlayLibraryCue),
+        "a release"
+    );
+}
+
+#[test]
+fn lb37_the_request_goes_when_another_track_is_selected() {
+    let (mut s, _, p2, _) = library_bar();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    apply(&mut s, Command::PlayLibraryCue).unwrap();
+    assert!(s.cue_on_air.request.is_some());
+    let b = track_b(&s);
+    apply(&mut s, Command::SelectLibraryCue(Some(b))).unwrap();
+    assert_eq!(s.cue_on_air.request, None);
+}
+
+#[test]
+fn lb37_a_running_preview_switching_tracks_asks_nothing() {
+    let (mut s, _, p2, a) = library_bar();
+    apply(&mut s, Command::Play(p2)).unwrap();
+    apply(&mut s, Command::ForceCue(CueStart::Library(a))).unwrap();
+    let b = track_b(&s);
+    let actions = apply(&mut s, Command::SelectLibraryCue(Some(b))).unwrap();
+    assert!(starts_library(&actions), "{actions:?}");
+    assert_eq!(s.cue_on_air.request, None);
+    assert_eq!(s.library_cue.track, Some(b));
+}
+
+#[test]
+fn lb37_forcing_an_unknown_track_is_an_error() {
+    let (mut s, _, _, _) = library_bar();
+    let gone = fp_model::TrackId(999_999);
+    assert!(apply(&mut s, Command::ForceCue(CueStart::Library(gone))).is_err());
 }

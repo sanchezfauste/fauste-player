@@ -115,6 +115,60 @@ selected when it is for several.
 | Show file location | Open the file's folder (one track) |
 | Remove from library… | Remove the tracks from the library, after asking (below) |
 
+## Pre-listening
+
+The bar under the title bar pre-listens the selected track on the library's
+own **Library** output (chosen in [Settings → Audio
+outputs](settings.md#audio-outputs)), for example headphones. It is not on
+the phone.
+
+The bar shows:
+
+- **Play**, **Pause** and **Stop**;
+- the big remaining time of the track, its title, artist and category;
+- a small meter at the right. It reads only this pre-listen, never a player's
+  or the cartwall's meter; click it to restart its maximum;
+- the whole file's waveform, with its markers, and an `elapsed / total` line
+  under it.
+
+Play starts the selected track from its cue-in and plays it to the end of the
+file. Play on a paused preview resumes it, and Play on a playing one does
+nothing: Stop, then Play, starts again from the cue-in. The loudness
+normalization applies as on a player's CUE.
+
+The waveform works as on a player's CUE window: click it to seek (a click or
+the release of the mouse seeks; dragging does not), zoom and pan it with the
+wheel, and edit the markers and open **Loudness…** from its menu (see
+[Editing markers](markers-and-mixing.md#editing-markers)). While the preview
+is stopped, a click sets where the next Play starts instead.
+
+**The preview follows the selection.** With several rows selected, the last
+one you clicked is the one it uses.
+
+- While it plays, selecting another row switches to that track from its
+  cue-in and keeps playing, without asking.
+- While it is paused, the new track is loaded paused.
+- While it is stopped, it stays stopped and the bar shows the new track.
+- Selecting nothing (no row selected, or the selected row filtered out) leaves
+  a running preview as it is.
+- Selecting a track that cannot be played (its file is missing or unreadable)
+  stops the preview, and the bar says that the file cannot be played.
+
+**What stops it.** Stop; removing its track from the library; closing the
+window (minimizing it does not). It never plays after a restart.
+
+**Without a Library output** Play is dimmed (hover it for the
+reason) and a line next to them says that pre-listening needs a library CUE
+output, with a link that opens Settings → Audio outputs on the **Library**
+row. The bar still shows the track, its waveform and its markers.
+
+**On an on-air output.** The Library output may be an on-air output (the same
+device and channels as a player's or the cartwall's Main). It then works like
+the players' and the cartwall's CUE (see [CUE
+(pre-listen)](players.md#cue-pre-listen)): while something plays there, Play
+asks first (**Pre-listen anyway** or **Cancel**), and a pre-listen you did not
+confirm stops when something starts on that output.
+
 ## Dragging to playlists and carts
 
 Drag the selected rows (or the row you start dragging from, when it is not

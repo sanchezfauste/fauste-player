@@ -104,6 +104,9 @@ pub(crate) struct SettingsState {
     player_count_draft: Option<usize>,
     /// On a phone, a section shows instead of the list of sections (PL20).
     pub(crate) phone_section: bool,
+    /// Outputs scrolls the library's row into view the next time it is
+    /// drawn (Settings opened from the library's preview bar).
+    reveal_library_route: bool,
 }
 
 impl SettingsState {
@@ -128,6 +131,13 @@ impl SettingsState {
         self.section = Section::Cartwall;
         self.carts.select(page, index);
         self.phone_section = true;
+    }
+
+    /// Opens the Outputs section (the library's CUE route is set there).
+    pub(crate) fn show_outputs(&mut self) {
+        self.section = Section::Outputs;
+        self.phone_section = true;
+        self.reveal_library_route = true;
     }
 
     /// Back on a phone (PL20): from a section to the list. False on the
@@ -452,7 +462,7 @@ fn body(
                         match st.section {
                             Section::Outputs => {
                                 st.load_devices(deps.backends, ctx);
-                                outputs(ui, scene, st);
+                                outputs(ui, scene, st, deps.phone);
                             }
                             Section::Players => players(ui, scene, st),
                             Section::Meters => meters::section(ui, scene),
@@ -1105,7 +1115,7 @@ fn backend_name(t: &crate::i18n::I18n, id: &str) -> String {
     }
 }
 
-fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
+fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, phone: bool) {
     let t = scene.i18n;
     let config = &scene.state.config;
     let Some(backends) = st.backends.clone() else {
@@ -1270,6 +1280,36 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             }
         });
     });
+    // The library and its pre-listen are desktop only (for now).
+    let library_routes = config.outputs.library.clone();
+    if !phone {
+        let library_row = ui.scope(|ui| {
+            row(ui, &t.tr("settings-library-outputs"), None, |ui| {
+                ui.vertical(|ui| {
+                    route_picker(
+                        ui,
+                        scene,
+                        Owner::Library,
+                        Bus::Cue,
+                        library_routes.cue.clone(),
+                        backend_id.as_deref(),
+                        &devices,
+                    );
+                    let cue = fp_model::Holder::LibraryCue;
+                    if config.outputs.cue_shares_main(cue)
+                        || fp_model::cue_on_air::cue_is_on_air(scene.state, cue)
+                    {
+                        cue_on_air_note(ui, scene);
+                    }
+                });
+            });
+        });
+        // Opened from the library's preview bar: its row is what the
+        // operator came for.
+        if std::mem::take(&mut st.reveal_library_route) {
+            ui.scroll_to_rect(library_row.response.rect, Some(egui::Align::Center));
+        }
+    }
     match view {
         OutputsView::Advanced => devices::section(ui, scene, &backends),
         OutputsView::Basic => {
@@ -1310,6 +1350,8 @@ enum Bus {
 enum Owner {
     Player(PlayerId),
     Cartwall,
+    /// The library's pre-listen: a Cue route only.
+    Library,
 }
 
 fn set_route(config: &mut Config, owner: Owner, bus: Bus, route: Option<Route>) {
@@ -1320,6 +1362,12 @@ fn set_route(config: &mut Config, owner: Owner, bus: Bus, route: Option<Route>) 
             match bus {
                 Bus::Main => c.main = route,
                 Bus::Cue => c.cue = route,
+            }
+            return;
+        }
+        Owner::Library => {
+            if bus == Bus::Cue {
+                config.outputs.library.cue = route;
             }
             return;
         }

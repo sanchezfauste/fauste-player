@@ -121,6 +121,7 @@ pub fn place_on_dac(state: &mut AppState, holder: Holder) -> Vec<EngineAction> {
         }
         Holder::CartwallMain => outputs.cartwall.main = Some(route.clone()),
         Holder::CartwallCue => outputs.cartwall.cue = Some(route.clone()),
+        Holder::LibraryCue => outputs.library.cue = Some(route.clone()),
     }
     if !outputs.bit_perfect.contains(&bp_device()) {
         outputs.bit_perfect.push(bp_device());

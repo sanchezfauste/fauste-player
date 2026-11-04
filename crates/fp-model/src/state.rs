@@ -31,6 +31,8 @@ pub struct AppState {
     pub layout: crate::layout::Layout,
     /// The library window's state, saved with the session.
     pub library_view: crate::library_view::LibraryView,
+    /// The library window pre-listen (library plan 4); runtime only.
+    pub library_cue: crate::library_cue::LibraryCue,
 }
 
 impl AppState {
@@ -65,6 +67,7 @@ impl AppState {
             cue_on_air: crate::cue_on_air::CueOnAir::default(),
             layout: crate::layout::Layout::default(),
             library_view: crate::library_view::LibraryView::default(),
+            library_cue: crate::library_cue::LibraryCue::default(),
         }
     }
 

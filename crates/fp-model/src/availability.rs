@@ -80,6 +80,16 @@ pub fn command_available(state: &AppState, command: &Command) -> bool {
         Command::CueCart(cart) => {
             state.cartwall.cue == Some(*cart) || state.config.outputs.cartwall_has_cue()
         }
+        // LB32: a held preview can always be released; a new one needs the
+        // route and a playable track on the bar.
+        Command::PlayLibraryCue => {
+            state.library_cue.transport == crate::player::Transport::Paused
+                || (state.config.outputs.library_has_cue()
+                    && state
+                        .library_cue
+                        .track
+                        .is_some_and(|t| state.library.is_playable(t)))
+        }
         _ => true,
     }
 }

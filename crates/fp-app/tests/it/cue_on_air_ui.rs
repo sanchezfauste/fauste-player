@@ -158,6 +158,30 @@ fn a_cart_pre_listen_asks_the_same_way() {
     assert_eq!(fake.state.load().cartwall.cue, Some(cart));
 }
 
+/// LB37.
+#[test]
+fn a_library_preview_asks_the_same_way() {
+    let mut s = sounding();
+    let track = s.library.ids()[0];
+    on_desk(&mut s, &[Holder::LibraryCue]);
+    fp_model::apply(&mut s, Command::SelectLibraryCue(Some(track))).unwrap();
+    let (mut h, fake) = harness(s);
+    fake.send(Command::PlayLibraryCue);
+    fake.take_sent();
+    h.run_steps(4);
+    assert!(h.query_by_label(BODY_P2).is_some());
+    h.get_by_label(ANYWAY).click();
+    h.run_steps(2);
+    assert_eq!(
+        fake.take_sent(),
+        vec![Command::ForceCue(CueStart::Library(track))]
+    );
+    assert_eq!(
+        fake.state.load().library_cue.transport,
+        fp_model::Transport::Playing
+    );
+}
+
 #[test]
 fn a_pre_listen_stopped_by_a_start_says_why() {
     let (mut h, fake) = harness(shared());

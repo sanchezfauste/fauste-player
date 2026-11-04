@@ -277,6 +277,16 @@ pub fn give_cue_routes(state: &mut AppState) {
     state.config.outputs.cartwall.cue = Some(phones);
 }
 
+/// The library CUE on `null`/`phones`, off the on-air output (library
+/// pre-listen spec).
+pub fn give_library_cue_route(state: &mut AppState) {
+    state.config.outputs.library.cue = Some(fp_model::Route {
+        backend: "null".to_owned(),
+        device: "phones".to_owned(),
+        first_channel: 0,
+    });
+}
+
 /// Places player `n`'s (0-based) Main on a `dac` that runs bit-perfect (live
 /// settings L3): its fader locks and it starts every track hard
 /// (bit-perfect rate and fader spec BR2, BF1).
@@ -343,6 +353,7 @@ pub fn on_desk(state: &mut AppState, holders: &[fp_model::Holder]) {
             }
             Holder::CartwallMain => outputs.cartwall.main = Some(desk.clone()),
             Holder::CartwallCue => outputs.cartwall.cue = Some(desk.clone()),
+            Holder::LibraryCue => outputs.library.cue = Some(desk.clone()),
         }
     }
     let running = fp_model::device_settings(&state.config.outputs, &device);

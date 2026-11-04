@@ -17,6 +17,11 @@ pub trait Controller: Send + Sync {
     fn test_tone(&self, route: Route, frequency_hz: f32) -> bool;
     /// Restarts the maximum of `player`'s meter; never blocks.
     fn reset_meter_max(&self, player: PlayerId) -> bool;
+    /// Restarts the maximum of the library CUE's meter; never blocks. A
+    /// controller without one has nothing to restart.
+    fn reset_library_cue_meter_max(&self) -> bool {
+        false
+    }
     /// The next command the model refused, if any.
     fn take_rejection(&self) -> Option<ModelError>;
     /// Sets what to call when a new model is published (PL32); a
@@ -43,6 +48,10 @@ impl Controller for ConductorHandle {
 
     fn reset_meter_max(&self, player: PlayerId) -> bool {
         ConductorHandle::reset_meter_max(self, player)
+    }
+
+    fn reset_library_cue_meter_max(&self) -> bool {
+        ConductorHandle::reset_library_cue_meter_max(self)
     }
 
     fn take_rejection(&self) -> Option<ModelError> {

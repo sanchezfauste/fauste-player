@@ -15,7 +15,7 @@ use super::glyphs::{self, TransportAction};
 use super::theme;
 use super::view::{self, CueWindowView};
 use super::wave_panel::{self, WaveBadges, WavePanelInput};
-use super::wave_view::WaveKey;
+use super::wave_view::{WaveKey, WaveSubject};
 use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 
 const WIDTH: f32 = 380.0;
@@ -140,7 +140,7 @@ fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &Cu
     let media = track.and_then(|track| scene.media.get(track));
     let input = WavePanelInput {
         key: WaveKey::Cue(v.player),
-        entry: Some(v.entry),
+        subject: Some(WaveSubject::Entry(v.entry)),
         track,
         media: media.as_ref(),
         total: v.total,

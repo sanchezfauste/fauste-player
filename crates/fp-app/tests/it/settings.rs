@@ -963,6 +963,97 @@ fn a_cue_output_on_an_on_air_output_is_noted() {
     );
 }
 
+#[test]
+fn the_library_cue_route_is_in_both_outputs_views() {
+    for view in [
+        fp_model::OutputsView::Basic,
+        fp_model::OutputsView::Advanced,
+    ] {
+        let (h, _fake) = outputs_view_routed(view, Vec::new(), "speakers", None);
+        // The row's label (the Settings list's entry is a button).
+        assert_eq!(
+            h.query_all_by_role_and_label(Role::Label, "Library")
+                .count(),
+            1,
+            "{view:?}"
+        );
+        // Player 1, the cartwall and the library.
+        assert_eq!(h.query_all_by_label("Test Cue").count(), 3, "{view:?}");
+    }
+}
+
+#[test]
+fn picking_a_library_cue_device_sends_the_route() {
+    // Every other Cue has a device, so one combo box reads "None".
+    let (mut h, fake) = outputs_routed(Vec::new(), "speakers", Some(("dac", "speakers")));
+    let before = fake.state.load().config.outputs.clone();
+    h.get_by_role_and_label(Role::ComboBox, "None")
+        .scroll_to_me();
+    h.run_steps(5);
+    h.get_by_role_and_label(Role::ComboBox, "None").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "speakers").click();
+    h.run_steps(2);
+    let sent: Vec<_> = fake
+        .take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::UpdateConfig(config) => Some(config.outputs),
+            _ => None,
+        })
+        .collect();
+    let mut expected = before;
+    expected.library.cue = Some(Route {
+        backend: "offline".into(),
+        device: "speakers".into(),
+        first_channel: 0,
+    });
+    assert_eq!(sent.last(), Some(&expected));
+}
+
+#[test]
+fn a_library_cue_on_an_on_air_output_shows_the_note() {
+    let count = |device: &str| {
+        let (h, _fake) = outputs_built(
+            fp_model::OutputsView::Advanced,
+            Vec::new(),
+            "speakers",
+            None,
+            |_, s| {
+                s.config.outputs.library.cue = Some(Route {
+                    backend: "offline".into(),
+                    device: device.into(),
+                    first_channel: 0,
+                });
+            },
+        );
+        h.query_all_by_label_contains(CUE_ON_AIR).count()
+    };
+    assert_eq!(count("speakers"), 0, "apart from every Main");
+    assert_eq!(count("dac"), 1, "on player 1's Main");
+}
+
+#[test]
+fn open_outputs_opens_settings_on_outputs() {
+    let backend = OfflineBackend::new();
+    backend.add_device("speakers", 2);
+    let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(backend)];
+    let (mut h, _fake) = harness_with_backends(state(1, 1), backends);
+    assert!(h.query_by_label("Test Main").is_none(), "Settings is shut");
+    h.state_mut().open_outputs();
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_all_by_label("Test Main").next().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        h.query_all_by_label("Test Main").next().is_some(),
+        "Settings shows the outputs"
+    );
+}
+
 /// `dac` reports only 44.1 to 48 kHz and 64 to 1024 frames, and the
 /// configuration still holds 192 kHz and 4096 frames for it.
 fn a_device_that_narrowed() -> (

@@ -479,6 +479,9 @@ pub struct OutputsConfig {
     /// Where the cartwall plays (Phase 2 spec P2.4).
     #[serde(default)]
     pub cartwall: CartwallRoutes,
+    /// Where the library pre-listens (library plan 4, LB32).
+    #[serde(default)]
+    pub library: LibraryRoutes,
     /// Devices played bit-perfect: exclusive access, and the stream rate
     /// follows the files (Phase 4 spec B1, B3).
     #[serde(default)]
@@ -519,6 +522,13 @@ pub struct CartwallRoutes {
     pub cue: Option<Route>,
 }
 
+/// The library outputs: without a Cue route the library cannot pre-listen.
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default)]
+pub struct LibraryRoutes {
+    pub cue: Option<Route>,
+}
+
 impl Default for OutputsConfig {
     fn default() -> Self {
         Self {
@@ -527,6 +537,7 @@ impl Default for OutputsConfig {
             buffer_frames: 512,
             routes: Vec::new(),
             cartwall: CartwallRoutes::default(),
+            library: LibraryRoutes::default(),
             bit_perfect: Vec::new(),
             dsd_output: Vec::new(),
             dsd_mix: crate::dsd::DsdMix::default(),
@@ -555,6 +566,11 @@ impl OutputsConfig {
         cue_is_usable(self.cartwall.cue.as_ref())
     }
 
+    /// Whether the library has a Cue output a track pre-listen can be heard on.
+    pub fn library_has_cue(&self) -> bool {
+        cue_is_usable(self.library.cue.as_ref())
+    }
+
     /// On-air pre-listen spec: whether `cue`'s configured route overlaps
     /// a configured Main route (any player's or the cartwall's). A missing
     /// Main route goes to the default output, which only the engine
@@ -565,6 +581,7 @@ impl OutputsConfig {
         let route = match cue {
             Holder::PlayerCue(p) => self.player_routes(p).and_then(|r| r.cue.as_ref()),
             Holder::CartwallCue => self.cartwall.cue.as_ref(),
+            Holder::LibraryCue => self.library.cue.as_ref(),
             Holder::PlayerMain(_) | Holder::CartwallMain => None,
         };
         let Some(route) = route else {
@@ -671,7 +688,7 @@ impl OutputsConfig {
             .retain(|o| o.sample_rate.is_some() || o.buffer_frames.is_some());
     }
 
-    /// The devices routes name explicitly (players, then the cartwall), each
+    /// The devices routes name explicitly (players, the cartwall, then the library), each
     /// once, in route order: the devices Settings gives their own rows.
     pub fn routed_devices(&self) -> Vec<OutputDevice> {
         let mut devices: Vec<OutputDevice> = Vec::new();
@@ -680,7 +697,8 @@ impl OutputsConfig {
             .iter()
             .flat_map(|r| r.main.iter().chain(r.cue.iter()))
             .chain(self.cartwall.main.iter())
-            .chain(self.cartwall.cue.iter());
+            .chain(self.cartwall.cue.iter())
+            .chain(self.library.cue.iter());
         for route in routes {
             let device = OutputDevice {
                 backend: route.backend.clone(),

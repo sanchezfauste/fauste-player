@@ -191,6 +191,7 @@ impl AppState {
             ids,
             live: crate::live::LiveSettings::default(),
             cue_on_air: crate::cue_on_air::CueOnAir::default(),
+            library_cue: crate::library_cue::LibraryCue::default(),
             layout: Layout::default(),
             library_view: crate::library_view::LibraryView::default(),
         };

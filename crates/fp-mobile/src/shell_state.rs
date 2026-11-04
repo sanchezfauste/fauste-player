@@ -27,7 +27,8 @@ pub fn shell_state(state: &AppState) -> i32 {
     bits
 }
 
-/// A player playing or pre-listening, or a cart playing or pre-listening.
+/// A player playing or pre-listening, a cart playing or pre-listening, or
+/// the library pre-listening.
 pub(crate) fn sounding(state: &AppState) -> bool {
     state
         .players
@@ -35,6 +36,7 @@ pub(crate) fn sounding(state: &AppState) -> bool {
         .any(|p| p.transport == Transport::Playing || p.cue.is_some())
         || !state.cartwall.playing.is_empty()
         || state.cartwall.cue.is_some()
+        || state.library_cue.transport != Transport::Stopped
 }
 
 /// The notification's text: one "P<n> — <title>" line per player playing

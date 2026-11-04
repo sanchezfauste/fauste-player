@@ -115,9 +115,12 @@ fn selected_rows(h: &H) -> Vec<Rect> {
         .collect()
 }
 
+/// Whether the table's row of `title` is selected (the preview bar above
+/// the table names the selected track too).
 fn is_selected(h: &H, title: &str) -> bool {
-    let c = h.get_by_label(title).rect().center();
-    selected_rows(h).iter().any(|r| r.contains(c))
+    let rows = selected_rows(h);
+    h.query_all_by_label(title)
+        .any(|n| rows.iter().any(|r| r.contains(n.rect().center())))
 }
 
 #[test]

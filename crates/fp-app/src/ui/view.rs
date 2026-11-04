@@ -3,7 +3,7 @@
 
 use fp_model::{
     AppState, EntryId, FileState, PlayMode, PlayerId, PlaylistEntry, PlaylistId, TableColumn,
-    Track, Transport,
+    Track, TrackId, Transport,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -230,6 +230,73 @@ pub fn cue_window_view(
         outro: total.and_then(|end| outro_left(track, elapsed, end)),
         mix_active: mix_active(state, player),
         can_load_next: !(p.next == Some(cue.entry) && p.next_explicit),
+    })
+}
+
+/// What the library window's preview bar shows (library plan 4, LB34): the
+/// bar's track and its pre-listen, always on the whole file.
+#[derive(Debug, Clone, PartialEq)]
+pub struct LibraryCueView {
+    pub track: TrackId,
+    pub title: String,
+    pub artist: Option<String>,
+    /// The name of the track's category; `None`: uncategorised.
+    pub category: Option<String>,
+    pub transport: Transport,
+    pub elapsed: f64,
+    /// File length, when known.
+    pub total: Option<f64>,
+    /// Seconds to the end of the file; `None` while the length is unknown.
+    pub remaining: Option<f64>,
+    /// The markers and the position on the whole file, `ignored: true`
+    /// as on a CUE.
+    pub markers: MarkerFractions,
+    /// Seconds left of a marked intro.
+    pub intro: Option<f64>,
+    /// Seconds from the outro to the end of the file.
+    pub outro: Option<f64>,
+    /// The file can play (not missing or unreadable).
+    pub playable: bool,
+    /// The library has a Cue output to hear the preview on.
+    pub has_route: bool,
+}
+
+/// The preview bar's view, or `None` without a track. `position` is the
+/// telemetry's, and only when its track is the bar's; while stopped, or
+/// without a usable position, the elapsed time is the start point, else
+/// the cue-in.
+pub fn library_cue_view(state: &AppState, position: Option<f64>) -> Option<LibraryCueView> {
+    let cue = &state.library_cue;
+    let track = state.library.get(cue.track?)?;
+    let total = (track.duration_secs.is_finite() && track.duration_secs > 0.0)
+        .then_some(track.duration_secs);
+    let start = cue.start_at.filter(|s| s.is_finite()).unwrap_or_else(|| {
+        track
+            .play_range(state.config.players.use_cue_markers)
+            .cue_in
+    });
+    let live = position.filter(|p| p.is_finite() && cue.transport != Transport::Stopped);
+    let mut elapsed = live.unwrap_or(start).max(0.0);
+    if let Some(total) = total {
+        elapsed = elapsed.min(total);
+    }
+    Some(LibraryCueView {
+        track: track.id,
+        title: track.title.clone(),
+        artist: Some(track.artist.clone()).filter(|a| !a.is_empty()),
+        category: track
+            .category
+            .and_then(|c| state.categories.get(c))
+            .map(|c| c.name.clone()),
+        transport: cue.transport,
+        elapsed,
+        total,
+        remaining: total.map(|t| (t - elapsed).max(0.0)),
+        markers: marker_fractions(track, total.unwrap_or(0.0), elapsed, true),
+        intro: intro_left(track, elapsed).map(tenths),
+        outro: total.and_then(|end| outro_left(track, elapsed, end)),
+        playable: track.file_state.is_playable(),
+        has_route: state.config.outputs.library_has_cue(),
     })
 }
 

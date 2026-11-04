@@ -12,19 +12,20 @@ use crossbeam_channel::{Receiver, Sender};
 use fp_backends::{AudioBackend, Availability, NullBackend, StreamConfig, choose_default_backend};
 use fp_model::{
     CartwallRoutes, Config, DeviceSettings, EngineAction, EngineEvent, EntryId, Holder,
-    OutputDevice, PlayerId, PlayerRoutes, Route, SourceRequest, Target, TransitionPlan, Tuning,
-    Wanted,
+    LibraryRoutes, OutputDevice, PlayerId, PlayerRoutes, Route, SourceRequest, Target,
+    TransitionPlan, Tuning, Wanted,
 };
 
 use crate::atomic::AtomicF32;
 use crate::bus::{Bus, BusHealth, BusKey, BusTiming};
 use crate::mixer::{BusCommand, BusEvent, MixerConfig};
 use crate::ramp::Curve;
-use crate::source::{SourceShared, source_pair};
+use crate::source::{SourceProducer, SourceShared, source_pair};
 use crate::worker::{PlayerWorker, SourceKey, SourceOpener, WorkerFailure};
 
 mod carts;
 mod dsd;
+mod library;
 pub use carts::{CartTelemetry, CartwallTelemetry};
 
 /// DSD output (feedback 2 spec O25), derived from the model `Config`.
@@ -67,6 +68,8 @@ pub struct EngineSettings {
     pub tuning: Tuning,
     pub routes: Vec<PlayerRoutes>,
     pub cartwall_routes: CartwallRoutes,
+    /// Where the library pre-listens (library plan 4, LB32).
+    pub library_routes: LibraryRoutes,
     /// Backend used when a player has no explicit route (`None`: the first registered).
     pub default_backend: Option<String>,
     /// Devices played bit-perfect (Phase 4 spec B1).
@@ -87,6 +90,7 @@ impl EngineSettings {
             tuning: config.tuning.clone(),
             routes: config.outputs.routes.clone(),
             cartwall_routes: config.outputs.cartwall.clone(),
+            library_routes: config.outputs.library.clone(),
             default_backend: config.outputs.backend.clone(),
             bit_perfect: config
                 .outputs
@@ -391,6 +395,8 @@ pub struct Engine {
     tones: Vec<(BusKey, usize)>,
     /// Created on the first cart action.
     cartwall: Option<carts::CartwallRuntime>,
+    /// The library CUE (library plan 4); created on its first preview.
+    library: Option<library::LibraryCueRuntime>,
     /// The latest time `execute` or `tick` was given, for bus reopens made
     /// deep inside an action.
     now: Instant,
@@ -467,6 +473,24 @@ fn take_measurement(s: &SourceShared) {
         .swap(0, std::sync::atomic::Ordering::AcqRel);
 }
 
+/// Holds (`paused`) or releases a pre-listen source whose start is
+/// `start` (a player's CUE, the library CUE): one that has not started yet
+/// is held back idle, or released to start when ready, with no command.
+/// Otherwise returns the Pause (`true`) or Resume (`false`) to send.
+fn hold_transition(start: &mut StartState, paused: bool) -> Option<bool> {
+    match (paused, *start) {
+        (true, StartState::WhenReady { .. }) => {
+            *start = StartState::Idle;
+            None
+        }
+        (false, StartState::Idle) => {
+            *start = StartState::WhenReady { fade_in: false };
+            None
+        }
+        (pause, _) => Some(pause),
+    }
+}
+
 /// `ms` milliseconds in frames at `rate`.
 fn frames_at(rate: u32, ms: f64) -> u64 {
     (ms.max(0.0) * f64::from(rate) / 1000.0).round() as u64
@@ -528,6 +552,7 @@ impl Engine {
         let audio_system = settings.default_backend.clone();
         let backend_in_use = choose_backend(&backends, audio_system.as_deref());
         let cartwall_routes = settings.cartwall_routes.clone();
+        let library_route = settings.library_routes.cue.clone();
         let (failures_tx, failures_rx) = crossbeam_channel::unbounded();
         let mut engine = Self {
             backends,
@@ -545,6 +570,7 @@ impl Engine {
             slot_exhaustions: 0,
             tones: Vec::new(),
             cartwall: None,
+            library: None,
             now: Instant::now(),
             true_peak: false,
             integration: (0.0, 0.0, 0.0),
@@ -567,6 +593,7 @@ impl Engine {
         });
         engine.report_cartwall_route(Holder::CartwallMain, cartwall_routes.main);
         engine.report_cartwall_route(Holder::CartwallCue, cartwall_routes.cue);
+        engine.report_library_route(library_route);
         engine
     }
 
@@ -609,6 +636,7 @@ impl Engine {
             })
             .sum::<usize>()
             + self.unsettled_carts()
+            + self.unsettled_library()
     }
 
     /// Mixer slots in use across all buses (a leak shows up here).
@@ -699,7 +727,8 @@ impl Engine {
                     + rt.outgoing.len()
                     + rt.cue_outgoing.len()
             })
-            .sum()
+            .sum::<usize>()
+            + self.attached_library()
     }
 
     /// Bus commands that could not be queued, plus test tones refused because
@@ -738,6 +767,7 @@ impl Engine {
     fn update_settings(&mut self, config: &Config, now: Instant) {
         let retune = self.settings.tuning != config.tuning;
         let cartwall_before = self.settings.cartwall_routes.clone();
+        let library_before = self.settings.library_routes.clone();
         self.settings = EngineSettings::from_config(config);
         // The cartwall has no bus before its first cart, so `ApplyRoute`
         // never has anything to move: it holds the configured routes, and
@@ -747,6 +777,12 @@ impl Engine {
             let routes = self.settings.cartwall_routes.clone();
             self.report_cartwall_route(Holder::CartwallMain, routes.main);
             self.report_cartwall_route(Holder::CartwallCue, routes.cue);
+        }
+        // The library CUE has no bus before its first preview: it is
+        // placed the same way.
+        if self.library.is_none() && self.settings.library_routes != library_before {
+            let route = self.settings.library_routes.cue.clone();
+            self.report_library_route(route);
         }
         if !retune {
             return;
@@ -820,6 +856,14 @@ impl Engine {
         self.report_placement(holder, route, target.as_ref().map(|t| &t.0));
     }
 
+    /// LB32: reports where the library Cue plays from its `route`, as its
+    /// playback will place it, without opening a stream or creating a
+    /// worker. A route that cannot carry a Cue has no bus.
+    fn report_library_route(&mut self, route: Option<Route>) {
+        let target = route.as_ref().and_then(|r| self.cue_target(r));
+        self.report_placement(Holder::LibraryCue, route, target.as_ref().map(|t| &t.0));
+    }
+
     /// BR1: reports each bus whose stream rate or refused rates changed
     /// since it was last reported (a bus just opened has nothing reported),
     /// whatever changed them: a B3.2 reopen, a rate cut, a refusal, a
@@ -855,6 +899,7 @@ impl Engine {
             .values()
             .all(|rt| self.player_quiet(rt, |p| &p.bus == bus))
             && !self.carts_sounding(bus)
+            && self.library_quiet_on(bus)
             && !self.tones.iter().any(|(b, _)| b == bus)
             && !self.dsd_silence_running(bus)
     }
@@ -1107,6 +1152,7 @@ impl Engine {
                 .is_none_or(|rt| self.player_quiet(rt, |s| s.cue)),
             Holder::CartwallMain => self.cart_path_quiet(false),
             Holder::CartwallCue => self.cart_path_quiet(true),
+            Holder::LibraryCue => self.library_path_quiet(),
         }
     }
 
@@ -1159,6 +1205,7 @@ impl Engine {
             Holder::CartwallMain | Holder::CartwallCue => {
                 self.move_cartwall(holder, route.clone(), force)
             }
+            Holder::LibraryCue => self.move_library_cue(route.clone(), force),
         };
         let Some(outcome) = done else {
             return false;
@@ -1291,13 +1338,14 @@ impl Engine {
         }
     }
 
-    /// Whether a holder (a player's Main or Cue, the cartwall) plays on
-    /// `key`.
+    /// Whether a holder (a player's Main or Cue, the cartwall, the library
+    /// CUE) plays on `key`.
     fn bus_in_use(&self, key: &BusKey) -> bool {
         self.players
             .values()
             .any(|rt| rt.main.0 == *key || rt.cue.as_ref().is_some_and(|c| c.0 == *key))
             || self.cartwall_uses(key)
+            || self.library_uses(key)
     }
 
     /// L13: closes the buses holders left, once no holder uses them,
@@ -1380,28 +1428,33 @@ impl Engine {
             take_measurement(&p.shared);
         }
         for p in rt.current.iter().chain(rt.outgoing.iter()) {
-            let s = &p.shared;
-            let mut source = crate::meter::MeterInput::default();
-            let mut take = || {
-                source.extend(crate::meter::MeterInput {
-                    peak: [s.peak_l.take(), s.peak_r.take()],
-                    sum_sq: [s.sum_sq_l.take(), s.sum_sq_r.take()],
-                    sum_abs: [s.sum_abs_l.take(), s.sum_abs_r.take()],
-                    k_sum: [s.k_sum_l.take(), s.k_sum_r.take()],
-                    frames: s
-                        .measured_frames
-                        .swap(0, std::sync::atomic::Ordering::AcqRel),
-                });
-            };
-            // The sums are taken one by one: a block rendered meanwhile is
-            // taken whole in the same reading (a tick never gets half a block).
-            match self.buses.get(&p.bus) {
-                Some(bus) => bus.shared().whole_blocks(take),
-                None => take(),
-            }
-            input.merge(source);
+            input.merge(self.take_source_measurement(&p.bus, &p.shared));
         }
         input
+    }
+
+    /// What the source sharing `s` on `bus` measured since the last call;
+    /// the measurement is taken, not copied.
+    fn take_source_measurement(&self, bus: &BusKey, s: &SourceShared) -> crate::meter::MeterInput {
+        let mut source = crate::meter::MeterInput::default();
+        let mut take = || {
+            source.extend(crate::meter::MeterInput {
+                peak: [s.peak_l.take(), s.peak_r.take()],
+                sum_sq: [s.sum_sq_l.take(), s.sum_sq_r.take()],
+                sum_abs: [s.sum_abs_l.take(), s.sum_abs_r.take()],
+                k_sum: [s.k_sum_l.take(), s.k_sum_r.take()],
+                frames: s
+                    .measured_frames
+                    .swap(0, std::sync::atomic::Ordering::AcqRel),
+            });
+        };
+        // The sums are taken one by one: a block rendered meanwhile is
+        // taken whole in the same reading (a tick never gets half a block).
+        match self.buses.get(bus) {
+            Some(bus) => bus.shared().whole_blocks(take),
+            None => take(),
+        }
+        source
     }
 
     /// Meters measure true peak on every bus (meters spec M1).
@@ -1485,7 +1538,10 @@ impl Engine {
                 .chain(rt.cue_outgoing.iter())
                 .any(|p| &p.bus == bus && sounding(p.start))
         });
-        players || self.carts_sounding(bus) || self.tones.iter().any(|(b, _)| b == bus)
+        players
+            || self.carts_sounding(bus)
+            || self.library_sounding(bus)
+            || self.tones.iter().any(|(b, _)| b == bus)
     }
 
     /// BR8: the rate `player`'s hard start of a file with `format` reopens
@@ -1650,8 +1706,8 @@ impl Engine {
             return;
         }
         let now = self.now;
+        let before = self.rate_of(bus);
         let changed = self.buses.get_mut(bus).is_some_and(|b| {
-            let before = b.sample_rate();
             // Nothing sounds here (checked above): the conductor may wait.
             let mut budget = b.busy_budget(true);
             b.reopen_at(rate, now, &mut budget);
@@ -1659,6 +1715,8 @@ impl Engine {
         });
         if changed {
             self.reopen_waiting(bus);
+            // A held library preview counts as quiet: it follows too.
+            self.follow_forced_rate_library(bus, before);
         }
     }
 
@@ -1805,6 +1863,7 @@ impl Engine {
             self.reopen_player_sources(player, |p| &p.bus == bus, old_rate);
         }
         self.follow_forced_rate_carts(bus, old_rate);
+        self.follow_forced_rate_library(bus, old_rate);
         let (gone, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.tones)
             .into_iter()
             .partition(|(b, _)| b == bus);
@@ -2069,6 +2128,7 @@ impl Engine {
             .flat_map(|r| r.main.iter().chain(r.cue.iter()))
             .chain(self.settings.cartwall_routes.main.iter())
             .chain(self.settings.cartwall_routes.cue.iter())
+            .chain(self.settings.library_routes.cue.iter())
             .map(|route| self.route_target(route))
             .filter(|(k, _)| k == key)
             .map(|(_, first)| first.saturating_add(2))
@@ -2130,7 +2190,7 @@ impl Engine {
             .values()
             .filter(|p| p.cue.as_ref().is_some_and(|c| &c.0 == key))
             .count();
-        let carts = self.cart_sources_on(key);
+        let carts = self.cart_sources_on(key) + self.library_sources_on(key);
         let wanted = ((mains * 5 + cues * 2 + carts + 2) as f64
             * self.settings.tuning.mixer_headroom)
             .ceil() as usize;
@@ -2147,6 +2207,12 @@ impl Engine {
             EngineAction::StopCart { cart } => self.stop_cart(cart),
             EngineAction::StartCartCue(request) => self.start_cart_cue(&request, now),
             EngineAction::StopCartCue => self.stop_cart_cue(),
+            EngineAction::StartLibraryCue { request, paused } => {
+                self.start_library_cue(&request, paused, now)
+            }
+            EngineAction::StopLibraryCue => self.stop_library_cue(),
+            EngineAction::SeekLibraryCue { secs } => self.seek_library_cue(secs),
+            EngineAction::SetLibraryCuePaused { paused } => self.set_library_cue_paused(paused),
             EngineAction::AddPlayer { player } => self.add_player(player, now),
             EngineAction::RemovePlayer { player } => self.remove_player(player),
             EngineAction::Preload { player, request } => self.preload(player, request),
@@ -3161,27 +3227,21 @@ impl Engine {
         };
         cue.held = paused;
         let (bus, slot) = (cue.bus.clone(), cue.slot);
-        let send = match (paused, cue.start) {
-            (true, StartState::WhenReady { .. }) => {
-                cue.start = StartState::Idle;
-                None
-            }
-            (false, StartState::Idle) => {
-                cue.start = StartState::WhenReady { fade_in: false };
-                None
-            }
-            (pause, _) => Some(pause),
-        };
-        let Some(pause) = send else {
-            return;
-        };
-        let ramp_frames = self.ramp_frames(&bus);
+        if let Some(pause) = hold_transition(&mut cue.start, paused) {
+            self.send_hold(&bus, slot, pause);
+        }
+    }
+
+    /// Pauses (`pause`) or resumes the source in `slot` of `bus` with the
+    /// pause ramp: the hold of a pre-listen that has started.
+    fn send_hold(&mut self, bus: &BusKey, slot: usize, pause: bool) {
+        let ramp_frames = self.ramp_frames(bus);
         let command = if pause {
             BusCommand::Pause { slot, ramp_frames }
         } else {
             BusCommand::Resume { slot, ramp_frames }
         };
-        self.send(&bus, command);
+        self.send(bus, command);
     }
 }
 
@@ -3229,7 +3289,7 @@ impl Engine {
     fn handle_failures(&mut self) {
         let failures: Vec<WorkerFailure> = self.failures_rx.try_iter().collect();
         for failure in failures {
-            if self.cart_failure(&failure) {
+            if self.cart_failure(&failure) || self.library_failure(&failure) {
                 continue;
             }
             let Some(player) = self.owners.get(&failure.key).copied() else {
@@ -3310,7 +3370,7 @@ impl Engine {
             self.send(&bus, BusCommand::Detach { slot });
             return;
         }
-        if self.cart_bus_event(bus, &event) {
+        if self.cart_bus_event(bus, &event) || self.library_bus_event(bus, &event) {
             return;
         }
         match event {
@@ -3592,6 +3652,7 @@ impl Engine {
             }
         }
         self.start_ready_carts();
+        self.start_ready_library();
         // (bus, slot, fade in, earliest frame).
         let mut starts: Vec<(BusKey, usize, bool, u64)> = Vec::new();
         for rt in self.players.values_mut() {

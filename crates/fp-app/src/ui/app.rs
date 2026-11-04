@@ -209,6 +209,9 @@ pub(crate) struct ViewState {
     pub marker_drag: Option<(super::wave_view::WaveKey, fp_model::MarkerKind, TrackId)>,
     /// A cart to open in Settings → Cartwall (`Edit…` on a cart).
     pub edit_cart: Option<(fp_model::CartPageId, usize)>,
+    /// Open Settings on Audio outputs (a place that needs a route set up,
+    /// such as the library's CUE).
+    pub open_outputs: bool,
     /// A track whose tags the operator asked to edit (feedback 2 spec O23);
     /// the next frame opens the editor.
     pub edit_tags: Option<TrackId>,
@@ -725,6 +728,13 @@ impl AppUi {
         self.cover_picker = Some(Arc::new(picker));
     }
 
+    /// Asks for Settings to open on Audio outputs, as the library does.
+    /// Used by tests.
+    #[cfg(feature = "test-hooks")]
+    pub fn open_outputs(&mut self) {
+        self.view.open_outputs = true;
+    }
+
     /// Makes the next frame panic. Used to test panic isolation.
     #[cfg(feature = "test-hooks")]
     pub fn fail_next_frame(&mut self) {
@@ -1065,6 +1075,9 @@ impl AppUi {
         // PL19b: while a phone's Music screen answers a picker Settings
         // asked, Settings waits (its state kept) instead of covering it.
         let picking = self.view.phone_active && self.view.music.pick.is_some();
+        if self.view.open_outputs {
+            self.view.settings_open = true;
+        }
         if self.view.settings_open && !picking {
             if !self.settings_shown {
                 self.settings.reset();
@@ -1072,6 +1085,9 @@ impl AppUi {
             }
             if let Some((page, index)) = self.view.edit_cart.take() {
                 self.settings.edit_cart(page, index);
+            }
+            if std::mem::take(&mut self.view.open_outputs) {
+                self.settings.show_outputs();
             }
             let pending_tip = {
                 let names = |d: &fp_model::OutputDevice| self.settings.device_label(d);
