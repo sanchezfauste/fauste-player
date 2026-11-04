@@ -744,3 +744,32 @@ fn the_preview_meter_reads_only_the_preview() {
     let again = r.engine.take_library_cue_meter_input();
     assert_eq!(again.frames, 0, "taken, not copied");
 }
+
+/// Two seeks before the first tail has ramped out: every tail still ramps
+/// down; none is cut (the preview may share a channel with a Main, CA7).
+#[test]
+fn two_quick_seeks_ramp_every_tail_out() {
+    let mut r = play_rig(2, Some(on("card", 0)), 48_000 * 10);
+    r.act(start(preview(1)));
+    r.settle();
+    r.run(5);
+    let level = *r.channel(0).last().unwrap();
+    r.act(EngineAction::SeekLibraryCue { secs: 3.0 });
+    r.settle();
+    r.act(EngineAction::SeekLibraryCue { secs: 6.0 });
+    let before = r.frames.len();
+    r.run(1);
+    let left = r.channel(0);
+    let mut previous = level;
+    for (i, v) in left[before..].iter().enumerate() {
+        assert!(
+            (v - previous).abs() < level * 0.05,
+            "a jump at frame {i} after the seeks: {previous} to {v}"
+        );
+        previous = *v;
+    }
+    r.settle();
+    r.run(10);
+    assert_eq!(r.engine.used_slots(), 1, "every tail is released");
+    assert!(r.position() > 6.0);
+}

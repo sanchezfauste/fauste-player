@@ -473,6 +473,24 @@ fn take_measurement(s: &SourceShared) {
         .swap(0, std::sync::atomic::Ordering::AcqRel);
 }
 
+/// Holds (`paused`) or releases a pre-listen source whose start is
+/// `start` (a player's CUE, the library CUE): one that has not started yet
+/// is held back idle, or released to start when ready, with no command.
+/// Otherwise returns the Pause (`true`) or Resume (`false`) to send.
+fn hold_transition(start: &mut StartState, paused: bool) -> Option<bool> {
+    match (paused, *start) {
+        (true, StartState::WhenReady { .. }) => {
+            *start = StartState::Idle;
+            None
+        }
+        (false, StartState::Idle) => {
+            *start = StartState::WhenReady { fade_in: false };
+            None
+        }
+        (pause, _) => Some(pause),
+    }
+}
+
 /// `ms` milliseconds in frames at `rate`.
 fn frames_at(rate: u32, ms: f64) -> u64 {
     (ms.max(0.0) * f64::from(rate) / 1000.0).round() as u64
@@ -3209,27 +3227,21 @@ impl Engine {
         };
         cue.held = paused;
         let (bus, slot) = (cue.bus.clone(), cue.slot);
-        let send = match (paused, cue.start) {
-            (true, StartState::WhenReady { .. }) => {
-                cue.start = StartState::Idle;
-                None
-            }
-            (false, StartState::Idle) => {
-                cue.start = StartState::WhenReady { fade_in: false };
-                None
-            }
-            (pause, _) => Some(pause),
-        };
-        let Some(pause) = send else {
-            return;
-        };
-        let ramp_frames = self.ramp_frames(&bus);
+        if let Some(pause) = hold_transition(&mut cue.start, paused) {
+            self.send_hold(&bus, slot, pause);
+        }
+    }
+
+    /// Pauses (`pause`) or resumes the source in `slot` of `bus` with the
+    /// pause ramp: the hold of a pre-listen that has started.
+    fn send_hold(&mut self, bus: &BusKey, slot: usize, pause: bool) {
+        let ramp_frames = self.ramp_frames(bus);
         let command = if pause {
             BusCommand::Pause { slot, ramp_frames }
         } else {
             BusCommand::Resume { slot, ramp_frames }
         };
-        self.send(&bus, command);
+        self.send(bus, command);
     }
 }
 

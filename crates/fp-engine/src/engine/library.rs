@@ -92,9 +92,17 @@ impl Engine {
     }
 
     /// Library CUE sources attached to `key` (for the derived mixer
-    /// capacity): a preview and one ramping down on its bus.
+    /// capacity): the preview and every tail still ramping down there,
+    /// plus one for the next (a seek attaches before its old source
+    /// ramps out), as the cartwall counts its own.
     pub(super) fn library_sources_on(&self, key: &BusKey) -> usize {
-        if self.library_uses(key) { 2 } else { 0 }
+        let Some(l) = self.library.as_ref().filter(|_| self.library_uses(key)) else {
+            return 0;
+        };
+        // Slots still held by released sources count until the mixer
+        // returns them.
+        let held = self.buses.get(key).map_or(0, Bus::used_slots);
+        held.max(l.all().filter(|s| &s.bus == key).count()).max(1) + 1
     }
 
     /// Whether the library CUE plays on `key`.
@@ -247,17 +255,18 @@ impl Engine {
 
     /// Stops `source`, no longer the preview, with a de-click ramp.
     fn retire_library_source(&mut self, source: LibrarySource) {
-        self.send(&source.bus, BusCommand::Cancel { slot: source.slot });
         // A requested start may already be audible (its Started event is
-        // not polled yet): fade it like a started one. A held one is
-        // silent, and the mixer never stops a paused slot.
+        // not polled yet): it keeps its start and fades like a started one,
+        // so the mixer reports its end either way (a cancelled start would
+        // never finish). A held one is silent, and the mixer never stops a
+        // paused slot.
+        if source.start != StartState::Requested {
+            self.send(&source.bus, BusCommand::Cancel { slot: source.slot });
+        }
         if source.held || !matches!(source.start, StartState::Started | StartState::Requested) {
             self.release_library(&source);
             return;
         }
-        // One source ramps down at a time (the derived capacity): an older
-        // tail is cut.
-        self.cut_library_outgoing(|_| true);
         self.declick_stop(&source.bus, source.slot);
         if let Some(l) = self.library.as_mut() {
             l.outgoing.push(source);
@@ -438,21 +447,22 @@ impl Engine {
     /// stays held: the new source waits idle until it is released. Without
     /// a preview nothing happens.
     pub(super) fn seek_library_cue(&mut self, secs: f64) {
-        let Some(mut request) = self
-            .library
-            .as_ref()
-            .and_then(|l| l.source.as_ref())
-            .map(|s| s.request.clone())
-        else {
-            return;
-        };
         if !secs.is_finite() {
             return;
         }
+        let Some((mut request, bus)) = self
+            .library
+            .as_ref()
+            .and_then(|l| l.source.as_ref())
+            .map(|s| (s.request.clone(), s.bus.clone()))
+        else {
+            return;
+        };
         request.from_secs = secs.max(0.0);
-        // One source ramps down at a time (the derived capacity): an older
-        // tail is cut.
-        self.cut_library_outgoing(|_| true);
+        // Tails still ramping keep their slots: the bus makes room for
+        // one more (never a cut tail, which would click).
+        let now = self.now;
+        self.ensure_bus(&bus, now);
         let Ok(mut next) = self.library_source(&request) else {
             return;
         };
@@ -483,27 +493,9 @@ impl Engine {
         };
         s.held = paused;
         let (bus, slot) = (s.bus.clone(), s.slot);
-        let send = match (paused, s.start) {
-            (true, StartState::WhenReady { .. }) => {
-                s.start = StartState::Idle;
-                None
-            }
-            (false, StartState::Idle) => {
-                s.start = StartState::WhenReady { fade_in: false };
-                None
-            }
-            (pause, _) => Some(pause),
-        };
-        let Some(pause) = send else {
-            return;
-        };
-        let ramp_frames = self.ramp_frames(&bus);
-        let command = if pause {
-            BusCommand::Pause { slot, ramp_frames }
-        } else {
-            BusCommand::Resume { slot, ramp_frames }
-        };
-        self.send(&bus, command);
+        if let Some(pause) = hold_transition(&mut s.start, paused) {
+            self.send_hold(&bus, slot, pause);
+        }
     }
 
     /// The library CUE part of `reopen_on_bus` (and of a B3.2 rate change
@@ -555,7 +547,7 @@ impl Engine {
         }
     }
 
-    /// What the library CUE's sources (the preview and one ramping down)
+    /// What the library CUE's sources (the preview and its tails ramping down)
     /// measured since the last call; the measurement is taken, not copied.
     pub fn take_library_cue_meter_input(&self) -> crate::meter::MeterInput {
         let mut input = crate::meter::MeterInput::default();
