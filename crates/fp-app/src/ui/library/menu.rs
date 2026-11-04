@@ -3,7 +3,8 @@
 //! that row alone first). Add to ▸ a playlist, Add to cart ▸ the shown
 //! page's empty carts, Move to category ▸, Kind ▸, Edit tags… and
 //! Loudness… (one row), Re-analyse, Reset markers to automatic, Remove
-//! from library… (LB17) and Show file location (one row).
+//! from library… (LB17) and Show file location (one row). The phone's
+//! track list opens a reduced one on a long press (LB43).
 
 use std::path::Path;
 
@@ -13,13 +14,26 @@ use fp_model::{AppState, CartPage, Categories, CategoryId, Command, TrackId};
 
 use super::super::app::Scene;
 use super::super::table::RowMenuOutcome;
-use super::super::view;
+use super::super::{phone_library, view};
 use super::category_dialog::{KINDS, kind_key};
 use crate::activity::TrackActivity;
 use crate::services::ServiceRequest;
 
-/// What the menu asks the window to do after it closes.
-pub(super) enum MenuOutcome {
+/// Where the menu opens: the library window's table, with every item, or
+/// the phone's track list (LB43), with Add to ▸, Pre-listen (one row while
+/// nothing is ticked), Move to category ▸, Re-analyse and Remove from
+/// library… only.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum MenuScope {
+    Window,
+    /// `ticked`: the menu acts on the ticked rows, so no Pre-listen.
+    Phone {
+        ticked: bool,
+    },
+}
+
+/// What the menu asks its screen to do after it closes.
+pub(crate) enum MenuOutcome {
     /// Edit tags… or Loudness… of one track, as on a playlist row.
     Row(RowMenuOutcome),
     /// Remove from library… asks first (LB17).
@@ -152,10 +166,17 @@ pub(crate) fn move_to_category(ui: &mut Ui, scene: &Scene<'_>, tracks: &[TrackId
     );
 }
 
-/// The row menu over `tracks` (the selected rows, in the table's order).
-pub(super) fn row_menu(ui: &mut Ui, scene: &Scene<'_>, tracks: &[TrackId]) -> Option<MenuOutcome> {
+/// The row menu over `tracks` (the selected rows, in the table's order;
+/// on the phone, the ticked rows in tick order).
+pub(crate) fn row_menu(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    tracks: &[TrackId],
+    scope: MenuScope,
+) -> Option<MenuOutcome> {
     let t = scene.i18n;
     let state: &AppState = scene.state;
+    let window = scope == MenuScope::Window;
     let mut outcome = None;
     let one = match tracks {
         [one] => state.library.get(*one),
@@ -202,78 +223,21 @@ pub(super) fn row_menu(ui: &mut Ui, scene: &Scene<'_>, tracks: &[TrackId]) -> Op
         },
     );
 
-    // Add to cart ▸ the shown page's empty carts.
-    let page = state.cartwall.shown_page();
-    let empty: Vec<usize> = page.map_or_else(Vec::new, |p| {
-        p.carts
-            .iter()
-            .enumerate()
-            .filter(|(_, c)| c.track.is_none())
-            .map(|(i, _)| i)
-            .collect()
-    });
-    submenu(
-        ui,
-        icon::SQUARES_FOUR,
-        &t.tr("library-menu-add-to-cart"),
-        !empty.is_empty(),
-        |ui| {
-            let Some(page) = page else { return };
-            for index in empty {
-                let name = t.tr_args("library-menu-cart", &[("n", (index + 1).into())]);
-                if entry(ui, "", &name, true).clicked() {
-                    let targets = cart_targets(page, index, tracks.len());
-                    for (cart, track) in targets.iter().zip(tracks) {
-                        scene.ctl.send(Command::AssignCartTrack {
-                            page: page.id,
-                            index: *cart,
-                            track: *track,
-                        });
-                    }
-                    let left = tracks.len().saturating_sub(targets.len());
-                    if left > 0 {
-                        outcome = Some(MenuOutcome::Notice(
-                            t.tr_args("library-cart-left-out", &[("count", left.into())]),
-                        ));
-                    }
-                    ui.close();
-                }
-            }
-        },
-    );
-
+    // LB43: Pre-listen one row on the phone while nothing is ticked.
+    if let (MenuScope::Phone { ticked: false }, Some(track)) = (scope, one) {
+        prelisten(ui, scene, track.id);
+    }
+    if window {
+        add_to_cart(ui, scene, tracks, &mut outcome);
+    }
     move_to_category(ui, scene, tracks);
-
-    // Kind ▸
-    let current_kind = {
-        let mut of = tracks
-            .iter()
-            .filter_map(|id| state.library.get(*id))
-            .map(|tr| tr.kind);
-        let first = of.next();
-        first.filter(|f| of.all(|k| k == *f))
-    };
-    submenu(ui, icon::TAG, &t.tr("library-menu-kind"), true, |ui| {
-        for kind in KINDS {
-            let text = t.tr(kind_key(kind));
-            let on = current_kind == Some(kind);
-            let response = ui.add(egui::Button::selectable(on, &text));
-            response.widget_info(|| {
-                egui::WidgetInfo::selected(egui::Role::Button, true, on, text.clone())
-            });
-            if response.clicked() {
-                scene.ctl.send(Command::SetTracksKind {
-                    tracks: tracks.to_vec(),
-                    kind,
-                });
-                ui.close();
-            }
-        }
-    });
+    if window {
+        kind(ui, scene, tracks);
+    }
     ui.separator();
 
     // Edit tags… and Loudness…: one row, as on a playlist.
-    if let Some(track) = one {
+    if window && let Some(track) = one {
         // Read-only music on mobile (spec §2): no tag editing.
         if scene.platform.can_write_user_files() {
             let block = view::tag_edit_availability(state, track.id);
@@ -328,21 +292,23 @@ pub(super) fn row_menu(ui: &mut Ui, scene: &Scene<'_>, tracks: &[TrackId]) -> Op
         }
         ui.close();
     }
-    if entry(ui, icon::ARROW_COUNTER_CLOCKWISE, &t.tr("wave-reset"), true).clicked() {
-        for id in tracks {
-            scene.ctl.send(Command::ResetMarkers { track: *id });
+    if window {
+        if entry(ui, icon::ARROW_COUNTER_CLOCKWISE, &t.tr("wave-reset"), true).clicked() {
+            for id in tracks {
+                scene.ctl.send(Command::ResetMarkers { track: *id });
+            }
+            ui.close();
         }
-        ui.close();
-    }
-    if let Some(track) = one
-        && let Some(url) = folder_url(&track.path)
-        && entry(ui, icon::FOLDER_OPEN, &t.tr("library-menu-show-file"), true).clicked()
-    {
-        // The platform opens it off this thread (the UI never blocks).
-        if let Err(error) = scene.platform.open_url(&url) {
-            tracing::warn!(%error, %url, "could not show the file's folder");
+        if let Some(track) = one
+            && let Some(url) = folder_url(&track.path)
+            && entry(ui, icon::FOLDER_OPEN, &t.tr("library-menu-show-file"), true).clicked()
+        {
+            // The platform opens it off this thread (the UI never blocks).
+            if let Err(error) = scene.platform.open_url(&url) {
+                tracing::warn!(%error, %url, "could not show the file's folder");
+            }
+            ui.close();
         }
-        ui.close();
     }
     ui.separator();
     if entry(ui, icon::TRASH, &t.tr("library-menu-remove"), true).clicked() {
@@ -350,6 +316,105 @@ pub(super) fn row_menu(ui: &mut Ui, scene: &Scene<'_>, tracks: &[TrackId]) -> Op
         ui.close();
     }
     outcome
+}
+
+/// Pre-listen (LB45): dimmed, with the reason, when the track cannot be.
+fn prelisten(ui: &mut Ui, scene: &Scene<'_>, track: TrackId) {
+    let t = scene.i18n;
+    let blocked = phone_library::prelisten_blocked(scene.state, track);
+    let response = entry(
+        ui,
+        icon::HEADPHONES,
+        &t.tr("library-menu-prelisten"),
+        blocked.is_none(),
+    );
+    let response = match blocked {
+        Some(key) => response.on_disabled_hover_text(t.tr(key)),
+        None => response,
+    };
+    if response.clicked() {
+        phone_library::prelisten(scene, track);
+        ui.close();
+    }
+}
+
+/// Add to cart ▸ the shown page's empty carts.
+fn add_to_cart(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    tracks: &[TrackId],
+    outcome: &mut Option<MenuOutcome>,
+) {
+    let t = scene.i18n;
+    let page = scene.state.cartwall.shown_page();
+    let empty: Vec<usize> = page.map_or_else(Vec::new, |p| {
+        p.carts
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c.track.is_none())
+            .map(|(i, _)| i)
+            .collect()
+    });
+    submenu(
+        ui,
+        icon::SQUARES_FOUR,
+        &t.tr("library-menu-add-to-cart"),
+        !empty.is_empty(),
+        |ui| {
+            let Some(page) = page else { return };
+            for index in empty {
+                let name = t.tr_args("library-menu-cart", &[("n", (index + 1).into())]);
+                if entry(ui, "", &name, true).clicked() {
+                    let targets = cart_targets(page, index, tracks.len());
+                    for (cart, track) in targets.iter().zip(tracks) {
+                        scene.ctl.send(Command::AssignCartTrack {
+                            page: page.id,
+                            index: *cart,
+                            track: *track,
+                        });
+                    }
+                    let left = tracks.len().saturating_sub(targets.len());
+                    if left > 0 {
+                        *outcome = Some(MenuOutcome::Notice(
+                            t.tr_args("library-cart-left-out", &[("count", left.into())]),
+                        ));
+                    }
+                    ui.close();
+                }
+            }
+        },
+    );
+}
+
+/// Kind ▸ the kinds, the tracks' own marked when they share one.
+fn kind(ui: &mut Ui, scene: &Scene<'_>, tracks: &[TrackId]) {
+    let t = scene.i18n;
+    let state = scene.state;
+    let current_kind = {
+        let mut of = tracks
+            .iter()
+            .filter_map(|id| state.library.get(*id))
+            .map(|tr| tr.kind);
+        let first = of.next();
+        first.filter(|f| of.all(|k| k == *f))
+    };
+    submenu(ui, icon::TAG, &t.tr("library-menu-kind"), true, |ui| {
+        for kind in KINDS {
+            let text = t.tr(kind_key(kind));
+            let on = current_kind == Some(kind);
+            let response = ui.add(egui::Button::selectable(on, &text));
+            response.widget_info(|| {
+                egui::WidgetInfo::selected(egui::Role::Button, true, on, text.clone())
+            });
+            if response.clicked() {
+                scene.ctl.send(Command::SetTracksKind {
+                    tracks: tracks.to_vec(),
+                    kind,
+                });
+                ui.close();
+            }
+        }
+    });
 }
 
 #[cfg(test)]

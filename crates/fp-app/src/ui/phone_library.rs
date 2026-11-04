@@ -4,7 +4,9 @@
 //! shared `library_view.selection` and the search the library window's;
 //! the tab keeps its page, its ticks (LB42) and the bar's target. A row's
 //! 🎧 pre-listens on the library CUE, with a slim strip over the list
-//! (LB45); leaving the tab stops it.
+//! (LB45); leaving the tab stops it. A long press on a row opens its menu
+//! (LB43), and the header's ＋ opens Device music to add to the list's
+//! category (LB44).
 
 use std::collections::HashSet;
 
@@ -14,12 +16,14 @@ use egui::{
 };
 use egui_phosphor::regular as icon;
 use fp_model::{
-    AppState, CartColor, Categories, CategoryId, Command, LibrarySelection, PlayerId, PlaylistId,
-    Track, TrackId, Transport,
+    AppState, CartColor, Categories, CategoryId, Command, LibrarySelection, LibraryView, PlayerId,
+    PlaylistId, Track, TrackId, Transport,
 };
 
 use super::app::{Scene, ViewState};
 use super::glyphs::{self, TransportAction};
+use super::library::confirm::Removal;
+use super::library::menu::{MenuOutcome, MenuScope};
 use super::player::paused_play_style;
 use super::widgets::{self, TileStyle, font, font_medium};
 use super::{format, library, music, theme, touch, track_cells, view};
@@ -299,7 +303,7 @@ enum RowTap {
 /// Why `track` cannot be pre-listened (the message key of the window's
 /// Play tooltip), or `None` when it can: the library CUE needs its route
 /// and a playable file (LB32, LB45).
-fn prelisten_blocked(state: &AppState, track: TrackId) -> Option<&'static str> {
+pub(crate) fn prelisten_blocked(state: &AppState, track: TrackId) -> Option<&'static str> {
     if !state.config.outputs.library_has_cue() {
         Some("library-preview-no-route")
     } else if !state.library.is_playable(track) {
@@ -336,6 +340,19 @@ pub(crate) fn follow_screen(scene: &Scene<'_>, view_state: &mut ViewState) {
     }
 }
 
+/// LB45: a window that stops being a phone (a resize, a foldable opened)
+/// leaves the Library tab with it, so the preview stops as on
+/// `follow_screen`. Called every frame with whether the frame is a phone's.
+pub(crate) fn follow_layout(scene: &Scene<'_>, view_state: &mut ViewState, phone: bool) {
+    if phone {
+        return;
+    }
+    let left = view_state.phone_screen_seen.take() == Some(touch::PhoneScreen::Library);
+    if left && scene.state.library_cue.transport != Transport::Stopped {
+        scene.ctl.send(Command::StopLibraryCue);
+    }
+}
+
 /// The open list (LB39–LB42): the header, the search and the *Whole
 /// library* toggle, the rows, and the selection bar while something is
 /// ticked.
@@ -345,9 +362,23 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         .phone_library
         .shown
         .unwrap_or(scene.state.library_view.selection);
-    if header(ui, scene, selection) {
-        view_state.phone_library.back();
-        return;
+    match header(ui, scene, selection) {
+        Some(HeaderTap::Back) => {
+            view_state.phone_library.back();
+            return;
+        }
+        // LB44: Device music adds to the list's category.
+        Some(HeaderTap::Add) => {
+            let view = LibraryView {
+                selection,
+                ..scene.state.library_view.clone()
+            };
+            let tab = &mut view_state.phone_library;
+            tab.adding_to = Some(library::added_category(&view));
+            tab.page = LibraryPage::Device;
+            return;
+        }
+        None => {}
     }
     ui.spacing_mut().item_spacing = vec2(6.0, 6.0);
     let wide = music::is_wide(ui);
@@ -395,6 +426,8 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
     };
     let mut toggled = None;
     let mut heard = None;
+    let mut held = None;
+    let mut outcome = None;
     egui::ScrollArea::vertical()
         .id_salt("phone-library-tracks")
         .max_height(list_height)
@@ -405,15 +438,37 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                 let Some(track) = scene.state.library.get(id) else {
                     continue;
                 };
-                match track_row(ui, scene, track, tab.ticked.contains(&id)) {
+                let ticked = tab.ticked.contains(&id);
+                let (response, tap) = track_row(ui, scene, track, ticked);
+                match tap {
                     Some(RowTap::Tick) => toggled = Some(id),
                     Some(RowTap::Prelisten) => heard = Some(id),
                     None => {}
                 }
+                // LB43: a long press (egui's secondary click on a touch
+                // screen) ticks an unticked row first while others are.
+                let joins = !ticked && !tab.ticked.is_empty();
+                if response.secondary_clicked() && joins {
+                    held = Some(id);
+                }
+                response.context_menu(|ui| {
+                    let targets = menu_targets(&tab.ticked, id);
+                    let scope = MenuScope::Phone {
+                        ticked: !tab.ticked.is_empty(),
+                    };
+                    if let Some(o) = library::menu::row_menu(ui, scene, &targets, scope) {
+                        outcome = Some(o);
+                    }
+                });
             }
         });
     if let Some(id) = heard {
         prelisten(scene, id);
+    }
+    if let Some(id) = held
+        && !tab.ticked.contains(&id)
+    {
+        tab.ticked.push(id);
     }
     if let Some(id) = toggled {
         match tab.ticked.iter().position(|t| *t == id) {
@@ -423,6 +478,15 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
             None => tab.ticked.push(id),
         }
     }
+    match outcome {
+        Some(MenuOutcome::Remove(tracks)) => {
+            library::confirm::ask_removal(scene, view_state, Removal::Tracks(tracks));
+        }
+        Some(MenuOutcome::Notice(text)) => view_state.set_notice(text, scene.time),
+        // Only the window's menu edits tags and loudness.
+        Some(MenuOutcome::Row(_)) | None => {}
+    }
+    let tab = &mut view_state.phone_library;
     if !tab.ticked.is_empty() {
         let shown = view_state.phone.shown_player(&scene.state.player_ids());
         let tab = &mut view_state.phone_library;
@@ -501,9 +565,27 @@ fn preview_strip(ui: &mut Ui, scene: &Scene<'_>) {
     });
 }
 
-/// The list's header: the back button, the list's name and room for its
-/// ＋ (LB44); true when the back button is tapped.
-fn header(ui: &mut Ui, scene: &Scene<'_>, selection: LibrarySelection) -> bool {
+/// What a tap on the list's header asked for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HeaderTap {
+    Back,
+    /// ＋: Device music, to add to the list's category (LB44).
+    Add,
+}
+
+/// What the menu of the row `held` acts on (LB43): the row alone while
+/// nothing is ticked, else every ticked row in tick order, with `held`
+/// last when it was not ticked.
+fn menu_targets(ticked: &[TrackId], held: TrackId) -> Vec<TrackId> {
+    let mut targets = ticked.to_vec();
+    if !targets.contains(&held) {
+        targets.push(held);
+    }
+    targets
+}
+
+/// The list's header: the back button, the list's name and its ＋ (LB44).
+fn header(ui: &mut Ui, scene: &Scene<'_>, selection: LibrarySelection) -> Option<HeaderTap> {
     let t = scene.i18n;
     let name = match selection {
         LibrarySelection::All => t.tr("library-tree-all"),
@@ -515,25 +597,24 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, selection: LibrarySelection) -> bool {
             .map(|c| c.name.clone())
             .unwrap_or_default(),
     };
-    let mut back = false;
-    ui.horizontal(|ui| {
-        let label = t.tr("phone-library-back");
-        let style = TileStyle {
-            border: Color32::TRANSPARENT,
-            ..TileStyle::plain()
-        };
-        let size = vec2(touch::TARGET, touch::TARGET);
-        let response = widgets::tile(ui, size, &label, true, style, |p, r, c| {
-            p.text(
-                r.center(),
-                Align2::CENTER_CENTER,
-                icon::ARROW_LEFT,
-                font(18.0),
-                c,
-            );
+    let mut tap = None;
+    let style = TileStyle {
+        border: Color32::TRANSPARENT,
+        ..TileStyle::plain()
+    };
+    let size = vec2(touch::TARGET, touch::TARGET);
+    let button = |ui: &mut Ui, label: &str, glyph: &str| {
+        let response = widgets::tile(ui, size, label, true, style, |p, r, c| {
+            p.text(r.center(), Align2::CENTER_CENTER, glyph, font(18.0), c);
         });
-        back = touch::tapped(ui, &response);
-        let width = (ui.available_width() - touch::TARGET).max(0.0);
+        touch::tapped(ui, &response)
+    };
+    ui.horizontal(|ui| {
+        if button(ui, &t.tr("phone-library-back"), icon::ARROW_LEFT) {
+            tap = Some(HeaderTap::Back);
+        }
+        let room = touch::TARGET + ui.spacing().item_spacing.x;
+        let width = (ui.available_width() - room).max(0.0);
         ui.allocate_ui(vec2(width, touch::TARGET), |ui| {
             ui.add(
                 egui::Label::new(
@@ -545,8 +626,11 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, selection: LibrarySelection) -> bool {
                 .truncate(),
             );
         });
+        if button(ui, &t.tr("phone-library-add-from-device"), icon::PLUS) {
+            tap = Some(HeaderTap::Add);
+        }
     });
-    back
+    tap
 }
 
 /// The search over the list (LB40), the library window's search text.
@@ -574,7 +658,12 @@ fn whole_toggle(ui: &mut Ui, scene: &Scene<'_>) -> bool {
 /// artist, its status marks (§7.4), the duration and its 🎧 (LB45). Its
 /// label joins title, artist and duration. A tap on the 🎧, enabled or
 /// not, never ticks the row.
-fn track_row(ui: &mut Ui, scene: &Scene<'_>, track: &Track, ticked: bool) -> Option<RowTap> {
+fn track_row(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    track: &Track,
+    ticked: bool,
+) -> (egui::Response, Option<RowTap>) {
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), music::TRACK_ROW), Sense::click());
     let title = if track.title.is_empty() {
@@ -591,7 +680,8 @@ fn track_row(ui: &mut Ui, scene: &Scene<'_>, track: &Track, ticked: bool) -> Opt
     let label = music::row_label(&title, artist, duration.as_deref());
     response.widget_info(|| WidgetInfo::selected(Role::CheckBox, true, ticked, &label));
     if !ui.is_rect_visible(rect) {
-        return touch::tapped(ui, &response).then_some(RowTap::Tick);
+        let tap = touch::tapped(ui, &response).then_some(RowTap::Tick);
+        return (response, tap);
     }
     music::paint_check(ui, rect, ticked);
     let right = rect.right() - PREVIEW_ROOM;
@@ -622,12 +712,16 @@ fn track_row(ui: &mut Ui, scene: &Scene<'_>, track: &Track, ticked: bool) -> Opt
     // Over the row, so it takes its own taps.
     let button = Rect::from_min_max(pos2(rect.right() - touch::TARGET, rect.top()), rect.max);
     if preview_button(ui, scene, track, &title, button) {
-        return Some(RowTap::Prelisten);
+        return (response, Some(RowTap::Prelisten));
     }
     let on_button = response
         .interact_pointer_pos()
         .is_some_and(|p| button.contains(p));
-    (touch::tapped(ui, &response) && !on_button).then_some(RowTap::Tick)
+    // The finger that held the row up for its menu lifts as a tap; a tap
+    // that closes a menu ticks nothing either.
+    let menu_open = egui::Popup::is_any_open(ui.ctx());
+    let tap = (touch::tapped(ui, &response) && !on_button && !menu_open).then_some(RowTap::Tick);
+    (response, tap)
 }
 
 /// A row's 🎧 in `rect`: dimmed, with the window's reason in its tooltip,

@@ -703,3 +703,327 @@ fn prelisten_on_a_sounding_output_asks_first() {
     assert!(fake.state.load().cue_on_air.request.is_some());
     assert!(h.query_by_label("Pre-listen anyway").is_some());
 }
+
+/// LB45 (Task 5 carry-over): a window that stops being a phone while the
+/// Library tab previews leaves the tab: the preview stops.
+#[test]
+fn leaving_the_phone_layout_stops_the_preview() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = rock_list(s);
+    h.set_size(vec2(1280.0, 800.0));
+    h.run_steps(3);
+    assert_eq!(cue_commands(&fake), [Command::StopLibraryCue]);
+    h.run_steps(3);
+    assert!(cue_commands(&fake).is_empty(), "once");
+}
+
+// --- The touch-and-hold menu (LB43) ---
+
+const PLUS: &str = "Add from device music";
+const MOVE: &str = "Move to category";
+const REMOVE: &str = "Remove from library…";
+const MENU_PRELISTEN: &str = "Pre-listen";
+
+fn click_at(h: &mut H, at: egui::Pos2, button: egui::PointerButton) {
+    h.event(egui::Event::PointerMoved(at));
+    h.run_steps(1);
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos: at,
+            button,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+    }
+    h.run_steps(3);
+}
+
+/// A long press on the row labelled `label` (egui opens the menu on a
+/// long touch as on a secondary click).
+fn hold(h: &mut H, label: &str) {
+    let at = h.get_by_label(label).rect().center();
+    click_at(h, at, egui::PointerButton::Secondary);
+}
+
+/// Picks the menu entries labelled `path` in turn.
+fn choose(h: &mut H, path: &[&str]) {
+    for label in path {
+        let at = h.get_by_label(label).rect().center();
+        click_at(h, at, egui::PointerButton::Primary);
+    }
+}
+
+/// Rock with Alpha and Beta, and the category Gold.
+fn with_gold() -> (AppState, TrackId, TrackId, CategoryId) {
+    let (mut s, a, b) = with_tracks();
+    let gold = create(&mut s, "Gold");
+    (s, a, b, gold)
+}
+
+#[test]
+fn lb43_the_phone_menu_has_only_its_items() {
+    let (s, _a, _b) = with_tracks();
+    let (mut h, _fake) = rock_list(s);
+    hold(&mut h, &row("Alpha", "Band"));
+    for item in ["Add to", MENU_PRELISTEN, MOVE, "Re-analyse", REMOVE] {
+        assert!(h.query_by_label(item).is_some(), "{item}");
+    }
+    for item in [
+        "Add to cart",
+        "Kind",
+        "Edit tags…",
+        "Loudness…",
+        "Reset markers to automatic",
+        "Show file location",
+    ] {
+        assert!(h.query_by_label(item).is_none(), "{item}");
+    }
+}
+
+#[test]
+fn lb43_the_menus_pre_listen_plays_the_row() {
+    let (s, a, _b) = with_tracks();
+    let (mut h, fake) = rock_list(s);
+    hold(&mut h, &row("Alpha", "Band"));
+    choose(&mut h, &[MENU_PRELISTEN]);
+    assert_eq!(
+        cue_commands(&fake),
+        [Command::SelectLibraryCue(Some(a)), Command::PlayLibraryCue]
+    );
+}
+
+#[test]
+fn lb43_a_long_press_on_an_unticked_row_joins_the_ticks() {
+    let (s, a, b, gold) = with_gold();
+    let (mut h, fake) = rock_list(s);
+    tap(&mut h, &row("Alpha", "Band"));
+    hold(&mut h, &row("Beta", "Band"));
+    assert!(h.query_by_label("2 tracks selected").is_some(), "heading");
+    assert!(is_ticked(&h, &row("Beta", "Band")), "ticked first");
+    fake.take_sent();
+    choose(&mut h, &[MOVE, "Gold"]);
+    let moved: Vec<Command> = fake
+        .take_sent()
+        .into_iter()
+        .filter(|c| matches!(c, Command::MoveTracksToCategory { .. }))
+        .collect();
+    assert_eq!(
+        moved,
+        [Command::MoveTracksToCategory {
+            tracks: vec![a, b],
+            category: Some(gold),
+        }]
+    );
+}
+
+#[test]
+fn lb43_a_long_press_with_nothing_ticked_acts_on_that_row() {
+    let (s, _a, b, gold) = with_gold();
+    let (mut h, fake) = rock_list(s);
+    hold(&mut h, &row("Beta", "Band"));
+    assert!(!is_ticked(&h, &row("Beta", "Band")), "not ticked");
+    fake.take_sent();
+    choose(&mut h, &[MOVE, "Gold"]);
+    assert!(fake.take_sent().contains(&Command::MoveTracksToCategory {
+        tracks: vec![b],
+        category: Some(gold),
+    }));
+}
+
+#[test]
+fn lb43_pre_listen_is_not_offered_while_rows_are_ticked() {
+    let (s, _a, _b) = with_tracks();
+    let (mut h, _fake) = rock_list(s);
+    tap(&mut h, &row("Alpha", "Band"));
+    hold(&mut h, &row("Alpha", "Band"));
+    assert!(h.query_by_label(MOVE).is_some(), "the menu is open");
+    assert!(h.query_by_label(MENU_PRELISTEN).is_none());
+}
+
+#[test]
+fn lb43_remove_asks_first() {
+    let (s, a, _b) = with_tracks();
+    let (mut h, fake) = rock_list(s);
+    hold(&mut h, &row("Alpha", "Band"));
+    fake.take_sent();
+    choose(&mut h, &[REMOVE]);
+    assert!(
+        h.query_by_label("Remove 1 track from the library?")
+            .is_some()
+    );
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::RemoveTracks(_))),
+        "nothing until confirmed"
+    );
+    h.get_by_label("Remove").click();
+    h.run_steps(3);
+    assert!(fake.take_sent().contains(&Command::RemoveTracks(vec![a])));
+}
+
+// --- Device music from ＋ (LB44) ---
+
+fn two_files() -> Vec<MediaFile> {
+    ["a", "b"]
+        .into_iter()
+        .map(|n| MediaFile {
+            path: PathBuf::from(format!("/sd/Songs/{n}.mp3")),
+            title: Some(n.to_uppercase()),
+            artist: Some("Other".into()),
+            album: None,
+            duration_secs: Some(60.0),
+        })
+        .collect()
+}
+
+fn added(fake: &Fake) -> Vec<(Vec<PathBuf>, Option<CategoryId>)> {
+    fake.take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::AddToLibrary { paths, category } => Some((paths, category)),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A phone on `category`'s list with two device files.
+fn list_of(s: AppState, category: &str) -> (H, MediaBrowser, Arc<Fake>) {
+    let (mut h, browser, fake) = phone(s);
+    browser.set_files(two_files());
+    tap(&mut h, "Library");
+    tap(&mut h, category);
+    fake.take_sent();
+    (h, browser, fake)
+}
+
+const FILE_A: &str = "A · Other · 01:00";
+const FILE_B: &str = "B · Other · 01:00";
+
+#[test]
+fn lb44_plus_opens_device_music_and_adds_to_the_category() {
+    let (s, _a, _b, gold) = with_gold();
+    let (mut h, _browser, fake) = list_of(s, "Gold");
+    let plus = h.get_by_label(PLUS).rect();
+    assert!(
+        plus.height() >= 48.0 && plus.right() <= PORTRAIT.x,
+        "{plus:?}"
+    );
+    tap(&mut h, PLUS);
+    assert!(h.query_by_label("Folders").is_some(), "Device music");
+    tap(&mut h, FILE_B);
+    tap(&mut h, FILE_A);
+    assert!(h.query_by_label("Add to Gold").is_some());
+    assert!(h.query_by_label(END).is_none(), "no player target");
+    tap(&mut h, "Add to Gold");
+    assert_eq!(
+        added(&fake),
+        [(
+            vec![
+                PathBuf::from("/sd/Songs/b.mp3"),
+                PathBuf::from("/sd/Songs/a.mp3")
+            ],
+            Some(gold)
+        )]
+    );
+    assert!(h.query_by_label(BACK).is_some(), "back on Gold's list");
+    assert!(h.query_by_label("Folders").is_none());
+    tap(&mut h, PLUS);
+    assert!(!is_ticked(&h, FILE_A), "the ticks are cleared");
+}
+
+#[test]
+fn lb44_plus_on_all_tracks_adds_uncategorised() {
+    let (s, _a, _b) = with_tracks();
+    let (mut h, _browser, fake) = list_of(s, "All tracks");
+    tap(&mut h, PLUS);
+    tap(&mut h, FILE_A);
+    tap(&mut h, "Add to Uncategorised");
+    assert_eq!(
+        added(&fake),
+        [(vec![PathBuf::from("/sd/Songs/a.mp3")], None)]
+    );
+}
+
+#[test]
+fn lb44_back_from_device_music_returns_to_the_list() {
+    let (s, _a, _b, _gold) = with_gold();
+    let (mut h, _browser, _fake) = list_of(s, "Gold");
+    tap(&mut h, PLUS);
+    assert!(back(&mut h));
+    assert!(h.query_by_label(BACK).is_some(), "Gold's list");
+}
+
+#[test]
+fn lb44_device_music_from_the_selector_has_no_add_to_category() {
+    let (s, _rock) = with_categories();
+    let (mut h, _browser, _fake) = phone(s);
+    tap(&mut h, "Library");
+    tap(&mut h, DEVICE);
+    tap(&mut h, ALPHA);
+    assert!(h.query_by_label(END).is_some(), "the player bar");
+    assert!(h.query_by_label_contains("Add to ").is_none());
+}
+
+/// Task 2 carry-over: a system Back while a pick is under way at Device
+/// music (its request just answered, the frame not yet run) leaves the
+/// Library tab's ＋ as it was.
+#[test]
+fn back_during_a_pick_keeps_the_add_to_category() {
+    let (s, _a, _b, _gold) = with_gold();
+    let (mut h, browser, _fake) = list_of(s, "Gold");
+    tap(&mut h, PLUS);
+    let mode = BrowseMode::one_file(&["mp3"]).unwrap();
+    let asking = browser.clone();
+    let thread = std::thread::spawn(move || asking.browse(mode, None));
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_by_label("Cancel").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(h.query_by_label("Cancel").is_some(), "the pick is shown");
+    browser.cancel_pending();
+    let ctx = h.ctx.clone();
+    h.state_mut().back(&ctx);
+    h.run_steps(3);
+    thread.join().unwrap();
+    tap(&mut h, FILE_A);
+    assert!(h.query_by_label("Add to Gold").is_some());
+}
+
+/// LB43 with a real touch: holding a finger on a row opens its menu and
+/// neither ticks nor unticks it.
+#[test]
+fn lb43_a_held_finger_opens_the_menu_without_a_tick() {
+    let (s, _a, _b) = with_tracks();
+    let (mut h, _fake) = rock_list(s);
+    let at = h.get_by_label(&row("Alpha", "Band")).rect().center();
+    let touch = |phase| egui::Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase,
+        pos: at,
+        force: None,
+    };
+    let press = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    h.event(touch(egui::TouchPhase::Start));
+    h.event(egui::Event::PointerMoved(at));
+    h.event(press(true));
+    for _ in 0..60 {
+        h.step();
+    }
+    h.event(touch(egui::TouchPhase::End));
+    h.event(press(false));
+    h.run_steps(3);
+    assert!(h.query_by_label(MOVE).is_some(), "the menu is open");
+    assert!(!is_ticked(&h, &row("Alpha", "Band")));
+}

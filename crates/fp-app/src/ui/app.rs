@@ -732,7 +732,9 @@ impl AppUi {
         if self.music_back() {
             return true;
         }
+        // A pick's own Back (above) wins: the page it holds stays as it is.
         if self.view.phone.screen == super::touch::PhoneScreen::Library
+            && self.view.music.pick.is_none()
             && self.view.phone_library.back()
         {
             return true;
@@ -1009,6 +1011,7 @@ impl AppUi {
             TOP_BAR_HEIGHT
         };
         self.view.phone_active = phone;
+        super::phone_library::follow_layout(&scene, &mut self.view, phone);
         self.view.touch = self.touch;
         let top = Rect::from_min_size(full.min, vec2(full.width(), top_height));
         let faults = self

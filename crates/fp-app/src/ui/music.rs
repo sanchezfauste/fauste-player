@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 use egui::{Align2, Rect, Role, Sense, Ui, WidgetInfo, vec2};
 use egui_phosphor::regular as icon;
-use fp_model::{Command, PlayerId, PlaylistId, TrackId};
+use fp_model::{CategoryId, Command, PlayerId, PlaylistId, TrackId};
 
 use super::app::{Scene, ViewState};
 use super::media_browser::{BrowseMode, MediaBrowser, MediaFile};
@@ -440,6 +440,12 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
         {
             action = Some(Action::Answer(view.ticked.clone()));
         }
+    } else if bar && let Some(category) = view_state.phone_library.adding_to {
+        // LB44: from a list's ＋, the files join its category, and the
+        // list returns.
+        if category_bar(ui, scene, &mut view_state.music.ticked, category, wide) {
+            view_state.phone_library.back();
+        }
     } else if bar {
         let shown = view_state.phone.shown_player(&scene.state.player_ids());
         let view = &mut view_state.music;
@@ -675,6 +681,54 @@ fn target_name(scene: &Scene<'_>, player: PlayerId, playlist: PlaylistId) -> Str
             .i18n
             .tr_args("player-label", &[("n", (index + 1).into())])
     )
+}
+
+/// LB44: the bar of Device music opened from a list's ＋: the count and
+/// *Add to <category>* only (no player target, no pick). Adding sends the
+/// files in tick order with `category` and clears them; true then.
+fn category_bar(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    ticked: &mut Vec<PathBuf>,
+    category: Option<CategoryId>,
+    wide: bool,
+) -> bool {
+    let t = scene.i18n;
+    let label = match category.and_then(|id| scene.state.categories.get(id)) {
+        Some(c) => t.tr_args(
+            "phone-library-add-to-category",
+            &[("category", c.name.clone().into())],
+        ),
+        None => t.tr("phone-library-add-to-uncategorised"),
+    };
+    ui.separator();
+    let mut add = false;
+    let mut line = |ui: &mut Ui| {
+        ui.label(
+            egui::RichText::new(t.tr_args("music-selected", &[("count", ticked.len().into())]))
+                .font(font(13.0))
+                .color(theme::TEXT),
+        );
+        add = ui
+            .add(
+                egui::Button::new(egui::RichText::new(&label).font(font(14.0)))
+                    .min_size(vec2(0.0, touch::TARGET)),
+            )
+            .clicked();
+    };
+    if wide {
+        let row = egui::Layout::left_to_right(egui::Align::Center);
+        ui.allocate_ui_with_layout(vec2(ui.available_width(), touch::TARGET), row, line);
+    } else {
+        ui.horizontal(|ui| line(ui));
+    }
+    if add {
+        scene.ctl.send(Command::AddToLibrary {
+            paths: std::mem::take(ticked),
+            category,
+        });
+    }
+    add
 }
 
 /// The bar under a list while something is selected (PL19, LB42): the

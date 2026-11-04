@@ -436,7 +436,9 @@ fn rows(
                     taken = Some(id);
                 }
                 response.context_menu(|ui| {
-                    if let Some(o) = menu::row_menu(ui, scene, &targets(id)) {
+                    if let Some(o) =
+                        menu::row_menu(ui, scene, &targets(id), menu::MenuScope::Window)
+                    {
                         outcome = Some(o);
                     }
                 });
