@@ -4,7 +4,7 @@
 use std::path::Path;
 
 use crossbeam_channel::Receiver;
-use notify::{RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{Config, RecommendedWatcher, RecursiveMode, Watcher};
 
 use super::{FolderEvent, FolderWatcher};
 
@@ -16,10 +16,14 @@ pub struct NotifyWatcher {
 impl NotifyWatcher {
     pub fn new() -> Result<NotifyWatcher, String> {
         let (tx, events) = crossbeam_channel::unbounded();
-        let watcher = notify::recommended_watcher(move |event| {
-            // The receiver is gone when the watcher is being dropped.
-            let _ = tx.send(event);
-        })
+        // Folder symlinks are not followed, as in the scans (spec §6.1).
+        let watcher = RecommendedWatcher::new(
+            move |event| {
+                // The receiver is gone when the watcher is being dropped.
+                let _ = tx.send(event);
+            },
+            Config::default().with_follow_symlinks(false),
+        )
         .map_err(|e| e.to_string())?;
         Ok(NotifyWatcher { watcher, events })
     }

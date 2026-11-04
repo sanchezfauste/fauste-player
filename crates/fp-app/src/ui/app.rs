@@ -13,7 +13,7 @@ use fp_backends::AudioBackend;
 use fp_engine::bus::BusHealth;
 use fp_engine::conductor::Telemetry;
 use fp_model::{
-    AppState, CategoryId, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId,
+    AppState, Categories, CategoryId, Command, EntryId, KeyChord, ModelError, PlayerId, PlaylistId,
     ShortcutAction, TrackId,
 };
 
@@ -902,7 +902,10 @@ impl AppUi {
             self.covers_version = self.media.version();
         }
         while let Some(error) = self.ctl.take_rejection() {
-            self.view.notice = Some((error_text(&self.i18n, &error), time + NOTICE_SECS));
+            self.view.notice = Some((
+                error_text(&self.i18n, &error, &state.categories),
+                time + NOTICE_SECS,
+            ));
         }
         // On-air pre-listen spec §5: CA5's notice, once per notice.
         if let Some(stopped) = state.cue_on_air.notice
@@ -2082,7 +2085,9 @@ fn tag_error_text(i18n: &I18n, error: &fp_analysis::tags::TagWriteError) -> Stri
     }
 }
 
-pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
+/// A refused command, in the interface language; `categories` names the
+/// category a refusal is about.
+pub(crate) fn error_text(i18n: &I18n, error: &ModelError, categories: &Categories) -> String {
     match error {
         ModelError::LastPlaylist => i18n.tr("error-last-playlist"),
         ModelError::PlaylistOnAir(_) => i18n.tr("error-playlist-on-air"),
@@ -2100,7 +2105,14 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
         | ModelError::UnknownCartPosition(_)
         | ModelError::UnknownCategory(_)
         | ModelError::UnknownTrack(_) => i18n.tr("error-not-found"),
-        ModelError::FolderAlreadyWatched(_) => i18n.tr("error-folder-watched"),
+        ModelError::FolderAlreadyWatched(other) => match categories.get(*other) {
+            Some(category) => i18n.tr_args(
+                "error-folder-watched-by",
+                &[("category", category.name.clone().into())],
+            ),
+            // Deleted meanwhile.
+            None => i18n.tr("error-folder-watched"),
+        },
         ModelError::CategoryNameEmpty => i18n.tr("error-category-name-empty"),
         ModelError::CategoryNameTaken => i18n.tr("error-category-name-taken"),
         ModelError::CategoryTooDeep => i18n.tr("error-category-too-deep"),

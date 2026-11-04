@@ -13,7 +13,7 @@ use fp_model::{AppState, Categories, CategoryId, Command, FileState, TrackId, wa
 
 use super::debounce::Debouncer;
 use super::scan::{Found, ScanAnswer, ScanJob, Scanner};
-use super::{FolderEvent, FolderTrouble, FolderWatcher, WatchCell, WatchStatus};
+use super::{FolderEvent, FolderTrouble, FolderWatcher, WatchCell, WatchStatus, usable_folder};
 
 /// What one round asks of the services.
 #[derive(Debug, Default)]
@@ -75,6 +75,20 @@ fn retry_interval(state: &AppState) -> Duration {
         .unwrap_or(Duration::from_secs(30))
 }
 
+/// Folders of `kept` nested in one of `unwatched` or holding one: the
+/// system's watch on them can go with it (inotify removes the watches of
+/// every path under the one unwatched).
+fn near(unwatched: &[PathBuf], kept: &[PathBuf]) -> Vec<PathBuf> {
+    kept.iter()
+        .filter(|kept| {
+            unwatched
+                .iter()
+                .any(|gone| kept.starts_with(gone) || gone.starts_with(kept))
+        })
+        .cloned()
+        .collect()
+}
+
 pub(crate) struct FolderWatch {
     watcher: SharedWatcher,
     thread: Option<WatchThread>,
@@ -87,17 +101,27 @@ pub(crate) struct FolderWatch {
     folders: BTreeMap<PathBuf, CategoryId>,
     /// Folders to walk whole at the next free scan.
     roots: BTreeSet<PathBuf>,
+    /// Folders to look at, not walk, at the next free scan.
+    checks: BTreeSet<PathBuf>,
     debouncer: Debouncer,
     /// Folders the scan could not read.
     troubles: BTreeMap<PathBuf, FolderTrouble>,
     /// Folders the system refused to follow.
     not_followed: BTreeSet<PathBuf>,
+    /// The watch thread is gone (it could not start, or it ended): no
+    /// folder is followed.
+    watch_lost: bool,
+    /// Watch calls asked for and not answered yet, per folder.
+    pending: BTreeMap<PathBuf, usize>,
+    /// Folders a retry walks once their watch call has answered.
+    walk_after_watch: BTreeSet<PathBuf>,
     /// Bad stored folders already reported.
     warned: BTreeSet<PathBuf>,
     /// Commands the conductor could not queue.
     unsent: Vec<Command>,
     published: WatchStatus,
-    /// When folders with a trouble are tried again; `None` while none has one.
+    /// When the folders are looked at again (the troubled ones watched and
+    /// walked again); `None` while none is followed.
     retry_at: Option<Instant>,
     /// Scan jobs sent.
     scans: u64,
@@ -106,17 +130,23 @@ pub(crate) struct FolderWatch {
 impl FolderWatch {
     pub(crate) fn new(watcher: Box<dyn FolderWatcher>, status: WatchCell) -> Self {
         let watcher: SharedWatcher = Arc::new(Mutex::new(watcher));
+        let thread = WatchThread::spawn(Arc::clone(&watcher));
         Self {
-            thread: WatchThread::spawn(Arc::clone(&watcher)),
+            // Already logged by `spawn`.
+            watch_lost: thread.is_none(),
+            thread,
             watcher,
             status,
             scanner: Scanner::spawn(),
             seen: None,
             folders: BTreeMap::new(),
             roots: BTreeSet::new(),
+            checks: BTreeSet::new(),
             debouncer: Debouncer::default(),
             troubles: BTreeMap::new(),
             not_followed: BTreeSet::new(),
+            pending: BTreeMap::new(),
+            walk_after_watch: BTreeSet::new(),
             warned: BTreeSet::new(),
             unsent: Vec::new(),
             published: WatchStatus::default(),
@@ -144,7 +174,7 @@ impl FolderWatch {
         };
         self.follow_categories(state);
         self.take_watch_results();
-        self.retry_troubled(state, now);
+        self.retry(state, now);
         self.take_events(now);
         for answer in self
             .scanner
@@ -159,6 +189,58 @@ impl FolderWatch {
         out
     }
 
+    /// The watch thread is gone: every folder shows as not followed, and
+    /// the log says it once.
+    fn lose_watch(&mut self) {
+        if !self.watch_lost {
+            self.watch_lost = true;
+            tracing::error!(
+                "the folder watch thread has ended; watched folders are scanned at start and on retries only"
+            );
+        }
+    }
+
+    fn not_followed(&self, folder: &Path) -> bool {
+        self.watch_lost || self.not_followed.contains(folder)
+    }
+
+    /// Asks the watch thread to follow `folder`; `false` if it is gone.
+    fn watch(&mut self, folder: &Path) -> bool {
+        let sent = self.thread.as_ref().is_some_and(|t| {
+            t.requests
+                .send(Request::Watch(folder.to_path_buf()))
+                .is_ok()
+        });
+        if sent {
+            *self.pending.entry(folder.to_path_buf()).or_default() += 1;
+        } else {
+            self.lose_watch();
+        }
+        sent
+    }
+
+    /// Asks the watch thread to stop following each of `folders`, then
+    /// watches again, and walks, the folders of `kept` that the system may
+    /// have dropped with them; events may have been missed.
+    fn unwatch(&mut self, folders: &[PathBuf], kept: &[PathBuf]) {
+        for folder in folders {
+            let sent = self
+                .thread
+                .as_ref()
+                .is_some_and(|t| t.requests.send(Request::Unwatch(folder.clone())).is_ok());
+            if !sent {
+                self.lose_watch();
+            }
+        }
+        for folder in near(folders, kept) {
+            if self.troubles.contains_key(&folder) {
+                continue;
+            }
+            self.watch(&folder);
+            self.roots.insert(folder);
+        }
+    }
+
     /// (1) The folders follow the categories.
     fn follow_categories(&mut self, state: &AppState) {
         if self.seen.as_ref() == Some(&state.categories) {
@@ -171,8 +253,7 @@ impl FolderWatch {
             let Some(folder) = &category.watched_folder else {
                 continue;
             };
-            // An empty path would match every file.
-            if folder.as_os_str().is_empty() || !folder.is_absolute() {
+            if !usable_folder(folder) {
                 if self.warned.insert(folder.clone()) {
                     tracing::warn!(
                         folder = %folder.display(),
@@ -186,31 +267,38 @@ impl FolderWatch {
             wanted.insert(folder.clone(), category.id);
         }
         self.warned.retain(|folder| bad.contains(folder));
-        let dropped: Vec<PathBuf> = self
-            .folders
+        let old = std::mem::replace(&mut self.folders, wanted);
+        let dropped: Vec<PathBuf> = old
             .keys()
-            .filter(|folder| !wanted.contains_key(*folder))
+            .filter(|folder| !self.folders.contains_key(*folder))
             .cloned()
             .collect();
-        for folder in dropped {
-            if let Some(thread) = &self.thread {
-                let _ = thread.requests.send(Request::Unwatch(folder.clone()));
-            }
-            self.debouncer.purge_under(&folder);
-            self.troubles.remove(&folder);
-            self.not_followed.remove(&folder);
-            self.roots.remove(&folder);
+        let kept: Vec<PathBuf> = old
+            .keys()
+            .filter(|folder| self.folders.contains_key(*folder))
+            .cloned()
+            .collect();
+        for folder in &dropped {
+            self.debouncer.purge_under(folder);
+            self.troubles.remove(folder);
+            self.not_followed.remove(folder);
+            self.roots.remove(folder);
+            self.checks.remove(folder);
+            self.walk_after_watch.remove(folder);
         }
-        for folder in wanted.keys() {
-            if self.folders.contains_key(folder) {
-                continue;
-            }
-            if let Some(thread) = &self.thread {
-                let _ = thread.requests.send(Request::Watch(folder.clone()));
-            }
-            self.roots.insert(folder.clone());
+        if !dropped.is_empty() {
+            self.unwatch(&dropped, &kept);
         }
-        self.folders = wanted;
+        let added: Vec<PathBuf> = self
+            .folders
+            .keys()
+            .filter(|folder| !old.contains_key(*folder))
+            .cloned()
+            .collect();
+        for folder in added {
+            self.watch(&folder);
+            self.roots.insert(folder);
+        }
     }
 
     /// What the watch thread did: a folder the system refused is scanned
@@ -219,9 +307,33 @@ impl FolderWatch {
         let Some(thread) = &self.thread else {
             return;
         };
-        for (folder, result) in thread.results.try_iter() {
+        let mut results = Vec::new();
+        let mut ended = false;
+        loop {
+            match thread.results.try_recv() {
+                Ok(result) => results.push(result),
+                Err(crossbeam_channel::TryRecvError::Empty) => break,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    ended = true;
+                    break;
+                }
+            }
+        }
+        if ended {
+            self.lose_watch();
+        }
+        for (folder, result) in results {
+            if let Some(count) = self.pending.get_mut(&folder) {
+                *count = count.saturating_sub(1);
+                if *count == 0 {
+                    self.pending.remove(&folder);
+                }
+            }
             if !self.folders.contains_key(&folder) {
                 continue;
+            }
+            if self.walk_after_watch.remove(&folder) {
+                self.roots.insert(folder.clone());
             }
             match result {
                 Err(why) => {
@@ -246,17 +358,13 @@ impl FolderWatch {
         }
     }
 
-    /// Every `tuning.missing_recheck_ms`, the folders with a trouble are
-    /// watched again and walked again. The watch call goes through the
-    /// helper thread like every other.
-    fn retry_troubled(&mut self, state: &AppState, now: Instant) {
-        let troubled: Vec<PathBuf> = self
-            .folders
-            .keys()
-            .filter(|f| self.troubles.contains_key(*f) || self.not_followed.contains(*f))
-            .cloned()
-            .collect();
-        if troubled.is_empty() {
+    /// Every `tuning.missing_recheck_ms`: a folder with a trouble is
+    /// watched again and walked again (once the watch call answers), and
+    /// every other one is looked at, so one lost while running (a drive
+    /// unplugged, whose watch the system drops quietly) becomes a trouble.
+    /// The calls go through the helper threads like every other.
+    fn retry(&mut self, state: &AppState, now: Instant) {
+        if self.folders.is_empty() {
             self.retry_at = None;
             return;
         }
@@ -268,11 +376,20 @@ impl FolderWatch {
             return;
         }
         self.retry_at = Some(now + retry_interval(state));
-        for folder in troubled {
-            if let Some(thread) = &self.thread {
-                let _ = thread.requests.send(Request::Watch(folder.clone()));
+        let folders: Vec<PathBuf> = self.folders.keys().cloned().collect();
+        for folder in folders {
+            if !self.troubles.contains_key(&folder) && !self.not_followed(&folder) {
+                self.checks.insert(folder);
+                continue;
             }
-            self.roots.insert(folder);
+            // While a call for it is stuck (a share that hangs), no other
+            // one piles up behind it; the walk goes on.
+            let stuck = self.pending.contains_key(&folder);
+            if !stuck && self.watch(&folder) {
+                self.walk_after_watch.insert(folder);
+            } else {
+                self.roots.insert(folder);
+            }
         }
     }
 
@@ -288,8 +405,14 @@ impl FolderWatch {
         };
         for event in events {
             match event {
+                // A folder itself, or one holding it, counts too (removed,
+                // renamed, unmounted): `send_scan` walks the folder.
                 FolderEvent::Touched(path) => {
-                    if self.folders.keys().any(|folder| path.starts_with(folder)) {
+                    if self
+                        .folders
+                        .keys()
+                        .any(|folder| path.starts_with(folder) || folder.starts_with(&path))
+                    {
                         self.debouncer.note(path, now);
                     }
                 }
@@ -348,13 +471,28 @@ impl FolderWatch {
                 });
             }
         }
+        let mut lost = Vec::new();
         for (folder, trouble) in troubles {
             if !self.folders.contains_key(&folder) {
                 continue;
             }
-            if self.troubles.insert(folder.clone(), trouble) != Some(trouble) {
+            let before = self.troubles.insert(folder.clone(), trouble);
+            if before != Some(trouble) {
                 tracing::warn!(folder = %folder.display(), ?trouble, "a watched folder cannot be scanned");
             }
+            if before.is_none() {
+                lost.push(folder);
+            }
+        }
+        // Its watch is dropped; the retry sets it again.
+        if !lost.is_empty() {
+            let kept: Vec<PathBuf> = self
+                .folders
+                .keys()
+                .filter(|folder| !lost.contains(*folder))
+                .cloned()
+                .collect();
+            self.unwatch(&lost, &kept);
         }
         for folder in readable {
             if self.troubles.remove(&folder).is_some() {
@@ -372,15 +510,53 @@ impl FolderWatch {
             return;
         }
         let quiet = Duration::from_millis(state.config.library.watch_debounce_ms);
-        let paths = if self.debouncer.is_empty() {
+        let due = if self.debouncer.is_empty() {
             Vec::new()
         } else {
             self.debouncer.take_due(now, quiet)
         };
-        if self.roots.is_empty() && paths.is_empty() {
+        if self.roots.is_empty() && due.is_empty() && self.checks.is_empty() {
             return;
         }
+        // A path that is a watched folder, or holds one, is that folder's
+        // root walk: its rule marks nothing when the folder is not there.
+        let mut paths = Vec::new();
+        for path in due {
+            let held: Vec<&PathBuf> = self
+                .folders
+                .keys()
+                .filter(|folder| folder.starts_with(&path))
+                .collect();
+            if !held.is_empty() {
+                self.roots.extend(held.into_iter().cloned());
+            } else if self.folders.keys().any(|folder| path.starts_with(folder)) {
+                paths.push(path);
+            }
+        }
         let roots: Vec<PathBuf> = std::mem::take(&mut self.roots).into_iter().collect();
+        let mut checks = std::mem::take(&mut self.checks);
+        checks.retain(|folder| !roots.contains(folder));
+        // The retry's checks: an empty one that holds tracks is not there.
+        let holding = checks
+            .iter()
+            .filter(|folder| {
+                state
+                    .library
+                    .iter()
+                    .any(|t| t.file_state != FileState::Missing && t.path.starts_with(folder))
+            })
+            .cloned()
+            .collect();
+        // The folders the event paths lie in are looked at too.
+        for path in &paths {
+            checks.extend(
+                self.folders
+                    .keys()
+                    .filter(|folder| path.starts_with(folder) && !roots.contains(*folder))
+                    .cloned(),
+            );
+        }
+        let checks: Vec<PathBuf> = checks.into_iter().collect();
         let known = state
             .library
             .iter()
@@ -393,10 +569,15 @@ impl FolderWatch {
             })
             .map(|t| (t.id, t.path.clone()))
             .collect();
+        let Some(scanner) = self.scanner.as_mut() else {
+            return;
+        };
         if scanner.send(ScanJob {
             roots,
             paths,
             known,
+            checks,
+            holding,
         }) {
             self.scans += 1;
         }
@@ -406,8 +587,7 @@ impl FolderWatch {
         let mut troubles = BTreeMap::new();
         for (folder, category) in &self.folders {
             let trouble = self.troubles.get(folder).copied().or_else(|| {
-                self.not_followed
-                    .contains(folder)
+                self.not_followed(folder)
                     .then_some(FolderTrouble::NotFollowed)
             });
             if let Some(trouble) = trouble {

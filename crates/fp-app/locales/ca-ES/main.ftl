@@ -764,6 +764,7 @@ flag-analysis-running = S'està analitzant ara
 menu-reanalyse-queued = Ja és en espera d'anàlisi
 menu-reanalyse-running = S'està analitzant ara
 error-folder-watched = Una altra categoria ja vigila aquesta carpeta.
+error-folder-watched-by = La categoria «{ $category }» ja vigila aquesta carpeta.
 error-category-name-empty = El nom d'una categoria no pot estar buit.
 error-category-name-taken = Ja existeix una categoria amb aquest nom aquí.
 error-category-too-deep = Les categories no es poden niar tant.
@@ -833,6 +834,7 @@ library-tree-watching = Vigila { $folder }
 library-tree-folder-missing = No es troba la carpeta vigilada: { $folder }. Es torna a buscar.
 library-tree-folder-unreadable = No es pot llegir la carpeta vigilada: { $folder }. Es torna a provar.
 library-tree-folder-not-followed = Els canvis a { $folder } no se segueixen; es revisa a l'inici i es torna a provar.
+library-tree-folder-ignored = La carpeta vigilada no és un camí complet: { $folder }. No es vigila.
 library-remove-missing-title = Treu les pistes que falten
 library-remove-missing-question = { $count ->
     [one] { $count } pista de { $name } no té el fitxer i no s'utilitza.

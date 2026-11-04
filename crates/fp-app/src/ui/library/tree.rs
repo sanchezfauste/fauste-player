@@ -476,7 +476,17 @@ fn watch_mark(scene: &Scene<'_>, category: &Category) -> Option<WatchMark> {
     if cfg!(target_os = "android") {
         return None;
     }
-    let folder = category.watched_folder.as_ref()?.display().to_string();
+    let stored = category.watched_folder.as_ref()?;
+    let folder = stored.display().to_string();
+    // The services ignore it (not an absolute path): not watched at all.
+    if !crate::watch::usable_folder(stored) {
+        return Some(WatchMark {
+            text: scene
+                .i18n
+                .tr_args("library-tree-folder-ignored", &[("folder", folder.into())]),
+            trouble: true,
+        });
+    }
     let trouble = scene.watch.troubles.get(&category.id).copied();
     let key = match trouble {
         None => "library-tree-watching",

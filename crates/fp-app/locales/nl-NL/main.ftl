@@ -764,6 +764,7 @@ flag-analysis-running = Wordt nu geanalyseerd
 menu-reanalyse-queued = Wacht al op analyse
 menu-reanalyse-running = Wordt nu geanalyseerd
 error-folder-watched = Een andere categorie bewaakt deze map al.
+error-folder-watched-by = De categorie “{ $category }” bewaakt deze map al.
 error-category-name-empty = De naam van een categorie mag niet leeg zijn.
 error-category-name-taken = Er bestaat hier al een categorie met die naam.
 error-category-too-deep = Categorieën kunnen niet zo diep worden genest.
@@ -833,6 +834,7 @@ library-tree-watching = Bewaakt { $folder }
 library-tree-folder-missing = Bewaakte map niet gevonden: { $folder }. Er wordt opnieuw naar gezocht.
 library-tree-folder-unreadable = Bewaakte map kan niet worden gelezen: { $folder }. Het wordt opnieuw geprobeerd.
 library-tree-folder-not-followed = Wijzigingen in { $folder } worden niet gevolgd; de map wordt bij het starten doorzocht en opnieuw geprobeerd.
+library-tree-folder-ignored = De bewaakte map is geen volledig pad: { $folder }. Hij wordt niet bewaakt.
 library-remove-missing-title = Ontbrekende nummers verwijderen
 library-remove-missing-question = { $count ->
     [one] { $count } nummer van { $name } heeft geen bestand meer en wordt niet gebruikt.

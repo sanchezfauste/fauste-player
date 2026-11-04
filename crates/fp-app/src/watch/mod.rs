@@ -37,6 +37,13 @@ pub trait FolderWatcher: Send {
     fn events(&mut self) -> Vec<FolderEvent>;
 }
 
+/// Whether a stored watched folder can be followed: an absolute path. An
+/// empty one would match every file; a relative one depends on where the
+/// application was started. Others are ignored (and shown as such).
+pub fn usable_folder(folder: &Path) -> bool {
+    !folder.as_os_str().is_empty() && folder.is_absolute()
+}
+
 /// Why a watched folder is not being followed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FolderTrouble {

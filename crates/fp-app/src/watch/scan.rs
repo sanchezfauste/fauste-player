@@ -20,6 +20,15 @@ pub struct ScanJob {
     pub paths: Vec<PathBuf>,
     /// Tracks to check: each one whose file is not there is `gone`.
     pub known: Vec<(TrackId, PathBuf)>,
+    /// Watched folders looked at, not walked: the ones an event path lies
+    /// in, and every followed folder on a retry (LB22). One that is not
+    /// usable is a trouble, and nothing under it is marked.
+    pub checks: Vec<PathBuf>,
+    /// Checks that hold tracks of the library; roots hold the tracks of
+    /// `known` under them. Found empty, such a folder counts as not there.
+    /// The folder of an event path is not listed: the event may have
+    /// removed its last file.
+    pub holding: Vec<PathBuf>,
 }
 
 /// An audio file found, as seen under the folder and in its canonical form.
@@ -35,19 +44,22 @@ pub struct ScanAnswer {
     pub gone: Vec<TrackId>,
     /// Roots that could not be walked, and why.
     pub troubles: Vec<(PathBuf, FolderTrouble)>,
-    /// Roots walked.
+    /// Roots walked (checks are never listed).
     pub readable: Vec<PathBuf>,
 }
 
 /// Walks `start` with an explicit stack. Folder symlinks are not followed
-/// (no cycles); an unreadable subfolder is skipped and counted.
+/// (no cycles); an unreadable subfolder is skipped and counted. One deleted
+/// meanwhile (an ordinary removal) is not counted.
 fn walk(start: &Path, found: &mut Vec<Found>, seen: &mut HashSet<PathBuf>, skipped: &mut usize) {
     let mut stack = vec![start.to_path_buf()];
     while let Some(dir) = stack.pop() {
         let entries = match std::fs::read_dir(&dir) {
             Ok(entries) => entries,
-            Err(_) => {
-                *skipped += 1;
+            Err(e) => {
+                if e.kind() != ErrorKind::NotFound {
+                    *skipped += 1;
+                }
                 continue;
             }
         };
@@ -89,32 +101,44 @@ fn is_gone(path: &Path) -> bool {
     }
 }
 
+/// Whether a watched folder can be walked (LB22). Not there, or empty
+/// while it holds tracks (a mount point with nothing mounted): `Missing`.
+fn look(folder: &Path, holds: bool) -> Result<(), FolderTrouble> {
+    match std::fs::metadata(folder) {
+        Ok(meta) if meta.is_dir() => match std::fs::read_dir(folder) {
+            Err(_) => Err(FolderTrouble::Unreadable),
+            Ok(mut entries) => {
+                if holds && entries.next().is_none() {
+                    Err(FolderTrouble::Missing)
+                } else {
+                    Ok(())
+                }
+            }
+        },
+        Ok(_) => Err(FolderTrouble::Unreadable),
+        Err(e) if e.kind() == ErrorKind::NotFound => Err(FolderTrouble::Missing),
+        Err(_) => Err(FolderTrouble::Unreadable),
+    }
+}
+
 /// Runs one job (file-system work: helper thread only).
 pub fn scan(job: &ScanJob) -> ScanAnswer {
     let mut answer = ScanAnswer::default();
     let mut seen = HashSet::new();
     let mut skipped = 0usize;
+    for folder in &job.checks {
+        if let Err(trouble) = look(folder, job.holding.contains(folder)) {
+            answer.troubles.push((folder.clone(), trouble));
+        }
+    }
     for root in &job.roots {
-        match std::fs::metadata(root) {
-            Ok(meta) if meta.is_dir() => {
-                if std::fs::read_dir(root).is_err() {
-                    answer
-                        .troubles
-                        .push((root.clone(), FolderTrouble::Unreadable));
-                    continue;
-                }
+        let holds = job.known.iter().any(|(_, path)| path.starts_with(root));
+        match look(root, holds) {
+            Ok(()) => {
                 walk(root, &mut answer.found, &mut seen, &mut skipped);
                 answer.readable.push(root.clone());
             }
-            Ok(_) => answer
-                .troubles
-                .push((root.clone(), FolderTrouble::Unreadable)),
-            Err(e) if e.kind() == ErrorKind::NotFound => {
-                answer.troubles.push((root.clone(), FolderTrouble::Missing));
-            }
-            Err(_) => answer
-                .troubles
-                .push((root.clone(), FolderTrouble::Unreadable)),
+            Err(trouble) => answer.troubles.push((root.clone(), trouble)),
         }
     }
     for path in &job.paths {
@@ -216,5 +240,23 @@ impl Scanner {
             }
         }
         out
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_folder_deleted_before_its_walk_is_not_counted() {
+        let dir = tempfile::tempdir().unwrap();
+        let (mut found, mut seen, mut skipped) = (Vec::new(), HashSet::new(), 0);
+        walk(
+            &dir.path().join("deleted"),
+            &mut found,
+            &mut seen,
+            &mut skipped,
+        );
+        assert_eq!(skipped, 0);
     }
 }

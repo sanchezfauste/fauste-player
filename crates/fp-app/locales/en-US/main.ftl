@@ -764,6 +764,7 @@ flag-analysis-running = Analysing now
 menu-reanalyse-queued = Already waiting for analysis
 menu-reanalyse-running = Being analysed now
 error-folder-watched = Another category already watches this folder.
+error-folder-watched-by = The category “{ $category }” already watches this folder.
 error-category-name-empty = A category name cannot be empty.
 error-category-name-taken = There is already a category with that name here.
 error-category-too-deep = Categories cannot be nested that deep.
@@ -833,6 +834,7 @@ library-tree-watching = Watches { $folder }
 library-tree-folder-missing = Watched folder not found: { $folder }. It is looked for again.
 library-tree-folder-unreadable = Watched folder cannot be read: { $folder }. It is tried again.
 library-tree-folder-not-followed = Changes in { $folder } are not followed; it is scanned at start and tried again.
+library-tree-folder-ignored = Watched folder is not a full path: { $folder }. It is not watched.
 library-remove-missing-title = Remove missing tracks
 library-remove-missing-question = { $count ->
     [one] { $count } track of { $name } has a missing file and is not used.

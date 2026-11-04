@@ -764,6 +764,7 @@ flag-analysis-running = A ser analisada agora
 menu-reanalyse-queued = Já está à espera de análise
 menu-reanalyse-running = Está a ser analisada agora
 error-folder-watched = Outra categoria já vigia esta pasta.
+error-folder-watched-by = A categoria «{ $category }» já vigia esta pasta.
 error-category-name-empty = O nome de uma categoria não pode estar vazio.
 error-category-name-taken = Já existe aqui uma categoria com esse nome.
 error-category-too-deep = As categorias não podem ser aninhadas tão fundo.
@@ -833,6 +834,7 @@ library-tree-watching = Vigia { $folder }
 library-tree-folder-missing = Pasta vigiada não encontrada: { $folder }. Será procurada de novo.
 library-tree-folder-unreadable = Não é possível ler a pasta vigiada: { $folder }. Será tentada de novo.
 library-tree-folder-not-followed = As alterações em { $folder } não são acompanhadas; a pasta é analisada ao iniciar e tentada de novo.
+library-tree-folder-ignored = A pasta vigiada não é um caminho completo: { $folder }. Não é vigiada.
 library-remove-missing-title = Remover faixas em falta
 library-remove-missing-question = { $count ->
     [one] { $count } faixa de { $name } não tem o ficheiro e não está em uso.

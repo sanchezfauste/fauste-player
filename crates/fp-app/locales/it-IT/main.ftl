@@ -764,6 +764,7 @@ flag-analysis-running = In analisi ora
 menu-reanalyse-queued = Già in attesa di analisi
 menu-reanalyse-running = In analisi in questo momento
 error-folder-watched = Un'altra categoria controlla già questa cartella.
+error-folder-watched-by = La categoria «{ $category }» controlla già questa cartella.
 error-category-name-empty = Il nome di una categoria non può essere vuoto.
 error-category-name-taken = Esiste già una categoria con questo nome qui.
 error-category-too-deep = Le categorie non possono essere annidate così in profondità.
@@ -833,6 +834,7 @@ library-tree-watching = Sorveglia { $folder }
 library-tree-folder-missing = Cartella sorvegliata non trovata: { $folder }. Viene cercata di nuovo.
 library-tree-folder-unreadable = Impossibile leggere la cartella sorvegliata: { $folder }. Si riprova.
 library-tree-folder-not-followed = Le modifiche in { $folder } non vengono seguite; la cartella è analizzata all'avvio e si riprova.
+library-tree-folder-ignored = La cartella sorvegliata non è un percorso completo: { $folder }. Non viene sorvegliata.
 library-remove-missing-title = Rimuovi i brani mancanti
 library-remove-missing-question = { $count ->
     [one] { $count } brano di { $name } ha il file mancante e non è in uso.

@@ -455,6 +455,14 @@ pub struct FakeWatch {
     watched: Vec<PathBuf>,
     refused: Vec<PathBuf>,
     queued: Vec<FolderEvent>,
+    calls: Vec<WatchCall>,
+}
+
+/// A call the services made on the watcher, in order.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum WatchCall {
+    Watch(PathBuf),
+    Unwatch(PathBuf),
 }
 
 /// A folder watcher that records what it is asked to follow and reports the
@@ -471,6 +479,11 @@ impl FakeWatcher {
         self.0.lock().unwrap().watched.clone()
     }
 
+    /// Every `watch` and `unwatch` call so far.
+    pub fn calls(&self) -> Vec<WatchCall> {
+        self.0.lock().unwrap().calls.clone()
+    }
+
     /// Makes `watch` fail (or work again) for `folder`.
     pub fn refuse(&self, folder: PathBuf, refused: bool) {
         let mut inner = self.0.lock().unwrap();
@@ -484,6 +497,7 @@ impl FakeWatcher {
 impl FolderWatcher for FakeWatcher {
     fn watch(&mut self, folder: &std::path::Path) -> Result<(), String> {
         let mut inner = self.0.lock().unwrap();
+        inner.calls.push(WatchCall::Watch(folder.to_path_buf()));
         if inner.refused.iter().any(|f| f == folder) {
             return Err("refused".into());
         }
@@ -493,8 +507,12 @@ impl FolderWatcher for FakeWatcher {
         Ok(())
     }
 
+    /// As the system's recursive watch on Linux: every watch under the
+    /// folder goes with it, a nested folder watched on its own too.
     fn unwatch(&mut self, folder: &std::path::Path) {
-        self.0.lock().unwrap().watched.retain(|f| f != folder);
+        let mut inner = self.0.lock().unwrap();
+        inner.calls.push(WatchCall::Unwatch(folder.to_path_buf()));
+        inner.watched.retain(|f| !f.starts_with(folder));
     }
 
     fn events(&mut self) -> Vec<FolderEvent> {

@@ -764,6 +764,7 @@ flag-analysis-running = Wird jetzt analysiert
 menu-reanalyse-queued = Wartet bereits auf Analyse
 menu-reanalyse-running = Wird gerade analysiert
 error-folder-watched = Eine andere Kategorie überwacht diesen Ordner bereits.
+error-folder-watched-by = Die Kategorie „{ $category }“ überwacht diesen Ordner bereits.
 error-category-name-empty = Der Name einer Kategorie darf nicht leer sein.
 error-category-name-taken = Hier gibt es bereits eine Kategorie mit diesem Namen.
 error-category-too-deep = Kategorien können nicht so tief verschachtelt werden.
@@ -833,6 +834,7 @@ library-tree-watching = Überwacht { $folder }
 library-tree-folder-missing = Überwachter Ordner nicht gefunden: { $folder }. Er wird erneut gesucht.
 library-tree-folder-unreadable = Überwachter Ordner kann nicht gelesen werden: { $folder }. Es wird erneut versucht.
 library-tree-folder-not-followed = Änderungen in { $folder } werden nicht verfolgt; der Ordner wird beim Start durchsucht und erneut versucht.
+library-tree-folder-ignored = Der überwachte Ordner ist kein vollständiger Pfad: { $folder }. Er wird nicht überwacht.
 library-remove-missing-title = Fehlende Titel entfernen
 library-remove-missing-question = { $count ->
     [one] { $count } Titel von { $name } hat keine Datei mehr und wird nicht verwendet.

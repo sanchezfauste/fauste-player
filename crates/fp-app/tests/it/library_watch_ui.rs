@@ -270,3 +270,52 @@ fn settings_library_offers_the_same_watch_items() {
     h.run_steps(2);
     assert!(h.query_by_label("Stop watching folder").is_some());
 }
+
+#[test]
+fn an_ignored_stored_folder_shows_a_trouble_not_a_watch() {
+    let (mut s, tree) = tree_state();
+    fp_model::apply(
+        &mut s,
+        Command::SetWatchedFolder {
+            category: tree.rock,
+            folder: Some(PathBuf::from("music/relative")),
+        },
+    )
+    .unwrap();
+    let (h, _) = open(s);
+    assert!(h.query_all_by_label_contains("Watches").next().is_none());
+    assert!(
+        h.query_by_label("Watched folder is not a full path: music/relative. It is not watched.")
+            .is_some()
+    );
+}
+
+#[test]
+fn a_folder_another_category_watches_is_refused_naming_it() {
+    let (mut s, tree) = tree_state();
+    let dir = tempfile::tempdir().unwrap();
+    fp_model::apply(
+        &mut s,
+        Command::SetWatchedFolder {
+            category: tree.rock,
+            folder: Some(canonical_path(dir.path())),
+        },
+    )
+    .unwrap();
+    let platform = Arc::new(FakePlatform {
+        folder: Some(dir.path().to_path_buf()),
+        ..FakePlatform::default()
+    });
+    let (mut h, fake) = open_with(s, platform, idle_watch_cell());
+    menu(&mut h, "Jingles");
+    h.get_by_label("Watch folder…").click();
+    wait(&mut h, &fake, |s| {
+        s.iter()
+            .any(|c| matches!(c, Command::SetWatchedFolder { .. }))
+    });
+    h.run_steps(2);
+    assert!(
+        h.query_by_label_contains("“Rock” already watches this folder.")
+            .is_some()
+    );
+}

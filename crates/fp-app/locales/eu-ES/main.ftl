@@ -764,6 +764,7 @@ flag-analysis-running = Orain aztertzen
 menu-reanalyse-queued = Dagoeneko analisiaren zain dago
 menu-reanalyse-running = Orain aztertzen ari da
 error-folder-watched = Beste kategoria batek jada begiratzen du karpeta hau.
+error-folder-watched-by = «{ $category }» kategoriak jada begiratzen du karpeta hau.
 error-category-name-empty = Kategoria baten izena ezin da hutsik egon.
 error-category-name-taken = Hemen badago izen hori duen kategoria bat.
 error-category-too-deep = Kategoriak ezin dira hainbeste habiatu.
@@ -833,6 +834,7 @@ library-tree-watching = { $folder } zaintzen du
 library-tree-folder-missing = Ez da zaindutako karpeta aurkitu: { $folder }. Berriro bilatuko da.
 library-tree-folder-unreadable = Ezin da zaindutako karpeta irakurri: { $folder }. Berriro saiatuko da.
 library-tree-folder-not-followed = { $folder } karpetako aldaketak ez dira jarraitzen; hasieran arakatzen da eta berriro saiatzen da.
+library-tree-folder-ignored = Zaindutako karpeta ez da bide-izen osoa: { $folder }. Ez da zaintzen.
 library-remove-missing-title = Kendu falta diren pistak
 library-remove-missing-question = { $count ->
     [one] { $name } kategoriako { $count } pistak ez du fitxategia eta ez da erabiltzen.

@@ -764,6 +764,7 @@ flag-analysis-running = Analizándose agora
 menu-reanalyse-queued = Xa está en espera de análise
 menu-reanalyse-running = Estase analizando agora
 error-folder-watched = Outra categoría xa vixía este cartafol.
+error-folder-watched-by = A categoría «{ $category }» xa vixía este cartafol.
 error-category-name-empty = O nome dunha categoría non pode estar baleiro.
 error-category-name-taken = Xa existe unha categoría con ese nome aquí.
 error-category-too-deep = As categorías non se poden aniñar tanto.
@@ -833,6 +834,7 @@ library-tree-watching = Vixía { $folder }
 library-tree-folder-missing = Non se atopa o cartafol vixiado: { $folder }. Búscase de novo.
 library-tree-folder-unreadable = Non se pode ler o cartafol vixiado: { $folder }. Tentarase de novo.
 library-tree-folder-not-followed = Os cambios en { $folder } non se seguen; revísase ao iniciar e tentarase de novo.
+library-tree-folder-ignored = O cartafol vixiado non é unha ruta completa: { $folder }. Non se vixía.
 library-remove-missing-title = Quitar pistas que faltan
 library-remove-missing-question = { $count ->
     [one] { $count } pista de { $name } non ten o seu ficheiro e non se usa.

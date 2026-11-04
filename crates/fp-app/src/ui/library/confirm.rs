@@ -66,7 +66,11 @@ fn refused(scene: &Scene<'_>, view_state: &mut ViewState, impact: &RemovalImpact
     if impact.on_air.is_empty() {
         return false;
     }
-    let text = error_text(scene.i18n, &ModelError::LibraryOnAir(impact.on_air.clone()));
+    let text = error_text(
+        scene.i18n,
+        &ModelError::LibraryOnAir(impact.on_air.clone()),
+        &scene.state.categories,
+    );
     view_state.set_notice(text, scene.time);
     true
 }

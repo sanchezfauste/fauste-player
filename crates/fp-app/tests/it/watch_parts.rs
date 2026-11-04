@@ -20,6 +20,7 @@ fn root_job(root: &Path) -> ScanJob {
         roots: vec![root.to_path_buf()],
         paths: vec![],
         known: vec![],
+        ..ScanJob::default()
     }
 }
 
@@ -106,6 +107,7 @@ fn scan_reports_a_missing_root_without_gone_marks() {
         roots: vec![root.clone()],
         paths: vec![],
         known: vec![(TrackId(1), root.join("x.mp3"))],
+        ..ScanJob::default()
     };
     let answer = scan(&job);
     assert_eq!(answer.troubles, vec![(root, FolderTrouble::Missing)]);
@@ -125,6 +127,7 @@ fn scan_marks_known_tracks_whose_file_is_gone() {
             (TrackId(1), root.join("here.mp3")),
             (TrackId(2), root.join("deleted.mp3")),
         ],
+        ..ScanJob::default()
     };
     assert_eq!(scan(&job).gone, vec![TrackId(2)]);
 }
@@ -140,6 +143,7 @@ fn scan_walks_a_touched_folder_and_looks_at_a_touched_file() {
         roots: vec![],
         paths: vec![root.join("new"), root.join("single.wav")],
         known: vec![],
+        ..ScanJob::default()
     };
     let mut want = vec![
         root.join("new/one.mp3"),
@@ -188,6 +192,7 @@ fn scan_does_not_mark_tracks_gone_when_a_stat_is_refused() {
         roots: vec![root.clone()],
         paths: vec![],
         known: vec![(TrackId(1), root.join("sub/x.mp3"))],
+        ..ScanJob::default()
     };
     let answer = scan(&job);
     std::fs::set_permissions(&sub, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -205,6 +210,7 @@ fn scan_does_not_walk_a_touched_folder_symlink() {
         roots: vec![],
         paths: vec![root.join("link")],
         known: vec![],
+        ..ScanJob::default()
     };
     assert!(scan(&job).found.is_empty());
 }
@@ -291,4 +297,97 @@ mod convert {
         let err = notify::Error::generic("lost");
         assert_eq!(convert(Err(err)), vec![FolderEvent::Rescan]);
     }
+}
+
+#[test]
+fn scan_reports_an_empty_root_holding_known_tracks_missing() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    let job = ScanJob {
+        roots: vec![root.clone()],
+        known: vec![(TrackId(1), root.join("x.mp3"))],
+        ..ScanJob::default()
+    };
+    let answer = scan(&job);
+    assert_eq!(answer.troubles, vec![(root, FolderTrouble::Missing)]);
+    assert!(answer.gone.is_empty());
+    assert!(answer.readable.is_empty());
+}
+
+#[test]
+fn scan_walks_an_empty_root_with_no_known_tracks() {
+    let dir = tempfile::tempdir().unwrap();
+    let answer = scan(&root_job(dir.path()));
+    assert!(answer.troubles.is_empty());
+    assert_eq!(answer.readable, vec![dir.path().to_path_buf()]);
+}
+
+#[test]
+fn scan_checks_a_folder_without_walking_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let here = dir.path().join("here");
+    let absent = dir.path().join("absent");
+    let empty = dir.path().join("empty");
+    touch(&here.join("a.mp3"));
+    std::fs::create_dir_all(&empty).unwrap();
+    let job = ScanJob {
+        checks: vec![here.clone(), absent.clone(), empty.clone()],
+        holding: vec![empty.clone()],
+        // An event path under the absent folder: not marked.
+        paths: vec![absent.join("b.mp3")],
+        known: vec![(TrackId(1), absent.join("b.mp3"))],
+        ..ScanJob::default()
+    };
+    let answer = scan(&job);
+    assert!(answer.found.is_empty(), "a check walks nothing");
+    let mut troubles = answer.troubles.clone();
+    troubles.sort_by(|a, b| a.0.cmp(&b.0));
+    assert_eq!(
+        troubles,
+        vec![
+            (absent, FolderTrouble::Missing),
+            (empty, FolderTrouble::Missing)
+        ]
+    );
+    assert!(answer.gone.is_empty());
+    assert!(answer.readable.is_empty(), "a check clears nothing");
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn notify_watcher_does_not_follow_folder_symlinks() {
+    use fp_app::watch::notify_watcher::NotifyWatcher;
+    use fp_app::watch::{FolderEvent, FolderWatcher};
+    let dir = tempfile::tempdir().unwrap();
+    let outside = tempfile::tempdir().unwrap();
+    let root = dir.path().join("root");
+    std::fs::create_dir_all(&root).unwrap();
+    std::os::unix::fs::symlink(outside.path(), root.join("link")).unwrap();
+    let mut w = NotifyWatcher::new().unwrap();
+    w.watch(&root).unwrap();
+    // The outside write first: a followed link would report it before the
+    // inside one, which arrives through the same queue.
+    touch(&outside.path().join("out.mp3"));
+    touch(&root.join("in.mp3"));
+    let mut events = Vec::new();
+    let end = Instant::now() + Duration::from_secs(10);
+    while Instant::now() < end
+        && !events
+            .iter()
+            .any(|e| *e == FolderEvent::Touched(root.join("in.mp3")))
+    {
+        events.extend(w.events());
+        std::thread::yield_now();
+    }
+    assert!(
+        events
+            .iter()
+            .any(|e| *e == FolderEvent::Touched(root.join("in.mp3")))
+    );
+    assert!(
+        !events
+            .iter()
+            .any(|e| matches!(e, FolderEvent::Touched(p) if p.starts_with(root.join("link")))),
+        "{events:?}"
+    );
 }

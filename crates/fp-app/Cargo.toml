@@ -35,8 +35,9 @@ unic-langid.workspace = true
 sys-locale.workspace = true
 image.workspace = true
 
-# Desktop only: MIDI, the remote API, the native dialogs and the system
-# opener are not built for Android (mobile spec §2).
+# Desktop only: MIDI, the remote API, the native dialogs, the system
+# opener and the file-system notifications of watched folders (notify) are
+# not built for Android (mobile spec §2, track library spec §11).
 [target.'cfg(not(target_os = "android"))'.dependencies]
 fp-control.workspace = true
 fp-remote.workspace = true

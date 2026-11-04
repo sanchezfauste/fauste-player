@@ -773,3 +773,304 @@ fn watched_folder_files_are_analysed_behind_a_players_track() {
     let before = crate::support::services_rig::started_before(&r, &outside);
     assert!(before <= 1, "{before} analyses started first");
 }
+
+fn troubles(r: &Rig) -> std::collections::BTreeMap<CategoryId, FolderTrouble> {
+    r.services.watch_status().load().troubles.clone()
+}
+
+fn all_ok(r: &Rig) -> bool {
+    r.handle
+        .model
+        .load()
+        .library
+        .iter()
+        .all(|t| t.file_state == FileState::Ok)
+}
+
+/// A watched folder with two analysed files, the watch settled.
+fn settled_folder(retry_ms: f64) -> (tempfile::TempDir, PathBuf, Rig, FakeWatcher, CategoryId) {
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    wav(&ids_folder, "a.wav", 1);
+    wav(&ids_folder, "b.wav", 1);
+    let keep = tempfile::tempdir().unwrap();
+    let mut ids = None;
+    let (mut r, fake) = watching(dir, |s| {
+        ids = Some(create(s, "IDs", TrackKind::Jingle, Some(&ids_folder)));
+        set_debounce(s, 100);
+        s.config.tuning.missing_recheck_ms = retry_ms;
+    });
+    settled(&mut r, &fake, 2);
+    (keep, ids_folder, r, fake, ids.unwrap())
+}
+
+#[test]
+fn an_event_on_the_root_itself_marks_nothing_and_reports_it_missing() {
+    let (keep, ids_folder, mut r, fake, ids) = settled_folder(2_000.0);
+    // Moved away (or unmounted): the event names the folder itself.
+    let away = keep.path().join("away");
+    std::fs::rename(&ids_folder, &away).unwrap();
+    push_and_step(&mut r, &fake, &ids_folder);
+    r.run_until("reported missing", |r| {
+        troubles(r).get(&ids) == Some(&FolderTrouble::Missing)
+    });
+    quiet_for(&mut r, 500);
+    assert!(all_ok(&r), "a root that is not there marks nothing");
+    std::fs::rename(&away, &ids_folder).unwrap();
+    let until = r.now + Duration::from_millis(2_500);
+    run_to(&mut r, until);
+    r.run_until("cleared", |r| troubles(r).is_empty());
+    assert!(all_ok(&r));
+}
+
+#[test]
+fn an_event_inside_a_vanished_root_marks_nothing() {
+    let (keep, ids_folder, mut r, fake, ids) = settled_folder(30_000.0);
+    let away = keep.path().join("away");
+    std::fs::rename(&ids_folder, &away).unwrap();
+    push_and_step(&mut r, &fake, &ids_folder.join("a.wav"));
+    r.run_until("reported missing", |r| {
+        troubles(r).get(&ids) == Some(&FolderTrouble::Missing)
+    });
+    quiet_for(&mut r, 500);
+    assert!(
+        all_ok(&r),
+        "the file's folder is not there: nothing is marked"
+    );
+}
+
+#[test]
+fn an_empty_root_with_known_tracks_marks_nothing() {
+    let dir = tempfile::tempdir().unwrap();
+    // A mount point with nothing mounted: there, readable and empty.
+    let mount = folder(&dir, "mnt");
+    let mut ids = None;
+    let mut r = rig_with(&[], dir, Duration::ZERO, |s| {
+        ids = Some(create(s, "IDs", TrackKind::Jingle, Some(&mount)));
+        apply(
+            s,
+            Command::AddToLibrary {
+                paths: vec![mount.join("c.mp3")],
+                category: ids,
+            },
+        )
+        .unwrap();
+        let id = s.library.iter().next().unwrap().id;
+        let track = s.library.get_mut(id).unwrap();
+        track.analyzed = true;
+        track.tags_read = true;
+        track.loudness_pass = Some(fp_model::loudness::LOUDNESS_VERSION);
+        track.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+        s.config.tuning.missing_recheck_ms = 2_000.0;
+    });
+    let fake = FakeWatcher::default();
+    r.services.set_watcher(Box::new(fake.clone()));
+    let ids = ids.unwrap();
+    r.run_until("reported missing", |r| {
+        troubles(r).get(&ids) == Some(&FolderTrouble::Missing)
+    });
+    quiet_for(&mut r, 1_000);
+    assert!(all_ok(&r), "an empty root marks nothing");
+    // Mounted: the folder has files again.
+    touch(&mount.join("c.mp3"));
+    let until = r.now + Duration::from_millis(2_500);
+    run_to(&mut r, until);
+    r.run_until("cleared", |r| troubles(r).is_empty());
+    assert!(all_ok(&r));
+}
+
+#[test]
+fn dropping_the_outer_of_two_nested_folders_keeps_the_inner_followed() {
+    let dir = tempfile::tempdir().unwrap();
+    let music = folder(&dir, "m");
+    let gold_folder = folder(&dir, "m/gold");
+    touch(&music.join("1.mp3"));
+    touch(&gold_folder.join("2.mp3"));
+    let mut m = None;
+    let (mut r, fake) = watching(dir, |s| {
+        m = Some(create(s, "Music", TrackKind::Music, Some(&music)));
+        create(s, "Gold", TrackKind::Music, Some(&gold_folder));
+    });
+    r.run_until("both watched", |_| fake.watched().len() == 2);
+    r.handle.send(Command::SetWatchedFolder {
+        category: m.unwrap(),
+        folder: None,
+    });
+    // The system drops the inner watch with the outer one: it is set again.
+    r.run_until("the inner one watched again", |_| {
+        fake.watched() == vec![gold_folder.clone()]
+    });
+}
+
+#[test]
+fn dropping_the_inner_of_two_nested_folders_watches_the_outer_again() {
+    use crate::support::WatchCall;
+    let dir = tempfile::tempdir().unwrap();
+    let music = folder(&dir, "m");
+    let gold_folder = folder(&dir, "m/gold");
+    touch(&music.join("1.mp3"));
+    let mut g = None;
+    let (mut r, fake) = watching(dir, |s| {
+        create(s, "Music", TrackKind::Music, Some(&music));
+        g = Some(create(s, "Gold", TrackKind::Music, Some(&gold_folder)));
+    });
+    r.run_until("both watched", |_| fake.watched().len() == 2);
+    r.handle.send(Command::SetWatchedFolder {
+        category: g.unwrap(),
+        folder: None,
+    });
+    r.run_until("the outer one watched again", |_| {
+        let calls = fake.calls();
+        let unwatch = calls
+            .iter()
+            .position(|c| *c == WatchCall::Unwatch(gold_folder.clone()));
+        unwatch.is_some_and(|at| calls[at..].contains(&WatchCall::Watch(music.clone())))
+    });
+}
+
+#[test]
+fn a_folder_lost_while_running_is_reported_and_followed_again() {
+    use crate::support::WatchCall;
+    let (keep, ids_folder, mut r, fake, ids) = settled_folder(2_000.0);
+    // Unplugged without an event (the system drops its watch quietly).
+    let away = keep.path().join("away");
+    std::fs::rename(&ids_folder, &away).unwrap();
+    fake.refuse(ids_folder.clone(), true);
+    let until = r.now + Duration::from_millis(2_500);
+    run_to(&mut r, until);
+    r.run_until("reported missing", |r| {
+        troubles(r).get(&ids) == Some(&FolderTrouble::Missing)
+    });
+    r.run_until("unwatched", |_| {
+        fake.calls()
+            .contains(&WatchCall::Unwatch(ids_folder.clone()))
+    });
+    assert!(all_ok(&r), "a lost folder marks nothing");
+    // Plugged back in, with a new file.
+    std::fs::rename(&away, &ids_folder).unwrap();
+    fake.refuse(ids_folder.clone(), false);
+    let new = wav(&ids_folder, "new.wav", 1);
+    let until = r.now + Duration::from_millis(2_500);
+    run_to(&mut r, until);
+    r.run_until("followed and scanned again", |r| {
+        troubles(r).is_empty()
+            && track_of(r, &new).is_some()
+            && fake.watched() == vec![ids_folder.clone()]
+    });
+    assert!(all_ok(&r));
+}
+
+/// A watcher whose every `watch` waits for a release, counting the calls.
+struct Stuck {
+    release: crossbeam_channel::Receiver<()>,
+    calls: Arc<Mutex<usize>>,
+}
+
+impl FolderWatcher for Stuck {
+    fn watch(&mut self, _: &Path) -> Result<(), String> {
+        *self.calls.lock().unwrap() += 1;
+        let _ = self.release.recv();
+        Err("refused".into())
+    }
+    fn unwatch(&mut self, _: &Path) {}
+    fn events(&mut self) -> Vec<FolderEvent> {
+        Vec::new()
+    }
+}
+
+#[test]
+fn a_stuck_watch_call_does_not_pile_up_retries() {
+    let dir = tempfile::tempdir().unwrap();
+    let gone = dir.path().join("not-mounted");
+    let (release_tx, release) = crossbeam_channel::unbounded();
+    let calls = Arc::new(Mutex::new(0));
+    let mut ids = None;
+    let mut r = rig_with(&[], dir, Duration::ZERO, |s| {
+        ids = Some(create(s, "IDs", TrackKind::Jingle, Some(&gone)));
+        s.config.tuning.missing_recheck_ms = 1_000.0;
+    });
+    r.services.set_watcher(Box::new(Stuck {
+        release,
+        calls: calls.clone(),
+    }));
+    let ids = ids.unwrap();
+    r.run_until("reported missing", |r| {
+        troubles(r).get(&ids) == Some(&FolderTrouble::Missing)
+    });
+    // Five retries while the first call is stuck.
+    let until = r.now + Duration::from_millis(5_500);
+    run_to(&mut r, until);
+    for _ in 0..20 {
+        release_tx.send(()).unwrap();
+    }
+    quiet_for(&mut r, 300);
+    assert!(
+        *calls.lock().unwrap() <= 2,
+        "{} watch calls",
+        calls.lock().unwrap()
+    );
+}
+
+#[test]
+fn a_retry_walks_a_refused_folder_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    touch(&ids_folder.join("a.mp3"));
+    let mut ids = None;
+    let fake = FakeWatcher::default();
+    fake.refuse(ids_folder.clone(), true);
+    let mut r = rig_with(&[], dir, Duration::ZERO, |s| {
+        ids = Some(create(s, "IDs", TrackKind::Jingle, Some(&ids_folder)));
+        s.config.tuning.missing_recheck_ms = 1_000.0;
+    });
+    r.services.set_watcher(Box::new(fake.clone()));
+    let ids = ids.unwrap();
+    r.run_until("joined and flagged", |r| {
+        tracks(r) == 1 && troubles(r).get(&ids) == Some(&FolderTrouble::NotFollowed)
+    });
+    quiet_for(&mut r, 300);
+    fake.refuse(ids_folder.clone(), false);
+    let scans = r.services.folder_scans();
+    r.run_until("followed", |r| troubles(r).is_empty());
+    quiet_for(&mut r, 500);
+    assert_eq!(r.services.folder_scans(), scans + 1);
+}
+
+/// A watcher whose `watch` panics: the watch thread ends.
+struct Broken;
+
+impl FolderWatcher for Broken {
+    fn watch(&mut self, _: &Path) -> Result<(), String> {
+        panic!("the watcher broke");
+    }
+    fn unwatch(&mut self, _: &Path) {}
+    fn events(&mut self) -> Vec<FolderEvent> {
+        Vec::new()
+    }
+}
+
+#[test]
+fn a_dead_watch_thread_shows_every_folder_not_followed() {
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    let other = folder(&dir, "other");
+    touch(&ids_folder.join("a.mp3"));
+    let (mut ids, mut more) = (None, None);
+    let mut r = rig_with(&[], dir, Duration::ZERO, |s| {
+        ids = Some(create(s, "IDs", TrackKind::Jingle, Some(&ids_folder)));
+        more = Some(create(s, "More", TrackKind::Jingle, None));
+    });
+    r.services.set_watcher(Box::new(Broken));
+    let (ids, more) = (ids.unwrap(), more.unwrap());
+    r.run_until("not followed", |r| {
+        troubles(r).get(&ids) == Some(&FolderTrouble::NotFollowed)
+    });
+    r.handle.send(Command::SetWatchedFolder {
+        category: more,
+        folder: Some(other.clone()),
+    });
+    r.run_until("the new one too", |r| {
+        troubles(r).get(&more) == Some(&FolderTrouble::NotFollowed)
+    });
+    r.run_until("still scanned", |r| tracks(r) == 1);
+}
