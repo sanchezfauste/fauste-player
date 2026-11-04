@@ -15,6 +15,8 @@ use fp_app::ui::controller::Controller;
 use fp_engine::conductor::Telemetry;
 use fp_model::{AppState, Command, Config, EntryId, ModelError, PlayerId, Route};
 
+pub mod services_rig;
+
 pub struct Fake {
     pub state: ArcSwap<AppState>,
     pub telemetry: ArcSwap<Telemetry>,
