@@ -836,7 +836,7 @@ library-tree-folder-not-followed = { $folder } karpetako aldaketak ez dira jarra
 library-remove-missing-title = Kendu falta diren pistak
 library-remove-missing-question = { $count ->
     [one] { $name } kategoriako { $count } pistak ez du fitxategia eta ez da erabiltzen.
-   *[other] { $name } kategoriako { $count } pistak ez dute fitxategia eta ez dira erabiltzen.
+   *[other] { $name } kategoriako { $count } pistek ez dute fitxategia eta ez dira erabiltzen.
 } Liburutegitik kendu nahi dituzu? Erabiltzen ari diren pistak mantentzen dira; ez da fitxategirik ukitzen.
 library-remove-missing-confirm = Kendu
 library-remove-missing-none = { $name } kategoriak ez du fitxategirik gabeko erabili gabeko pistarik.
