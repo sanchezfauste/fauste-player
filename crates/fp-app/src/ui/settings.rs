@@ -458,7 +458,7 @@ fn body(
                         match st.section {
                             Section::Outputs => {
                                 st.load_devices(deps.backends, ctx);
-                                outputs(ui, scene, st);
+                                outputs(ui, scene, st, deps.phone);
                             }
                             Section::Players => players(ui, scene, st),
                             Section::Meters => meters::section(ui, scene),
@@ -1111,7 +1111,7 @@ fn backend_name(t: &crate::i18n::I18n, id: &str) -> String {
     }
 }
 
-fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
+fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, phone: bool) {
     let t = scene.i18n;
     let config = &scene.state.config;
     let Some(backends) = st.backends.clone() else {
@@ -1276,26 +1276,29 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             }
         });
     });
+    // The library and its pre-listen are desktop only (for now).
     let library_routes = config.outputs.library.clone();
-    row(ui, &t.tr("settings-library-outputs"), None, |ui| {
-        ui.vertical(|ui| {
-            route_picker(
-                ui,
-                scene,
-                Owner::Library,
-                Bus::Cue,
-                library_routes.cue.clone(),
-                backend_id.as_deref(),
-                &devices,
-            );
-            let cue = fp_model::Holder::LibraryCue;
-            if config.outputs.cue_shares_main(cue)
-                || fp_model::cue_on_air::cue_is_on_air(scene.state, cue)
-            {
-                cue_on_air_note(ui, scene);
-            }
+    if !phone {
+        row(ui, &t.tr("settings-library-outputs"), None, |ui| {
+            ui.vertical(|ui| {
+                route_picker(
+                    ui,
+                    scene,
+                    Owner::Library,
+                    Bus::Cue,
+                    library_routes.cue.clone(),
+                    backend_id.as_deref(),
+                    &devices,
+                );
+                let cue = fp_model::Holder::LibraryCue;
+                if config.outputs.cue_shares_main(cue)
+                    || fp_model::cue_on_air::cue_is_on_air(scene.state, cue)
+                {
+                    cue_on_air_note(ui, scene);
+                }
+            });
         });
-    });
+    }
     match view {
         OutputsView::Advanced => devices::section(ui, scene, &backends),
         OutputsView::Basic => {

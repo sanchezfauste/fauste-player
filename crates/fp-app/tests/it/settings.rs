@@ -970,8 +970,13 @@ fn the_library_cue_route_is_in_both_outputs_views() {
         fp_model::OutputsView::Advanced,
     ] {
         let (h, _fake) = outputs_view_routed(view, Vec::new(), "speakers", None);
-        // The Settings list's entry and the row.
-        assert_eq!(h.query_all_by_label("Library").count(), 2, "{view:?}");
+        // The row's label (the Settings list's entry is a button).
+        assert_eq!(
+            h.query_all_by_role_and_label(Role::Label, "Library")
+                .count(),
+            1,
+            "{view:?}"
+        );
         // Player 1, the cartwall and the library.
         assert_eq!(h.query_all_by_label("Test Cue").count(), 3, "{view:?}");
     }

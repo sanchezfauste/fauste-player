@@ -1070,6 +1070,30 @@ fn phone_settings_open_on_the_section_list() {
     assert!(h.query_by_label("Close").is_none(), "Settings closed");
 }
 
+/// The library and its pre-listen are desktop only: a phone's Settings →
+/// Audio outputs has no Library row (player 1, player 2 and the cartwall
+/// each have a Cue; the library would be a fourth).
+#[test]
+fn a_phones_outputs_have_no_library_cue_row() {
+    let backend = fp_backends::OfflineBackend::new();
+    backend.add_device("speakers", 2);
+    let backends: Vec<Arc<dyn fp_backends::AudioBackend>> = vec![Arc::new(backend)];
+    let (mut h, _fake) = harness_sized(state(2, 3), PORTRAIT, |ui| {
+        ui.with_touch().with_backends(backends)
+    });
+    h.run_steps(3);
+    more(&mut h, "Settings");
+    h.get_by_label("Audio outputs").click();
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_all_by_label("Test Main").next().is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert_eq!(h.query_all_by_label("Test Cue").count(), 3);
+}
+
 /// PL20: a category dialog opened from Settings → Library closes on Back
 /// before Settings goes back to its list.
 #[test]
