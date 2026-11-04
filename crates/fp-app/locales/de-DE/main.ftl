@@ -253,6 +253,7 @@ settings-library-hint = Lege die Kategorien an, die deine Titel gruppieren, bene
 settings-library-hint-touch = Lege die Kategorien an, die deine Titel gruppieren, benenne sie um, ändere ihre Farbe oder lösche sie. Halte eine Kategorie gedrückt, um ihr Menü zu öffnen.
 settings-tab-shortcuts = Tastenkürzel
 settings-cartwall-outputs = Cartwall
+settings-library-outputs = Bibliothek
 settings-outputs-view = Anzeigen
 settings-outputs-basic = Einfach
 settings-outputs-advanced = Erweitert

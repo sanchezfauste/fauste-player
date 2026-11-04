@@ -130,6 +130,12 @@ impl SettingsState {
         self.phone_section = true;
     }
 
+    /// Opens the Outputs section (the library's CUE route is set there).
+    pub(crate) fn show_outputs(&mut self) {
+        self.section = Section::Outputs;
+        self.phone_section = true;
+    }
+
     /// Back on a phone (PL20): from a section to the list. False on the
     /// list, where Back closes Settings.
     pub(crate) fn phone_back(&mut self) -> bool {
@@ -1270,6 +1276,26 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             }
         });
     });
+    let library_routes = config.outputs.library.clone();
+    row(ui, &t.tr("settings-library-outputs"), None, |ui| {
+        ui.vertical(|ui| {
+            route_picker(
+                ui,
+                scene,
+                Owner::Library,
+                Bus::Cue,
+                library_routes.cue.clone(),
+                backend_id.as_deref(),
+                &devices,
+            );
+            let cue = fp_model::Holder::LibraryCue;
+            if config.outputs.cue_shares_main(cue)
+                || fp_model::cue_on_air::cue_is_on_air(scene.state, cue)
+            {
+                cue_on_air_note(ui, scene);
+            }
+        });
+    });
     match view {
         OutputsView::Advanced => devices::section(ui, scene, &backends),
         OutputsView::Basic => {
@@ -1310,6 +1336,8 @@ enum Bus {
 enum Owner {
     Player(PlayerId),
     Cartwall,
+    /// The library's pre-listen: a Cue route only.
+    Library,
 }
 
 fn set_route(config: &mut Config, owner: Owner, bus: Bus, route: Option<Route>) {
@@ -1320,6 +1348,12 @@ fn set_route(config: &mut Config, owner: Owner, bus: Bus, route: Option<Route>) 
             match bus {
                 Bus::Main => c.main = route,
                 Bus::Cue => c.cue = route,
+            }
+            return;
+        }
+        Owner::Library => {
+            if bus == Bus::Cue {
+                config.outputs.library.cue = route;
             }
             return;
         }

@@ -259,6 +259,7 @@ settings-library-hint = Twórz, zmieniaj nazwy i kolory oraz usuwaj kategorie gr
 settings-library-hint-touch = Twórz, zmieniaj nazwy i kolory oraz usuwaj kategorie grupujące utwory. Przytrzymaj kategorię, aby otworzyć jej menu.
 settings-tab-shortcuts = Skróty klawiszowe
 settings-cartwall-outputs = Cartwall
+settings-library-outputs = Biblioteka
 settings-outputs-view = Pokaż
 settings-outputs-basic = Podstawowe
 settings-outputs-advanced = Zaawansowane

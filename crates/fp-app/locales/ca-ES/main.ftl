@@ -253,6 +253,7 @@ settings-library-hint = Crea, reanomena, canvia el color i elimina les categorie
 settings-library-hint-touch = Crea, reanomena, canvia el color i elimina les categories que agrupen les teves pistes. Mantén premuda una categoria per obrir-ne el menú.
 settings-tab-shortcuts = Dreceres de teclat
 settings-cartwall-outputs = Cartutxera
+settings-library-outputs = Biblioteca
 settings-outputs-view = Mostrar
 settings-outputs-basic = Bàsic
 settings-outputs-advanced = Avançat

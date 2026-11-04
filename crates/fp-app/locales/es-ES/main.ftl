@@ -253,6 +253,7 @@ settings-library-hint = Crea, renombra, cambia el color y elimina las categoría
 settings-library-hint-touch = Crea, renombra, cambia el color y elimina las categorías que agrupan tus pistas. Mantén pulsada una categoría para abrir su menú.
 settings-tab-shortcuts = Atajos de teclado
 settings-cartwall-outputs = Cartuchera
+settings-library-outputs = Biblioteca
 settings-outputs-view = Mostrar
 settings-outputs-basic = Básico
 settings-outputs-advanced = Avanzado

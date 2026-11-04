@@ -253,6 +253,7 @@ settings-library-hint = Create, rename, recolour and delete the categories that 
 settings-library-hint-touch = Create, rename, recolour and delete the categories that group your tracks. Touch and hold a category for its menu.
 settings-tab-shortcuts = Keyboard shortcuts
 settings-cartwall-outputs = Cartwall
+settings-library-outputs = Library
 settings-outputs-view = Show
 settings-outputs-basic = Basic
 settings-outputs-advanced = Advanced

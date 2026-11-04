@@ -253,6 +253,7 @@ settings-library-hint = Créez, renommez, recolorez et supprimez les catégories
 settings-library-hint-touch = Créez, renommez, recolorez et supprimez les catégories qui regroupent vos pistes. Appuyez longuement sur une catégorie pour ouvrir son menu.
 settings-tab-shortcuts = Raccourcis clavier
 settings-cartwall-outputs = Mur de cartouches
+settings-library-outputs = Bibliothèque
 settings-outputs-view = Afficher
 settings-outputs-basic = Simple
 settings-outputs-advanced = Avancé

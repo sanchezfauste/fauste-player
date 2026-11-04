@@ -253,6 +253,7 @@ settings-library-hint = Maak de categorieën die je nummers groeperen, hernoem z
 settings-library-hint-touch = Maak de categorieën die je nummers groeperen, hernoem ze, geef ze een andere kleur of verwijder ze. Houd een categorie ingedrukt voor haar menu.
 settings-tab-shortcuts = Sneltoetsen
 settings-cartwall-outputs = Cartwall
+settings-library-outputs = Bibliotheek
 settings-outputs-view = Tonen
 settings-outputs-basic = Basis
 settings-outputs-advanced = Geavanceerd

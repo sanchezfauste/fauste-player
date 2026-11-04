@@ -253,6 +253,7 @@ settings-library-hint = Crea, rinomina, cambia il colore ed elimina le categorie
 settings-library-hint-touch = Crea, rinomina, cambia il colore ed elimina le categorie che raggruppano i tuoi brani. Tieni premuta una categoria per aprirne il menu.
 settings-tab-shortcuts = Scorciatoie da tastiera
 settings-cartwall-outputs = Cartwall
+settings-library-outputs = Libreria
 settings-outputs-view = Mostra
 settings-outputs-basic = Base
 settings-outputs-advanced = Avanzate

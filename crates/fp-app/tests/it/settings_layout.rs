@@ -186,8 +186,10 @@ fn outputs_test_buttons_line_up_in_columns() {
     wait_for_devices(&mut h);
     for label in ["Test Main", "Test Cue"] {
         let lefts: Vec<f32> = h.get_all_by_label(label).map(|n| n.rect().left()).collect();
-        // Player 1 (routed), player 2 (not routed) and the cartwall.
-        assert_eq!(lefts.len(), 3, "{label}");
+        // Player 1 (routed), player 2 (not routed) and the cartwall; the
+        // library has a Cue only.
+        let rows = if label == "Test Cue" { 4 } else { 3 };
+        assert_eq!(lefts.len(), rows, "{label}");
         assert!(
             lefts.iter().all(|x| (x - lefts[0]).abs() < 0.5),
             "{label}: {lefts:?}"

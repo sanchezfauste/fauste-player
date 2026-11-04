@@ -253,6 +253,7 @@ settings-library-hint = Crie, mude o nome e a cor e elimine as categorias que ag
 settings-library-hint-touch = Crie, mude o nome e a cor e elimine as categorias que agrupam as suas faixas. Mantenha premida uma categoria para abrir o respetivo menu.
 settings-tab-shortcuts = Atalhos de teclado
 settings-cartwall-outputs = Cartucheira
+settings-library-outputs = Biblioteca
 settings-outputs-view = Mostrar
 settings-outputs-basic = Básico
 settings-outputs-advanced = Avançado

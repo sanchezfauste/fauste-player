@@ -253,6 +253,7 @@ settings-library-hint = Sortu, berrizendatu, aldatu kolorea eta ezabatu zure pis
 settings-library-hint-touch = Sortu, berrizendatu, aldatu kolorea eta ezabatu zure pistak taldekatzen dituzten kategoriak. Eutsi sakatuta kategoria bat bere menua irekitzeko.
 settings-tab-shortcuts = Laster-teklak
 settings-cartwall-outputs = Kartutxo-panela
+settings-library-outputs = Liburutegia
 settings-outputs-view = Erakutsi
 settings-outputs-basic = Oinarrizkoa
 settings-outputs-advanced = Aurreratua
