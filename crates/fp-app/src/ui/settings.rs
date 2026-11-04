@@ -462,7 +462,7 @@ fn body(
                         match st.section {
                             Section::Outputs => {
                                 st.load_devices(deps.backends, ctx);
-                                outputs(ui, scene, st, deps.phone);
+                                outputs(ui, scene, st);
                             }
                             Section::Players => players(ui, scene, st),
                             Section::Meters => meters::section(ui, scene),
@@ -1115,7 +1115,7 @@ fn backend_name(t: &crate::i18n::I18n, id: &str) -> String {
     }
 }
 
-fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, phone: bool) {
+fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let config = &scene.state.config;
     let Some(backends) = st.backends.clone() else {
@@ -1280,35 +1280,33 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState, phone: bool) 
             }
         });
     });
-    // The library and its pre-listen are desktop only (for now).
+    // The library's pre-listen route, on every layout (LB46).
     let library_routes = config.outputs.library.clone();
-    if !phone {
-        let library_row = ui.scope(|ui| {
-            row(ui, &t.tr("settings-library-outputs"), None, |ui| {
-                ui.vertical(|ui| {
-                    route_picker(
-                        ui,
-                        scene,
-                        Owner::Library,
-                        Bus::Cue,
-                        library_routes.cue.clone(),
-                        backend_id.as_deref(),
-                        &devices,
-                    );
-                    let cue = fp_model::Holder::LibraryCue;
-                    if config.outputs.cue_shares_main(cue)
-                        || fp_model::cue_on_air::cue_is_on_air(scene.state, cue)
-                    {
-                        cue_on_air_note(ui, scene);
-                    }
-                });
+    let library_row = ui.scope(|ui| {
+        row(ui, &t.tr("settings-library-outputs"), None, |ui| {
+            ui.vertical(|ui| {
+                route_picker(
+                    ui,
+                    scene,
+                    Owner::Library,
+                    Bus::Cue,
+                    library_routes.cue.clone(),
+                    backend_id.as_deref(),
+                    &devices,
+                );
+                let cue = fp_model::Holder::LibraryCue;
+                if config.outputs.cue_shares_main(cue)
+                    || fp_model::cue_on_air::cue_is_on_air(scene.state, cue)
+                {
+                    cue_on_air_note(ui, scene);
+                }
             });
         });
-        // Opened from the library's preview bar: its row is what the
-        // operator came for.
-        if std::mem::take(&mut st.reveal_library_route) {
-            ui.scroll_to_rect(library_row.response.rect, Some(egui::Align::Center));
-        }
+    });
+    // Opened from the library's preview bar: its row is what the
+    // operator came for.
+    if std::mem::take(&mut st.reveal_library_route) {
+        ui.scroll_to_rect(library_row.response.rect, Some(egui::Align::Center));
     }
     match view {
         OutputsView::Advanced => devices::section(ui, scene, &backends),
@@ -1426,9 +1424,16 @@ fn route_picker(
     const GAP: f32 = 8.0;
     let tail_width = CHANNELS_WIDTH + GAP + test_width;
     let one_line = BUS_LABEL_WIDTH + GAP + DEVICE_MIN_WIDTH + GAP + tail_width;
-    let none_text = match bus {
-        Bus::Main => t.tr("settings-default-device"),
-        Bus::Cue => t.tr("settings-none"),
+    // An empty Main route plays on the default output, and so does the
+    // library's Cue when it falls back to it (LB46).
+    let default_output = match bus {
+        Bus::Main => true,
+        Bus::Cue => owner == Owner::Library && scene.state.config.outputs.library.default_output,
+    };
+    let none_text = if default_output {
+        t.tr("settings-default-device")
+    } else {
+        t.tr("settings-none")
     };
     let device = |ui: &mut Ui| {
         device_box(
@@ -1447,9 +1452,10 @@ fn route_picker(
             Bus::Main => (t.tr("settings-test-main"), MAIN_TONE_HZ),
             Bus::Cue => (t.tr("settings-test-cue"), CUE_TONE_HZ),
         };
-        // Main without a route plays on the default output; Cue needs one.
+        // Without a route Main plays on the default output, and so does a
+        // Cue that falls back to it; any other Cue needs a route.
         let target = route.clone().or_else(|| {
-            (bus == Bus::Main).then(|| Route {
+            default_output.then(|| Route {
                 backend: backend.unwrap_or_default().to_owned(),
                 device: String::new(),
                 first_channel: 0,

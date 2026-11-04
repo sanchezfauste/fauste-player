@@ -65,6 +65,7 @@ mod services;
 mod settings;
 mod settings_analysis_hints;
 mod settings_layout;
+mod settings_library_phone;
 mod settings_restore;
 mod support;
 mod tab_strip;
