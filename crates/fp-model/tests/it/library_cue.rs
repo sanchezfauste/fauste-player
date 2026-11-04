@@ -419,6 +419,23 @@ fn lb35_closing_the_window_stops_it_and_minimising_does_not() {
     assert_eq!(s.library_cue.transport, Transport::Stopped);
 }
 
+/// LB35, LB45: only closing the window stops the preview; a view change
+/// while it is closed (the phone's Library tab opening a category or
+/// toggling *Whole library*) leaves it playing.
+#[test]
+fn lb35_a_view_change_with_the_window_closed_keeps_it() {
+    let mut s = bar();
+    run(&mut s, Command::PlayLibraryCue);
+    let view = LibraryView {
+        whole_library: true,
+        ..LibraryView::default()
+    };
+    assert!(!view.open);
+    let out = run(&mut s, Command::SetLibraryView(Box::new(view)));
+    assert!(out.is_empty(), "{out:?}");
+    assert_eq!(s.library_cue.transport, Transport::Playing);
+}
+
 #[test]
 fn lb36_the_request_carries_the_library_cue_normalization() {
     let mut s = bar();

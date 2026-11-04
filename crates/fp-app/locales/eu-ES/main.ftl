@@ -651,6 +651,7 @@ phone-library-back = Itzuli kategorietara
 phone-library-search-hint = Bilatu pistak
 phone-library-whole = Liburutegi osoa
 phone-library-empty = Ez dago pistarik
+phone-library-prelisten = Aurrez entzun: { $title }
 music-search = Bilatu musika
 music-folders = Karpetak
 music-artists = Artistak

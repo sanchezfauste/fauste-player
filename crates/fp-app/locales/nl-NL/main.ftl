@@ -651,6 +651,7 @@ phone-library-back = Terug naar de categorieën
 phone-library-search-hint = Nummers zoeken
 phone-library-whole = Hele bibliotheek
 phone-library-empty = Geen nummers
+phone-library-prelisten = { $title } voorbeluisteren
 music-search = Muziek zoeken
 music-folders = Mappen
 music-artists = Artiesten

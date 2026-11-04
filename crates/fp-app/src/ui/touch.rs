@@ -490,6 +490,7 @@ pub(crate) fn phone_middle(
     let players = scene.state.player_ids();
     view_state.phone.settle(&players);
     super::music::follow_request(view_state);
+    super::phone_library::follow_screen(scene, view_state);
     view_state.player_rects.clear();
     match view_state.phone.screen {
         PhoneScreen::Live => live(ui, scene, view_state, covers, &players, landscape),

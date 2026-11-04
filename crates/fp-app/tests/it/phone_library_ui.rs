@@ -532,3 +532,174 @@ fn a_list_whose_category_is_gone_settles_on_the_selector() {
     assert_eq!(view.page, LibraryPage::Selector);
     assert!(view.ticked.is_empty());
 }
+
+// --- Pre-listen from the list (LB45, LB47) ---
+
+const PAUSE: &str = "Pause pre-listen";
+const STOP: &str = "Stop pre-listen";
+
+fn headphones(title: &str) -> String {
+    format!("Pre-listen {title}")
+}
+
+fn cue_commands(fake: &Fake) -> Vec<Command> {
+    fake.take_sent()
+        .into_iter()
+        .filter(|c| {
+            matches!(
+                c,
+                Command::SelectLibraryCue(_)
+                    | Command::PlayLibraryCue
+                    | Command::SetLibraryCuePaused(_)
+                    | Command::StopLibraryCue
+            )
+        })
+        .collect()
+}
+
+/// Rock with the tracks Alpha and Beta, and a library CUE route.
+fn with_tracks() -> (AppState, TrackId, TrackId) {
+    let (mut s, rock) = with_categories();
+    support::give_library_cue_route(&mut s);
+    let a = track(&mut s, "a", "Alpha", "Band", Some(rock));
+    let b = track(&mut s, "b", "Beta", "Band", Some(rock));
+    (s, a, b)
+}
+
+fn previewing(s: &mut AppState, track: TrackId) {
+    fp_model::apply(s, Command::SelectLibraryCue(Some(track))).unwrap();
+    fp_model::apply(s, Command::PlayLibraryCue).unwrap();
+    assert_eq!(s.library_cue.transport, fp_model::Transport::Playing);
+}
+
+#[test]
+fn lb45_the_headphones_start_the_track_from_its_cue_in() {
+    let (s, a, _b) = with_tracks();
+    let (mut h, fake) = rock_list(s);
+    tap(&mut h, &headphones("Alpha"));
+    assert_eq!(
+        cue_commands(&fake),
+        [Command::SelectLibraryCue(Some(a)), Command::PlayLibraryCue]
+    );
+    assert!(
+        !is_ticked(&h, &row("Alpha", "Band")),
+        "the row is not ticked"
+    );
+    assert_eq!(
+        fake.state.load().library_cue.transport,
+        fp_model::Transport::Playing
+    );
+}
+
+#[test]
+fn lb45_another_rows_headphones_switch_a_running_preview() {
+    let (mut s, a, b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = rock_list(s);
+    tap(&mut h, &headphones("Beta"));
+    assert_eq!(cue_commands(&fake), [Command::SelectLibraryCue(Some(b))]);
+}
+
+#[test]
+fn lb45_the_strip_pauses_and_stops() {
+    let (mut s, a, _b) = with_tracks();
+    let (mut h, fake) = rock_list(s.clone());
+    assert!(h.query_by_label(STOP).is_none(), "no strip while stopped");
+    previewing(&mut s, a);
+    fake.state.store(Arc::new(s));
+    h.run_steps(3);
+    assert!(h.query_by_label("Alpha").is_some(), "the strip's title");
+    tap(&mut h, PAUSE);
+    assert_eq!(cue_commands(&fake), [Command::SetLibraryCuePaused(true)]);
+    // Paused: the same button releases it.
+    tap(&mut h, "Pre-listen");
+    assert_eq!(cue_commands(&fake), [Command::SetLibraryCuePaused(false)]);
+    tap(&mut h, STOP);
+    assert_eq!(cue_commands(&fake), [Command::StopLibraryCue]);
+    assert!(h.query_by_label(STOP).is_none(), "the strip goes");
+}
+
+#[test]
+fn lb45_changing_the_list_keeps_the_preview() {
+    let (s, _a, _b) = with_tracks();
+    let (mut h, fake) = rock_list(s);
+    tap(&mut h, &headphones("Alpha"));
+    tap(&mut h, WHOLE);
+    tap(&mut h, BACK);
+    tap(&mut h, "Jazz");
+    assert_eq!(
+        fake.state.load().library_cue.transport,
+        fp_model::Transport::Playing
+    );
+}
+
+#[test]
+fn leaving_the_library_tab_stops_the_preview() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = rock_list(s);
+    tap(&mut h, BACK);
+    assert!(
+        cue_commands(&fake).is_empty(),
+        "the selector is the same tab"
+    );
+    tap(&mut h, "Live");
+    assert_eq!(cue_commands(&fake), [Command::StopLibraryCue]);
+    h.run_steps(3);
+    assert!(cue_commands(&fake).is_empty(), "once");
+}
+
+#[test]
+fn the_system_back_out_of_the_tab_stops_the_preview() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = rock_list(s);
+    assert!(back(&mut h));
+    assert!(back(&mut h));
+    assert!(on_live(&h));
+    assert_eq!(cue_commands(&fake), [Command::StopLibraryCue]);
+}
+
+#[test]
+fn prelisten_of_a_missing_track_starts_nothing() {
+    let (mut s, a, _b) = with_tracks();
+    s.library.get_mut(a).unwrap().file_state = FileState::Missing;
+    let (mut h, fake) = rock_list(s);
+    let label = headphones("Alpha");
+    assert!(h.get_by_label(&label).accesskit_node().is_disabled());
+    tap(&mut h, &headphones("Alpha"));
+    assert!(cue_commands(&fake).is_empty());
+    assert!(!is_ticked(&h, &row("Alpha", "Band")), "nor ticks the row");
+}
+
+#[test]
+fn prelisten_without_a_route_is_disabled() {
+    let (mut s, _a, _b) = with_tracks();
+    s.config.outputs.library.cue = None;
+    s.config.outputs.library.default_output = false;
+    let (h, _fake) = rock_list(s);
+    assert!(
+        h.get_by_label(&headphones("Alpha"))
+            .accesskit_node()
+            .is_disabled()
+    );
+}
+
+#[test]
+fn prelisten_on_a_sounding_output_asks_first() {
+    let (mut s, _a, _b) = with_tracks();
+    let p2 = s.players[1].id;
+    support::on_desk(
+        &mut s,
+        &[
+            fp_model::Holder::PlayerMain(p2),
+            fp_model::Holder::LibraryCue,
+        ],
+    );
+    fp_model::apply(&mut s, Command::Play(p2)).unwrap();
+    let (mut h, fake) = rock_list(s);
+    tap(&mut h, &headphones("Alpha"));
+    h.run_steps(3);
+    assert!(fake.state.load().cue_on_air.request.is_some());
+    assert!(h.query_by_label("Pre-listen anyway").is_some());
+}

@@ -666,6 +666,7 @@ phone-library-back = Wróć do kategorii
 phone-library-search-hint = Szukaj utworów
 phone-library-whole = Cała biblioteka
 phone-library-empty = Brak utworów
+phone-library-prelisten = Odsłuchaj { $title }
 music-search = Szukaj muzyki
 music-folders = Foldery
 music-artists = Wykonawcy

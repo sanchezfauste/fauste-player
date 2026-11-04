@@ -2,7 +2,9 @@
 //! selector (LB38), a category's track list (LB39) and Device music, the
 //! phone's Music screen (phone layout spec §9). The open category is the
 //! shared `library_view.selection` and the search the library window's;
-//! the tab keeps its page, its ticks (LB42) and the bar's target.
+//! the tab keeps its page, its ticks (LB42) and the bar's target. A row's
+//! 🎧 pre-listens on the library CUE, with a slim strip over the list
+//! (LB45); leaving the tab stops it.
 
 use std::collections::HashSet;
 
@@ -12,13 +14,15 @@ use egui::{
 };
 use egui_phosphor::regular as icon;
 use fp_model::{
-    CartColor, Categories, CategoryId, Command, LibrarySelection, PlayerId, PlaylistId, Track,
-    TrackId,
+    AppState, CartColor, Categories, CategoryId, Command, LibrarySelection, PlayerId, PlaylistId,
+    Track, TrackId, Transport,
 };
 
 use super::app::{Scene, ViewState};
+use super::glyphs::{self, TransportAction};
+use super::player::paused_play_style;
 use super::widgets::{self, TileStyle, font, font_medium};
-use super::{format, library, music, theme, touch, track_cells};
+use super::{format, library, music, theme, touch, track_cells, view};
 
 /// The height of a selector row, for a finger (as the Music screen's
 /// group rows).
@@ -282,6 +286,55 @@ fn paint_row(
 
 /// Room at a track row's right for its preview button (LB45).
 const PREVIEW_ROOM: f32 = 44.0;
+/// The preview strip's remaining time.
+const STRIP_COUNTDOWN: f32 = 20.0;
+
+/// What a tap on a track row did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RowTap {
+    Tick,
+    Prelisten,
+}
+
+/// Why `track` cannot be pre-listened (the message key of the window's
+/// Play tooltip), or `None` when it can: the library CUE needs its route
+/// and a playable file (LB32, LB45).
+fn prelisten_blocked(state: &AppState, track: TrackId) -> Option<&'static str> {
+    if !state.config.outputs.library_has_cue() {
+        Some("library-preview-no-route")
+    } else if !state.library.is_playable(track) {
+        Some("library-preview-not-available")
+    } else {
+        None
+    }
+}
+
+/// LB45: pre-listens `track` on the library CUE from its cue-in. A running
+/// or held preview switches to it (LB34); a stopped one starts, and the
+/// model asks first on a sounding on-air output (LB47). A track that
+/// cannot be pre-listened sends nothing.
+pub(crate) fn prelisten(scene: &Scene<'_>, track: TrackId) {
+    if prelisten_blocked(scene.state, track).is_some() {
+        return;
+    }
+    scene.ctl.send(Command::SelectLibraryCue(Some(track)));
+    if scene.state.library_cue.transport == Transport::Stopped {
+        scene.ctl.send(Command::PlayLibraryCue);
+    }
+}
+
+/// LB45: leaving the Library tab (for any other screen, by a tab or by
+/// Back) stops the preview. Called once a phone frame, after the screen
+/// has settled.
+pub(crate) fn follow_screen(scene: &Scene<'_>, view_state: &mut ViewState) {
+    let screen = view_state.phone.screen;
+    let left = view_state.phone_screen_seen == Some(touch::PhoneScreen::Library)
+        && screen != touch::PhoneScreen::Library;
+    view_state.phone_screen_seen = Some(screen);
+    if left && scene.state.library_cue.transport != Transport::Stopped {
+        scene.ctl.send(Command::StopLibraryCue);
+    }
+}
 
 /// The open list (LB39–LB42): the header, the search and the *Whole
 /// library* toggle, the rows, and the selection bar while something is
@@ -313,6 +366,7 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         view.whole_library = !view.whole_library;
         scene.ctl.send(Command::SetLibraryView(Box::new(view)));
     }
+    preview_strip(ui, scene);
     let rows = view_state.library.rows(scene.state);
     let tab = &mut view_state.phone_library;
     // Ticks the search or the scope hides, or the library lost, are not
@@ -340,6 +394,7 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         ui.available_height()
     };
     let mut toggled = None;
+    let mut heard = None;
     egui::ScrollArea::vertical()
         .id_salt("phone-library-tracks")
         .max_height(list_height)
@@ -350,11 +405,16 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                 let Some(track) = scene.state.library.get(id) else {
                     continue;
                 };
-                if track_row(ui, scene, track, tab.ticked.contains(&id)) {
-                    toggled = Some(id);
+                match track_row(ui, scene, track, tab.ticked.contains(&id)) {
+                    Some(RowTap::Tick) => toggled = Some(id),
+                    Some(RowTap::Prelisten) => heard = Some(id),
+                    None => {}
                 }
             }
         });
+    if let Some(id) = heard {
+        prelisten(scene, id);
+    }
     if let Some(id) = toggled {
         match tab.ticked.iter().position(|t| *t == id) {
             Some(at) => {
@@ -369,6 +429,76 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         let picked = music::Picked::Tracks(&mut tab.ticked);
         music::selection_bar(ui, scene, picked, &mut tab.target, shown, wide);
     }
+}
+
+/// LB45: the slim strip over the list while the library CUE runs or is
+/// held: Pause/Play, Stop, the remaining time and the title. No waveform.
+fn preview_strip(ui: &mut Ui, scene: &Scene<'_>) {
+    let t = scene.i18n;
+    let cue = &scene.state.library_cue;
+    if cue.transport == Transport::Stopped {
+        return;
+    }
+    // The engine's position only while it is the strip's track.
+    let position = scene
+        .telemetry
+        .library_cue
+        .filter(|tel| Some(tel.track) == cue.track)
+        .map(|tel| tel.position_secs);
+    let Some(v) = view::library_cue_view(scene.state, position) else {
+        return;
+    };
+    let paused = v.transport == Transport::Paused;
+    let blink = widgets::blink(scene.time);
+    let size = vec2(touch::TARGET, touch::TARGET);
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
+        let (label, action, style) = if paused {
+            (
+                t.tr("library-preview-play"),
+                TransportAction::Play,
+                paused_play_style(blink),
+            )
+        } else {
+            (
+                t.tr("library-preview-pause"),
+                TransportAction::Pause,
+                TileStyle::plain(),
+            )
+        };
+        let toggle = widgets::tile(ui, size, &label, true, style, |p, r, c| {
+            glyphs::paint(p, r, action, 16.0, c)
+        });
+        if touch::tapped(ui, &toggle) {
+            scene.ctl.send(Command::SetLibraryCuePaused(!paused));
+        }
+        let stop = widgets::tile(
+            ui,
+            size,
+            &t.tr("library-preview-stop"),
+            true,
+            TileStyle::plain(),
+            |p, r, c| glyphs::paint(p, r, TransportAction::Stop, 16.0, c),
+        );
+        if touch::tapped(ui, &stop) {
+            scene.ctl.send(Command::StopLibraryCue);
+        }
+        widgets::countdown(
+            ui,
+            v.remaining.unwrap_or(f64::NAN),
+            theme::TEXT,
+            STRIP_COUNTDOWN,
+        );
+        ui.add(
+            egui::Label::new(
+                egui::RichText::new(v.title.clone())
+                    .font(font(15.0))
+                    .color(theme::TEXT),
+            )
+            .selectable(false)
+            .truncate(),
+        );
+    });
 }
 
 /// The list's header: the back button, the list's name and room for its
@@ -441,9 +571,10 @@ fn whole_toggle(ui: &mut Ui, scene: &Scene<'_>) -> bool {
 }
 
 /// A library track: a check box, the title (or the file name) over the
-/// artist, its status marks (§7.4), the duration and room for its preview
-/// button. Its label joins title, artist and duration; true when tapped.
-fn track_row(ui: &mut Ui, scene: &Scene<'_>, track: &Track, ticked: bool) -> bool {
+/// artist, its status marks (§7.4), the duration and its 🎧 (LB45). Its
+/// label joins title, artist and duration. A tap on the 🎧, enabled or
+/// not, never ticks the row.
+fn track_row(ui: &mut Ui, scene: &Scene<'_>, track: &Track, ticked: bool) -> Option<RowTap> {
     let (rect, response) =
         ui.allocate_exact_size(vec2(ui.available_width(), music::TRACK_ROW), Sense::click());
     let title = if track.title.is_empty() {
@@ -460,7 +591,7 @@ fn track_row(ui: &mut Ui, scene: &Scene<'_>, track: &Track, ticked: bool) -> boo
     let label = music::row_label(&title, artist, duration.as_deref());
     response.widget_info(|| WidgetInfo::selected(Role::CheckBox, true, ticked, &label));
     if !ui.is_rect_visible(rect) {
-        return touch::tapped(ui, &response);
+        return touch::tapped(ui, &response).then_some(RowTap::Tick);
     }
     music::paint_check(ui, rect, ticked);
     let right = rect.right() - PREVIEW_ROOM;
@@ -488,5 +619,45 @@ fn track_row(ui: &mut Ui, scene: &Scene<'_>, track: &Track, ticked: bool) -> boo
         marks_right
     };
     music::paint_lines(ui, rect, text_right, &title, artist);
-    touch::tapped(ui, &response)
+    // Over the row, so it takes its own taps.
+    let button = Rect::from_min_max(pos2(rect.right() - touch::TARGET, rect.top()), rect.max);
+    if preview_button(ui, scene, track, &title, button) {
+        return Some(RowTap::Prelisten);
+    }
+    let on_button = response
+        .interact_pointer_pos()
+        .is_some_and(|p| button.contains(p));
+    (touch::tapped(ui, &response) && !on_button).then_some(RowTap::Tick)
+}
+
+/// A row's 🎧 in `rect`: dimmed, with the window's reason in its tooltip,
+/// when the track cannot be pre-listened; true when tapped.
+fn preview_button(ui: &mut Ui, scene: &Scene<'_>, track: &Track, title: &str, rect: Rect) -> bool {
+    let t = scene.i18n;
+    let blocked = prelisten_blocked(scene.state, track.id);
+    let label = t.tr_args("phone-library-prelisten", &[("title", title.into())]);
+    let tip = blocked.map_or_else(|| label.clone(), |key| t.tr(key));
+    let style = TileStyle {
+        border: Color32::TRANSPARENT,
+        ..TileStyle::plain()
+    };
+    let mut child = ui.new_child(UiBuilder::new().max_rect(rect));
+    let response = widgets::tile_without_tooltip(
+        &mut child,
+        rect.size(),
+        &label,
+        blocked.is_none(),
+        style,
+        |p, r, c| {
+            p.text(
+                r.center(),
+                Align2::CENTER_CENTER,
+                icon::HEADPHONES,
+                font(20.0),
+                c,
+            );
+        },
+    )
+    .on_hover_text(tip);
+    touch::tapped(&child, &response)
 }

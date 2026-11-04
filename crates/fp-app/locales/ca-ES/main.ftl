@@ -651,6 +651,7 @@ phone-library-back = Tornar a les categories
 phone-library-search-hint = Cerca pistes
 phone-library-whole = Tota la biblioteca
 phone-library-empty = No hi ha pistes
+phone-library-prelisten = Preescolta { $title }
 music-search = Cerca música
 music-folders = Carpetes
 music-artists = Artistes

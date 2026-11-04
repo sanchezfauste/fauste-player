@@ -126,6 +126,9 @@ pub(crate) struct ViewState {
     pub music: super::music::MusicView,
     /// The phone's Library tab (track library spec §11.1).
     pub phone_library: super::phone_library::PhoneLibraryView,
+    /// The phone screen the last phone frame showed: leaving the Library
+    /// tab stops its preview (LB45).
+    pub phone_screen_seen: Option<super::touch::PhoneScreen>,
     /// The device's music, where the platform lists it (Android).
     pub media: Option<MediaBrowser>,
     /// Whether this frame draws a phone's views (no desktop panel buttons).

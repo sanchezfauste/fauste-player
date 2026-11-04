@@ -651,6 +651,7 @@ phone-library-back = Volver ás categorías
 phone-library-search-hint = Buscar pistas
 phone-library-whole = Toda a biblioteca
 phone-library-empty = Non hai pistas
+phone-library-prelisten = Preescoitar { $title }
 music-search = Buscar música
 music-folders = Cartafoles
 music-artists = Artistas
