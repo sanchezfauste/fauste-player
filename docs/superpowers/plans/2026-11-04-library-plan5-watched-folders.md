@@ -133,9 +133,12 @@ tracks…*; §13 `library.watch_debounce_ms`; §14; §16 item 5; §17).
   (`cfg!(target_os = "android")`), which has no file-system watching.
   *Remove missing tracks…* is offered everywhere the tree is.
 - **`notify` is CC0-1.0**, a licence not yet in `deny.toml` and
-  `about.toml`. CC0-1.0 is GPL-compatible; the plan adds it to both lists
-  (Task 3). If the maintainer objects at review, the fallback is a
-  `[[licenses.exceptions]]` entry for `notify` alone.
+  `about.toml` (its own dependencies are MIT, ISC or Apache-2.0, already
+  allowed). The spec names `notify` (LB22). CC0-1.0 is GPL-compatible but
+  grants no patent licence, so it is allowed for `notify` alone, not
+  globally: a `[[licenses.exceptions]]` entry in `deny.toml` and, in
+  `about.toml`, the narrowest per-crate acceptance cargo-about supports
+  (Task 3). A new CC0 crate must be accepted on its own.
 
 ---
 
@@ -364,8 +367,11 @@ tracks…*; §13 `library.watch_debounce_ms`; §14; §16 item 5; §17).
 
 - [ ] **Step 3: Add the dependency.** `notify = "8.2"` in the workspace
   table; in `fp-app`'s desktop-only dependency table `notify.workspace =
-  true`. Add `"CC0-1.0"` to `deny.toml` `[licenses] allow` and
-  `about.toml` `accepted` (ruling above). Run `cargo deny check`;
+  true`. Allow `CC0-1.0` for `notify` alone: a `[[licenses.exceptions]]`
+  entry (`crate = "notify"`, `allow = ["CC0-1.0"]`) in `deny.toml`, and in
+  `about.toml` the narrowest per-crate acceptance cargo-about supports (a
+  global `accepted` entry only if it has none; say so in the report). Check
+  `scripts/package/notices.sh` still renders (ruling above). Run `cargo deny check`;
   Expected: `advisories ok, bans ok, licenses ok, sources ok`.
 
 - [ ] **Step 4: Implement.** `Debouncer` over a `HashMap<PathBuf,
