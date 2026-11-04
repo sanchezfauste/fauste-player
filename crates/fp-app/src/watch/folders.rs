@@ -4,7 +4,10 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, PoisonError, TryLockError};
 use std::time::{Duration, Instant};
+
+use crossbeam_channel::{Receiver, Sender};
 
 use fp_model::{AppState, Categories, CategoryId, Command, FileState, TrackId, watching_category};
 
@@ -20,8 +23,55 @@ pub(crate) struct WatchOutcome {
     pub returned: Vec<TrackId>,
 }
 
+enum Request {
+    Watch(PathBuf),
+    Unwatch(PathBuf),
+}
+
+type SharedWatcher = Arc<Mutex<Box<dyn FolderWatcher>>>;
+
+/// The `fp-folder-watch` thread: registering a folder with the system can
+/// walk a whole tree or wait on a share, so it never runs on the services
+/// thread. It ends when `requests` closes.
+struct WatchThread {
+    requests: Sender<Request>,
+    results: Receiver<(PathBuf, Result<(), String>)>,
+}
+
+impl WatchThread {
+    /// `None` (logged) when the thread cannot start.
+    fn spawn(watcher: SharedWatcher) -> Option<WatchThread> {
+        let (requests, request_rx) = crossbeam_channel::unbounded::<Request>();
+        let (result_tx, results) = crossbeam_channel::unbounded();
+        let spawned = std::thread::Builder::new()
+            .name("fp-folder-watch".to_owned())
+            .spawn(move || {
+                while let Ok(request) = request_rx.recv() {
+                    let mut watcher = watcher.lock().unwrap_or_else(PoisonError::into_inner);
+                    match request {
+                        Request::Watch(folder) => {
+                            let result = watcher.watch(&folder);
+                            if result_tx.send((folder, result)).is_err() {
+                                break;
+                            }
+                        }
+                        Request::Unwatch(folder) => watcher.unwatch(&folder),
+                    }
+                }
+            });
+        match spawned {
+            Ok(_) => Some(WatchThread { requests, results }),
+            Err(e) => {
+                tracing::error!(error = %e, "cannot start the folder watch thread; folders are not followed");
+                None
+            }
+        }
+    }
+}
+
 pub(crate) struct FolderWatch {
-    watcher: Box<dyn FolderWatcher>,
+    watcher: SharedWatcher,
+    thread: Option<WatchThread>,
     status: WatchCell,
     /// `None` when the thread could not start: nothing is scanned.
     scanner: Option<Scanner>,
@@ -47,7 +97,9 @@ pub(crate) struct FolderWatch {
 
 impl FolderWatch {
     pub(crate) fn new(watcher: Box<dyn FolderWatcher>, status: WatchCell) -> Self {
+        let watcher: SharedWatcher = Arc::new(Mutex::new(watcher));
         Self {
+            thread: WatchThread::spawn(Arc::clone(&watcher)),
             watcher,
             status,
             scanner: Scanner::spawn(),
@@ -65,6 +117,7 @@ impl FolderWatch {
     }
 
     /// How many scan jobs were sent.
+    #[cfg(feature = "test-hooks")]
     pub(crate) fn scans(&self) -> u64 {
         self.scans
     }
@@ -81,6 +134,7 @@ impl FolderWatch {
             returned: Vec::new(),
         };
         self.follow_categories(state);
+        self.take_watch_results();
         self.take_events(now);
         for answer in self
             .scanner
@@ -129,7 +183,10 @@ impl FolderWatch {
             .cloned()
             .collect();
         for folder in dropped {
-            self.watcher.unwatch(&folder);
+            if let Some(thread) = &self.thread {
+                let _ = thread.requests.send(Request::Unwatch(folder.clone()));
+            }
+            self.debouncer.purge_under(&folder);
             self.troubles.remove(&folder);
             self.not_followed.remove(&folder);
             self.roots.remove(&folder);
@@ -138,22 +195,45 @@ impl FolderWatch {
             if self.folders.contains_key(folder) {
                 continue;
             }
-            if let Err(why) = self.watcher.watch(folder) {
-                tracing::warn!(
-                    folder = %folder.display(),
-                    %why,
-                    "a watched folder is not followed; it is scanned at start and on retries only"
-                );
-                self.not_followed.insert(folder.clone());
+            if let Some(thread) = &self.thread {
+                let _ = thread.requests.send(Request::Watch(folder.clone()));
             }
             self.roots.insert(folder.clone());
         }
         self.folders = wanted;
     }
 
+    /// What the watch thread did: a folder the system refused is scanned
+    /// (already queued) but not followed.
+    fn take_watch_results(&mut self) {
+        let Some(thread) = &self.thread else {
+            return;
+        };
+        for (folder, result) in thread.results.try_iter() {
+            if let Err(why) = result
+                && self.folders.contains_key(&folder)
+            {
+                tracing::warn!(
+                    folder = %folder.display(),
+                    %why,
+                    "a watched folder is not followed; it is scanned at start and on retries only"
+                );
+                self.not_followed.insert(folder);
+            }
+        }
+    }
+
     /// (2) Events wait for their path to be quiet.
     fn take_events(&mut self, now: Instant) {
-        for event in self.watcher.events() {
+        // A watch call in progress holds the watcher: the events stay
+        // queued in it until the next round.
+        let events = match self.watcher.try_lock() {
+            Ok(mut watcher) if self.thread.is_some() => watcher.events(),
+            Ok(_) => Vec::new(),
+            Err(TryLockError::Poisoned(e)) => e.into_inner().events(),
+            Err(TryLockError::WouldBlock) => Vec::new(),
+        };
+        for event in events {
             match event {
                 FolderEvent::Touched(path) => {
                     if self.folders.keys().any(|folder| path.starts_with(folder)) {

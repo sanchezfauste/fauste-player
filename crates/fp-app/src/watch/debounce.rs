@@ -32,6 +32,11 @@ impl Debouncer {
         due
     }
 
+    /// Forgets the paths at or under `folder` (it is no longer watched).
+    pub fn purge_under(&mut self, folder: &std::path::Path) {
+        self.last.retain(|path, _| !path.starts_with(folder));
+    }
+
     pub fn is_empty(&self) -> bool {
         self.last.is_empty()
     }

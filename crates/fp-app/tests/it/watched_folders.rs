@@ -9,10 +9,11 @@
 //! the categories. Time is driven with `now`, never waited for.
 
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-use fp_app::watch::FolderEvent;
-use fp_model::{AppState, CategoryId, Command, TrackKind, apply};
+use fp_app::watch::{FolderEvent, FolderTrouble, FolderWatcher};
+use fp_model::{AppState, CategoryId, Command, FileState, TrackKind, apply};
 
 use crate::support::FakeWatcher;
 use crate::support::services_rig::{Rig, rig_with, wav};
@@ -111,7 +112,7 @@ fn the_start_rescan_files_the_folder_into_its_category() {
             .iter()
             .all(|t| t.category == Some(ids) && t.kind == TrackKind::Jingle)
     );
-    assert_eq!(fake.watched(), vec![ids_folder]);
+    r.run_until("watched", |_| fake.watched() == vec![ids_folder.clone()]);
 }
 
 #[test]
@@ -213,12 +214,12 @@ fn a_scan_answer_for_a_category_deleted_meanwhile_adds_nothing() {
     let ids = ids.unwrap();
     // The first step sends the start scan.
     r.services.step(r.now);
-    assert_eq!(fake.watched().len(), 1);
+    assert_eq!(r.services.folder_scans(), 1);
     r.handle.send(Command::DeleteCategory(ids));
     r.conductor.tick(r.now);
     // The next step takes the answer, now for a category that is gone.
     r.services.step(r.now);
-    assert!(fake.watched().is_empty(), "no longer watched");
+    r.run_until("not watched", |_| fake.watched().is_empty());
     quiet_for(&mut r, 500);
     assert_eq!(tracks(&r), 0, "nothing joined, not even uncategorised");
 }
@@ -300,4 +301,106 @@ fn a_bad_stored_folder_is_not_watched() {
     fake.push(FolderEvent::Rescan);
     quiet_for(&mut r, 300);
     assert_eq!(r.services.folder_scans(), 0);
+}
+
+#[test]
+fn a_refused_folder_is_not_followed_but_still_scanned() {
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    touch(&ids_folder.join("a.mp3"));
+    touch(&ids_folder.join("b.mp3"));
+    let mut ids = None;
+    let fake = FakeWatcher::default();
+    fake.refuse(ids_folder.clone(), true);
+    let mut r = rig_with(&[], dir, Duration::ZERO, |s| {
+        ids = Some(create(s, "IDs", TrackKind::Jingle, Some(&ids_folder)));
+    });
+    r.services.set_watcher(Box::new(fake.clone()));
+    let ids = ids.unwrap();
+    let status = r.services.watch_status();
+    r.run_until("not followed", |_| {
+        status.load().troubles.get(&ids) == Some(&FolderTrouble::NotFollowed)
+    });
+    r.run_until("both tracks", |r| tracks(r) == 2);
+    assert!(fake.watched().is_empty());
+}
+
+/// A watcher whose `watch` waits for the test.
+struct Blocking {
+    release: crossbeam_channel::Receiver<()>,
+    entered: crossbeam_channel::Sender<()>,
+    watched: Arc<Mutex<Vec<PathBuf>>>,
+}
+
+impl FolderWatcher for Blocking {
+    fn watch(&mut self, folder: &Path) -> Result<(), String> {
+        let _ = self.entered.send(());
+        let _ = self.release.recv();
+        self.watched.lock().unwrap().push(folder.to_path_buf());
+        Ok(())
+    }
+    fn unwatch(&mut self, _: &Path) {}
+    fn events(&mut self) -> Vec<FolderEvent> {
+        Vec::new()
+    }
+}
+
+#[test]
+fn a_blocked_watch_call_does_not_stall_the_services_step() {
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    touch(&ids_folder.join("a.mp3"));
+    let (release_tx, release) = crossbeam_channel::unbounded();
+    let (entered_tx, entered) = crossbeam_channel::unbounded();
+    let watched = Arc::new(Mutex::new(Vec::new()));
+    let mut r = rig_with(&[], dir, Duration::ZERO, |s| {
+        create(s, "IDs", TrackKind::Jingle, Some(&ids_folder));
+    });
+    r.services.set_watcher(Box::new(Blocking {
+        release,
+        entered: entered_tx,
+        watched: watched.clone(),
+    }));
+    // Steps return while the watch call is stuck, and the scan goes on.
+    r.run_until("the watch call started and the file joined", |r| {
+        entered.try_recv().is_ok() || tracks(r) == 1
+    });
+    r.run_until("the file joined", |r| tracks(r) == 1);
+    assert!(watched.lock().unwrap().is_empty(), "still blocked");
+    release_tx.send(()).unwrap();
+    r.run_until("watched", |_| !watched.lock().unwrap().is_empty());
+}
+
+#[test]
+fn a_dropped_folder_forgets_its_pending_events() {
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    let a = wav(&ids_folder, "a.wav", 1);
+    let mut ids = None;
+    let (mut r, fake) = watching(dir, |s| {
+        ids = Some(create(s, "IDs", TrackKind::Jingle, Some(&ids_folder)));
+    });
+    let ids = ids.unwrap();
+    r.run_until("analysed", |r| {
+        let m = r.handle.model.load();
+        m.library.len() == 1 && m.library.iter().all(|t| t.analyzed)
+    });
+    r.run_until("watched", |_| !fake.watched().is_empty());
+    quiet_for(&mut r, 300);
+    // An event waits for its quiet period; the folder is dropped and the
+    // file deleted meanwhile.
+    fake.push(FolderEvent::Touched(a.clone()));
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    r.handle.send(Command::SetWatchedFolder {
+        category: ids,
+        folder: None,
+    });
+    r.conductor.tick(r.now);
+    r.services.step(r.now);
+    std::fs::remove_file(&a).unwrap();
+    r.now += Duration::from_secs(5);
+    quiet_for(&mut r, 500);
+    let model = r.handle.model.load();
+    assert!(model.library.iter().all(|t| t.file_state == FileState::Ok));
 }
