@@ -4,8 +4,8 @@
 use crate::common::fixture;
 use fp_model::library_cue::LibraryCue;
 use fp_model::{
-    AppState, BusyCause, Config, EngineEvent, Holder, OutputDevice, Route, TrackId, Transport,
-    causes, configured_route, holders, on_event,
+    AppState, BusyCause, Config, EngineEvent, Holder, LibraryRoutes, OutputDevice, Route, TrackId,
+    Transport, causes, configured_route, holders, on_event,
 };
 
 fn route(device: &str, first_channel: u16) -> Route {
@@ -467,8 +467,6 @@ fn rule10_a_restored_state_has_the_library_cue_stopped() {
 }
 
 // ---- LB46: the default output as the library CUE's fallback ----
-
-use fp_model::LibraryRoutes;
 
 #[test]
 fn lb46_the_default_output_gives_the_library_a_cue() {

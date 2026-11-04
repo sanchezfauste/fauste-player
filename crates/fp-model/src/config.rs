@@ -600,7 +600,8 @@ impl OutputsConfig {
     /// a configured Main route (any player's or the cartwall's). A missing
     /// Main route goes to the default output, which only the engine
     /// resolves: it is not counted here (`cue_on_air::cue_is_on_air` sees
-    /// it once placed), and neither is a library CUE on the default output. False for a holder that is not a Cue.
+    /// it once placed), and neither is a library CUE on the default output.
+    /// False for a holder that is not a Cue.
     pub fn cue_shares_main(&self, cue: crate::live::Holder) -> bool {
         use crate::live::Holder;
         let route = match cue {

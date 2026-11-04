@@ -1039,6 +1039,15 @@ impl Engine {
         } else if let Some(route) = unopened {
             self.report_cartwall_route(Holder::CartwallMain, route);
         }
+        // LB46: a library CUE without a route follows the default output.
+        if self.settings.library_routes.cue.is_none() && self.settings.library_routes.default_output
+        {
+            if self.library.is_some() {
+                self.move_library_cue(None, true);
+            } else {
+                self.report_library_route(None);
+            }
+        }
         self.events.push(EngineEvent::AudioSystemInUse {
             configured: backend.clone(),
             in_use: self.backend_in_use.clone(),

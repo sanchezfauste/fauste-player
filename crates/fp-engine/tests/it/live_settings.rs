@@ -914,6 +914,45 @@ fn l17_a_new_audio_system_moves_only_the_holders_on_the_default_output() {
     assert!(!r.main.is_open(), "nothing uses it any more");
 }
 
+/// LB46: a library CUE without a route follows the default output, opened
+/// or not.
+#[test]
+fn lb46_a_new_audio_system_moves_the_library_cue_on_the_default_output() {
+    for opened in [false, true] {
+        let mut c = config();
+        c.outputs.library.default_output = true;
+        let mut r = rig_with(&c);
+        if opened {
+            r.act(EngineAction::StartLibraryCue {
+                request: fp_model::LibraryCueRequest {
+                    track: fp_model::TrackId(1),
+                    path: "track1".into(),
+                    from_secs: 0.0,
+                    format: None,
+                    normalization: fp_model::Normalization::default(),
+                },
+                paused: true,
+            });
+            r.settle();
+        }
+        r.take_events();
+        r.act(EngineAction::ApplyAudioSystem {
+            backend: Some("null".into()),
+            force: true,
+        });
+        r.settle();
+        let events = r.take_events();
+        assert!(
+            events.iter().any(|e| matches!(
+                e,
+                EngineEvent::Placed { holder: Holder::LibraryCue, device, .. }
+                    if device.backend == "null"
+            )),
+            "opened {opened}: {events:?}"
+        );
+    }
+}
+
 #[test]
 fn l17_the_audio_system_waits_until_every_device_is_quiet() {
     let mut r = two_players();
