@@ -539,6 +539,7 @@ plus the mixer's DSD mode.
 | `StartCue`, `StopCue` | a separate source on the player's Cue route. The model sends `StartCue` only for a player with a Cue route (`OutputsConfig::player_has_cue`); a Cue route on the Main output is placed there like any holder (on-air pre-listen spec CA8), and the model decides when such a pre-listen may sound (CA3–CA5). A Cue route to a backend this machine does not have (`cue_target`) ends the CUE at once with `CueEnded`. A pre-listen that shares a channel with a Main (`Engine::cue_on_air`) never reopens a bit-perfect bus at its file's rate (CA7). Its meters never reach a player's or the cartwall's readings (CA9), and over a DSD stream it follows the device's DSD mix policy like a cart (CA10) |
 | `SeekCue` | replace the CUE source by one at the target (the CUE plays whole files); it starts idle when the CUE is held, so a held CUE stays held |
 | `SetCuePaused` | `BusCommand::Pause`/`Resume` with the pause ramp for an audible source; a source that has not started yet is held idle and started on release. `PlayerRuntime::cue_paused` remembers the state and a new CUE clears it |
+| `StartLibraryCue`, `StopLibraryCue`, `SeekLibraryCue`, `SetLibraryCuePaused` | the library window's pre-listen (see "Library CUE"). The model sends `StartLibraryCue` only with a library Cue route (`OutputsConfig::library_has_cue`); a route to a missing backend ends it at once with `LibraryCueEnded { track }` |
 | `AddPlayer`, `RemovePlayer` | create or retire a worker and its bookkeeping |
 | `LoadPaused` | restore a session: load the source at a position, paused |
 | `UpdateSettings` | take a new configuration for new buses and holders, and the tuning (see "Live settings") |
@@ -623,6 +624,39 @@ added.
   (wrapped within the loop for looped carts).
 - **Known limit:** a marker change on a cart's track applies from the next
   fire. A cart already playing keeps the end it started with.
+
+## Library CUE
+
+The library window pre-listens one track at a time on `Holder::LibraryCue`
+(`engine/library.rs`, track library spec §8), on the cartwall's pattern. No
+real-time code is added.
+
+- **Worker and route:** a worker of its own (`fp-library-cue`), created on
+  the first `StartLibraryCue`, decodes it. It plays on the route
+  `outputs.library.cue`; a route on a Main output plays there (CA8), and
+  `Engine::cue_on_air` applies (CA7: it never reopens a bit-perfect bus).
+- **Placement before first use:** the engine reports the holder's `Placed`
+  (or `Unplaced`) from its start and after each settings update until the
+  worker exists, as for the cartwall, so Settings never shows a pending
+  change for a route that needs no apply (L3, L13).
+- **Playing:** the source plays from the request's `from_secs` (the cue-in,
+  or where a stopped click set) to the end of the file, with the request's
+  fixed normalization gain. `SeekLibraryCue` replaces the source by one at
+  the target, and a held preview stays held; `SetLibraryCuePaused` pauses
+  with the pause ramp, or holds a source that has not started yet.
+- **De-click:** every tail (a stop, a seek, a replacement) ramps down over `declick_ms` and is released when the mixer
+  finishes it, because the preview may share a channel with a Main.
+- **Forced rate change:** a source on a bus whose rate is forced is opened
+  again at its position measured at the old rate (held if it was held);
+  tails ramping down there are cut (`follow_forced_rate_library`).
+- **Events:** mixer `Finished` becomes `LibraryCueEnded { track }`, also
+  for a worker failure once its buffered audio has played; the model ignores
+  the end of a track that is no longer the bar's.
+- **Telemetry:** `Telemetry.library_cue` (`LibraryCueTelemetry`) carries the
+  track, its position and the preview's own `MeterReading`, from a
+  `MeterState` of its own in the conductor. It never reaches a player's or
+  the cartwall's reading (CA9); its maximum restarts when another track is
+  pre-listened, and `reset_library_cue_meter_max` restarts it.
 
 ## Live settings
 

@@ -14,8 +14,9 @@ Markers set by hand always win: a new analysis never replaces them.
 
 ## Editing markers
 
-On a player's waveform, or on the waveform of its CUE window (the same
-menu and handles; a change shows in both at once):
+On a player's waveform, on the waveform of its CUE window or on the
+[library window's preview bar](library.md#pre-listening) (the same menu and
+handles; a change shows everywhere the track is at once):
 
 - **Right-click** where you want a marker and choose **Set cue in here**,
   **Set intro end here**, **Set outro start here**, **Set MIX point here** or

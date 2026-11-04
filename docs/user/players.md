@@ -212,9 +212,9 @@ on air, so:
 
 - while nothing plays on that output, CUE starts at once;
 - while something plays there (a player playing or paused, a cart, another
-  pre-listen), CUE asks first: **Pre-listen anyway** or **Cancel** (Cancel
+  pre-listen, the library's pre-listen), CUE asks first: **Pre-listen anyway** or **Cancel** (Cancel
   is the default: Esc and Enter cancel). The same question comes from the
-  track menu, the CUE window and the cartwall;
+  track menu, the CUE window, the cartwall and the library window;
 - when something starts on that output while a pre-listen you did not
   confirm plays there, the pre-listen stops and the status bar says why. A
   pre-listen you confirmed keeps playing.
