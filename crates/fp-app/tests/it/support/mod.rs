@@ -397,6 +397,8 @@ pub struct FakePlatform {
     pub asked: Mutex<Vec<String>>,
     /// Folders are picked through this browser, as on Android (MB7).
     pub browser: Option<fp_app::ui::media_browser::MediaBrowser>,
+    /// The folder a desktop dialog answers with when there is no browser.
+    pub folder: Option<PathBuf>,
 }
 
 impl fp_app::platform::Platform for FakePlatform {
@@ -417,7 +419,9 @@ impl fp_app::platform::Platform for FakePlatform {
 
     fn pick_folder(&self, start: Option<PathBuf>) -> Option<PathBuf> {
         self.asked.lock().unwrap().push("folder".into());
-        let browser = self.browser.as_ref()?;
+        let Some(browser) = self.browser.as_ref() else {
+            return self.folder.clone();
+        };
         let mode = fp_app::ui::media_browser::BrowseMode::Folder;
         browser.browse(mode, start).into_iter().next()
     }

@@ -825,6 +825,21 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = Kein Titel wird aus der Bibliothek entfernt.
 library-delete-files-kept = Die Dateien selbst werden nicht gelöscht.
 library-delete-confirm = Löschen
+library-menu-watch-folder = Ordner überwachen…
+library-menu-change-watched-folder = Überwachten Ordner ändern…
+library-menu-stop-watching = Ordner nicht mehr überwachen
+library-menu-remove-missing = Fehlende Titel entfernen…
+library-tree-watching = Überwacht { $folder }
+library-tree-folder-missing = Überwachter Ordner nicht gefunden: { $folder }. Er wird erneut gesucht.
+library-tree-folder-unreadable = Überwachter Ordner kann nicht gelesen werden: { $folder }. Es wird erneut versucht.
+library-tree-folder-not-followed = Änderungen in { $folder } werden nicht verfolgt; der Ordner wird beim Start durchsucht und erneut versucht.
+library-remove-missing-title = Fehlende Titel entfernen
+library-remove-missing-question = { $count ->
+    [one] { $count } Titel von { $name } hat keine Datei mehr und wird nicht verwendet.
+   *[other] { $count } Titel von { $name } haben keine Datei mehr und werden nicht verwendet.
+} Aus der Bibliothek entfernen? Verwendete Titel bleiben erhalten; keine Datei wird angetastet.
+library-remove-missing-confirm = Entfernen
+library-remove-missing-none = { $name } hat keine unbenutzten Titel mit fehlender Datei.
 library-remove-title = { $count ->
     [one] { $count } Titel aus der Bibliothek entfernen?
    *[other] { $count } Titel aus der Bibliothek entfernen?

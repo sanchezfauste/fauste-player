@@ -825,6 +825,21 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = No es treu cap pista de la biblioteca.
 library-delete-files-kept = Els fitxers no s'esborren.
 library-delete-confirm = Elimina
+library-menu-watch-folder = Vigila una carpeta…
+library-menu-change-watched-folder = Canvia la carpeta vigilada…
+library-menu-stop-watching = Deixa de vigilar la carpeta
+library-menu-remove-missing = Treu les pistes que falten…
+library-tree-watching = Vigila { $folder }
+library-tree-folder-missing = No es troba la carpeta vigilada: { $folder }. Es torna a buscar.
+library-tree-folder-unreadable = No es pot llegir la carpeta vigilada: { $folder }. Es torna a provar.
+library-tree-folder-not-followed = Els canvis a { $folder } no se segueixen; es revisa a l'inici i es torna a provar.
+library-remove-missing-title = Treu les pistes que falten
+library-remove-missing-question = { $count ->
+    [one] { $count } pista de { $name } no té el fitxer i no s'utilitza.
+   *[other] { $count } pistes de { $name } no tenen el fitxer i no s'utilitzen.
+} Voleu treure-les de la biblioteca? Les pistes en ús es conserven; no es toca cap fitxer.
+library-remove-missing-confirm = Treu
+library-remove-missing-none = { $name } no té pistes sense ús amb el fitxer absent.
 library-remove-title = { $count ->
     [one] Vols treure { $count } pista de la biblioteca?
    *[other] Vols treure { $count } pistes de la biblioteca?

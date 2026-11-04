@@ -83,6 +83,9 @@ pub(crate) enum PickTarget {
     Playlist { playlist: PlaylistId, index: usize },
     /// Added to the library, under a category (`None`: uncategorised).
     Library(Option<CategoryId>),
+    /// The folder a category watches (track library spec LB19): the one
+    /// path the folder dialog chose, canonical.
+    WatchedFolder(CategoryId),
 }
 
 /// Files chosen in a file dialog or dropped on the window, read on a
@@ -338,6 +341,8 @@ pub(crate) struct Scene<'a> {
     pub media: &'a MediaCache,
     /// What the analysis is doing (main spec §6.1).
     pub analysis: &'a crate::activity::AnalysisActivity,
+    /// Which watched folders are in trouble (track library spec LB22).
+    pub watch: &'a crate::watch::WatchStatus,
     pub state: &'a AppState,
     pub telemetry: &'a Telemetry,
     /// Seconds since start, for blinking.
@@ -410,6 +415,38 @@ impl Scene<'_> {
             tracing::error!(error = %e, "could not open the file dialog");
         }
     }
+
+    /// The folder dialog for the folder `category` watches, starting in
+    /// the current folder or the music folder. The choice is canonicalised
+    /// on the dialog's helper thread (no file-system call on the UI one).
+    pub(crate) fn pick_watched_folder(&self, category: CategoryId) {
+        let tx = self.picks.clone();
+        let ctx = self.ctx.clone();
+        let start = self
+            .state
+            .categories
+            .get(category)
+            .and_then(|c| c.watched_folder.clone())
+            .or_else(|| self.state.config.ui.music_dir.clone());
+        let platform = self.platform.clone();
+        let spawned = std::thread::Builder::new()
+            .name("fp-folder-dialog".to_owned())
+            .spawn(move || {
+                let paths = platform
+                    .pick_folder(start)
+                    .map(|folder| super::files::canonical_path(&folder))
+                    .into_iter()
+                    .collect();
+                let _ = tx.send(Picked {
+                    target: PickTarget::WatchedFolder(category),
+                    paths,
+                });
+                ctx.request_repaint();
+            });
+        if let Err(e) = spawned {
+            tracing::error!(error = %e, "could not open the folder dialog");
+        }
+    }
 }
 
 pub struct AppUi {
@@ -418,6 +455,8 @@ pub struct AppUi {
     media: MediaCache,
     /// What the analysis is doing, published by the services thread.
     analysis: crate::activity::ActivityCell,
+    /// The watched folders in trouble, published by the services thread.
+    watch: crate::watch::WatchCell,
     services: Option<Sender<ServiceRequest>>,
     pub(crate) view: ViewState,
     covers: HashMap<TrackId, TextureHandle>,
@@ -494,6 +533,7 @@ impl AppUi {
             i18n,
             media,
             analysis: crate::activity::idle_cell(),
+            watch: crate::watch::idle_watch_cell(),
             services: None,
             view: ViewState::default(),
             covers: HashMap::new(),
@@ -532,6 +572,13 @@ impl AppUi {
             #[cfg(feature = "test-hooks")]
             cover_picker: None,
         }
+    }
+
+    /// The watched folders in trouble (`Services::watch_status`), for the
+    /// library tree's marks.
+    pub fn with_watch_status(mut self, cell: crate::watch::WatchCell) -> Self {
+        self.watch = cell;
+        self
     }
 
     /// The services thread's fault counter, shown as a status-bar alert.
@@ -899,6 +946,10 @@ impl AppUi {
                     paths,
                 },
                 PickTarget::Library(category) => Command::AddToLibrary { paths, category },
+                PickTarget::WatchedFolder(category) => Command::SetWatchedFolder {
+                    category,
+                    folder: paths.into_iter().next(),
+                },
             });
         }
         self.tag_outcomes(&state, time);
@@ -911,11 +962,13 @@ impl AppUi {
         self.keyboard(&ctx, &state);
         let pending = fp_model::pending(&state);
         let analysis = self.analysis.load_full();
+        let watch = self.watch.load_full();
         let scene = Scene {
             ctl: self.ctl.as_ref(),
             i18n: &self.i18n,
             media: &self.media,
             analysis: &analysis,
+            watch: &watch,
             state: &state,
             telemetry: &telemetry,
             time,

@@ -825,6 +825,21 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = Ez da pistarik kentzen liburutegitik.
 library-delete-files-kept = Fitxategiak ez dira ezabatzen.
 library-delete-confirm = Ezabatu
+library-menu-watch-folder = Zaindu karpeta…
+library-menu-change-watched-folder = Aldatu zaindutako karpeta…
+library-menu-stop-watching = Utzi karpeta zaintzeari
+library-menu-remove-missing = Kendu falta diren pistak…
+library-tree-watching = { $folder } zaintzen du
+library-tree-folder-missing = Ez da zaindutako karpeta aurkitu: { $folder }. Berriro bilatuko da.
+library-tree-folder-unreadable = Ezin da zaindutako karpeta irakurri: { $folder }. Berriro saiatuko da.
+library-tree-folder-not-followed = { $folder } karpetako aldaketak ez dira jarraitzen; hasieran arakatzen da eta berriro saiatzen da.
+library-remove-missing-title = Kendu falta diren pistak
+library-remove-missing-question = { $count ->
+    [one] { $name } kategoriako { $count } pistak ez du fitxategia eta ez da erabiltzen.
+   *[other] { $name } kategoriako { $count } pistak ez dute fitxategia eta ez dira erabiltzen.
+} Liburutegitik kendu nahi dituzu? Erabiltzen ari diren pistak mantentzen dira; ez da fitxategirik ukitzen.
+library-remove-missing-confirm = Kendu
+library-remove-missing-none = { $name } kategoriak ez du fitxategirik gabeko erabili gabeko pistarik.
 library-remove-title = { $count ->
     [one] { $count } pista kendu liburutegitik?
    *[other] { $count } pista kendu liburutegitik?

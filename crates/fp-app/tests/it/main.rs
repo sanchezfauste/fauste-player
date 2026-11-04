@@ -32,6 +32,7 @@ mod library_paths;
 mod library_preview_ui;
 mod library_table;
 mod library_tree;
+mod library_watch_ui;
 mod library_window;
 mod live_settings;
 mod loudness_ui;

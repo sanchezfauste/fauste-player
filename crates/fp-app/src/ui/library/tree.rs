@@ -20,8 +20,9 @@ use super::super::settings::carts::color_key;
 use super::super::theme;
 use super::super::widgets::{self, TileStyle, font, font_semibold};
 use super::category_dialog::{self, KINDS, kind_key};
-use super::confirm::{Removal, ask_removal};
+use super::confirm::{Removal, ask_removal, ask_remove_missing};
 use super::state::{CountsCache, LibraryUi};
+use crate::watch::FolderTrouble;
 
 /// Where the tree is shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,6 +34,8 @@ pub(crate) enum TreeMode {
     Settings,
 }
 
+/// The width of the ⟳ mark of a category that watches a folder.
+const WATCH_MARK: f32 = 16.0;
 /// The height of the header with the ＋.
 const HEADER_HEIGHT: f32 = 30.0;
 /// The height of one item.
@@ -69,6 +72,10 @@ enum Action {
     Color(CategoryId, Option<CartColor>),
     Kind(CategoryId, TrackKind),
     Delete(CategoryId),
+    /// The folder dialog for the folder the category watches.
+    WatchFolder(CategoryId),
+    StopWatching(CategoryId),
+    RemoveMissing(CategoryId),
     Drag(CategoryId),
 }
 
@@ -291,6 +298,7 @@ fn row(
         info.current_text_value = Some(count.to_string());
         info
     });
+    let watch = category.and_then(|c| watch_mark(scene, c));
     let being_dragged = matches!(item, Item::Category { id, .. } if dragging == Some(id));
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
@@ -347,9 +355,10 @@ fn row(
             rect.right() - 8.0 - count_galley.size().x,
             rect.center().y - count_galley.size().y / 2.0,
         );
+        let mark_width = if watch.is_some() { WATCH_MARK } else { 0.0 };
         let name_rect = Rect::from_min_max(
             pos2(swatch.right() + 8.0, rect.top()),
-            pos2(count_pos.x - 6.0, rect.bottom()),
+            pos2(count_pos.x - 6.0 - mark_width, rect.bottom()),
         );
         let text = if being_dragged {
             theme::NEUTRAL_500
@@ -368,6 +377,47 @@ fn row(
                 text,
             );
         painter.galley(count_pos, count_galley, theme::NEUTRAL_500);
+        if let Some(watch) = &watch {
+            let mark = Rect::from_min_size(
+                pos2(count_pos.x - 6.0 - WATCH_MARK, rect.top()),
+                vec2(WATCH_MARK, ROW_HEIGHT),
+            );
+            let colour = if watch.trouble {
+                theme::AMBER
+            } else {
+                theme::NEUTRAL_400
+            };
+            painter.text(
+                mark.center(),
+                Align2::CENTER_CENTER,
+                icon::ARROWS_CLOCKWISE,
+                font(11.0),
+                colour,
+            );
+        }
+    }
+    if let (Item::Category { id, .. }, Some(watch)) = (item, &watch) {
+        let count_width = ui
+            .painter()
+            .layout_no_wrap(count.to_string(), font(11.0), theme::NEUTRAL_500)
+            .size()
+            .x;
+        let mark = Rect::from_min_size(
+            pos2(
+                rect.right() - 8.0 - count_width - 6.0 - WATCH_MARK,
+                rect.top(),
+            ),
+            vec2(WATCH_MARK, ROW_HEIGHT),
+        );
+        let mark_response = ui.interact(
+            mark,
+            ui.scope_id().with(("library-tree-watch", id)),
+            Sense::hover(),
+        );
+        let text = watch.text.clone();
+        mark_response
+            .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Label, true, text.clone()));
+        mark_response.on_hover_text(&watch.text);
     }
     let mut arrow_clicked = false;
     if let Item::Category {
@@ -412,6 +462,32 @@ fn row(
         });
     }
     rect
+}
+
+/// The ⟳ mark of a category that watches a folder (LB19, LB22): its text
+/// (the folder, or why it is not followed) and whether it is in trouble.
+/// Android has no file-system watching: no mark there.
+struct WatchMark {
+    text: String,
+    trouble: bool,
+}
+
+fn watch_mark(scene: &Scene<'_>, category: &Category) -> Option<WatchMark> {
+    if cfg!(target_os = "android") {
+        return None;
+    }
+    let folder = category.watched_folder.as_ref()?.display().to_string();
+    let trouble = scene.watch.troubles.get(&category.id).copied();
+    let key = match trouble {
+        None => "library-tree-watching",
+        Some(FolderTrouble::Missing) => "library-tree-folder-missing",
+        Some(FolderTrouble::Unreadable) => "library-tree-folder-unreadable",
+        Some(FolderTrouble::NotFollowed) => "library-tree-folder-not-followed",
+    };
+    Some(WatchMark {
+        text: scene.i18n.tr_args(key, &[("folder", folder.into())]),
+        trouble: trouble.is_some(),
+    })
 }
 
 /// The right-click menu of a category.
@@ -475,6 +551,25 @@ fn menu(
     })
     .response
     .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, kind_label.clone()));
+    // File-system watching is desktop only (spec §11).
+    if !cfg!(target_os = "android") {
+        ui.separator();
+        let watching = category.is_some_and(|c| c.watched_folder.is_some());
+        let key = if watching {
+            "library-menu-change-watched-folder"
+        } else {
+            "library-menu-watch-folder"
+        };
+        if item(ui, icon::FOLDER_OPEN, key) {
+            action = Some(Action::WatchFolder(id));
+        }
+        if watching && item(ui, icon::ARROWS_CLOCKWISE, "library-menu-stop-watching") {
+            action = Some(Action::StopWatching(id));
+        }
+    }
+    if item(ui, icon::BROOM, "library-menu-remove-missing") {
+        action = Some(Action::RemoveMissing(id));
+    }
     ui.separator();
     if item(ui, icon::TRASH, "library-menu-delete") {
         action = Some(Action::Delete(id));
@@ -639,6 +734,14 @@ fn act(scene: &Scene<'_>, view_state: &mut ViewState, mode: TreeMode, action: Ac
             scene.ctl.send(Command::SetCategoryKind { category, kind });
         }
         Action::Delete(id) => ask_removal(scene, view_state, Removal::Category(id)),
+        Action::WatchFolder(id) => scene.pick_watched_folder(id),
+        Action::StopWatching(category) => {
+            scene.ctl.send(Command::SetWatchedFolder {
+                category,
+                folder: None,
+            });
+        }
+        Action::RemoveMissing(id) => ask_remove_missing(scene, view_state, id),
         Action::Drag(id) => view_state.library.tree_drag = Some((mode, id)),
     }
 }

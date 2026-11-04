@@ -850,6 +850,23 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = Żaden utwór nie zostanie usunięty z biblioteki.
 library-delete-files-kept = Same pliki nie są usuwane.
 library-delete-confirm = Usuń
+library-menu-watch-folder = Obserwuj folder…
+library-menu-change-watched-folder = Zmień obserwowany folder…
+library-menu-stop-watching = Przestań obserwować folder
+library-menu-remove-missing = Usuń brakujące utwory…
+library-tree-watching = Obserwuje { $folder }
+library-tree-folder-missing = Nie znaleziono obserwowanego folderu: { $folder }. Zostanie wyszukany ponownie.
+library-tree-folder-unreadable = Nie można odczytać obserwowanego folderu: { $folder }. Zostanie podjęta kolejna próba.
+library-tree-folder-not-followed = Zmiany w { $folder } nie są śledzone; folder jest skanowany przy starcie i podejmowana jest kolejna próba.
+library-remove-missing-title = Usuń brakujące utwory
+library-remove-missing-question = { $count ->
+    [one] { $count } utwór z { $name } nie ma pliku i nie jest używany.
+    [few] { $count } utwory z { $name } nie mają pliku i nie są używane.
+    [many] { $count } utworów z { $name } nie ma pliku i nie jest używanych.
+   *[other] { $count } utworów z { $name } nie ma pliku i nie jest używanych.
+} Usunąć je z biblioteki? Używane utwory zostaną zachowane; żaden plik nie zostanie ruszony.
+library-remove-missing-confirm = Usuń
+library-remove-missing-none = { $name } nie ma nieużywanych utworów z brakującym plikiem.
 library-remove-title = { $count ->
     [one] Usunąć { $count } utwór z biblioteki?
     [few] Usunąć { $count } utwory z biblioteki?

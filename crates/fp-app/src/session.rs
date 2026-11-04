@@ -30,6 +30,8 @@ pub struct AppSession {
     pub handle: Arc<ConductorHandle>,
     pub requests: Sender<ServiceRequest>,
     pub activity: ActivityCell,
+    /// The watched folders in trouble (empty where nothing is watched).
+    pub watch: crate::watch::WatchCell,
     pub faults: Arc<AtomicU64>,
     pub media: MediaCache,
     /// The audio systems in use, Null last.
@@ -98,11 +100,13 @@ impl AppSession {
         let requests = services.requests();
         let faults = services.faults();
         let activity = services.activity();
+        let watch = services.watch_status();
         let services = services.spawn()?;
         Ok(Self {
             handle,
             requests,
             activity,
+            watch,
             faults,
             media,
             backends,
@@ -122,6 +126,7 @@ impl AppSession {
         )
         .with_services(self.requests.clone())
         .with_analysis_activity(self.activity.clone())
+        .with_watch_status(self.watch.clone())
         .with_service_faults(self.faults.clone())
         .with_backends(self.backends.clone())
     }

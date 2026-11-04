@@ -825,6 +825,21 @@ library-delete-tracks = { $count ->
 library-delete-no-tracks = Nenhuma faixa é removida da biblioteca.
 library-delete-files-kept = Os ficheiros não são apagados.
 library-delete-confirm = Eliminar
+library-menu-watch-folder = Vigiar pasta…
+library-menu-change-watched-folder = Alterar pasta vigiada…
+library-menu-stop-watching = Deixar de vigiar a pasta
+library-menu-remove-missing = Remover faixas em falta…
+library-tree-watching = Vigia { $folder }
+library-tree-folder-missing = Pasta vigiada não encontrada: { $folder }. Será procurada de novo.
+library-tree-folder-unreadable = Não é possível ler a pasta vigiada: { $folder }. Será tentada de novo.
+library-tree-folder-not-followed = As alterações em { $folder } não são acompanhadas; a pasta é analisada ao iniciar e tentada de novo.
+library-remove-missing-title = Remover faixas em falta
+library-remove-missing-question = { $count ->
+    [one] { $count } faixa de { $name } não tem o ficheiro e não está em uso.
+   *[other] { $count } faixas de { $name } não têm o ficheiro e não estão em uso.
+} Remover da biblioteca? As faixas em uso são mantidas; nenhum ficheiro é tocado.
+library-remove-missing-confirm = Remover
+library-remove-missing-none = { $name } não tem faixas sem uso a que falte o ficheiro.
 library-remove-title = { $count ->
     [one] Remover { $count } faixa da biblioteca?
    *[other] Remover { $count } faixas da biblioteca?
