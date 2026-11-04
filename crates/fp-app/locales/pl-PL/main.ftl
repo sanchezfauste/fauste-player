@@ -784,6 +784,7 @@ flag-analysis-queued = Czeka na analizę
 flag-analysis-running = Teraz analizowany
 menu-reanalyse-queued = Już czeka na analizę
 menu-reanalyse-running = Właśnie jest analizowany
+error-folder-watched = Inna kategoria już obserwuje ten folder.
 error-category-name-empty = Nazwa kategorii nie może być pusta.
 error-category-name-taken = Kategoria o tej nazwie już tu istnieje.
 error-category-too-deep = Kategorii nie można zagnieżdżać tak głęboko.

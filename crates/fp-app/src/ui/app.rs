@@ -2047,6 +2047,7 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError) -> String {
         | ModelError::UnknownCartPosition(_)
         | ModelError::UnknownCategory(_)
         | ModelError::UnknownTrack(_) => i18n.tr("error-not-found"),
+        ModelError::FolderAlreadyWatched(_) => i18n.tr("error-folder-watched"),
         ModelError::CategoryNameEmpty => i18n.tr("error-category-name-empty"),
         ModelError::CategoryNameTaken => i18n.tr("error-category-name-taken"),
         ModelError::CategoryTooDeep => i18n.tr("error-category-too-deep"),

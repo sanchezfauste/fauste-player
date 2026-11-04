@@ -4,6 +4,7 @@
 //! category are the entries with that parent, in list order.
 
 use std::collections::{HashMap, HashSet};
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +27,10 @@ pub struct Category {
     /// The kind a track takes when it is filed under this category.
     #[serde(default)]
     pub kind: TrackKind,
+    /// LB19: the folder this category watches; files that appear there join
+    /// it. At most one category watches a given folder.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub watched_folder: Option<PathBuf>,
 }
 
 /// Every category, in display order.
@@ -168,7 +173,8 @@ impl Categories {
     /// (the first stays); one whose parent is unknown, or the first (in list
     /// order) of each cycle, goes to the top level; and one deeper than
     /// `MAX_CATEGORY_DEPTH` levels goes to the top level with its subtree.
-    /// One warning each. The list is then put in tree order: every parent
+    /// One warning each. A folder watched by several categories stays on the
+    /// first in stored order (LB19). The list is then put in tree order: every parent
     /// before its children, each subtree contiguous. Linear in the number
     /// of categories, without recursion.
     pub fn repaired(mut self) -> (Categories, Vec<String>) {
@@ -185,6 +191,19 @@ impl Categories {
                 false
             }
         });
+        let mut watched: HashSet<PathBuf> = HashSet::new();
+        for c in &mut self.list {
+            let Some(folder) = c.watched_folder.clone() else {
+                continue;
+            };
+            if !watched.insert(folder) {
+                c.watched_folder = None;
+                warnings.push(format!(
+                    "category {} ({:?}) watches a folder another category already watches; cleared",
+                    c.id.0, c.name
+                ));
+            }
+        }
         let position: HashMap<CategoryId, usize> = self
             .list
             .iter()
@@ -420,4 +439,18 @@ pub fn check_name(
         return Err(ModelError::CategoryNameTaken);
     }
     Ok(name.to_string())
+}
+
+/// LB19: the category whose watched folder holds `path`, the innermost when
+/// several do; `None` when none does.
+pub fn watching_category(categories: &Categories, path: &Path) -> Option<CategoryId> {
+    categories
+        .iter()
+        .filter_map(|c| {
+            let folder = c.watched_folder.as_deref()?;
+            path.starts_with(folder)
+                .then(|| (folder.components().count(), c.id))
+        })
+        .max_by_key(|(depth, _)| *depth)
+        .map(|(_, id)| id)
 }

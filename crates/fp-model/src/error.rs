@@ -58,6 +58,9 @@ pub enum ModelError {
     LibraryOnAir(crate::library_rules::OnAirHolds),
     #[error("unknown category {0:?}")]
     UnknownCategory(CategoryId),
+    /// LB19: the category that already watches the folder.
+    #[error("category {0:?} already watches that folder")]
+    FolderAlreadyWatched(CategoryId),
     #[error("a category name must not be empty")]
     CategoryNameEmpty,
     #[error("a category with that name already exists there")]

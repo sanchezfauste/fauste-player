@@ -939,6 +939,7 @@ mod tests {
             name: name.into(),
             color: None,
             kind: fp_model::TrackKind::Music,
+            watched_folder: None,
         };
         let mut old = snapshot();
         old.categories = vec![cat(1, "A"), cat(2, "B"), cat(3, "C")];

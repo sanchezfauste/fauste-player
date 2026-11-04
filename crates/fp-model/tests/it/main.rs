@@ -61,3 +61,4 @@ mod track_tags;
 mod transitions;
 mod transport;
 mod volume;
+mod watched_folders;

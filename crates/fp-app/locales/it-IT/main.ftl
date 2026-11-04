@@ -763,6 +763,7 @@ flag-analysis-queued = In attesa di analisi
 flag-analysis-running = In analisi ora
 menu-reanalyse-queued = Già in attesa di analisi
 menu-reanalyse-running = In analisi in questo momento
+error-folder-watched = Un'altra categoria controlla già questa cartella.
 error-category-name-empty = Il nome di una categoria non può essere vuoto.
 error-category-name-taken = Esiste già una categoria con questo nome qui.
 error-category-too-deep = Le categorie non possono essere annidate così in profondità.

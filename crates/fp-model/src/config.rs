@@ -308,12 +308,16 @@ pub const MAX_CATEGORY_DEPTH: usize = 32;
 pub struct LibraryConfig {
     /// How many levels the category tree may have (1 ..= 32).
     pub max_category_depth: usize,
+    /// How long (ms) a watched folder must be quiet before its file-system
+    /// events are acted on (100 ..= 60 000, LB22).
+    pub watch_debounce_ms: u64,
 }
 
 impl Default for LibraryConfig {
     fn default() -> Self {
         Self {
             max_category_depth: 8,
+            watch_debounce_ms: 1_000,
         }
     }
 }
@@ -1488,6 +1492,13 @@ impl Config {
             1,
             MAX_CATEGORY_DEPTH,
             "library.max_category_depth",
+            &mut w,
+        );
+        clamp_to(
+            &mut self.library.watch_debounce_ms,
+            100,
+            60_000,
+            "library.watch_debounce_ms",
             &mut w,
         );
 

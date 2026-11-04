@@ -166,3 +166,20 @@ fn the_category_depth_is_clamped_and_a_missing_section_takes_the_default() {
     let config: Config = serde_json::from_str(r#"{"players":{"count":2}}"#).unwrap();
     assert_eq!(config.library.max_category_depth, 8);
 }
+
+#[test]
+fn watch_debounce_is_clamped_with_a_warning() {
+    assert_eq!(Config::default().library.watch_debounce_ms, 1_000);
+    for (set, want) in [(50, 100), (99_000, 60_000), (2_500, 2_500)] {
+        let mut config = Config::default();
+        config.library.watch_debounce_ms = set;
+        let warned = config
+            .validate()
+            .iter()
+            .any(|w| w.field == "library.watch_debounce_ms");
+        assert_eq!(config.library.watch_debounce_ms, want);
+        assert_eq!(warned, set != want);
+    }
+    let config: Config = serde_json::from_str(r#"{"library":{"max_category_depth":3}}"#).unwrap();
+    assert_eq!(config.library.watch_debounce_ms, 1_000);
+}

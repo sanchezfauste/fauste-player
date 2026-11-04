@@ -372,6 +372,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
                 name,
                 color,
                 kind,
+                watched_folder: None,
             });
         }
         Command::RenameCategory { category, name } => {
@@ -399,6 +400,22 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
                 .get_mut(category)
                 .ok_or(ModelError::UnknownCategory(category))?
                 .kind = kind;
+        }
+        Command::SetWatchedFolder { category, folder } => {
+            if state.categories.get(category).is_none() {
+                return Err(ModelError::UnknownCategory(category));
+            }
+            if let Some(folder) = &folder
+                && let Some(other) = state
+                    .categories
+                    .iter()
+                    .find(|c| c.id != category && c.watched_folder.as_ref() == Some(folder))
+            {
+                return Err(ModelError::FolderAlreadyWatched(other.id));
+            }
+            if let Some(c) = state.categories.get_mut(category) {
+                c.watched_folder = folder;
+            }
         }
         Command::MoveCategory {
             category,

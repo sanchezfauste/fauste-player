@@ -48,7 +48,7 @@ pub use cartwall::{
     Cart, CartColor, CartEdit, CartFileChange, CartKind, CartPage, CartPageImport, Cartwall,
     CartwallSession, PlayingCart,
 };
-pub use category::{Categories, Category, check_name};
+pub use category::{Categories, Category, check_name, watching_category};
 pub use columns::{
     TableColumn, column_rows, default_columns, move_column, move_column_before, normalize_columns,
     with_column_shown,

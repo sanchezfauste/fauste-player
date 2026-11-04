@@ -225,6 +225,12 @@ pub enum Command {
         category: crate::ids::CategoryId,
         kind: crate::track::TrackKind,
     },
+    /// LB19: the folder `category` watches (`None`: none). Refused when
+    /// another category watches the same folder.
+    SetWatchedFolder {
+        category: crate::ids::CategoryId,
+        folder: Option<std::path::PathBuf>,
+    },
     /// Moves a category with its subtree; `index` is among the new
     /// siblings and is clamped.
     MoveCategory {

@@ -763,6 +763,7 @@ flag-analysis-queued = Wacht op analyse
 flag-analysis-running = Wordt nu geanalyseerd
 menu-reanalyse-queued = Wacht al op analyse
 menu-reanalyse-running = Wordt nu geanalyseerd
+error-folder-watched = Een andere categorie bewaakt deze map al.
 error-category-name-empty = De naam van een categorie mag niet leeg zijn.
 error-category-name-taken = Er bestaat hier al een categorie met die naam.
 error-category-too-deep = Categorieën kunnen niet zo diep worden genest.
