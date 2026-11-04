@@ -334,6 +334,9 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::RemoveTracks(tracks) => {
             crate::library_rules::remove_tracks(state, &tracks, &mut out)?
         }
+        Command::RemoveMissingTracks(category) => {
+            crate::library_rules::remove_missing_tracks(state, category, &mut out)?
+        }
         Command::DeleteCategory(category) => {
             crate::library_rules::delete_category(state, category, &mut out)?;
             let view = std::mem::take(&mut state.library_view);

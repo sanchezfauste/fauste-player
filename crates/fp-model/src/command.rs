@@ -202,6 +202,8 @@ pub enum Command {
     /// LB17: removes the tracks from the library with their entries and
     /// their carts' files. Refused whole while any of them is on air (LB17b).
     RemoveTracks(Vec<crate::ids::TrackId>),
+    /// LB21: removes `missing_tracks(category)` as found when it is applied.
+    RemoveMissingTracks(crate::ids::CategoryId),
     /// LB11: deletes a category, its subcategories and every track in them
     /// (LB17), refused whole while any of those is on air (LB17b).
     DeleteCategory(crate::ids::CategoryId),

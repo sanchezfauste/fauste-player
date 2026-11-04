@@ -4,8 +4,8 @@
 
 use crate::common::{entries, fixture, p0};
 use fp_model::{
-    AppState, CartId, CategoryId, Command, EntryId, ModelError, TrackId, TrackKind,
-    category_deletion, removal_impact,
+    AppState, CartId, CategoryId, Command, EntryId, FileState, ModelError, TrackId, TrackKind,
+    category_deletion, missing_tracks, removal_impact,
 };
 
 fn category(
@@ -338,4 +338,111 @@ fn deleting_a_big_category_is_fast() {
     apply(&mut s, Command::DeleteCategory(gold));
     let took = started.elapsed();
     assert!(took < std::time::Duration::from_millis(50), "took {took:?}");
+}
+
+/// LB21 setup: `a` with subcategory `b`, and six tracks filed as the
+/// returned struct says.
+struct Missing {
+    s: AppState,
+    a: CategoryId,
+    /// Missing and unused, in `a` and in `b`.
+    listed: [TrackId; 2],
+    /// Missing in `a`, used by an entry; missing in `a`, used by a cart.
+    in_use: [TrackId; 2],
+    ok: TrackId,
+    other: TrackId,
+}
+
+fn missing_setup() -> Missing {
+    let mut s = fixture(6);
+    let a = category(&mut s, None, "A", TrackKind::Music);
+    let b = category(&mut s, Some(a), "B", TrackKind::Music);
+    let o = category(&mut s, None, "O", TrackKind::Music);
+    let t = tracks_of(&s);
+    let e = entries(&s);
+    let homes = [a, b, a, a, a, o];
+    for (track, home) in t.iter().zip(homes) {
+        apply(
+            &mut s,
+            Command::MoveTracksToCategory {
+                tracks: vec![*track],
+                category: Some(home),
+            },
+        );
+    }
+    put_in_cart(&mut s, 0, t[3]);
+    // Everything but t[2] loses its entry (the categorised tracks stay).
+    for i in [0, 1, 3, 4, 5] {
+        apply(&mut s, Command::RemoveEntry(e[i]));
+    }
+    for i in [0, 1, 2, 3, 5] {
+        apply(
+            &mut s,
+            Command::SetFileState {
+                track: t[i],
+                state: FileState::Missing,
+            },
+        );
+    }
+    Missing {
+        s,
+        a,
+        listed: [t[0], t[1]],
+        in_use: [t[2], t[3]],
+        ok: t[4],
+        other: t[5],
+    }
+}
+
+#[test]
+fn missing_tracks_lists_only_unused_missing_tracks_of_the_subtree() {
+    let m = missing_setup();
+    assert_eq!(missing_tracks(&m.s, m.a), m.listed.to_vec());
+}
+
+#[test]
+fn remove_missing_tracks_removes_them_and_keeps_tracks_in_use() {
+    let mut m = missing_setup();
+    let (entries_before, cart) = (entries(&m.s), m.s.cartwall.pages[0].carts[0].clone());
+    let out = fp_model::apply(&mut m.s, Command::RemoveMissingTracks(m.a)).unwrap();
+    for t in m.listed {
+        assert!(m.s.library.get(t).is_none());
+    }
+    for t in [m.in_use[0], m.in_use[1], m.ok, m.other] {
+        assert!(m.s.library.get(t).is_some());
+    }
+    assert_eq!(entries(&m.s), entries_before);
+    assert_eq!(m.s.cartwall.pages[0].carts[0], cart);
+    assert!(
+        !out.iter()
+            .any(|a| matches!(a, fp_model::EngineAction::TrackLeftLibrary { .. })),
+        "{out:?}"
+    );
+}
+
+#[test]
+fn remove_missing_tracks_recomputes_when_applied() {
+    let mut m = missing_setup();
+    assert_eq!(missing_tracks(&m.s, m.a).len(), 2);
+    apply(
+        &mut m.s,
+        Command::SetFileState {
+            track: m.listed[0],
+            state: FileState::Ok,
+        },
+    );
+    apply(&mut m.s, Command::RemoveMissingTracks(m.a));
+    assert!(m.s.library.get(m.listed[0]).is_some());
+    assert!(m.s.library.get(m.listed[1]).is_none());
+}
+
+#[test]
+fn remove_missing_tracks_of_an_unknown_category_is_refused() {
+    let mut s = fixture(1);
+    let before = s.clone();
+    assert_eq!(
+        fp_model::apply(&mut s, Command::RemoveMissingTracks(CategoryId(999))),
+        Err(ModelError::UnknownCategory(CategoryId(999)))
+    );
+    assert_eq!(s, before);
 }

@@ -312,6 +312,38 @@ pub(crate) fn remove_tracks(
     Ok(())
 }
 
+/// LB21: the tracks of `category` and its subcategories whose file is
+/// missing and that no playlist entry or cart uses, in id order.
+pub fn missing_tracks(state: &AppState, category: CategoryId) -> Vec<TrackId> {
+    let subtree = state.categories.subtree(category);
+    let mut tracks: Vec<TrackId> = tracks_in(state, &subtree)
+        .into_iter()
+        .filter(|id| {
+            state
+                .library
+                .get(*id)
+                .is_some_and(|t| t.file_state == FileState::Missing)
+                && !state.playlists.references_track(*id)
+                && !state.cartwall.references_track(*id)
+        })
+        .collect();
+    tracks.sort();
+    tracks
+}
+
+/// LB21: removes `missing_tracks(category)` as found now.
+pub(crate) fn remove_missing_tracks(
+    state: &mut AppState,
+    category: CategoryId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    if state.categories.get(category).is_none() {
+        return Err(ModelError::UnknownCategory(category));
+    }
+    let tracks = missing_tracks(state, category);
+    remove_tracks(state, &tracks, out)
+}
+
 /// LB11: removes the category, its subcategories and their tracks.
 pub(crate) fn delete_category(
     state: &mut AppState,

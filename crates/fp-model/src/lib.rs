@@ -80,7 +80,9 @@ pub use layout::{
     CartwallLayout, DEFAULT_SIDE_SHARE, Dock, Layout, MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE,
     Panel, settle_layout,
 };
-pub use library_rules::{OnAirHolds, RemovalImpact, category_deletion, removal_impact};
+pub use library_rules::{
+    OnAirHolds, RemovalImpact, category_deletion, missing_tracks, removal_impact,
+};
 pub use library_view::{
     LibraryColumn, LibraryColumnWidth, LibrarySelection, LibrarySort, LibraryView,
     lenient_library_view,
