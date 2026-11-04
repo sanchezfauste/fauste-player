@@ -105,12 +105,20 @@ each watched folder is still there, so a drive unplugged while it runs is
 reported too. A folder in trouble is tried again at that pace and scanned as
 soon as it is back. A folder that is not there, cannot be read, or is empty
 while the library still has tracks from it (a drive or share that is not
-mounted often looks like an empty folder) counts as not found: the watch
-marks none of its tracks missing and removes nothing. If you empty such a
-folder on purpose, the warning stays until files are back in it or you stop
-watching it, and its tracks are not marked missing. One exception: a
-track that has never been analysed is still marked missing when the analysis
-cannot find its file, wherever it is.
+mounted often looks like an empty folder) counts as not found. The watch then
+marks none of its tracks missing and removes nothing, also when the folder
+sits inside another watched folder.
+
+If you empty a watched folder on purpose, the warning stays until files are
+back in it or you stop watching it, and its tracks stay in the library
+without being marked missing. To clear them, select them in the table and
+choose **Remove from library…**, or choose **Re-analyse** on them: the
+analysis marks the tracks whose file is gone missing, and **Remove missing
+tracks…** then removes them (if the folder is still watched, its warning
+clears at the next check).
+
+One exception to the rule above: a track that has never been analysed is
+still marked missing when the analysis cannot find its file, wherever it is.
 
 A subfolder that cannot be read is skipped and the log says so; folder links
 (symbolic links to folders) are not followed.

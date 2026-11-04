@@ -133,7 +133,10 @@ folders](library.md#watched-folders).
   reachable. An empty folder that should hold tracks of the library counts as
   not found too, as an unmounted share often looks like one. Nothing is
   marked or removed; the folder is looked for again every 30 seconds and
-  scanned when it appears.
+  scanned when it appears. If you emptied the folder on purpose, clear its
+  tracks by selecting them in the library table and choosing **Remove from
+  library…**, or by choosing **Re-analyse** on them, which marks those whose
+  file is gone missing so **Remove missing tracks…** can remove them.
 - **Changes are not followed**: the system would not watch it, usually a
   folder with very many subfolders. The folder is still scanned at every
   start and at each retry, so new files appear then, not at once. On Linux, a

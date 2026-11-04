@@ -369,7 +369,13 @@ Where the implementation settles or differs from the text above:
     The empty rule applies to the folder's own walk and to the retry, not to
     the folder of an event (that event may have removed its last file). A
     folder emptied on purpose while tracks of it are still known therefore
-    stays a trouble; the operator stops watching it or puts files back.
+    stays a trouble until the operator stops watching it or puts files
+    back; its tracks are cleared by removing them from the table or by
+    re-analysing them (the analysis marks them missing).
+  - A walk of a folder holding a watched folder in trouble leaves the
+    tracks under the troubled one out, and every watched folder nested in a
+    root is looked at in the same job: an outer walk never marks the tracks
+    of a lost nested folder.
   - An event on the watched folder itself, or on a folder holding it (moved,
     renamed, unmounted), walks that folder under the rule above instead of
     checking its tracks one by one. The folder of any other event path is
