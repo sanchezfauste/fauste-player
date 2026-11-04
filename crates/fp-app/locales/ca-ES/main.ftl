@@ -48,6 +48,7 @@ cue-window-resume = Reprendre el CUE
 cue-window-stop = Aturar el CUE
 cue-window-close = Tancar i aturar el CUE
 tip-cue-waveform = Forma d'ona del CUE: clic per saltar
+tip-library-waveform = Forma d'ona del CUE de la biblioteca: clic per saltar
 tip-volume = Volum: { $db }
 tip-volume-locked = Volum fix al 100 %: la sortida d'aquest reproductor és bit-perfect.
 no-track = No sona res

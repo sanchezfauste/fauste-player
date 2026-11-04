@@ -13,9 +13,10 @@ use fp_app::ui::format::{clock, countdown, number_width};
 use fp_app::ui::view::{
     BadgeTone, InfoKind, InfoLine, InfoValue, MarkerFractions, Message, PlayerStatus, RowStatus,
     TipField, analysis_pending, cue_follow_target, cue_window_view, fader_from_gain, file_icon,
-    file_problem, gain_badge, gain_from_fader, gain_info, intro_left, marker_fractions, mix_active,
-    outro_left, player_view, playlist_times, row_is_next, row_status, shown_entry, signed_db,
-    start_scroll_target, tag_edit_availability, time_text, track_tooltip, volume_db,
+    file_problem, gain_badge, gain_from_fader, gain_info, intro_left, library_cue_view,
+    marker_fractions, mix_active, outro_left, player_view, playlist_times, row_is_next, row_status,
+    shown_entry, signed_db, start_scroll_target, tag_edit_availability, time_text, track_tooltip,
+    volume_db,
 };
 use fp_model::{
     AppState, AudioFormat, Command, Config, EntryId, FileState, MarkerKind, PlayMode, PlayerId,
@@ -1536,4 +1537,98 @@ fn j1_the_resulting_gain_is_the_badge_gain_in_every_status() {
 
 fn bp_of(n: &fp_model::Normalization) -> bool {
     n.status == fp_model::NormalizationStatus::BitPerfect
+}
+
+fn library_cue_state() -> (AppState, fp_model::TrackId) {
+    let (mut s, e, _) = state(2);
+    let t = s.playlists.entry(e[0]).unwrap().track;
+    s.config.outputs.library.cue = Some(fp_model::Route {
+        backend: "null".to_owned(),
+        device: "phones".to_owned(),
+        first_channel: 0,
+    });
+    apply(&mut s, Command::SelectLibraryCue(Some(t))).unwrap();
+    (s, t)
+}
+
+#[test]
+fn there_is_no_library_cue_view_without_a_track() {
+    let (s, _, _) = state(2);
+    assert_eq!(library_cue_view(&s, None), None);
+}
+
+#[test]
+fn the_library_cue_view_shows_the_track_and_its_category() {
+    let (mut s, t) = library_cue_state();
+    let v = library_cue_view(&s, None).unwrap();
+    assert_eq!((v.track, v.title.as_str()), (t, "Song 0"));
+    assert_eq!(v.artist.as_deref(), Some("Artist"));
+    assert_eq!(v.category, None, "uncategorised");
+    let id = s.ids.category();
+    s.categories = vec![fp_model::Category {
+        id,
+        parent: None,
+        name: "Jingles".into(),
+        color: None,
+        kind: Default::default(),
+    }]
+    .into();
+    s.library.get_mut(t).unwrap().category = Some(id);
+    let v = library_cue_view(&s, None).unwrap();
+    assert_eq!(v.category.as_deref(), Some("Jingles"));
+}
+
+#[test]
+fn a_stopped_preview_shows_its_start_point_or_cue_in() {
+    let (mut s, t) = library_cue_state();
+    mark(&mut s, t, MarkerKind::CueIn, 12.0);
+    use_markers(&mut s, true);
+    let v = library_cue_view(&s, Some(99.0)).unwrap();
+    assert_eq!(v.transport, fp_model::Transport::Stopped);
+    assert_eq!(v.elapsed, 12.0, "the cue-in, whatever the telemetry says");
+    s.library_cue.start_at = Some(40.0);
+    assert_eq!(library_cue_view(&s, None).unwrap().elapsed, 40.0);
+}
+
+#[test]
+fn a_playing_preview_follows_the_telemetry_and_counts_down_to_the_file_end() {
+    let (mut s, _) = library_cue_state();
+    apply(&mut s, Command::PlayLibraryCue).unwrap();
+    let v = library_cue_view(&s, Some(50.0)).unwrap();
+    assert_eq!(v.transport, fp_model::Transport::Playing);
+    assert_eq!(v.elapsed, 50.0);
+    assert_eq!(v.total, Some(200.0));
+    assert_eq!(v.remaining, Some(150.0));
+    assert!(v.markers.ignored, "a CUE plays the whole file");
+    assert_eq!(v.markers.position, Some(0.25));
+    let past = library_cue_view(&s, Some(900.0)).unwrap();
+    assert_eq!((past.elapsed, past.remaining), (200.0, Some(0.0)));
+    let broken = library_cue_view(&s, Some(f64::NAN)).unwrap();
+    assert_eq!(broken.elapsed, 0.0);
+}
+
+#[test]
+fn an_unknown_length_has_no_total_and_no_remaining() {
+    let (mut s, t) = library_cue_state();
+    s.library.get_mut(t).unwrap().duration_secs = 0.0;
+    apply(&mut s, Command::PlayLibraryCue).unwrap();
+    let v = library_cue_view(&s, Some(5.0)).unwrap();
+    assert_eq!((v.total, v.remaining), (None, None));
+    assert_eq!(v.elapsed, 5.0);
+    assert_eq!(v.markers.position, None);
+    assert_eq!(v.outro, None);
+}
+
+#[test]
+fn without_a_route_or_a_playable_file_it_says_so() {
+    let (mut s, t) = library_cue_state();
+    let v = library_cue_view(&s, None).unwrap();
+    assert!(v.has_route && v.playable);
+    s.library.get_mut(t).unwrap().file_state = FileState::Missing;
+    let v = library_cue_view(&s, None).unwrap();
+    assert!(v.has_route && !v.playable);
+    s.library.get_mut(t).unwrap().file_state = FileState::Ok;
+    s.config.outputs.library.cue = None;
+    let v = library_cue_view(&s, None).unwrap();
+    assert!(!v.has_route && v.playable);
 }

@@ -485,6 +485,41 @@ fn peaks_are_kept_only_for_tracks_on_a_player() {
 }
 
 #[test]
+fn the_library_preview_track_gets_its_peaks_while_the_window_is_open() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = rig(&files, dir);
+    r.run_until("analysis", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
+    let model = r.handle.model.load_full();
+    let next = model.players[0].next.unwrap();
+    let next_track = model.playlists.entry(next).unwrap().track;
+    let t = model
+        .library
+        .iter()
+        .map(|t| t.id)
+        .find(|t| *t != next_track)
+        .unwrap();
+    // Window closed: the preview's track is not kept.
+    r.handle.send(Command::SelectLibraryCue(Some(t)));
+    let until = r.now + Duration::from_millis(300);
+    r.run_until("a quiet period", |r| r.now >= until);
+    assert!(!r.media.contains(t), "closed window");
+    let open = fp_model::LibraryView {
+        open: true,
+        ..Default::default()
+    };
+    r.handle.send(Command::SetLibraryView(Box::new(open)));
+    r.run_until("peaks for the preview", |r| r.media.contains(t));
+    // Closing the window lets them go.
+    r.handle.send(Command::SetLibraryView(Box::default()));
+    r.run_until("peaks dropped", |r| !r.media.contains(t));
+}
+
+#[test]
 fn a_panicking_step_does_not_stop_autosave() {
     let dir = tempfile::tempdir().unwrap();
     let mut r = rig(&[], dir);

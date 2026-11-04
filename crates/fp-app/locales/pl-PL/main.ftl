@@ -48,6 +48,7 @@ cue-window-resume = Wznów CUE
 cue-window-stop = Zatrzymaj CUE
 cue-window-close = Zamknij i zatrzymaj CUE
 tip-cue-waveform = Przebieg CUE: kliknij, aby przejść
+tip-library-waveform = Przebieg fali CUE biblioteki: kliknij, aby przewinąć
 tip-volume = Głośność: { $db }
 tip-volume-locked = Głośność zablokowana na 100 %: wyjście tego odtwarzacza jest bit-perfect.
 no-track = Nic nie gra

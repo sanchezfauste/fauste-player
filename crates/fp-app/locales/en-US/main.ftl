@@ -48,6 +48,7 @@ cue-window-resume = Resume CUE
 cue-window-stop = Stop CUE
 cue-window-close = Close and stop CUE
 tip-cue-waveform = CUE waveform: click to seek
+tip-library-waveform = Library CUE waveform: click to seek
 tip-volume = Volume: { $db }
 tip-volume-locked = Volume held at 100 %: this player's output is bit-perfect.
 no-track = Nothing playing

@@ -364,8 +364,8 @@ fn a_waveform_with_ignored_marks_draws_without_panicking() {
 }
 
 mod keys {
-    use fp_app::ui::wave_view::{WaveKey, WaveView, WaveZoom, WaveZooms};
-    use fp_model::{EntryId, PlayerId};
+    use fp_app::ui::wave_view::{WaveKey, WaveSubject, WaveView, WaveZoom, WaveZooms};
+    use fp_model::{EntryId, PlayerId, TrackId};
 
     fn zoom(entry: u64, start: f64) -> WaveZoom {
         WaveZoom {
@@ -373,7 +373,7 @@ mod keys {
                 start_secs: start,
                 span_secs: 10.0,
             },
-            entry: EntryId(entry),
+            subject: WaveSubject::Entry(EntryId(entry)),
             moved_at: 0.0,
         }
     }
@@ -384,14 +384,24 @@ mod keys {
         let (player, cue) = (WaveKey::Player(p), WaveKey::Cue(p));
         let mut z = WaveZooms::default();
         z.set(player, Some(zoom(5, 20.0)));
-        assert_eq!(z.get(cue, Some(EntryId(5))), None, "the CUE is not zoomed");
-        z.set(cue, Some(zoom(5, 40.0)));
-        assert_eq!(z.get(player, Some(EntryId(5))), Some(zoom(5, 20.0)));
-        assert_eq!(z.get(cue, Some(EntryId(5))), Some(zoom(5, 40.0)));
-        z.set(cue, None);
-        assert_eq!(z.get(cue, Some(EntryId(5))), None);
         assert_eq!(
-            z.get(player, Some(EntryId(5))),
+            z.get(cue, Some(WaveSubject::Entry(EntryId(5)))),
+            None,
+            "the CUE is not zoomed"
+        );
+        z.set(cue, Some(zoom(5, 40.0)));
+        assert_eq!(
+            z.get(player, Some(WaveSubject::Entry(EntryId(5)))),
+            Some(zoom(5, 20.0))
+        );
+        assert_eq!(
+            z.get(cue, Some(WaveSubject::Entry(EntryId(5)))),
+            Some(zoom(5, 40.0))
+        );
+        z.set(cue, None);
+        assert_eq!(z.get(cue, Some(WaveSubject::Entry(EntryId(5)))), None);
+        assert_eq!(
+            z.get(player, Some(WaveSubject::Entry(EntryId(5)))),
             Some(zoom(5, 20.0)),
             "the player's zoom stays"
         );
@@ -401,7 +411,13 @@ mod keys {
     fn players_keep_their_own_zoom() {
         let mut z = WaveZooms::default();
         z.set(WaveKey::Player(PlayerId(1)), Some(zoom(5, 20.0)));
-        assert_eq!(z.get(WaveKey::Player(PlayerId(2)), Some(EntryId(5))), None);
+        assert_eq!(
+            z.get(
+                WaveKey::Player(PlayerId(2)),
+                Some(WaveSubject::Entry(EntryId(5)))
+            ),
+            None
+        );
     }
 
     #[test]
@@ -409,9 +425,47 @@ mod keys {
         let key = WaveKey::Cue(PlayerId(1));
         let mut z = WaveZooms::default();
         z.set(key, Some(zoom(5, 20.0)));
-        assert_eq!(z.get(key, Some(EntryId(6))), None, "another entry");
+        assert_eq!(
+            z.get(key, Some(WaveSubject::Entry(EntryId(6)))),
+            None,
+            "another entry"
+        );
         assert_eq!(z.get(key, None), None, "no entry");
-        assert_eq!(z.get(key, Some(EntryId(5))), Some(zoom(5, 20.0)));
+        assert_eq!(
+            z.get(key, Some(WaveSubject::Entry(EntryId(5)))),
+            Some(zoom(5, 20.0))
+        );
+    }
+
+    #[test]
+    fn a_zoom_belongs_to_its_entry_or_its_track() {
+        let (a, b) = (TrackId(1), TrackId(2));
+        let zoom = WaveZoom {
+            view: WaveView {
+                start_secs: 5.0,
+                span_secs: 10.0,
+            },
+            subject: WaveSubject::Track(a),
+            moved_at: 0.0,
+        };
+        let mut z = WaveZooms::default();
+        z.set(WaveKey::Library, Some(zoom));
+        assert_eq!(
+            z.get(WaveKey::Library, Some(WaveSubject::Track(a))),
+            Some(zoom)
+        );
+        assert_eq!(z.get(WaveKey::Library, Some(WaveSubject::Track(b))), None);
+        assert_eq!(
+            z.get(WaveKey::Library, Some(WaveSubject::Entry(EntryId(1)))),
+            None
+        );
+    }
+
+    #[test]
+    fn the_library_waveform_has_its_own_id() {
+        assert_eq!(WaveKey::Library.id(), egui::Id::unique("library-waveform"));
+        assert_ne!(WaveKey::Library.id(), WaveKey::Player(PlayerId(1)).id());
+        assert_ne!(WaveKey::Library.id(), WaveKey::Cue(PlayerId(1)).id());
     }
 
     #[test]

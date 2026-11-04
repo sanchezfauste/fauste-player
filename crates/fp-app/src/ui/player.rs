@@ -20,7 +20,7 @@ use super::table;
 use super::theme;
 use super::view::{self, PlayerStatus, PlayerView};
 use super::wave_panel::{self, WaveBadges, WavePanelInput};
-use super::wave_view::WaveKey;
+use super::wave_view::{WaveKey, WaveSubject};
 use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 
 const PLAY_SIZE: f32 = 64.0;
@@ -1808,7 +1808,7 @@ fn wave_sized(
     let media = track.and_then(|t| scene.media.get(t));
     let input = WavePanelInput {
         key: WaveKey::Player(id),
-        entry,
+        subject: entry.map(WaveSubject::Entry),
         track,
         media: media.as_ref(),
         total: pv.total,

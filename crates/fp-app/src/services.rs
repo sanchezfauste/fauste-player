@@ -804,8 +804,7 @@ impl Services {
     /// The inputs of the library walks now (see `WalkInputs`).
     fn walk_inputs(&self, state: &AppState) -> WalkInputs {
         let on_players = Self::on_players(state);
-        let mut wanted = on_players.clone();
-        wanted.extend(Self::cart_waveforms(state, true));
+        let wanted = Self::wanted(state);
         WalkInputs {
             library: state.library.clone(),
             on_players,
@@ -1180,6 +1179,10 @@ impl Services {
     fn wanted(state: &AppState) -> HashSet<TrackId> {
         let mut wanted = Self::on_players(state);
         wanted.extend(Self::cart_waveforms(state, true));
+        // The library window's preview bar draws its track's waveform.
+        if state.library_view.open {
+            wanted.extend(state.library_cue.track);
+        }
         wanted
     }
 
