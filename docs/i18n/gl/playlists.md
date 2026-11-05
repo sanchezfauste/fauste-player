@@ -16,10 +16,27 @@ escolles, e a que mostra un reprodutor, tráese á vista.
 Cambiar de lapela nunca cambia o que está en antena nin o que vai despois.
 Cando remata unha pista, o reprodutor continúa na lista que contén esa pista.
 
-As listas créanse, renómeanse e elimínanse en [Configuración](settings.md). A
-última lista, e unha lista cunha pista en antena, non se poden eliminar.
+O **+** do extremo dereito da fila crea unha lista nova: escribe un nome e
+preme Enter ou **Crear** (Escape ou un clic fóra cancelan). A lista nova
+aparece ao instante nas lapelas dese reprodutor e o reprodutor móstraa.
+As listas tamén se poden crear, e renómeanse e elimínanse, en
+[Configuración](settings.md). A última lista, e unha lista cunha pista en
+antena, non se poden eliminar.
 
 ## A táboa de pistas {#the-track-table}
+
+Cada ficheiro que engades a unha lista, a un cartucho ou importando un
+ficheiro M3U ou PLS pasa a ser unha *pista* da biblioteca, e queda nela
+cando quitas a súa entrada, baleiras o cartucho ou eliminas a lista: os seus
+marcadores, a súa configuración de sonoridade e as súas etiquetas
+consérvanse para a próxima vez que engadas o ficheiro. O mesmo ficheiro é
+sempre unha soa pista: engadilo dúas veces, ou a unha lista e a un cartucho,
+comparte os seus marcadores e a súa configuración de sonoridade en todas
+partes. No escritorio, un ficheiro engadido desde esta versión é a mesma
+pista sexa cal for a ruta que chegue a el (unha ligazón simbólica ou `..` na
+ruta non crea unha segunda pista). A única excepción: unha pista sen
+categoría, cuxo ficheiro desapareceu e que xa non usa nada, sae da biblioteca
+por si soa, cunha liña no rexistro.
 
 ![Unha lista: pistas reproducidas atenuadas, a pista en antena en vermello, a pista seguinte en verde, e o pé co tempo que queda](../../images/guide/playlist.png)
 
@@ -34,6 +51,7 @@ As listas créanse, renómeanse e elimínanse en [Configuración](settings.md). 
 | Dur. | Duración de reprodución, desde o cue-in ata o cue-out (o ficheiro enteiro con **Usar cue-in e cue-out** desactivado) |
 | Intro | Canto dura a intro, desde onde a pista empeza a soar ata o seu marcador de intro; baleira cando a pista non ten marcador de intro |
 | Ficheiro | O nome do ficheiro, coa súa extensión |
+| Comentario | A etiqueta de comentario, nunha liña |
 
 Unha instalación nova mostra `#`, Título, Artista e Dur. As outras columnas
 son opcionais; consulta **Escoller as columnas** máis abaixo. Unha pista á que
@@ -98,12 +116,14 @@ Cores das filas:
 | **P2** vermello (ou outro número) na columna de número | En antena nese reprodutor |
 | **Verde**, cunha frecha | A pista seguinte deste reprodutor |
 | Atenuada | Xa reproducida neste reprodutor |
+| Contorno lavanda | A fila seleccionada (fai clic nela, ou móvete con Up e Down). Tamén se ve nas filas vermella e verde |
 | Ficheiro cunha icona de cruz / aviso | Ficheiro que falta / ilexible (sáltase); pon o punteiro sobre a fila: a xanela emerxente comeza coa razón, en ámbar, e despois os campos habituais. Un ficheiro que falta búscase de novo cada 30 s (`tuning.missing_recheck_ms`). |
 | Frechas de recarga á dereita do título | Analizada por unha versión anterior; aínda se reproduce con esa análise. **Configuración → Análise → Analizar as pistas desactualizadas** póñea ao día (as pistas dun reprodutor actualízanse igualmente) |
-| Reloxo de area á dereita do título | A pista está á espera da súa análise (pon o punteiro sobre o reloxo de area: *Análise pendente*). Reprodúcese igualmente, e o reloxo de area desaparece cando remata a análise |
+| Reloxo de area á dereita do título | A pista está á espera da súa análise: *En espera de análise* cando está na cola, *Análise pendente* cando aínda non entrou nela. Reprodúcese igualmente, e o reloxo de area desaparece cando remata a análise. Unha pista analizada que volve á cola (por **Analizar de novo todas as pistas**) tamén o mostra |
+| Icona de forma de onda á dereita do título | A pista estase analizando agora (*Analizándose agora*) |
 | Violeta | Seleccionada |
 
-**Dica da pista.** Pon o punteiro un momento sobre unha fila para ver o seu título, artista, álbum, data, xénero, duración, formato (tipo, frecuencia de mostraxe e profundidade de bits cando se coñecen) e a ruta do seu ficheiro. Un campo que o ficheiro non ten omítese. A xanela emerxente é a única información ao pasar o punteiro sobre unha fila, e nunca se move mentres se mostra. Para un ficheiro que falta ou é ilexible, comeza coa razón.
+**Dica da pista.** Pon o punteiro un momento sobre unha fila para ver o seu título, artista, álbum, data, xénero, duración, formato (tipo, frecuencia de mostraxe, profundidade de bits e taxa de bits media, por exemplo 320 kbps, cando se coñecen) e a ruta do seu ficheiro. Un campo que o ficheiro non ten omítese. A xanela emerxente é a única información ao pasar o punteiro sobre unha fila, e nunca se move mentres se mostra. Para un ficheiro que falta ou é ilexible, comeza coa razón.
 
 ## Rato {#mouse}
 
@@ -118,15 +138,18 @@ Cores das filas:
 |---|---|
 | Reproducir agora | Inicia esta pista ao instante (mesturando se o reprodutor está en antena) |
 | Marcar como seguinte | O mesmo que o dobre clic. Na pista en antena, reprodúcese unha vez máis, desde o seu comezo, cando remate a pasada actual (mesturando como Repetir, sen pausa), e despois o reprodutor segue. Actúa unha soa vez. Stop ao final, o modo SINGLE e unha marca de parar despois seguen detendo antes o reprodutor. Mentres hai un CUE en marcha, móvese á nova pista seguinte |
-| Preescoitar no CUE | Reprodúceo na saída CUE (abre a xanela CUE). Atenuado cando o reprodutor non ten saída Cue á parte da súa Main |
+| Preescoitar no CUE | Reprodúceo na saída CUE (abre a xanela CUE). Atenuado cando o reprodutor non ten saída Cue. Na saída de antena pregunta primeiro mentres algo soa alí (ver [CUE](players.md#cue-pre-listen)) |
 | Editar etiquetas… | Abre o editor de etiquetas desta pista. **Gardar** escribe os cambios no ficheiro de audio; **Cancelar** (ou Esc, cando non hai un gardado en curso) pecha sen escribir. O elemento aparece atenuado, coa razón ao poñer o punteiro enriba, mentres a pista está en antena, en CUE ou nun cartucho que soa, mentres aínda non se leron as súas etiquetas, cando o ficheiro falta, e para os formatos cuxas etiquetas non se poden escribir (por exemplo DSD) |
-| Volver analizar | Analiza esta pista de novo agora, sexa cal for o seu estado. Un ficheiro ilexible que se arranxou tamén se recolle por si só (consulta [Resolución de problemas](troubleshooting.md)). Os marcadores manuais consérvanse |
+| Volver analizar | Analiza esta pista de novo agora, sexa cal for o seu estado, lendo o ficheiro de novo (así un ficheiro que editaches mídese outra vez aínda que o seu tamaño e data non cambiasen). Un ficheiro ilexible que se arranxou tamén se recolle por si só (consulta [Resolución de problemas](troubleshooting.md)). Os marcadores manuais consérvanse. Atenuado, coa razón ao poñer o punteiro enriba, mentres a pista xa está á espera da súa análise ou analizándose |
+| Sonoridade… | Abre a xanela emerxente de sonoridade desta pista (axuste e exclusión; ver [Sonoridade](loudness.md)) |
+| Mostrar na biblioteca | Abre a [xanela da biblioteca](library.md) na categoría desta pista coa súa fila seleccionada. Só no escritorio |
+| Mover á categoría ▸ | Arquiva a pista nunha categoría, ou en Sen categoría, sen abrir a biblioteca. Só no escritorio |
 | Engadir pistas debaixo… | Escolle ficheiros para inserir despois desta pista |
 | Duplicar | Insire unha copia sen reproducir debaixo (coas súas marcas de repetir e parar despois) |
 | Repetir esta pista | Marca para reproducila unha e outra vez, sen pausa, ata que premas Play (seguinte), Anterior, Stop ou Stop con fundido, ou actives Stop ao final. Pausa mantena repetindo. Unha icona de repetición móstrase antes do título |
 | Parar despois desta pista | Marca para deter o reprodutor cando remate esta pista, cada vez que se reproduza (en calquera modo). A diferenza do botón **Stop ao final** do reprodutor, a marca queda coa pista e gárdase coa lista. A icona de parar despois móstrase antes do título. Gaña a Repetir |
 | Mover a ▸ | Móveo ao final doutra lista |
-| Quitar da lista | Quítao; non é posible mentres está en antena |
+| Quitar da lista | Quítao desta lista; non é posible mentres está en antena. A pista queda na biblioteca (os seus marcadores e a súa configuración de sonoridade consérvanse) |
 
 ## Editar etiquetas {#editing-tags}
 
@@ -223,7 +246,12 @@ aplicación ignóranse.
   para inserilos na posición onde soltas. Sobre a cabeceira, o bordo dunha
   columna, a barra de desprazamento ou unha xanela que cubre a lista non se
   insire nada. Se o sistema non informa da posición, van ao final da lista
-  que se ve.
+  que mostra o último reprodutor que usaches, ou o primeiro reprodutor
+  visible; con todos os reprodutores ocultos non se insire nada e a barra de
+  estado dío (ver [Disposición](layout.md#show-and-hide-panels)).
+  En Linux, soltar ficheiros precisa que a xanela funcione en X11, o que
+  fai de forma predeterminada, tamén nun escritorio Wayland (ver
+  [Resolución de problemas](troubleshooting.md#files-cannot-be-dropped-on-linux)).
 
 ## Pé {#footer}
 

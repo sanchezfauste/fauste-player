@@ -9,6 +9,12 @@ reprodutores poden encadear pistas con mesturas superpostas, preescoitar
 nunha saída **CUE** á parte e sobrevivir a fallos sen poñer nada en antena
 por si sos.
 
+> **Feita con axuda da IA, ofrecida tal cal.** Fauste Player, esta guía e as
+> súas traducións desenvolvéronse cunha axuda substancial de ferramentas de
+> IA. Ofrécese sen ningunha garantía e úsase baixo a túa propia
+> responsabilidade: consulta o
+> [aviso legal](https://github.com/sanchezfauste/fauste-player#disclaimer).
+
 ![Pantalla principal](../../images/main-screen.png)
 
 | Guía | De que trata |
@@ -19,7 +25,8 @@ por si sos.
 | [Cartucheira](cartwall.md) | Cartuchos instantáneos: disparo, páxinas, bucles, cartuchos exclusivos, configuración |
 | [Marcadores e mestura](markers-and-mixing.md) | Cue-in/cue-out, o punto MIX, intro e outro, análise automática |
 | [Configuración](settings.md) | Saídas de audio, reprodutores, análise, listas, MIDI, control remoto |
-| [Saída bit-perfect](bit-perfect.md) | Dispositivos exclusivos que seguen a frecuencia de cada ficheiro, o distintivo BP, saída DSD, comprobar unha cadea |
+| [Normalización de sonoridade](loudness.md) | Todas as pistas e cartuchos á mesma sonoridade cunha ganancia fixa por pista: o distintivo de ganancia, excluír e axustar unha pista, saídas bit-perfect |
+| [Saída bit-perfect](bit-perfect.md) | Un modo especial: sen fundidos cruzados, volume ao 100 %. Dispositivos exclusivos que seguen a frecuencia de cada ficheiro, o distintivo BP, saída DSD, comprobar unha cadea |
 | [Teclado](keyboard.md) | Atallos |
 | [Superficies de control MIDI](midi.md) | Botóns, faders e luces en controladores MIDI |
 | [Control remoto](remote-control.md) | Manexar Fauste Player pola rede: API HTTP, seguranza |
@@ -28,10 +35,10 @@ por si sos.
 
 A interface está dispoñible en inglés, español, catalán, neerlandés,
 francés, galego, alemán, italiano, éuscaro, polaco e portugués. Segue o
-idioma do sistema operativo salvo que escollas un en Configuración. O inglés
-e o español están escritos a man; os outros nove xeráronse con IA e poden
-conter erros. Se falas algún deles, agradecemos as correccións en forma de
-issues ou pull requests.
+idioma do sistema operativo salvo que escollas un en Configuración. A
+interface en todos os idiomas, inglés e español incluídos, xerouse con IA e
+pode conter erros. Agradecemos as correccións en forma de issues ou pull
+requests.
 
 A guía tamén está dispoñible noutros idiomas, traducida con IA a
 partir da guía en inglés: na [guía en liña](https://sanchezfauste.com/fauste-player/guide/),

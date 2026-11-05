@@ -4,20 +4,29 @@ Cada columna é un reprodutor. Os reprodutores son independentes: cada un ten
 as súas propias lapelas de listas, o seu transporte, o seu volume e as súas
 saídas.
 
-![O reprodutor 1 en antena: cabeceira, portada, título, pista seguinte, transporte, conta atrás, vúmetro, fader e forma de onda](../../images/guide/player.png)
+![O reprodutor 1 en antena: cabeceira coa ganancia de sonoridade, portada, título, pista seguinte, transporte, conta atrás, vúmetro, fader e forma de onda](../../images/guide/player.png)
 
 ## Cabeceira {#header}
 
 | Elemento | Significado |
 |---|---|
 | `P1` … `Pn` | Número do reprodutor (a tecla numérica que o reproduce) |
+| Botóns **Ocultar** e **Maximizar** / **Restaurar** | Os dous botóns pequenos do extremo dereito da cabeceira: ocultan o reprodutor, ou maximízano durante un momento (**Restaurar** mentres está maximizado). Aparecen atenuados mentres a disposición está bloqueada, **Ocultar** no último panel visible e **Maximizar** cun só panel visible (ver [Disposición](layout.md#maximize-a-panel)) |
 | Punto de estado e etiqueta | **En antena** (vermello), **En pausa** (ámbar), **Detido** (gris) |
-| Distintivo **Mestura** / **Fundido** | Está en curso un fundido cruzado coa pista seguinte, ou un stop con fundido |
+| Columnas estreitas | Cando a columna é demasiado estreita para todos os distintivos, a cabeceira vai quitando primeiro os menos importantes (o texto do estado, despois **Outras silenciadas**, o aviso de entrada, **Stop ao final**, **Mestura** / **Fundido**, o punto de estado), así que nada se solapa nunca. O número do reprodutor, **CUE**, o modo, **BP**, o distintivo de ganancia e os botóns **Ocultar** e **Maximizar** quedan sempre. Ensancha a columna para velos todos |
+| Distintivo **Mestura** / **Fundido** | Está en curso un fundido cruzado coa pista seguinte, ou un stop con fundido. **Mestura** nunca se acende nun reprodutor cuxa saída Main é bit-perfect: non fai fundidos cruzados (ver [O que custa](bit-perfect.md#what-it-costs)) |
 | Distintivo **Stop ao final** | O reprodutor detense cando remata a pista actual |
 | Distintivo **Repetir** / **Parar despois** | A pista actual repítese, ou detén o reprodutor cando remata, pola súa propia marca no menú da lista. Pon o punteiro enriba para ver a frase completa. Gaña o botón **Stop ao final** do propio reprodutor: mentres está activado, só se ve o seu distintivo |
-| **BP** / **DSD** | **BP** acéndese mentres a pista actual chega sen cambios ao seu dispositivo Main. **DSD** substitúeo mentres unha pista DSD sae como DSD, sen cambios (consulta [Saída bit-perfect](bit-perfect.md)). **Outras silenciadas** aparece ao seu carón cando ese fluxo DSD mantén as outras fontes fóra da saída |
+| Distintivo de ganancia | Coa [normalización de sonoridade](loudness.md#the-gain-in-the-player-header) activada, a ganancia coa que se reproduce a pista en antena (**+4.0 dB**), ou un **0.0 dB** ámbar cando a pista se reproduce sen cambios (aínda sen medición, unha saída bit-perfect, ou unha pista excluída da normalización). Pon o punteiro enriba para ver a razón. Móstrase mentres o reprodutor reproduce ou está en pausa |
+| **BP** / **DSD** | O distintivo só aparece nun reprodutor cuxo dispositivo Main funciona en bit-perfect; **BP** acéndese mentres a pista actual chega sen cambios ao seu dispositivo Main. **DSD** substitúeo mentres unha pista DSD sae como DSD, sen cambios (consulta [Saída bit-perfect](bit-perfect.md)). **Outras silenciadas** aparece ao seu carón cando ese fluxo DSD mantén as outras fontes fóra da saída |
 | **SINGLE** \| **CONT** | Modo de reprodución (ver abaixo): un só control unido, a metade acesa é o modo activo |
 | **CUE** | Preescoitar a pista seguinte na saída CUE |
+
+Os dous botóns pequenos do extremo dereito da cabeceira, **Ocultar** e
+**Maximizar** (ou **Restaurar**), ocultan o reprodutor ou maximízano durante
+un momento; os mesmos dous están no menú do clic dereito sobre o fondo da
+cabeceira (non sobre un dos seus botóns) (ver
+[Disposición](layout.md#maximize-a-panel)).
 
 ## Fila de información {#info-row}
 
@@ -91,9 +100,30 @@ saídas.
     - Nada no reprodutor engade ganancia por riba do 100 %. Un dispositivo de
       enteiros satura na escala completa; un dispositivo de coma flotante
       recibe o nivel tal cal e o sistema de son ou o controlador satúrao.
-- **Fader de volume** (á dereita do medidor, tan alto coma el): arrástrao ou
-  usa a roda do rato, un paso por cada clic. A dica mostra o nivel en dB; o
-  extremo superior é 0 dB e o inferior é silencio.
+- **Fader de volume** (á dereita do medidor, tan alto coma el). Segue unha
+  lei de mesa de mesturas: é fino preto do extremo superior e máis pronunciado
+  cara abaixo, así que baixalo un pouco baixa un pouco o nivel (o 90 % do
+  percorrido son uns −2,5 dB, o 50 % uns −15,9 dB, o 10 % uns −48 dB). O
+  extremo superior é 0 dB e o inferior é silencio. As marcas a través do fader
+  sinalan 0, −2, −4, −6, −8, −10, −12, −15, −20, −25, −30, −40, −50 e −∞ dB,
+  co nivel escrito á súa dereita.
+  - Arrástrao: o fader móvese tanto como o punteiro, desde onde está, así que
+    agarralo nunca o fai saltar; un clic sen mover non cambia nada. Tirar
+    máis alá do extremo superior ou inferior e volver deixa o pomo no extremo
+    ata que o punteiro volve ao punto onde o alcanzou, así que o pomo nunca
+    queda lonxe do punteiro.
+  - Usa a roda do rato: un paso por cada clic (uns 0,6 dB preto de 0 dB).
+  - Mantén **Ctrl** ou **Shift** mentres arrastras ou usas a roda para movelo
+    dez veces máis fino.
+  - Fai dobre clic no pomo para volver a 0 dB (un dobre clic noutro punto do
+    fader non fai nada).
+
+  O nivel en dB (cun decimal, ou −∞ para o silencio) está escrito baixo o
+  fader, na mesma fila que a liña de sonoridade do medidor, e a dica tamén o
+  mostra. Unha sesión gardada antes desta lei conserva o nivel de cada
+  reprodutor; só cambia a posición do fader.
+  Nun reprodutor cuxa saída Main é bit-perfect o fader queda bloqueado ao
+  100 % e en gris, le un 0.0 atenuado, e a súa dica explica a razón (ver [O que custa](bit-perfect.md#what-it-costs)).
 - **Título, artista** e a liña **seguinte**, cun cadrado verde. Mentres o CUE
   está activo, a posición de preescoita móstrase en azul.
 
@@ -101,13 +131,17 @@ saídas.
 
 | Botón | Acción |
 |---|---|
-| **Play / Seguinte** (grande) | Detido: inicia a pista seguinte. En antena: pasa con fundido á pista seguinte (o tempo de fundido axústase en [Configuración](settings.md)). En pausa: retoma. Se a pista en antena é tamén a seguinte, Play reiníciaa co fundido habitual. |
+| **Play / Seguinte** (grande) | Detido: inicia a pista seguinte. En antena: pasa con fundido á pista seguinte (o tempo de fundido axústase en [Configuración](settings.md)); mentres dura o fundido dun fundido cruzado iniciado por Seguinte ou por un segue, unha banda verde baleira o botón durante a duración do fundido, co bordo movéndose de esquerda a dereita coma o dun cartucho (un fundido cruzado iniciado por Anterior baleira o botón Anterior). En pausa: retoma. Se a pista en antena é tamén a seguinte, Play reiníciaa co fundido habitual. Nunha saída bit-perfect cambia ao instante, sen fundido, e a súa dica dío (ver [O que custa](bit-perfect.md#what-it-costs)). |
 | **Stop** | Detén ao instante (cunha rampla curta contra os chasquidos) |
-| **Stop con fundido** | Fundido de saída e stop |
+| **Stop con fundido** | Fundido de saída e stop. Mentres dura un stop con fundido, unha banda baleira o botón durante a duración do fundido, co bordo movéndose de esquerda a dereita |
 | **Pausa** | Pausa ou retoma; pestanexa en ámbar mentres está en pausa |
 | **Stop ao final** (un triángulo de play e despois un cadrado) | Detén cando remata a pista actual, unha vez. No modo SINGLE só está dispoñible mentres a pista actual se repite: pon fin á repetición cando remata a pasada que está soando. Para parar despois dunha pista cada vez que se reproduce, ou para repetir unha pista, usa o seu menú na lista (consulta [Listas](playlists.md)) |
-| **Anterior** (unha barra e dous triángulos) | En antena: volve con fundido á pista que este reprodutor reproduciu antes, como fai Seguinte. Prémeo de novo para seguir retrocedendo. A pista que deixaches pasa a ser a seguinte. |
+| **Anterior** (unha barra e dous triángulos) | En antena: volve con fundido á pista que este reprodutor reproduciu antes, como fai Seguinte. Prémeo de novo para seguir retrocedendo. A pista que deixaches pasa a ser a seguinte. Nunha saída bit-perfect cambia ao instante, sen fundido (ver [O que custa](bit-perfect.md#what-it-costs)). |
 | **Reiniciar** (unha barra e un triángulo) | Volve ao comezo da pista actual (o seu cue-in). Un reprodutor en pausa segue en pausa. |
+
+Desde o teclado, `Up` e `Down` moven a selección pola lista, `Enter` fixa
+a pista seleccionada como seguinte, e un segundo `Enter` sobre ela dentro do
+tempo dun dobre clic reprodúcea. Consulta [Teclado](keyboard.md).
 
 Os botóns que agora non poden actuar aparecen atenuados: Stop e Reiniciar
 sen nada cargado, Pausa e Stop con fundido mentres está detido, Anterior sen
@@ -135,7 +169,8 @@ vermello.
 ## Forma de onda {#waveform}
 
 - A parte xa reproducida debúxase coa cor da forma de onda; o resto é máis
-  escuro.
+  escuro. Cunha cor de forma de onda violeta, a liña MIX violeta destaca
+  menos; escolle outra cor de forma de onda se precisas distinguilas.
 - O contorno mostra os picos, tenue; o corpo sólido dentro del é o nivel medio
   (RMS). Nunha pista forte os picos ocupan toda a altura, e o corpo segue
   mostrando onde a pista é máis suave ou máis forte.
@@ -143,8 +178,11 @@ vermello.
   atrás nela. A intro só se mostra cando se estableceu.
 - Unha área laranxa sombreada ao final marca o **outro**, coa súa propia conta
   atrás.
-- Unha liña ámbar descontinua cunha etiqueta **MIX** marca onde empeza a pista
-  seguinte no modo continuo. Aparece atenuada no modo single.
+- Unha liña violeta descontinua (a cor do distintivo **Mestura**, para non
+  confundila co outro laranxa) cunha etiqueta **MIX** marca onde empeza a
+  pista seguinte no modo continuo. Aparece atenuada no modo single, e nun
+  reprodutor cuxa saída Main é bit-perfect, que non mestura (ver
+  [O que custa](bit-perfect.md#what-it-costs)).
 - Debúxase o ficheiro enteiro. O comezo e o final en silencio que a reprodución
   salta (antes do cue-in e despois do cue-out) debúxanse máis escuros, cunha
   liña fina onde a reprodución empeza e remata. Con **Usar cue-in e cue-out**
@@ -175,12 +213,28 @@ vermello.
 ## CUE (preescoita) {#cue-pre-listen}
 
 Premer **CUE** (ou **Preescoitar no CUE** no menú dunha pista) reproduce a
-pista na saída CUE do reprodutor, por exemplo uns auriculares, sen tocar a
-saída en antena, e abre unha pequena **xanela CUE** para ese reprodutor. Pode
+pista na saída CUE do reprodutor, por exemplo uns auriculares, e abre unha
+pequena **xanela CUE** para ese reprodutor. Pode
 haber varias xanelas abertas, unha por reprodutor. Consulta
 [Configuración](settings.md) para escoller o dispositivo CUE. Un reprodutor
-necesita unha saída Cue que non sexa a súa saída Main: sen ela, **CUE** e
+necesita unha saída Cue: sen ela, **CUE** e
 **Preescoitar no CUE** aparecen atenuados, e ao poñer o punteiro enriba dilo.
+
+Cunha soa tarxeta de son, a saída Cue pode ser a propia saída de antena (ou
+compartila con outro reprodutor ou coa cartucheira). Unha preescoita aí
+óese en antena, así que:
+
+- mentres nada soa nesa saída, o CUE comeza ao instante;
+- mentres algo soa alí (un reprodutor en reprodución ou en pausa, un
+  cartucho, outra preescoita, a preescoita da biblioteca), o CUE pregunta
+  primeiro: **Preescoitar igualmente** ou **Cancelar** (Cancelar é a opción
+  predeterminada: Esc e Enter cancelan). A mesma pregunta vén do menú da
+  pista, da xanela CUE, da cartucheira e da xanela da biblioteca;
+- cando algo comeza nesa saída mentres soa unha preescoita que non
+  confirmaches, a preescoita para e a barra de estado di por que. Unha
+  preescoita que confirmaches segue soando.
+
+A dica do botón CUE di cando a súa preescoita sae pola saída de antena.
 
 ![A xanela CUE do reprodutor 4, preescoitando a súa pista seguinte](../../images/guide/cue-window.png)
 

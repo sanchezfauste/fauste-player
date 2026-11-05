@@ -73,7 +73,9 @@ Un cliente pode:
   cartucheira;
 - reproducir, pausar, parar, facer fundidos, reiniciar e volver atrás;
 - escoller a entrada seguinte (tamén a entrada en antena: reprodúcese unha
-  vez máis), preescoitar e buscar (nun reprodutor detido, buscar escolle onde
+  vez máis), preescoitar (rexéitase unha preescoita que se oiría en antena
+  mentres algo soa alí, salvo que a petición diga `"force": true`; consulta a
+  referencia da API) e buscar (nun reprodutor detido, buscar escolle onde
   Play inicia a entrada seguinte, e buscar antes do seu cue-in inicia no
   cue-in);
 - axustar volumes, modos, stop ao final da actual, e as marcas de repetir e
@@ -82,14 +84,44 @@ Un cliente pode:
   que se ve;
 - editar: crear, renomear e eliminar listas; engadir unha pista que xa está
   cargada, e quitar, mover ou duplicar entradas; crear, renomear,
-  redimensionar e eliminar páxinas de cartuchos, e configurar un cartucho cunha
-  pista cargada; definir ou restablecer marcadores.
+  redimensionar e eliminar páxinas de cartuchos, e configurar un cartucho
+  (nome, tipo, cor, bucle, exclusivo) cunha pista cargada; definir ou
+  restablecer marcadores; excluír unha pista da
+  [normalización de sonoridade](loudness.md) ou axustala.
 
 Quitar o que está en antena rexéitase, como na pantalla. Os ficheiros que
 aínda non están cargados non se poden engadir en remoto: están neste
 computador, así que engádeos primeiro aquí.
 
-Un botón atenuado na pantalla tamén se rexeita en remoto. A referencia
+Un botón atenuado na pantalla tamén se rexeita en remoto.
+
+Un reprodutor cuxa saída Main é [bit-perfect](bit-perfect.md#what-it-costs)
+segue funcionando en remoto, cos mesmos límites que na pantalla: `play` e
+`previous` cambian ao instante, sen fundido cruzado, e o seu volume mantense
+ao 100 %. Un volume por debaixo do 100 % rexéitase (`409`, coa razón) e
+exactamente o 100 % acéptase. Cada reprodutor di se o seu volume está
+bloqueado (`fader_locked`).
+
+Un volume enviado como posición do fader (o `fader` da API, o `/volume` de
+OSC) é unha posición na escala propia do fader da pantalla, de 0 (silencio) a
+1 (0 dB): 0,9 son uns −2,5 dB, 0,8 uns −5,3 dB e 0,5 uns −16 dB. As versións
+anteriores usaban outra escala (0,8 era −12 dB, 0,5 era −30 dB), así que un
+script escrito para elas agora fixa niveis máis altos: comproba os seus
+valores.
+
+Cada pista leva a súa medición de sonoridade (`loudness`, `null` ata que se
+mide) e a súa configuración (`loudness_edit`: `excluded` e `trim_db`). Un
+reprodutor que soa ou está en pausa, e cada cartucho que soa, di con que
+ganancia de [normalización](loudness.md) comezou a súa pista e por que
+(`normalization`: `gain_db` e un `status` como `applied`, `not_measured` ou
+`bit_perfect`). `PUT /api/v1/tracks/<id>/loudness` con
+`{"excluded": false, "trim_db": -1.5}` cambia a configuración, como fai a
+xanela emerxente **Sonoridade…**; un axuste máis alá do axuste máximo
+rexéitase (`409`, coa razón). Os axustes da normalización mesmos (activada ou
+non, o obxectivo, os límites) só se cambian neste computador. OSC e MIDI non
+teñen controis de sonoridade.
+
+A referencia
 completa está na [documentación técnica](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
 
 Próbao desde un terminal:
@@ -135,6 +167,10 @@ vez, para que a superficie os limpe. Debe subscribirse de novo nun minuto
 
     oscdump 9000 &
     oscsend localhost 7381 /fauste/subscribe i 9000
+
+Nun reprodutor cuxa saída Main é bit-perfect, as mensaxes `/volume`
+rexéitanse (o rexistro tómao en conta) e o reprodutor envía `/volume-locked` 1
+aos subscritores (0 noutro caso).
 
 Un subscritor pode nomear calquera porto do seu propio enderezo, e consérvanse
 ata `max_subscribers`. Polo tanto, quen estea autorizado a enviar tamén pode

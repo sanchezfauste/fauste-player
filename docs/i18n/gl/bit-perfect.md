@@ -2,8 +2,58 @@
 
 Un dispositivo **bit-perfect** recibe as mostras de cada ficheiro exactamente
 como están no ficheiro: a mesma frecuencia de mostraxe, os mesmos valores, sen
-remostraxe, cambio de volume nin mestura. É útil en cadeas de monitorización
-e ligazóns dixitais, onde se debe evitar calquera procesamento no computador.
+remostraxe, cambio de volume nin mestura.
+
+A saída bit-perfect é un **modo especial para a reprodución audiófila**:
+escoitar un arquivo, alimentar unha cadea hi-fi ou de monitorización,
+comprobar unha ligazón dixital, en calquera lugar onde se deba evitar o
+procesamento no computador. Está desactivada de forma predeterminada e non
+está pensada para un programa musical mesturado. Le [O que custa](#what-it-costs)
+antes de activala.
+
+## O que custa {#what-it-costs}
+
+Para manter cada pista intacta, un reprodutor cuxa saída Main está nun
+dispositivo bit-perfect reproduce de forma distinta aos demais:
+
+- **Sen fundidos cruzados nin segues.** Cada pista reprodúcese ata o seu
+  final (o seu cue-out, ou o final do ficheiro con **Usar cue-in e cue-out**
+  desactivado), e despois comeza a seguinte. A **Mestura automática no punto
+  MIX** e o punto MIX non se usan: o marcador MIX debúxase atenuado e o
+  distintivo **Mestura** nunca se acende. **Play / Seguinte** e **Anterior**
+  mentres hai unha pista en antena cambian ao instante, cunha parada curta sen
+  chasquido, en lugar de facer un fundido.
+- **Un silencio curto cando cambia a frecuencia de mostraxe.** Entre dúas
+  pistas cuxas frecuencias de mostraxe difiren, cando non soa nada máis no
+  dispositivo, o dispositivo reproduce primeiro o que aínda ten no búfer (o
+  final da pista), e despois ábrese de novo á nova frecuencia, o que deixa un
+  silencio curto (normalmente unhas poucas decenas de milisegundos, máis nalgúns
+  dispositivos). As pistas á mesma frecuencia séguense sen oco nin
+  superposición. Cando a frecuencia non pode seguir (ver
+  [Que pasa nun dispositivo bit-perfect](#what-happens-on-a-bit-perfect-device)),
+  a pista seguinte comeza ao instante, convertida á frecuencia do dispositivo.
+- **Sen normalización de sonoridade.** Unha pista nun dispositivo bit-perfect
+  reprodúcese sempre con ganancia unitaria, mesmo coa
+  [normalización de sonoridade](loudness.md#bit-perfect-outputs) activada: a
+  cabeceira le **0.0 dB** en ámbar, e a súa dica di por que. Os outros
+  reprodutores e cartuchos normalízanse como de costume.
+- **O volume mantense ao 100 %.** O fader de volume do reprodutor queda
+  bloqueado no extremo superior: na pantalla, nos controladores
+  [MIDI](midi.md) e pola [API remota e OSC](remote-control.md). Pasa ao 100 %
+  cando se activa bit-perfect no dispositivo, e queda aí cando se desactiva.
+- **O que segue funcionando:** **Stop con fundido** (esvaécese durante a
+  duración do fundido), **Pausa**, **Stop**, **Reiniciar**, as marcas de
+  repetir e de parar despois, os modos Single e Continuo, o Cue (a preescoita,
+  que non ten fader e non se ve afectada), os cartuchos, a [saída DSD](#dsd),
+  e todos os reprodutores cuxa saída Main está noutro dispositivo, que
+  mesturan como de costume. Un cartucho pode soar no mesmo dispositivo:
+  mentres soa, a pista seguinte do reprodutor comeza á frecuencia actual do
+  dispositivo, convertida (así que non é bit-perfect), e non se insire
+  silencio.
+- **Cando usalo.** Actívao cando cada pista debe chegar intacta ao conversor.
+  Déixao desactivado para un programa en antena que precise transicións
+  mesturadas ou cambios de nivel. O modo axústase por dispositivo, así que os
+  reprodutores de mestura poden quedar noutro dispositivo.
 
 ## Configurar un dispositivo como bit-perfect {#setting-a-device-bit-perfect}
 
@@ -15,7 +65,8 @@ e ligazóns dixitais, onde se debe evitar calquera procesamento no computador.
    aplicación.
 2. Escolle **Avanzado** na parte de arriba da sección. En **Axustes por
    dispositivo**, activa **Bit perfect** ao carón do dispositivo.
-3. Reinicia a aplicación.
+3. O dispositivo pasa a ser bit-perfect en canto nada soa nel (consulta
+   [Axustes pendentes](settings.md#settings-pending)).
 
 O dispositivo empeza entón á súa propia frecuencia de mostraxe se lle deches
 unha no mesmo lugar, e se non á frecuencia de mostraxe global, e desde aí
@@ -47,27 +98,37 @@ exclusivo.
 - **Acceso exclusivo.** Nada máis no computador pode reproducir no dispositivo
   mentres a aplicación o usa. Se se rexeita o acceso exclusivo, o dispositivo
   reproduce igualmente, compartido, e o distintivo BP queda apagado.
-- **A frecuencia segue o ficheiro.** Cando non se reproduce nada no
-  dispositivo e empeza unha pista a outra frecuencia de mostraxe, o
-  dispositivo ábrese de novo a esa frecuencia.
-  - Isto sucede cando reproduces unha pista, retomas unha cargada en pausa,
-    preescoitas ou disparas un cartucho. As pistas que só están á espera (a
-    pista seguinte de cada reprodutor) prepáranse de novo á nova frecuencia.
-  - A reapertura leva o que o dispositivo precise para arrancar (normalmente
-    unhas poucas decenas de milisegundos). O comezo retrásase outro tanto.
-  - Mentres algo se reproduce no dispositivo, a frecuencia nunca cambia. Unha
-    pista a outra frecuencia que empeza entón (por exemplo unha pista de
-    48 kHz á que se mestura despois dunha de 44,1 kHz, ou unha pista iniciada
-    mentres outro reprodutor ou un cartucho soa no mesmo dispositivo)
-    convértese durante toda a súa duración, e non é bit-perfect.
-  - Se o dispositivo rexeita unha frecuencia, conserva a anterior e a pista
-    convértese.
+- **A frecuencia segue o ficheiro.** O dispositivo ábrese de novo á
+  frecuencia de mostraxe dunha pista cando a pista comeza:
+  - **Desde o silencio:** reproduces unha pista, retomas unha cargada en
+    pausa, preescoitas ou disparas un cartucho mentres non soa nada no
+    dispositivo. As pistas que só están á espera (a pista seguinte de cada
+    reprodutor) prepáranse de novo á nova frecuencia.
+  - **Entre dúas pistas dun reprodutor:** a pista en antena para (ao seu
+    final, ou ao instante con **Play / Seguinte** e **Anterior**), o
+    dispositivo ábrese de novo e comeza a pista seguinte. Este é o silencio
+    curto de [O que custa](#what-it-costs).
+  - O dispositivo só se abre de novo cando reproduciu todo o que tiña no
+    búfer, así que o final da pista anterior nunca se corta. Despois a
+    reapertura leva o que o dispositivo precise para arrancar. En conxunto
+    adoita ser unhas poucas decenas de milisegundos; o comezo retrásase outro
+    tanto. A espera polo búfer nunca é de máis de medio segundo
+    (`tuning.play_out_max_ms` no ficheiro de configuración, de 0 a 2000 ms),
+    diga o que diga o dispositivo.
+- **Cando a frecuencia non pode seguir.** O dispositivo conserva a súa
+  frecuencia, e unha pista a outra frecuencia convértese durante toda a súa
+  duración (non é bit-perfect), cando:
+  - algo máis soa no dispositivo ao comezar a pista: outro reprodutor (ou un
+    en pausa cunha pista), un cartucho ou unha preescoita;
+  - o dispositivo rexeitou antes esa frecuencia; conserva a anterior;
+  - a pista aínda non foi analizada, así que non se coñece a súa frecuencia.
+
+  O cambio entre as dúas pistas segue sendo sen fundido cruzado.
 - **Sen procesamento, cando nada o pide.** As mostras pasan sen cambios mentres
-  se cumpran todas estas condicións:
-  - o volume do reprodutor está ao 100 %;
-  - non hai ningún fundido en curso;
-  - non soa nada máis nas mesmas saídas (outro reprodutor, un cartucho, un
-    ton de proba).
+  non hai ningún fundido en curso (Stop con fundido, as rampas de pausa e
+  retomada, a parada curta sen chasquido dunha pista) e non soa nada máis nas
+  mesmas saídas (outro reprodutor, un cartucho, un ton de proba). O volume non
+  importa: unha saída bit-perfect mantenno ao 100 %.
 
 ## DSD {#dsd}
 
@@ -92,8 +153,8 @@ está desactivado, o dispositivo non se pode abrir en exclusiva, o DSD nativo
 necesita Linux, ou o dispositivo non acepta DSD nativo. Un modo gardado para
 un dispositivo que agora non o pode aceptar aparece como PCM, que é o que se
 reproduce; o modo gardado volve cando o dispositivo o pode aceptar de novo.
-Cambiar un modo, o axuste de mestura ou o silencio DSD necesita un reinicio,
-como os outros axustes de saída.
+Cambiar un modo, o axuste de mestura ou o silencio DSD aplícase cando nada
+soa no dispositivo, como os outros axustes de saída.
 
 **Cando o DSD sae sen cambios.** Todo isto debe cumprirse cando empeza a
 pista:
@@ -101,9 +162,12 @@ pista:
   nativo;
 - a pista é DSD (DSF ou DFF), mono ou estéreo, e foi analizada (así se coñece
   a súa frecuencia DSD);
-- o volume do reprodutor está ao 100 %;
 - non soa nada máis no dispositivo (outro reprodutor, un cartucho, un ton de
   proba);
+- a pista non ten ganancia de [normalización de sonoridade](loudness.md#bit-perfect-outputs):
+  unha cargada (por exemplo en pausa) cunha ganancia antes de que o
+  dispositivo pasase a ser bit-perfect conservaa, así que se reproduce
+  convertida, sen **DSD** nin **BP**;
 - o dispositivo acepta o fluxo. DoP necesita unha frecuencia de dispositivo
   igual á frecuencia DSD dividida por 16 (176,4 kHz para DSD64, 352,8 kHz
   para DSD128, 705,6 kHz para DSD256) e un formato de 24 ou 32 bits. O DSD
@@ -128,11 +192,8 @@ Mentres o DSD sae sen cambios:
 - o distintivo da cabeceira le **DSD** en lugar de **BP**;
 - os vúmetros mostran o nivel da conversión a PCM da mesma pista, así que
   funcionan como de costume;
-- o volume debe quedar ao 100 %: a dica do fader dío. Movelo cambia a pista a
-  PCM (ver abaixo);
 - Stop e un stop con fundido paran a pista ao instante, sen fundido, porque un
-  fluxo DSD non se pode esvaecer. Premer Play noutra pista mentres soa córtaa
-  do mesmo xeito en vez de facer un fundido cruzado;
+  fluxo DSD non se pode esvaecer;
 - a pausa e a retomada tamén actúan ao instante, sen rampla.
 
 **Silencio nos bordos.** Cada inicio, final e cambio a PCM envía primeiro
@@ -140,44 +201,44 @@ silencio DSD (200 ms de forma predeterminada), para que o conversor se
 enganche sen chasquido. A excepción é unha pista DSD que continúa un fluxo do
 mesmo tipo e frecuencia DSD cuxo silencio aínda está en curso: o conversor
 aínda está enganchado, así que empeza sen silencio extra. Por iso unha pista
-empeza ese tempo máis tarde, e un cambio a PCM deixa un oco desa duración. É
-**Silencio DSD** en Configuración → Saídas de audio, Avanzado (de 0 a
-2000 ms).
+empeza ese tempo máis tarde, e un cambio a PCM deixa un oco desa duración (un
+dispositivo DSD nativo tamén reproduce o que ten no búfer antes de abrirse de
+novo como PCM, uns milisegundos máis). É **Silencio DSD** en Configuración →
+Saídas de audio, Avanzado (de 0 a 2000 ms).
 
 **Cando outra fonte necesita o dispositivo.** **Cando outra fonte necesita
 unha saída DSD** en Configuración → Saídas de audio escolle o que pasa cando
-outro reprodutor, un cartucho ou un ton de proba empeza no mesmo dispositivo
-(mover o fader do propio reprodutor é a excepción: sempre cambia a pista a
-PCM):
+outro reprodutor, un cartucho ou un ton de proba empeza no mesmo dispositivo:
 - **Continuar a pista DSD en PCM** (o predeterminado). O fluxo cambia a PCM
   despois do silencio DSD, e a pista continúa, convertida, desde onde estaba.
   O mesmo lle pasa á pista que segue por si soa (ver abaixo).
 - **Manter o DSD e silenciar as outras fontes.** Nada interrompe o fluxo DSD.
   As outras fontes dirixidas ao dispositivo quedan silenciadas ata que remate
   a pista DSD, e mentres tanto o reprodutor mostra un distintivo **Outras
-  silenciadas**. A pista seguinte do propio reprodutor non se superpón: empeza
-  cando remata a pista DSD, sen fundido cruzado nin segue. Unha pista PCM
-  agarda ao silencio DSD; unha pista DSD do mesmo tipo e frecuencia DSD
-  continúa o fluxo sen el. Mover o fader segue cambiando a pista a PCM.
+  silenciadas**. A pista seguinte do propio reprodutor comeza cando remata a
+  pista DSD: unha pista PCM despois do silencio DSD, unha pista DSD do mesmo
+  tipo e frecuencia DSD ao instante, continuando o fluxo.
 
 **Un álbum non segue en DSD co axuste predeterminado.** Con *Continuar a pista
 DSD en PCM*, só sae como DSD unha pista DSD que empeza nun dispositivo
 libre. As pistas que o reprodutor inicia por si só despois (ao final dunha
-pista, un segue ou un fundido cruzado) empezan desde unha precarga, que é
-sempre PCM, así que o dispositivo cambia a PCM e reprodúcense convertidas. Unha
-pista que inicias ti (Play, dobre clic) sae como DSD de novo cando o
-dispositivo está libre ou o fluxo DSD anterior aínda está no seu silencio coa
-mesma frecuencia DSD. Para manter un álbum DSD enteiro como DSD, escolle
-*Manter o DSD e silenciar as outras fontes*. Entón cada pista do reprodutor
-sae como DSD, e a seguinte empeza cando remata a anterior.
+pista) empezan desde unha precarga, que é sempre PCM, así que o dispositivo
+cambia a PCM e reprodúcense convertidas. Unha pista que inicias ti (Play,
+dobre clic) sae como DSD de novo cando o dispositivo está libre ou o fluxo DSD
+anterior aínda está no seu silencio coa mesma frecuencia DSD. Para manter un
+álbum DSD enteiro como DSD, escolle *Manter o DSD e silenciar as outras
+fontes*. Entón cada pista do reprodutor sae como DSD, e a seguinte empeza
+cando remata a anterior.
 
 Se o dispositivo se perde mentres soa DSD e volve sen poder levalo (por
 exemplo sen acceso exclusivo), a pista continúa como PCM.
 
 ## O distintivo BP {#the-bp-badge}
 
-O distintivo **BP** da cabeceira do reprodutor acéndese mentres a pista actual
-chega sen cambios ao seu dispositivo Main. Todo isto debe cumprirse:
+O distintivo **BP** da cabeceira do reprodutor só existe nun reprodutor cuxo
+dispositivo Main funciona en bit-perfect. Acéndese (bordo e texto verdes;
+gris tenue cando está apagado) mentres a pista actual chega sen cambios ao seu
+dispositivo Main. Todo isto debe cumprirse:
 
 - o dispositivo é bit-perfect e está aberto con acceso exclusivo;
 - o dispositivo funciona á frecuencia de mostraxe da pista;
@@ -191,8 +252,14 @@ chega sen cambios ao seu dispositivo Main. Todo isto debe cumprirse:
   tamaño de mostra. As pistas que analizou unha versión anterior reciben o
   seu formato cando se analizan de novo (o aviso de inicio, ou Configuración →
   Análise), ou en canto un reprodutor as mostra ou un cartucho as ten;
-- o volume está ao 100 %, non hai ningún fundido en curso, e non soa nada máis
-  nas mesmas saídas.
+- a pista reprodúcese con ganancia unitaria: unha saída bit-perfect nunca se
+  normaliza, pero unha pista que comezou cunha ganancia de normalización antes
+  de que o seu dispositivo pasase a ser bit-perfect conserva esa ganancia ata
+  que para, e BP queda apagado para ela;
+- o volume mantense ao 100 % nunha saída bit-perfect, non hai ningún fundido
+  en curso (Stop con fundido, as rampas de pausa e retomada e a parada curta
+  sen chasquido dunha pista son os únicos fundidos que quedan nun reprodutor
+  así), e non soa nada máis nas mesmas saídas.
 
 Algúns ficheiros nunca se mostran como bit-perfect:
 - **Ficheiros con perdas** (MP3, AAC, Ogg Vorbis, Opus): as súas mostras
@@ -207,11 +274,18 @@ Para verificar unha cadea de punta a punta:
 
 1. Conecta a saída dixital do dispositivo (S/PDIF, AES ou loopback USB) a un
    gravador que capture con exactitude de bit.
-2. Reproduce un ficheiro de proba sen perdas ao 100 % sen que soe nada máis.
+2. Reproduce un ficheiro de proba sen perdas sen que soe nada máis.
 3. Grávao.
 4. Compara a gravación co ficheiro. Por exemplo, con SoX, inverte un e
    mestúraos: `sox -m -v 1 file.wav -v -1 recording.wav diff.wav` despois de
    aliñar os seus comezos. Cada mostra da diferenza debe ser cero.
+5. Comproba un cambio de frecuencia: no modo Continuo, coa **Mestura
+   automática no punto MIX** activada, reproduce unha pista de 44,1 kHz que
+   teña un punto MIX seguida doutra de 96 kHz. A primeira reprodúcese ata o
+   seu cue-out sen fundido; despois dun silencio curto o conversor mostra
+   96 kHz na segunda. O distintivo BP acéndese nas dúas.
+6. Despois reproduce dúas pistas á mesma frecuencia: a segunda segue á
+   primeira sen oco nin superposición.
 
 As probas automáticas do proxecto comproban a mesma propiedade dentro da
 aplicación, nun dispositivo simulado.
@@ -220,22 +294,21 @@ aplicación, nun dispositivo simulado.
 
 As probas automáticas só comproban o DSD en dispositivos simulados. O proxecto
 non probou DoP nin DSD nativo nun conversor real. Para comprobar un:
-1. Pon o dispositivo en **DoP** (ou **DSD nativo** en Linux), reinicia e
-   reproduce un ficheiro DSD ao 100 % sen que soe nada máis. A cabeceira debe
-   mostrar **DSD**, e a pantalla do propio conversor debería mostrar a
-   frecuencia DSD (por exemplo DSD64) en vez dunha frecuencia PCM. Un
-   conversor que mostra unha frecuencia PCM ou reproduce ruído non recoñece o
-   fluxo: volve a **Converter a PCM**.
-2. Escoita se hai un chasquido ou unha ráfaga de ruído ao comezo, no Stop, ao
-   final da pista e ao mover o fader. Un chasquido significa que o conversor
-   precisa un **Silencio DSD** máis longo (Configuración → Saídas de audio,
-   Avanzado).
+1. Pon o dispositivo en **DoP** (ou **DSD nativo** en Linux) e reproduce un
+   ficheiro DSD sen que soe nada máis. A cabeceira debe mostrar **DSD**, e a
+   pantalla do propio conversor debería mostrar a frecuencia DSD (por
+   exemplo DSD64) en vez dunha frecuencia PCM. Un conversor que mostra unha
+   frecuencia PCM ou reproduce ruído non recoñece o fluxo: volve a
+   **Converter a PCM**.
+2. Escoita se hai un chasquido ou unha ráfaga de ruído ao comezo, no Stop e ao
+   final da pista. Un chasquido significa que o conversor precisa un
+   **Silencio DSD** máis longo (Configuración → Saídas de audio, Avanzado).
 3. Inicia un cartucho ou outro reprodutor no mesmo dispositivo, unha vez con
    cada axuste de mestura, e comproba o comportamento descrito arriba.
 4. En Linux, para comprobar o DSD nativo sen a aplicación, executa
-   `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0 cargo test -p fp-backends --test conformance -- --ignored native_dsd_on_a_real_device`.
+   `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0 cargo test -p fp-backends --test it -- --ignored conformance::native_dsd_on_a_real_device`.
    Abre o dispositivo en DSD nativo a DSD64 e reproduce un segundo de silencio
    DSD. Debe pasar, e o conversor debería enganchar a DSD64.
-5. Con ficheiros DSD en `test-music/`, `cargo test --release -p fp-engine --test dsd_real_music -- --ignored`
+5. Con ficheiros DSD en `test-music/`, `cargo test --release -p fp-engine --test it dsd_real_music:: -- --ignored`
    reprodúceos a través do motor nun dispositivo simulado e compara as
    palabras cos bytes do ficheiro (consulta [Testing](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/testing.md)).
