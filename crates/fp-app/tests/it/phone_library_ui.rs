@@ -1215,3 +1215,57 @@ fn lb53_a_category_without_a_folder_has_no_reread() {
     tap(&mut h, "Rock");
     assert!(h.query_by_label(REREAD).is_none());
 }
+
+/// A finger held at `at` for about a second, as the phone sends it.
+fn hold_finger(h: &mut H, at: egui::Pos2) {
+    let touch = |phase| egui::Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase,
+        pos: at,
+        force: None,
+    };
+    let press = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    h.event(touch(egui::TouchPhase::Start));
+    h.event(egui::Event::PointerMoved(at));
+    h.event(press(true));
+    for _ in 0..60 {
+        h.step();
+    }
+    h.event(touch(egui::TouchPhase::End));
+    h.event(press(false));
+    h.run_steps(3);
+}
+
+/// PL38: a held finger's tap belongs to what is on top. Held on Settings,
+/// it must not open the selector row drawn beneath.
+#[test]
+fn a_held_finger_on_settings_does_not_open_the_row_beneath() {
+    let (s, _rock) = with_categories();
+    let (mut h, _browser, fake) = phone(s);
+    tap(&mut h, "Library");
+    let at = h.get_by_label("Uncategorised").rect().center();
+    tap(&mut h, "More");
+    tap(&mut h, "Settings");
+    fake.take_sent();
+    hold_finger(&mut h, at);
+    let opened = fake
+        .take_sent()
+        .into_iter()
+        .any(|c| matches!(c, Command::SetLibraryView(_)));
+    assert!(!opened, "a list opened under Settings");
+}
+
+/// The header's buttons sit at its right edge, whatever the name's length.
+#[test]
+fn the_header_buttons_sit_at_the_right() {
+    let (s, _a, _b, _gold) = with_gold();
+    let (h, _browser, _fake) = list_of(s, "Gold");
+    let plus = h.get_by_label(PLUS).rect();
+    assert!(plus.right() >= PORTRAIT.x - 24.0, "{plus:?}");
+}

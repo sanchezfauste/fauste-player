@@ -122,10 +122,14 @@ const TAP_SLOP: f32 = 16.0;
 /// (PL38).
 pub(crate) fn tapped(ui: &Ui, response: &egui::Response) -> bool {
     response.clicked()
-        || (response.sense.senses_click() && second_finger_tap(ui, response.interact_rect))
+        || (response.sense.senses_click()
+            && second_finger_tap(ui, response.interact_rect, response.layer_id))
 }
 
-fn second_finger_tap(ui: &Ui, rect: Rect) -> bool {
+/// A tap read from touch events on `rect`, of the layer `layer`: only
+/// where that layer is the top one, so a finger on a window or a modal
+/// does not reach what is drawn beneath, as egui's own click does not.
+fn second_finger_tap(ui: &Ui, rect: Rect, layer: egui::LayerId) -> bool {
     let frame = ui.ctx().cumulative_frame_nr();
     let key = egui::Id::unique("second-finger-taps");
     let seen = ui
@@ -194,12 +198,13 @@ fn second_finger_tap(ui: &Ui, rect: Rect) -> bool {
             }
         });
     }
-    ui.ctx().data(|d| {
-        d.get_temp::<Fingers>(key).is_some_and(|f| {
-            f.taps
-                .iter()
-                .any(|(a, b)| rect.contains(*a) && rect.contains(*b))
-        })
+    let taps: Vec<(egui::Pos2, egui::Pos2)> = ui.ctx().data(|d| {
+        d.get_temp::<Fingers>(key)
+            .map(|f| f.taps.clone())
+            .unwrap_or_default()
+    });
+    taps.iter().any(|(a, b)| {
+        rect.contains(*a) && rect.contains(*b) && ui.ctx().layer_id_at(*b) == Some(layer)
     })
 }
 
