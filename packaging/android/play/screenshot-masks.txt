@@ -11,6 +11,7 @@
 */phoneScreenshots/2-carts.png 880,150,200,80
 */phoneScreenshots/3-playlists.png 880,150,200,80
 */phoneScreenshots/4-music.png 880,150,200,80
+*/phoneScreenshots/5-library.png 880,150,200,80
 # A paused player's Play and Pause buttons blink (P1's card).
 */phoneScreenshots/1-live.png 30,755,290,290
 */phoneScreenshots/1-live.png 600,758,140,140

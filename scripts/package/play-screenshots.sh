@@ -332,12 +332,22 @@ settled_capture() {
 
 tap() { shell input tap "$1" "$2"; sleep "${3:-1}"; }
 
+# The Library tab opens on its categories (48 dp rows): All tracks, the
+# demo's Music with Pop and Evening, Jingles, Uncategorised, Device music.
+ROW_MUSIC=470
+ROW_DEVICE=1100
+
+# Music's track list: its songs and those of its subcategories.
+library_scene() {
+    tap 300 "$ROW_MUSIC" 1.5
+}
+
 # Device music: the Demo folder, three songs chosen.
 music_scene() {
-    # The Library tab opens on its categories: the demo state has none, so
-    # the rows are All tracks, Uncategorised and Device music (48 dp each).
-    tap 300 596 1.5 # Device music
-    tap 300 840 1.5 # Demo: the root lists the folders of Music, Carts first
+    shell input keyevent KEYCODE_BACK
+    sleep 1
+    tap 300 "$ROW_DEVICE" 1.5 # Device music
+    tap 300 992 1.5 # Demo: the root lists the folders of Music, Carts first
     for y in 866 1017 1320; do
         tap 80 "$y" 0.7
     done
@@ -377,5 +387,7 @@ for lang in "${langs[@]}"; do
     shoot "$dir" 1-live live
     shoot "$dir" 2-carts carts
     shoot "$dir" 3-playlists playlists
+    # The list first: Back from it is the selector, where Device music is.
+    shoot "$dir" 5-library library library_scene
     shoot "$dir" 4-music library music_scene
 done

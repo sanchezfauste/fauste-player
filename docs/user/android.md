@@ -45,6 +45,7 @@ the status bar at the bottom shows only when it has something to say.
 <img src="../images/android/2-carts.png" width="180" alt="Carts on a phone: the General page turned upright, two carts per row">
 <img src="../images/android/3-playlists.png" width="180" alt="Playlists on a phone: the P1 to P4 chips, the playlist tabs, the track list and the player's card at the bottom">
 <img src="../images/android/4-music.png" width="180" alt="Device music on a phone: the Demo folder with three songs ticked and the bar to add them to P1's Morning playlist">
+<img src="../images/android/5-library.png" width="180" alt="The Library tab on a phone: the Music category's tracks, each with a box to tick and headphones to pre-listen, under the search and Whole library">
 </p>
 
 - *Live:* every player as a card, and the cartwall. Each card has, top
@@ -203,7 +204,9 @@ list header (or **Re-read device folder** in its menu). Every file Device
 music lists in the folder and its subfolders is added to the category,
 with the rules above (a file already in another category keeps it), and a
 notice says how many files were read. Files that left the folder stay in
-the library; **Re-analyse** marks those whose file is gone as missing. **Change device folder…** and **Forget
+the library, marked missing, and come back to normal when they return to
+it (when Device music lists nothing, for example without permission,
+nothing is marked). **Change device folder…** and **Forget
 device folder** are in the same menu; one folder belongs to one category.
 
 ### Device music
