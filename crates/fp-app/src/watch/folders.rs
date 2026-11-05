@@ -546,16 +546,23 @@ impl FolderWatch {
         checks.retain(|folder| !roots.contains(folder));
         // The retry's and the nested checks: an empty one that holds
         // tracks is not there.
-        let holding = checks
-            .iter()
-            .filter(|folder| {
-                state
-                    .library
-                    .iter()
-                    .any(|t| t.file_state != FileState::Missing && t.path.starts_with(folder))
-            })
-            .cloned()
-            .collect();
+        // One pass over the library: each track looks its folders up.
+        let holding = {
+            let mut held = HashSet::new();
+            if !checks.is_empty() {
+                for t in state.library.iter() {
+                    if t.file_state == FileState::Missing {
+                        continue;
+                    }
+                    held.extend(t.path.ancestors().filter(|a| checks.contains(*a)));
+                }
+            }
+            checks
+                .iter()
+                .filter(|folder| held.contains(folder.as_path()))
+                .cloned()
+                .collect()
+        };
         // The folders the event paths lie in are looked at too.
         for path in &paths {
             checks.extend(
@@ -568,21 +575,31 @@ impl FolderWatch {
         let checks: Vec<PathBuf> = checks.into_iter().collect();
         // The tracks of a folder in trouble wait for its own walk: a walk
         // of a folder holding it must not mark them.
-        let troubled: Vec<&PathBuf> = self
+        let troubled: HashSet<&Path> = self
             .troubles
             .keys()
             .filter(|folder| !roots.contains(*folder))
+            .map(PathBuf::as_path)
             .collect();
+        let under: HashSet<&Path> = roots
+            .iter()
+            .chain(paths.iter())
+            .map(PathBuf::as_path)
+            .collect();
+        // One pass over the library: each track looks its folders up
+        // (`Path::ancestors` starts with the path itself, as `starts_with`).
         let known = state
             .library
             .iter()
             .filter(|t| t.file_state != FileState::Missing)
-            .filter(|t| !troubled.iter().any(|folder| t.path.starts_with(folder)))
             .filter(|t| {
-                roots
-                    .iter()
-                    .chain(paths.iter())
-                    .any(|under| t.path.starts_with(under))
+                let mut troubled_above = false;
+                let mut listed = false;
+                for a in t.path.ancestors() {
+                    troubled_above |= troubled.contains(a);
+                    listed |= under.contains(a);
+                }
+                listed && !troubled_above
             })
             .map(|t| (t.id, t.path.clone()))
             .collect();

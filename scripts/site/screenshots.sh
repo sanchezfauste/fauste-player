@@ -177,6 +177,35 @@ for y in sorted(rows):
 '
 }
 
+# The centres (x) of the bordered buttons at the left end of the top bar,
+# left to right: the players' (P1 to P4), Cartwall, Library, the layout
+# button. Their places depend on the labels' length in the interface
+# language, so they are found on the screen as `topbar_buttons` does.
+topbar_left_buttons() {
+    local raw=$work/bar.png
+    x import -window "$win" "$raw"
+    convert "$raw" -crop 960x16+0+0 +repage -depth 8 txt:- | python3 -c '
+import re, sys
+rows = {}
+for line in sys.stdin:
+    m = re.match(r"(\d+),(\d+):.*(#[0-9A-Fa-f]{6})", line)
+    if m:
+        rows.setdefault(int(m[2]), []).append(m[3])
+for y in sorted(rows):
+    row, bar, runs, start = rows[y], rows[y][0], [], None
+    for x, colour in enumerate(row + [bar]):
+        if colour != bar and start is None:
+            start = x
+        elif colour == bar and start is not None:
+            if x - start >= 10:
+                runs.append((start + x - 1) // 2)
+            start = None
+    if len(runs) >= 7:
+        print(*runs)
+        break
+'
+}
+
 # capture_window <file> <x> <y> <radius> [left top right bottom]: the window
 # that covers the point (x, y), an empty part of it, found on the screen
 # (scripts/site/window_box.py), widened by the margins. A window's size depends on the language of its
@@ -249,6 +278,7 @@ null = lambda ch: {"backend": "null", "device": "null", "first_channel": ch}
 c["outputs"]["backend"] = "null"
 c["outputs"]["routes"] = [{"player": p, "main": null(0), "cue": null(2)} for p in players]
 c["outputs"]["cartwall"] = {"main": null(0), "cue": null(2)}
+c["outputs"]["library"] = {"cue": null(2)}
 c["outputs"]["bit_perfect"] = []
 c["ui"]["language"] = lang
 # Loudness normalization on (the other loudness settings keep their
@@ -413,7 +443,7 @@ shoot_main() {
 # the windows and menus, whose size depends on the language, and the top
 # bar's buttons are found on the screen.
 shoot_guide() {
-    local p4 n section about_x settings_x
+    local p4 n section about_x settings_x library_x
     # From the scene, while the cart still plays.
     capture "$guide/player.png" 472x262+7+41
     capture "$guide/playlist.png" 472x614+7+309
@@ -447,7 +477,7 @@ shoot_guide() {
     # Settings, one capture per section (the list on the left).
     click "$settings_x" 17
     n=0
-    for section in outputs players meters analysis loudness playlists cartwall shortcuts midi remote; do
+    for section in outputs players meters analysis loudness playlists cartwall library shortcuts midi remote; do
         click 600 $((291 + n * 36))
         park
         capture "$guide/settings-$section.png" 900x640+510+220
@@ -460,6 +490,20 @@ shoot_guide() {
     park
     capture_window "$guide/about.png" 960 540 40
     key Escape
+
+    # The library window (the top bar's sixth button), on the Music
+    # category the demo session chose; closed again with the same button.
+    library_x=$(topbar_left_buttons | awk '{print $6}')
+    [[ -n $library_x ]] || die "cannot find the Library button in the top bar"
+    click "$library_x" 17
+    # A row selected (Northbound, row 4) shows its waveform for pre-listening.
+    click 700 490
+    park
+    sleep 1.5
+    # The window's default place: 70 % of the area below the top bar,
+    # whatever the language.
+    capture "$guide/library.png" 1344x714+288+189
+    click "$library_x" 17
 }
 
 # ---------------------------------------------------------------- main

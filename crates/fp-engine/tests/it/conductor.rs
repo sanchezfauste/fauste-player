@@ -189,6 +189,24 @@ fn a_flooded_command_queue_refuses_instead_of_blocking() {
     );
 }
 
+/// A refused command comes back whole, so its sender can queue it again
+/// without having cloned it first.
+#[test]
+fn a_full_queue_gives_the_command_back() {
+    let (conductor, handle, _device, _now) = offline_conductor(model(1, 2));
+    let p = conductor.state().players[0].id;
+    while handle.send(Command::SetVolume(p, 0.5)) {}
+    let paths = vec![std::path::PathBuf::from("/m/a.wav"); 3];
+    let command = Command::AddToLibrary {
+        paths: paths.clone(),
+        category: None,
+    };
+    match handle.offer(command) {
+        Err(Command::AddToLibrary { paths: back, .. }) => assert_eq!(back, paths),
+        other => panic!("expected the command back, got {other:?}"),
+    }
+}
+
 #[test]
 fn test_tones_requested_through_the_handle_play_on_their_route() {
     let (mut conductor, handle, device, now) = offline_conductor(model(1, 1));

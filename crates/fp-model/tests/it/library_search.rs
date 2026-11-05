@@ -204,6 +204,41 @@ fn counts_include_subcategories() {
     assert_eq!(counts.by_category.get(&CategoryId(102)), Some(&1));
 }
 
+/// 20 categories with 100 subcategories each, a track in every one, plus a
+/// cycle a hand edit left (counted once) and a track whose category is
+/// unknown: counted in one pass, not a subtree walk per category.
+#[test]
+fn counts_of_a_wide_tree_are_quick_and_right() {
+    let mut cats = Vec::new();
+    let mut tracks = Vec::new();
+    for top in 0..20u64 {
+        let parent = 10_000 + top;
+        cats.push(cat(parent, None, "Top"));
+        for child in 0..100u64 {
+            let id = parent * 1_000 + child;
+            cats.push(cat(id, Some(parent), "Child"));
+            tracks.push(track(id, &format!("/m/{id}.wav"), "T", "", Some(id)));
+        }
+    }
+    cats.push(cat(9_001, Some(9_002), "Loop A"));
+    cats.push(cat(9_002, Some(9_001), "Loop B"));
+    tracks.push(track(9_001, "/m/loop.wav", "L", "", Some(9_001)));
+    tracks.push(track(9_999, "/m/lost.wav", "X", "", Some(77_777)));
+    let (lib, cats) = (library(tracks), Categories::from(cats));
+    let started = Instant::now();
+    let counts = category_counts(&lib, &cats);
+    assert!(
+        started.elapsed().as_secs_f64() < 1.0,
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(counts.by_category.get(&CategoryId(10_000)), Some(&100));
+    assert_eq!(counts.by_category.get(&CategoryId(10_019_099)), Some(&1));
+    assert_eq!(counts.by_category.get(&CategoryId(9_001)), Some(&1));
+    assert_eq!(counts.by_category.get(&CategoryId(9_002)), Some(&1));
+    assert_eq!(counts.by_category.get(&CategoryId(77_777)), None);
+}
+
 fn sorted(lib: &Library, cats: &Categories, column: LibraryColumn, ascending: bool) -> Vec<u64> {
     let mut ids = lib.ids();
     sort_rows(&mut ids, lib, cats, LibrarySort { column, ascending });

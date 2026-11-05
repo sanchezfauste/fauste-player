@@ -20,7 +20,7 @@ use super::super::track_cells::{self, RowColours};
 use super::super::widgets::{self, TileStyle, font};
 use super::confirm::{Removal, ask_removal};
 use super::menu::{self, MenuOutcome};
-use super::state::{LibraryUi, LiveColumns, selected_among};
+use super::state::{LibraryUi, LiveColumns};
 use super::{added_category, current_view, send};
 
 const TOOLBAR_HEIGHT: f32 = 36.0;
@@ -387,14 +387,15 @@ fn rows(
         Sense::click_and_drag()
     };
     {
-        let rows = library.rows.as_ref().map_or(&[][..], |c| c.rows.as_slice());
-        let selected = &library.selected;
+        let lib: &LibraryUi = library;
+        let rows = lib.rows.as_ref().map_or(&[][..], |c| c.rows.as_slice());
+        let selected = &lib.selected;
         // What a menu or a drag on the row of `id` acts on.
-        let targets = |id: TrackId| {
+        let targets = |id: TrackId| -> std::rc::Rc<[TrackId]> {
             if selected.contains(&id) {
-                selected_among(rows, selected)
+                lib.selected_in_order()
             } else {
-                vec![id]
+                std::rc::Rc::from([id])
             }
         };
         ui.spacing_mut().item_spacing = Vec2::ZERO;
@@ -425,7 +426,7 @@ fn rows(
                     egui::DragAndDrop::set_payload(
                         ui.ctx(),
                         DragTracks {
-                            tracks: targets(id),
+                            tracks: targets(id).to_vec(),
                         },
                     );
                     taken = Some(id);
@@ -664,6 +665,42 @@ mod tests {
         library.rows(&s);
         assert_eq!(library.selected, vec![alpha]);
         assert_eq!(library.anchor, None, "the anchor was the removed row");
+    }
+
+    #[test]
+    fn a_shift_click_over_many_rows_is_linear() {
+        let rows: Vec<TrackId> = (1..=20_000).map(TrackId).collect();
+        let mut library = LibraryUi::default();
+        let started = std::time::Instant::now();
+        library.click(&rows, rows[0], egui::Modifiers::NONE);
+        library.click(&rows, rows[19_999], egui::Modifiers::SHIFT);
+        library.click(&rows, rows[10_000], egui::Modifiers::COMMAND);
+        assert_eq!(library.selected.len(), 19_999);
+        library.click(
+            &rows,
+            rows[19_999],
+            egui::Modifiers::COMMAND | egui::Modifiers::SHIFT,
+        );
+        assert_eq!(library.selected.len(), 20_000);
+        assert_eq!(library.selected.last(), Some(&rows[10_000]), "added last");
+        assert_eq!(library.selected.ids()[..2], rows[..2]);
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    }
+
+    #[test]
+    fn the_ordered_selection_follows_a_click_and_the_rows() {
+        let mut s = library_state(&["A", "B", "C"]);
+        let mut library = LibraryUi::default();
+        let rows = library.rows(&s).to_vec();
+        let [a, b, c] = [rows[0], rows[1], rows[2]];
+        library.click(&rows, c, egui::Modifiers::NONE);
+        library.click(&rows, a, egui::Modifiers::COMMAND);
+        assert_eq!(&*library.selected_in_order(), &[a, c], "the table's order");
+        library.click(&rows, b, egui::Modifiers::COMMAND);
+        assert_eq!(&*library.selected_in_order(), &[a, b, c]);
+        s.library.remove(b);
+        library.rows(&s);
+        assert_eq!(&*library.selected_in_order(), &[a, c], "the rows changed");
     }
 
     #[test]

@@ -206,16 +206,23 @@ fn command_summary(command: &Command) -> String {
 impl ConductorHandle {
     /// Queues a command; never blocks. `false` if the queue is full.
     pub fn send(&self, command: Command) -> bool {
+        self.offer(command).is_ok()
+    }
+
+    /// Queues a command; never blocks. A command the queue cannot take
+    /// (full, or the conductor gone) comes back, so the sender can keep it
+    /// for later without cloning it first.
+    pub fn offer(&self, command: Command) -> Result<(), Command> {
         match self.commands.try_send(command) {
-            Ok(()) => true,
+            Ok(()) => Ok(()),
             Err(TrySendError::Full(c)) => {
                 tracing::warn!(
                     command = %command_summary(&c),
-                    "command queue full; command dropped"
+                    "command queue full; command refused"
                 );
-                false
+                Err(c)
             }
-            Err(TrySendError::Disconnected(_)) => false,
+            Err(TrySendError::Disconnected(c)) => Err(c),
         }
     }
 

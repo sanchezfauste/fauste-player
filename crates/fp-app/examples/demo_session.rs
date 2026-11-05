@@ -10,7 +10,11 @@ use std::process::ExitCode;
 
 use fp_app::bootstrap;
 use fp_app::ui::files::audio_paths;
-use fp_model::{AppState, CartColor, CartEdit, CartKind, Command, Config, Limits, PlaylistId};
+use fp_model::library_view::LibrarySelection;
+use fp_model::{
+    AppState, CartColor, CartEdit, CartKind, CategoryId, Command, Config, Limits, PlaylistId,
+    TrackKind,
+};
 use fp_store::Store;
 
 fn main() -> ExitCode {
@@ -132,6 +136,7 @@ fn main() -> ExitCode {
             name: "Effects".into(),
         },
     );
+    library(&mut state, &files, &short);
     let mut store = Store::new(paths, Limits::default());
     let saved = store.save_config(&state).and_then(|()| {
         store.save_state(
@@ -147,4 +152,69 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
+}
+
+/// The track library of the guide's screenshot: the songs in two
+/// categories under Music, the cart files in Jingles, and the window on
+/// Music with its subcategories shown.
+fn library(state: &mut AppState, songs: &[PathBuf], carts: &[PathBuf]) {
+    fn category(
+        state: &mut AppState,
+        parent: Option<CategoryId>,
+        name: &str,
+        color: Option<CartColor>,
+        kind: TrackKind,
+    ) -> Option<CategoryId> {
+        let created = Command::CreateCategory {
+            parent,
+            name: name.into(),
+            color,
+            kind,
+        };
+        fp_model::apply(state, created).ok()?;
+        state
+            .categories
+            .iter()
+            .find(|c| c.name == name && c.parent == parent)
+            .map(|c| c.id)
+    }
+    let music = category(
+        state,
+        None,
+        "Music",
+        Some(CartColor::Teal),
+        TrackKind::Music,
+    );
+    let pop = category(state, music, "Pop", None, TrackKind::Music);
+    let evening = category(
+        state,
+        music,
+        "Evening",
+        Some(CartColor::Violet),
+        TrackKind::Music,
+    );
+    let jingles = category(
+        state,
+        None,
+        "Jingles",
+        Some(CartColor::Amber),
+        TrackKind::Jingle,
+    );
+    let (first, second) = songs.split_at(songs.len() / 2);
+    let carts = carts.get(..6.min(carts.len())).unwrap_or_default();
+    for (paths, category) in [(carts, jingles), (first, pop), (second, evening)] {
+        let _ = fp_model::apply(
+            state,
+            Command::AddToLibrary {
+                paths: paths.to_vec(),
+                category,
+            },
+        );
+    }
+    let mut view = state.library_view.clone();
+    if let Some(music) = music {
+        view.selection = LibrarySelection::Category(music);
+        view.expanded = vec![music];
+    }
+    let _ = fp_model::apply(state, Command::SetLibraryView(Box::new(view)));
 }
