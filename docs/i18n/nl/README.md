@@ -1,6 +1,6 @@
 # Fauste Player — Gebruikershandleiding
 
-<div class="ai-notice" role="note">Deze handleiding is met AI vertaald uit de Engelse handleiding (v0.5.0-120-g6932087, commit 6932087) en kan fouten bevatten. Bij verschillen geldt de Engelse versie. <a href="../index.html" hreflang="en">Lees het origineel in het Engels</a></div>
+<div class="ai-notice" role="note">Deze handleiding is met AI vertaald uit de Engelse handleiding (v0.12.0-308-gdf2987e0, commit df2987e) en kan fouten bevatten. Bij verschillen geldt de Engelse versie. <a href="../index.html" hreflang="en">Lees het origineel in het Engels</a></div>
 
 Fauste Player is een playout-applicatie voor radiostudio’s. Het draait
 meerdere onafhankelijke **spelers** naast elkaar. Elke speler heeft zijn eigen

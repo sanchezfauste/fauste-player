@@ -7,8 +7,8 @@ title = "Fauste Player — Guide de l'utilisateur"
 label = "Langue"
 # The commit of master whose docs/user this translation was made from, and
 # its `git describe --tags`.
-source-commit = "69320878e299f7829975d5b1a845f1a8c96794bb"
-source-version = "v0.5.0-120-g6932087"
+source-commit = "df2987e0d5b2a3fc3903c23ce9ed5d9b60ea1176"
+source-version = "v0.12.0-308-gdf2987e0"
 # The notice on every page; {version} and {commit} are replaced with the
 # fields above, and english-link links to the same page in English.
 notice = "Cette page a été traduite par IA à partir du guide en anglais ({version}, commit {commit}) et peut contenir des erreurs. En cas de différence, la version anglaise fait foi."
