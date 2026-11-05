@@ -218,3 +218,17 @@ fn the_question_lists_what_sounds_with_and() {
         .is_some()
     );
 }
+
+/// The system Back cancels the question, as Esc does, before anything
+/// under it goes back.
+#[test]
+fn back_cancels_the_question() {
+    let (mut h, fake) = asked();
+    let id = fake.state.load().cue_on_air.request.clone().unwrap().id;
+    let ctx = h.ctx.clone();
+    assert!(h.state_mut().back(&ctx));
+    h.run_steps(2);
+    assert_eq!(fake.take_sent(), vec![Command::CancelCueOnAir(id)]);
+    assert!(h.query_by_label(TITLE).is_none());
+    assert!(!cueing(&fake, 0));
+}

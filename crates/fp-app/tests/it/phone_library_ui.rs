@@ -1520,3 +1520,20 @@ fn lb57_the_headers_arrow_leaves_the_list_at_once() {
     tap(&mut h, BACK);
     assert!(on_selector(&h), "one tap on the arrow");
 }
+
+/// LB54: with a stopped track and the card closed, the strip names the
+/// track beside its caret, not the idle hint.
+#[test]
+fn lb54_a_stopped_track_shows_its_title_not_the_hint() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    fp_model::apply(&mut s, Command::StopLibraryCue).unwrap();
+    assert_eq!(s.library_cue.track, Some(a), "LB33 keeps the track");
+    let (h, _fake) = rock_list(s);
+    assert!(h.query_by_label(IDLE).is_none(), "no hint beside the caret");
+    let strip = h.get_by_label(OPEN_CARD).rect();
+    let named = h
+        .query_all_by_label("Alpha")
+        .any(|n| strip.contains(n.rect().center()));
+    assert!(named, "the strip names the track");
+}

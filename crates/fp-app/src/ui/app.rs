@@ -682,6 +682,17 @@ impl AppUi {
             egui::Popup::close_all(ctx);
             return true;
         }
+        // On-air pre-listen spec §5: the question is cancelled, as Esc
+        // would, before anything under it goes back (the close guard, drawn
+        // over it, closes first).
+        if self.view.exit_guard.is_none() {
+            let state = self.ctl.model();
+            if let Some(id) = self.cue_question(&state).map(|r| r.id) {
+                self.view.cue_answered = Some(id);
+                self.ctl.send(Command::CancelCueOnAir(id));
+                return true;
+            }
+        }
         // PL2, PL19b: answering a picker, the Music screen goes up a
         // folder before the request is cancelled.
         if self.view.music.pick.is_some() && self.music_back() {
