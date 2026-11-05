@@ -476,6 +476,9 @@ packaging: the workflow refuses other tags, and tags made before it
   scripts or `stores.yml` builds the MSIX and both snaps, lints the Flathub
   manifest, checks the Google Play listing and the PKGBUILD, and publishes
   nothing.
+- **Timeout:** a snap build stops after 45 minutes (it takes about 10):
+  when the snap servers stall, snapcraft otherwise waits silently for
+  hours. Re-run the job.
 - **Google Play** takes the bundle `release-build.yml` built and signed (the
   `binaries` job runs before `stores`), never a rebuild: a release made
   without the Android release key has no bundle, and the job fails. A
