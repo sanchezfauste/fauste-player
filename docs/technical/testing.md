@@ -117,10 +117,13 @@ fmt, clippy and tests run on Linux, Windows and macOS for pushes to `master`
 and for every pull request; `cargo deny` and the release-bump check run on
 Linux. A pull request that changes only documentation (`docs/`, Markdown
 files, `site/`, `scripts/site/`, the Google Play listing in
-`packaging/android/play`) skips every job but `deny`: the `changes` job
-decides, the skipped jobs count as passed for the required checks, and the
-pages workflow still checks the guide and the site. Pushes to `master` run
-everything.
+`packaging/android/play`) skips the Rust work: the `changes` job decides,
+the other jobs but `deny` are skipped, and the test matrix runs with its
+steps skipped (a matrix job skipped as a whole reports one check under its
+unexpanded name, never the three required ones). Skipped jobs count as
+passed for the required checks, and the pages workflow still checks the
+guide and the site. Pushes to `master` run everything, and so does a pull
+request when the filter fails.
 
 Every job has a timeout (`timeout-minutes`, about three times its usual
 length), so a stalled mirror, emulator or server fails it in minutes. The
