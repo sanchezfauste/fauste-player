@@ -45,7 +45,7 @@ the status bar at the bottom shows only when it has something to say.
 <img src="../images/android/2-carts.png" width="180" alt="Carts on a phone: the General page turned upright, two carts per row">
 <img src="../images/android/3-playlists.png" width="180" alt="Playlists on a phone: the P1 to P4 chips, the playlist tabs, the track list and the player's card at the bottom">
 <img src="../images/android/4-music.png" width="180" alt="Device music on a phone: the Demo folder with three songs ticked and the bar to add them to P1's Morning playlist">
-<img src="../images/android/5-library.png" width="180" alt="The Library tab on a phone: the Music category's tracks, each with a box to tick and headphones to pre-listen, under the search and Whole library">
+<img src="../images/android/5-library.png" width="180" alt="The Library tab on a phone: the Music category's tracks, each with a box to tick and headphones to pre-listen, and under them the pre-listen card with the track's waveform and markers">
 </p>
 
 - *Live:* every player as a card, and the cartwall. Each card has, top
@@ -167,6 +167,27 @@ that track. A slim strip over the list shows the title, the time left,
 hint otherwise: it always keeps its place, so the rows do not move when a
 pre-listen starts or stops. The 🎧
 is dimmed when the file is missing or cannot be played.
+
+**The pre-listen card.** Tap the strip (away from its buttons) to open
+the card under the list, with the track's waveform as on a player's card
+in Playlists; the arrow at the strip's right shows whether it is open.
+Tap the strip again, or press Back, to close it; the pre-listen goes on.
+On the card:
+
+- a tap on the waveform jumps there, or, while stopped, sets where
+  **Play** starts;
+- a long press sets a marker at that point (cue in, intro end, outro
+  start, MIX, cue out) or removes one you set. Markers belong to the
+  track, so the change shows in every playlist and on the desktop;
+- a pinch zooms, a drag moves a zoomed view and **Full view** shows the
+  whole track again;
+- under the waveform are the times, **Play**, **Pause**, **Stop** and the
+  meter.
+
+The list stays above the card (on the left with the phone on its side),
+so the 🎧 of another row still switches the card to that track. The
+padlock stops the waveform's jumps and marker changes, as on the
+players.
 The preview stops when its track leaves the library and when you leave
 the Library tab (for another tab, or by Back); on the categories or on
 Device music it goes on, but its strip shows only on the track list.

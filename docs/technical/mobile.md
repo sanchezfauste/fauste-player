@@ -227,7 +227,15 @@ stops or changes playout.
   disabled when `prelisten_blocked` names a reason (no Cue output, a
   missing or unreadable file). The strip over the list
   (`preview_strip`) shows only on the list page and always takes its
-  height (LB49: a dim hint while stopped, so the rows never move). Device
+  height (LB49: a dim hint while stopped, so the rows never move). While
+  the library CUE has a track a tap on the strip toggles
+  `PhoneLibraryView::card_open` (LB54, plan 9), and `tracks_page` lays the
+  rows out above the pre-listen card (`phone_prelisten::card`, at most
+  `CARD_SHARE` of the room; sideways the right half), with the ticks' bar
+  under both (LB55). The card reuses `wave_panel::show` with
+  `WaveKey::Library` (seek as `SeekLibraryCue`, long-press markers, pinch
+  zoom, the padlock), so the desktop preview bar and the card share their
+  zoom; `PhoneLibraryView::back` closes an open card first (LB57). Device
   music as a page of the tab has a header (`device_header`, LB50) whose
   back leaves it at once, unless a pick is answered; opening a list from
   the selector clears the search text (LB51). Plan 7's device folders
