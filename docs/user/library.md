@@ -128,7 +128,9 @@ New files go to the analysis behind anything a player or a cart needs, so a
 folder with thousands of files takes a while; the analysis progress shows it.
 
 The same menu and mark are in **Settings → Library**. They are not on Android,
-which does not watch folders.
+which does not watch folders: there a category can take its files from a
+device folder that you re-read when you choose (see [Android →
+Library](android.md#library)).
 
 ## The track table
 

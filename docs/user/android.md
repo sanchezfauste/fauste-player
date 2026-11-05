@@ -136,7 +136,8 @@ in **Settings → Library**.
 
 **A category's tracks.** Tap a category to open its tracks (with those of
 its subcategories). The arrow in its header, or Back, returns to the
-categories. Another tab and back finds the list as you left it. Search
+categories. Another tab and back finds the list as you left it. Opening
+a category from the categories starts with an empty search. Search
 filters the list by title, artist, album and the other tags the library
 window searches; **Whole library** searches every
 category. Each row shows the title (or the file name), the artist, the
@@ -160,8 +161,10 @@ not offered. The ticks stay after the menu's action.
 
 **Pre-listen.** The 🎧 at a row's right plays its track from its cue-in
 on the library's pre-listen output; the 🎧 of another row switches to
-that track. While it plays (or is paused), a slim strip over the list
-shows the title, the time left, **Pause**/**Play** and **Stop**. The 🎧
+that track. A slim strip over the list shows the title, the time left,
+**Pause**/**Play** and **Stop** while it plays (or is paused), and a
+hint otherwise: it always keeps its place, so the rows do not move when a
+pre-listen starts or stops. The 🎧
 is dimmed when the file is missing or cannot be played.
 The preview stops when its track leaves the library and when you leave
 the Library tab (for another tab, or by Back); on the categories or on
@@ -186,7 +189,22 @@ category and returns to the list; a file already in the library joins it
 if it has no category and keeps the one it has otherwise, as on the
 desktop. Device music keeps its ticks between visits,
 so files ticked on an earlier visit are added too: check the count on the
-bar first. Back returns to the list without adding.
+bar first. **Back to the list**, at the top, or Back returns to the list
+without adding. Device music opened from the categories has **Back to the
+categories** at the top instead.
+
+**A category's device folder.** A category can take its files from a
+folder of the device's music. In its menu (a long press on it in
+**Settings → Library**, or in the library window on a tablet), **Use a
+device folder…** opens Device music to choose the folder (**Use this
+folder**); the category then names it. Nothing watches the folder: when
+you have copied new music there, tap the **↻** in the category's track
+list header (or **Re-read device folder** in its menu). Every file Device
+music lists in the folder and its subfolders is added to the category,
+with the rules above (a file already in another category keeps it), and a
+notice says how many files were read. Files that left the folder stay in
+the library, marked missing. **Change device folder…** and **Forget
+device folder** are in the same menu; one folder belongs to one category.
 
 ### Device music
 
