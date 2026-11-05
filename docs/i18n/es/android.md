@@ -50,6 +50,7 @@ aparece cuando tiene algo que decir.
 <img src="../../images/android/2-carts.png" width="180" alt="Cartuchera en un teléfono: la página General en vertical, dos cartuchos por fila">
 <img src="../../images/android/3-playlists.png" width="180" alt="Playlists en un teléfono: los chips de P1 a P4, las pestañas de playlist, la lista de pistas y la tarjeta del player abajo">
 <img src="../../images/android/4-music.png" width="180" alt="Música del dispositivo en un teléfono: la carpeta Demo con tres canciones marcadas y la barra para añadirlas a la playlist Morning de P1">
+<img src="../../images/android/5-library.png" width="180" alt="La pestaña Biblioteca en un teléfono: las pistas de la categoría Music, cada una con una casilla para marcar y unos auriculares para preescuchar, y debajo la tarjeta de preescucha con la forma de onda de la pista y sus marcadores">
 </p>
 
 - *Directo:* cada player como una tarjeta, y la cartuchera. Cada tarjeta
@@ -179,7 +180,32 @@ cambian a esa pista. Una franja delgada sobre la lista muestra el título, el
 tiempo restante, **Pausar**/**Preescuchar** y **Detener** mientras suena (o está
 en pausa), y una indicación en caso contrario: siempre conserva su sitio, de
 modo que las filas no se mueven cuando empieza o acaba una preescucha. Los 🎧
-se atenúan cuando el archivo falta o no se puede reproducir. La preescucha
+se atenúan cuando el archivo falta o no se puede reproducir.
+
+**La tarjeta de preescucha.** Toca la franja (fuera de sus botones) para
+abrir la tarjeta bajo la lista, con la forma de onda de la pista como en la
+tarjeta de un player en Playlists; la flecha a la derecha de la franja
+indica si está abierta. Toca la franja otra vez, o pulsa Atrás, para
+cerrarla; la preescucha continúa. La flecha de la cabecera de la lista
+vuelve a las categorías enseguida y deja la tarjeta abierta para la
+siguiente lista. En la tarjeta:
+
+- un toque en la forma de onda salta a ese punto o, con la preescucha
+  detenida, fija dónde empieza **Preescuchar**;
+- una pulsación larga pone un marcador en ese punto (cue-in, fin de la
+  intro, inicio del outro, MIX, cue-out) o quita uno que pusiste. Los
+  marcadores son de la pista, así que el cambio se ve en todas las
+  playlists y en el escritorio;
+- un pellizco amplía, un arrastre mueve una vista ampliada y **Vista
+  completa** vuelve a mostrar toda la pista;
+- bajo la forma de onda están los tiempos, **Preescuchar**, **Pausar**,
+  **Detener** y el medidor.
+
+La lista queda encima de la tarjeta (a la izquierda con el teléfono de
+lado), así que los 🎧 de otra fila siguen cambiando la tarjeta a esa pista.
+El candado detiene los saltos y los cambios de marcadores de la forma de
+onda, como en los players.
+La preescucha
 se detiene cuando su pista sale de la biblioteca y cuando sales de la
 pestaña Biblioteca (a otra pestaña, o con Atrás); en las categorías o en
 Música del dispositivo continúa, pero su franja solo se muestra en la lista
@@ -222,8 +248,9 @@ carpeta del dispositivo** en su menú). Todo archivo que Música del
 dispositivo lista en la carpeta y en sus subcarpetas se añade a la
 categoría, con las reglas anteriores (un archivo que ya está en otra
 categoría conserva esa), y un aviso dice cuántos archivos se leyeron. Los
-archivos que salieron de la carpeta se quedan en la biblioteca; **Volver a
-analizar** marca como faltantes los que ya no tienen archivo. **Cambiar
+archivos que salieron de la carpeta se quedan en la biblioteca, marcados como faltantes, y vuelven a la normalidad cuando
+regresan a ella (cuando Música del dispositivo no lista nada, por ejemplo sin
+permiso, no se marca nada). **Cambiar
 carpeta del dispositivo…** y **Olvidar carpeta del dispositivo** están en el
 mismo menú; una carpeta pertenece a una sola categoría.
 

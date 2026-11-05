@@ -46,6 +46,7 @@ algo a dizer.
 <img src="../../images/android/2-carts.png" width="180" alt="Cartucheira num telemóvel: a página Geral na vertical, dois cartuchos por linha">
 <img src="../../images/android/3-playlists.png" width="180" alt="Listas num telemóvel: os botões P1 a P4, os separadores de listas, a lista de faixas e o cartão do leitor em baixo">
 <img src="../../images/android/4-music.png" width="180" alt="Música do dispositivo num telemóvel: a pasta Demo com três canções assinaladas e a barra para as adicionar à lista Manhã do P1">
+<img src="../../images/android/5-library.png" width="180" alt="O separador Biblioteca num telemóvel: as faixas da categoria Music, cada uma com uma caixa para assinalar e uns auscultadores para pré-escutar, e por baixo o cartão de pré-escuta com a forma de onda da faixa e os seus marcadores">
 </p>
 
 - *Direto:* cada leitor como um cartão, e a cartucheira. Cada cartão tem, de
@@ -171,7 +172,30 @@ para essa faixa. Uma faixa fina por cima da lista mostra o título, o tempo
 restante, **Pausa**/**Play** e **Stop** enquanto toca (ou está em pausa), e
 uma dica caso contrário: mantém sempre o seu lugar, por isso as linhas não se
 movem quando uma pré-escuta começa ou pára. Os 🎧 ficam esbatidos quando o
-ficheiro está em falta ou não pode ser tocado. A pré-escuta pára quando a sua
+ficheiro está em falta ou não pode ser tocado.
+
+**O cartão de pré-escuta.** Toque na faixa fina (fora dos seus botões)
+para abrir o cartão por baixo da lista, com a forma de onda da faixa como no
+cartão de um leitor em Listas; a seta à direita da faixa fina indica se está
+aberto. Toque outra vez na faixa fina, ou prima Voltar, para o fechar; a
+pré-escuta continua. A seta do cabeçalho da lista volta logo às categorias e
+deixa o cartão aberto para a lista seguinte. No cartão:
+
+- um toque na forma de onda salta para esse ponto ou, parada, define onde
+  começa **Pré-escutar**;
+- um toque longo põe um marcador nesse ponto (cue-in, fim da intro, início
+  do outro, MIX, cue-out) ou remove um que tenha posto. Os marcadores são
+  da faixa, por isso a alteração vê-se em todas as listas e no computador;
+- um gesto de pinça amplia, um arrasto move uma vista ampliada e **Vista
+  completa** volta a mostrar a faixa inteira;
+- por baixo da forma de onda estão os tempos, **Pré-escutar**, **Pausa**,
+  **Parar** e o medidor.
+
+A lista fica por cima do cartão (à esquerda com o telemóvel deitado), por
+isso os 🎧 de outra linha continuam a passar o cartão para essa faixa. O
+cadeado impede os saltos e as alterações de marcadores da forma de onda,
+como nos leitores.
+A pré-escuta pára quando a sua
 faixa sai da biblioteca e quando sai do separador Biblioteca (para outro
 separador, ou por Voltar); nas categorias ou em Música do dispositivo
 continua, mas a sua faixa só aparece na lista de faixas.
@@ -211,8 +235,9 @@ em **Reler a pasta do dispositivo** no seu menu). Cada ficheiro que a Música
 do dispositivo lista na pasta e nas suas subpastas é adicionado à categoria,
 com as regras acima (um ficheiro que já está noutra categoria mantém-na), e um
 aviso diz quantos ficheiros foram lidos. Os ficheiros que saíram da pasta
-ficam na biblioteca; **Voltar a analisar** marca como em falta aqueles cujo
-ficheiro desapareceu. **Alterar a pasta do dispositivo…** e **Esquecer a
+ficam na biblioteca, marcados como em falta, e voltam ao normal quando lá
+regressam (quando Música do dispositivo não lista nada, por exemplo sem
+permissão, nada é marcado). **Alterar a pasta do dispositivo…** e **Esquecer a
 pasta do dispositivo** estão no mesmo menu; uma pasta pertence a uma só
 categoria.
 

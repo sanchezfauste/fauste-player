@@ -51,6 +51,7 @@ duenean bakarrik ageri da.
 <img src="../../images/android/2-carts.png" width="180" alt="Kartutxoak telefono batean: Orokorra orria zutik jarrita, errenkada bakoitzean bi kartutxo">
 <img src="../../images/android/3-playlists.png" width="180" alt="Zerrendak telefono batean: P1etik P4rako chipak, zerrenda-fitxak, pista-zerrenda eta erreproduzitzailearen txartela behean">
 <img src="../../images/android/4-music.png" width="180" alt="Gailuko musika telefono batean: Demo karpeta hiru abestirekin markatuta eta P1eko Goizeko zerrendara gehitzeko barra">
+<img src="../../images/android/5-library.png" width="180" alt="Liburutegia fitxa telefono batean: Music kategoriako pistak, bakoitza markatzeko lauki batekin eta aurrez entzuteko entzungailu batzuekin, eta azpian aurrez entzuteko txartela pistaren uhin-formarekin eta bere markatzaileekin">
 </p>
 
 - *Zuzenean:* erreproduzitzaile bakoitza txartel gisa, eta kartutxo-panela.
@@ -188,7 +189,33 @@ mehe batek izenburua, geratzen den denbora, **Pausatu**/**Aurrez entzun** eta
 **Gelditu** erakusten ditu jotzen ari den bitartean (edo pausan), eta
 bestela iradokizun bat: beti bere lekua mantentzen du, beraz errenkadak ez dira
 mugitzen aurrez entzute bat hasi edo gelditzen denean. 🎧 ilunduta dago
-fitxategia falta denean edo jo ezin denean. Aurrebista gelditu egiten da bere
+fitxategia falta denean edo jo ezin denean.
+
+**Aurrez entzuteko txartela.** Ukitu zerrenda (bere botoietatik kanpo)
+txartela zerrendaren azpian irekitzeko, pistaren uhin-formarekin,
+Zerrendak ataleko erreproduzitzaile baten txartelean bezala; zerrendaren
+eskuineko geziak irekita dagoen erakusten du. Ukitu zerrenda berriro, edo
+sakatu Atzera, ixteko; aurrez entzuteak jarraitzen du. Zerrendaren
+goiburuko geziak berehala itzultzen du kategorietara eta txartela irekita
+uzten du hurrengo zerrendarako. Txartelean:
+
+- uhin-forma ukitzeak puntu horretara jauzi egiten du edo, geldirik
+  dagoenean, **Aurrez entzun** non hasten den finkatzen du;
+- sakatuta eustean markatzaile bat jartzen da puntu horretan (cue-in,
+  introaren amaiera, outroaren hasiera, MIX, cue-out) edo zuk jarritako
+  bat kentzen da. Markatzaileak pistarenak dira, beraz aldaketa zerrenda
+  guztietan eta mahaigainean ikusten da;
+- atximurkatzeak handitu egiten du, arrastatzeak handitutako ikuspegia
+  mugitzen du eta **Ikuspegi osoa** aukerak pista osoa erakusten du
+  berriro;
+- uhin-formaren azpian daude denborak, **Aurrez entzun**, **Pausatu**,
+  **Gelditu** eta neurgailua.
+
+Zerrenda txartelaren gainean geratzen da (ezkerrean telefonoa etzanda
+dagoenean), beraz beste errenkada baten 🎧 ikonoak txartela pista horretara
+aldatzen jarraitzen du. Giltzarrapoak uhin-formaren jauziak eta
+markatzaileen aldaketak gelditzen ditu, erreproduzitzaileetan bezala.
+Aurrebista gelditu egiten da bere
 pista liburutegitik ateratzen denean eta Liburutegia fitxa uzten duzunean
 (beste fitxa batera, edo Atzerarekin); kategorietan edo Gailuko musikan
 jarraitzen du, baina bere zerrenda pisten zerrendan bakarrik ageri da.
@@ -231,8 +258,9 @@ Gailuko musikak karpetan eta bere azpikarpetetan zerrendatzen duen fitxategi
 guztia kategoriara gehitzen da, goiko arauekin (beste kategoria batean dagoen
 fitxategi batek hura mantentzen du), eta ohar batek zenbat fitxategi irakurri
 diren esaten du. Karpetatik atera diren fitxategiak liburutegian geratzen
-dira; **Berriro aztertu** aukerak fitxategia galdu dutenak falta gisa
-markatzen ditu. **Aldatu gailuko karpeta…** eta **Ahaztu gailuko karpeta**
+dira, falta gisa markatuta, eta normaltasunera itzultzen dira karpetara
+itzultzen direnean (Gailuko musikak ezer zerrendatzen ez duenean, adibidez
+baimenik gabe, ez da ezer markatzen). **Aldatu gailuko karpeta…** eta **Ahaztu gailuko karpeta**
 menu berean daude; karpeta bat kategoria bakar batena da.
 
 ### Gailuko musika {#device-music}

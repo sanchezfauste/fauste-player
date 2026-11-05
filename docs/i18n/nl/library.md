@@ -8,6 +8,8 @@ stuurt ze naar de playlists en de cartwall. Het is een venster op de desktop en
 op een tablet; een telefoon toont de bibliotheek in plaats daarvan in zijn
 tabblad **Bibliotheek** (zie [Op een telefoon](#on-a-phone)).
 
+![Het bibliotheekvenster: de voorbeluisterstrook met de golfvorm van het geselecteerde nummer, de categorieboom met Music (met de subcategorieën Pop en Evening) geselecteerd, en de tabel van zijn nummers met hun categorie en soort](../../images/guide/library.png)
+
 ## Het venster openen {#opening-the-window}
 
 Klik op de tegel **Bibliotheek** in de bovenbalk. Hij is verlicht terwijl het
@@ -71,6 +73,8 @@ Dezelfde boom staat in **Instellingen → Bibliotheek**, om categorieën aan te
 maken, te hernoemen, een andere kleur te geven, van soort te veranderen, te
 verplaatsen en te verwijderen zonder het venster te openen (hij heeft geen *Alle
 nummers*, *Zonder categorie* of selectie).
+
+![Instellingen, Bibliotheek: de categorieboom met Music, de subcategorieën Pop en Evening, en Jingles, elk met zijn aantal](../../images/guide/settings-library.png)
 
 ## Bewaakte mappen {#watched-folders}
 

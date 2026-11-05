@@ -46,6 +46,7 @@ powiedzenia.
 <img src="../../images/android/2-carts.png" width="180" alt="Carty na telefonie: strona General ustawiona pionowo, dwa carty w wierszu">
 <img src="../../images/android/3-playlists.png" width="180" alt="Playlisty na telefonie: żetony P1 do P4, karty playlist, lista utworów i karta odtwarzacza u dołu">
 <img src="../../images/android/4-music.png" width="180" alt="Muzyka na urządzeniu na telefonie: folder Demo z trzema zaznaczonymi utworami i pasek do dodania ich do playlisty Morning odtwarzacza P1">
+<img src="../../images/android/5-library.png" width="180" alt="Karta Biblioteka na telefonie: utwory kategorii Music, każdy z polem do zaznaczenia i słuchawkami do odsłuchu, a pod nimi karta odsłuchu z przebiegiem utworu i jego markerami">
 </p>
 
 - *Na żywo:* każdy odtwarzacz jako karta oraz cartwall. Każda karta ma, od
@@ -165,7 +166,30 @@ pozostały, **Wstrzymaj odsłuch**/**Odsłuch** i **Zatrzymaj odsłuch**, gdy
 gra (lub jest wstrzymany), a w przeciwnym razie podpowiedź: zawsze zachowuje
 swoje miejsce, więc wiersze nie przesuwają się, gdy odsłuch zaczyna się lub
 kończy. 🎧 jest przyciemnione, gdy plik jest brakujący lub nie można go
-odtworzyć. Podgląd zatrzymuje się, gdy jego utwór opuszcza bibliotekę i gdy
+odtworzyć.
+
+**Karta odsłuchu.** Dotknij paska (poza jego przyciskami), aby otworzyć
+kartę pod listą, z przebiegiem utworu jak na karcie odtwarzacza w
+Playlistach; strzałka po prawej stronie paska pokazuje, czy jest otwarta.
+Dotknij paska ponownie lub naciśnij Wstecz, aby ją zamknąć; odsłuch trwa
+dalej. Strzałka w nagłówku listy od razu wraca do kategorii i zostawia
+kartę otwartą dla następnej listy. Na karcie:
+
+- dotknięcie przebiegu przeskakuje w to miejsce lub, gdy odsłuch jest
+  zatrzymany, ustala, gdzie zaczyna **Odsłuch**;
+- długie przytrzymanie ustawia marker w tym miejscu (cue-in, koniec intro,
+  początek outro, MIX, cue-out) lub usuwa ustawiony przez Ciebie. Markery
+  należą do utworu, więc zmiana jest widoczna na każdej playliście i na
+  komputerze;
+- rozsunięcie palców przybliża, przeciągnięcie przesuwa przybliżony widok,
+  a **Pełny widok** znów pokazuje cały utwór;
+- pod przebiegiem są czasy, **Odsłuch**, **Wstrzymaj**, **Zatrzymaj** i
+  miernik.
+
+Lista zostaje nad kartą (po lewej, gdy telefon leży poziomo), więc 🎧 innego
+wiersza nadal przełącza kartę na ten utwór. Kłódka zatrzymuje przeskoki i
+zmiany markerów na przebiegu, tak jak na odtwarzaczach.
+Podgląd zatrzymuje się, gdy jego utwór opuszcza bibliotekę i gdy
 opuścisz kartę Biblioteka (na inną kartę lub przez Wstecz); na liście
 kategorii lub w Muzyce na urządzeniu gra dalej, ale jego pasek pokazuje się
 tylko na liście utworów.
@@ -203,8 +227,9 @@ folderu. Nic nie obserwuje folderu: gdy skopiujesz tam nową muzykę, stuknij
 urządzenia** w jej menu). Każdy plik, który Muzyka na urządzeniu wymienia w
 folderze i jego podfolderach, jest dodawany do kategorii, według powyższych
 reguł (plik już w innej kategorii ją zachowuje), a komunikat mówi, ile plików
-wczytano. Pliki, które opuściły folder, zostają w bibliotece; **Analizuj
-ponownie** oznacza te, których plik zniknął, jako brakujące. **Zmień folder
+wczytano. Pliki, które opuściły folder, zostają w bibliotece, oznaczone jako brakujące, i wracają do normy, gdy do niego
+wrócą (gdy Muzyka na urządzeniu nic nie wymienia, na przykład bez
+uprawnień, nic nie jest oznaczane). **Zmień folder
 urządzenia…** i **Zapomnij folder urządzenia** są w tym samym menu; jeden
 folder należy do jednej kategorii.
 

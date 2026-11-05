@@ -7,6 +7,8 @@ markerami i ustawieniami głośności. Okno biblioteki wymienia je, grupuje w
 komputerze i tablecie to okno; telefon pokazuje bibliotekę w swojej karcie
 **Biblioteka** (zob. [Na telefonie](#on-a-phone)).
 
+![Okno biblioteki: pasek odsłuchu z przebiegiem wybranego utworu, drzewo kategorii z zaznaczoną kategorią Music (z jej podkategoriami Pop i Evening) oraz tabela jej utworów z kategorią i rodzajem](../../images/guide/library.png)
+
 ## Otwieranie okna {#opening-the-window}
 
 Kliknij kafelek **Biblioteka** na górnym pasku. Świeci, gdy okno jest
@@ -69,6 +71,8 @@ mówi, co gra.
 To samo drzewo jest w **Ustawienia → Biblioteka**, do tworzenia, zmiany nazwy i
 koloru, zmiany rodzaju, przenoszenia i usuwania kategorii bez otwierania okna
 (nie ma tam *Wszystkie utwory*, *Bez kategorii* ani zaznaczenia).
+
+![Ustawienia, Biblioteka: drzewo kategorii z Music, jej podkategoriami Pop i Evening oraz Jingles, każda z liczbą utworów](../../images/guide/settings-library.png)
 
 ## Obserwowane foldery {#watched-folders}
 

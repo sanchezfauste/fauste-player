@@ -51,6 +51,7 @@ d'état en bas ne s'affiche que lorsqu'elle a quelque chose à dire.
 <img src="../../images/android/2-carts.png" width="180" alt="Cartouches sur un téléphone : la page General tournée à la verticale, deux cartouches par rangée">
 <img src="../../images/android/3-playlists.png" width="180" alt="Playlists sur un téléphone : les pastilles P1 à P4, les onglets de playlist, la liste des pistes et la carte du lecteur en bas">
 <img src="../../images/android/4-music.png" width="180" alt="La musique de l'appareil sur un téléphone : le dossier Demo avec trois morceaux cochés et la barre pour les ajouter à la playlist Morning de P1">
+<img src="../../images/android/5-library.png" width="180" alt="L'onglet Bibliothèque sur un téléphone : les pistes de la catégorie Music, chacune avec une case à cocher et un casque pour la pré-écoute, et en dessous la carte de pré-écoute avec la forme d'onde de la piste et ses marqueurs">
 </p>
 
 - *Direct :* chaque lecteur sous forme de carte, et le mur de cartouches.
@@ -185,7 +186,32 @@ cette piste. Un fin bandeau au-dessus de la liste montre le titre, le temps
 restant, **Pause**/**Lecture** et **Stop** pendant qu'elle joue (ou est en
 pause), et une indication sinon : il garde toujours sa place, si bien que les
 lignes ne bougent pas quand une pré-écoute démarre ou s'arrête. Le 🎧 est
-grisé quand le fichier est manquant ou ne peut pas être lu. La pré-écoute
+grisé quand le fichier est manquant ou ne peut pas être lu.
+
+**La carte de pré-écoute.** Touchez le bandeau (hors de ses boutons) pour
+ouvrir la carte sous la liste, avec la forme d'onde de la piste comme sur la
+carte d'un lecteur dans Playlists ; la flèche à droite du bandeau indique si
+elle est ouverte. Touchez de nouveau le bandeau, ou appuyez sur Retour, pour
+la fermer ; la pré-écoute continue. La flèche de l'en-tête de la liste
+revient aussitôt aux catégories et laisse la carte ouverte pour la liste
+suivante. Sur la carte :
+
+- un toucher sur la forme d'onde saute à cet endroit ou, à l'arrêt, fixe
+  où **Pré-écouter** commence ;
+- un appui long place un marqueur à cet endroit (cue-in, fin d'intro,
+  début d'outro, MIX, cue-out) ou en retire un que vous avez placé. Les
+  marqueurs appartiennent à la piste : la modification se voit dans toutes
+  les playlists et sur l'ordinateur ;
+- un pincement zoome, un glissement déplace une vue zoomée et **Vue
+  complète** montre de nouveau toute la piste ;
+- sous la forme d'onde se trouvent les temps, **Pré-écouter**, **Pause**,
+  **Stop** et l'indicateur de niveau.
+
+La liste reste au-dessus de la carte (à gauche, téléphone à l'horizontale),
+si bien que le 🎧 d'une autre ligne passe toujours la carte à cette piste. Le
+cadenas arrête les sauts et les modifications de marqueurs de la forme
+d'onde, comme sur les lecteurs.
+La pré-écoute
 s'arrête quand sa piste quitte la bibliothèque et quand vous quittez l'onglet
 Bibliothèque (pour un autre onglet, ou par Retour) ; sur les catégories ou sur
 la musique de l'appareil, elle continue, mais son bandeau ne s'affiche que sur
@@ -228,9 +254,9 @@ sur **Relire le dossier de l’appareil** dans son menu). Chaque fichier que la
 musique de l'appareil liste dans le dossier et ses sous-dossiers est ajouté à
 la catégorie, avec les règles ci-dessus (un fichier déjà dans une autre
 catégorie la garde), et un avis dit combien de fichiers ont été lus. Les
-fichiers qui ont quitté le dossier restent dans la bibliothèque ;
-**Réanalyser** marque comme manquants ceux dont le fichier a disparu.
-**Changer le dossier de l’appareil…** et **Oublier le dossier de l’appareil**
+fichiers qui ont quitté le dossier restent dans la bibliothèque, marqués manquants, et redeviennent normaux quand ils y
+reviennent (quand la musique de l'appareil ne liste rien, par exemple sans
+autorisation, rien n'est marqué). **Changer le dossier de l’appareil…** et **Oublier le dossier de l’appareil**
 sont dans le même menu ; un dossier appartient à une seule catégorie.
 
 ### Musique de l'appareil {#device-music}

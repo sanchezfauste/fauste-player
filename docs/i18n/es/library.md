@@ -8,6 +8,8 @@ encuentra por texto y las envía a las playlists y a la cartuchera. Es una
 ventana en el escritorio y en una tableta; un teléfono muestra la
 biblioteca en su pestaña **Biblioteca** (véase [En un teléfono](#on-a-phone)).
 
+![La ventana de la biblioteca: la franja de preescucha con la forma de onda de la pista seleccionada, el árbol de categorías con Music (y sus subcategorías Pop y Evening) seleccionada, y la tabla de sus pistas con su categoría y su tipo](../../images/guide/library.png)
+
 ## Abrir la ventana {#opening-the-window}
 
 Haz clic en el mosaico **Biblioteca** de la barra superior. Está encendido
@@ -72,6 +74,8 @@ se quita nada mientras alguna esté en antena; un aviso dice qué suena.
 El mismo árbol está en **Configuración → Biblioteca**, para crear, renombrar,
 cambiar el color y el tipo, mover y eliminar categorías sin abrir la ventana
 (no tiene *Todas las pistas*, *Sin categoría* ni selección).
+
+![Configuración, Biblioteca: el árbol de categorías con Music, sus subcategorías Pop y Evening, y Jingles, cada una con su número de pistas](../../images/guide/settings-library.png)
 
 ## Carpetas vigiladas {#watched-folders}
 

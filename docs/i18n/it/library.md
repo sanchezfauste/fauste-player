@@ -8,6 +8,8 @@ testo e li invia alle playlist e alla cartwall. È una finestra sul desktop e
 su un tablet; un telefono mostra invece la libreria nella sua scheda
 **Libreria** (vedi [Su un telefono](#on-a-phone)).
 
+![La finestra della libreria: la striscia di preascolto con la forma d'onda del brano selezionato, l'albero delle categorie con Music (e le sue sottocategorie Pop ed Evening) selezionata, e la tabella dei suoi brani con categoria e tipo](../../images/guide/library.png)
+
 ## Aprire la finestra {#opening-the-window}
 
 Fai clic sulla tessera **Libreria** nella barra superiore. È accesa mentre la
@@ -73,6 +75,8 @@ rimosso finché uno di essi è in onda; un avviso dice cosa suona.
 Lo stesso albero è in **Impostazioni → Libreria**, per creare, rinominare,
 cambiare il colore e il tipo, spostare ed eliminare le categorie senza aprire
 la finestra (non ha *Tutti i brani*, *Senza categoria* né selezione).
+
+![Impostazioni, Libreria: l'albero delle categorie con Music, le sue sottocategorie Pop ed Evening, e Jingles, ciascuna con il suo numero di brani](../../images/guide/settings-library.png)
 
 ## Cartelle sorvegliate {#watched-folders}
 

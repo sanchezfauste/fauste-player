@@ -8,6 +8,8 @@ envia a les llistes i a la cartutxera. A l'escriptori i a una tauleta és una
 finestra; un mòbil mostra la biblioteca a la pestanya **Biblioteca** (vegeu
 [En un mòbil](#on-a-phone)).
 
+![La finestra de la biblioteca: la franja de preescolta amb la forma d'ona de la pista seleccionada, l'arbre de categories amb Music (i les seves subcategories Pop i Evening) seleccionada, i la taula de les seves pistes amb la categoria i el tipus](../../images/guide/library.png)
+
 ## Obrir la finestra {#opening-the-window}
 
 Fes clic al mosaic **Biblioteca** de la barra superior. Està il·luminat mentre
@@ -71,6 +73,8 @@ alguna estigui en antena; un avís diu què sona.
 El mateix arbre és a **Configuració → Biblioteca**, per crear, canviar el nom,
 canviar el color, canviar el tipus, moure i eliminar categories sense obrir la
 finestra (no té *Totes les pistes*, *Sense categoria* ni selecció).
+
+![Configuració, Biblioteca: l'arbre de categories amb Music, les seves subcategories Pop i Evening, i Jingles, cadascuna amb el seu nombre de pistes](../../images/guide/settings-library.png)
 
 ## Carpetes vigilades {#watched-folders}
 

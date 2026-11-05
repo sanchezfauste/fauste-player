@@ -8,6 +8,8 @@ listas e á cartucheira. É unha xanela no escritorio e nunha tablet; un
 teléfono mostra a biblioteca na súa lapela **Biblioteca** (consulta [Nun
 teléfono](#on-a-phone)).
 
+![A xanela da biblioteca: a franxa de preescoita coa forma de onda da pista seleccionada, a árbore de categorías con Music (e as súas subcategorías Pop e Evening) seleccionada, e a táboa das súas pistas coa súa categoría e o seu tipo](../../images/guide/library.png)
+
 ## Abrir a xanela {#opening-the-window}
 
 Fai clic na tesela **Biblioteca** da barra superior. Está acesa mentres a
@@ -69,6 +71,8 @@ estea en antena; un aviso di o que soa.
 A mesma árbore está en **Configuración → Biblioteca**, para crear, renomear,
 cambiar a cor, cambiar o tipo, mover e eliminar categorías sen abrir a xanela
 (non ten *Todas as pistas*, *Sen categoría* nin selección).
+
+![Configuración, Biblioteca: a árbore de categorías con Music, as súas subcategorías Pop e Evening, e Jingles, cada unha co seu número de pistas](../../images/guide/settings-library.png)
 
 ## Cartafoles vixiados {#watched-folders}
 
