@@ -760,11 +760,12 @@ impl Services {
         let outcome = folders.step(state, now);
         let mut unsent = Vec::new();
         for command in outcome.commands {
-            if unsent.is_empty() && self.conductor.send(command.clone()) {
-                continue;
-            }
             // Order is kept: once one is refused, the rest wait with it.
-            unsent.push(command);
+            if !unsent.is_empty() {
+                unsent.push(command);
+            } else if let Err(refused) = self.conductor.offer(command) {
+                unsent.push(refused);
+            }
         }
         if !unsent.is_empty() {
             folders.requeue(unsent);
