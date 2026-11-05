@@ -18,8 +18,9 @@ note) and the on-air pre-listen spec §5.
 - [x] The library's search index is folded when a search first needs it,
   not when the window opens (~29 ms on a large library). Test
   `the_search_index_is_built_when_a_search_needs_it`.
-- [x] `touch::tapped`: a second finger's tap where no layer is found (past
-  every area, at the screen's edge) is kept; nothing covers the widget.
+- [x] `touch::tapped`: a second finger's tap that ends past the screen's
+  edge is checked at the nearest point on the screen, where egui finds a
+  layer (a modal's backdrop included), instead of being dropped.
 
 ## Not in this plan (rulings)
 
