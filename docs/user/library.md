@@ -7,6 +7,8 @@ and loudness settings. The library window lists them, groups them in
 cartwall. It is a window on the desktop and on a tablet; a phone shows the
 library in its **Library** tab instead (see [On a phone](#on-a-phone)).
 
+![The library window: the pre-listen strip with the selected track's waveform, the category tree with Music (its subcategories Pop and Evening) selected, and the table of its tracks with their category and kind](../images/guide/library.png)
+
 ## Opening the window
 
 Click the **Library** tile in the top bar. It is lit while the window is open;
@@ -66,6 +68,8 @@ says what plays.
 The same tree is in **Settings → Library**, to create, rename, recolour,
 change the kind of, move and delete categories without opening the window (it
 has no *All tracks*, *Uncategorised* or selection).
+
+![Settings, Library: the category tree with Music, its subcategories Pop and Evening, and Jingles, each with its count](../images/guide/settings-library.png)
 
 ## Watched folders
 
