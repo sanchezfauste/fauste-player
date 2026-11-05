@@ -53,6 +53,7 @@ env:
 jobs:
   shots:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
     outputs:
       changed: ${{ steps.compare.outputs.changed }}
     steps:
@@ -89,6 +90,7 @@ jobs:
   publish:
     needs: shots
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
       pull-requests: write
