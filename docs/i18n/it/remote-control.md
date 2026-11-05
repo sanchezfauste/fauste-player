@@ -74,7 +74,7 @@ Un client può:
 - riprodurre, mettere in pausa, fermare, dissolvere, riavviare e tornare
   indietro;
 - scegliere la voce successiva (anche la voce in onda: suona ancora una
-  volta), preascoltare e spostarsi (su un lettore fermo uno spostamento
+  volta), preascoltare (un preascolto che si sentirebbe in onda mentre lì suona qualcosa viene rifiutato, a meno che la richiesta non dica `"force": true`; vedi il riferimento dell'API) e spostarsi (su un lettore fermo uno spostamento
   sceglie da dove Play avvia la voce successiva, e uno spostamento prima del
   suo cue-in parte dal cue-in);
 - impostare volumi, modalità, stop alla fine del brano attuale, e i segni di
@@ -83,15 +83,44 @@ Un client può:
   mostrata;
 - modificare: creare, rinominare ed eliminare playlist; aggiungere un brano
   già caricato, e rimuovere, spostare o duplicare voci; creare, rinominare,
-  ridimensionare ed eliminare pagine di cart, e configurare un cart con un
-  brano caricato; impostare o reimpostare i marker.
+  ridimensionare ed eliminare pagine di cart, e configurare un cart (nome,
+  tipo, colore, loop, esclusivo) con un brano caricato; impostare o
+  reimpostare i marker; escludere un brano dalla
+  [normalizzazione del loudness](loudness.md) o regolarne il trim.
 
 Rimuovere ciò che è in onda viene rifiutato, come sullo schermo. I file non
 ancora caricati non si possono aggiungere da remoto: si trovano su questo
 computer, quindi aggiungili prima qui.
 
-Anche un pulsante disattivato sullo schermo viene rifiutato da remoto. Il
-riferimento completo è nella [documentazione tecnica](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
+Anche un pulsante disattivato sullo schermo viene rifiutato da remoto.
+
+Un lettore la cui uscita Main è [bit-perfect](bit-perfect.md#what-it-costs)
+continua a funzionare da remoto, con gli stessi limiti che sullo schermo:
+`play` e `previous` cambiano brano subito, senza dissolvenza incrociata, e il
+suo volume è mantenuto al 100 %. Un volume inferiore al 100 % viene rifiutato
+(`409`, con il motivo), e esattamente il 100 % viene accettato. Ogni lettore
+dice se il suo volume è mantenuto (`fader_locked`).
+
+Un volume inviato come posizione del fader (il `fader` dell'API, `/volume` di
+OSC) è una posizione sulla scala propria del fader sullo schermo, da 0
+(silenzio) a 1 (0 dB): 0,9 è circa −2,5 dB, 0,8 circa −5,3 dB e 0,5 circa
+−16 dB. Le versioni precedenti usavano un'altra scala (0,8 era −12 dB, 0,5
+era −30 dB), quindi uno script scritto per loro ora imposta livelli più
+alti: controlla i suoi valori.
+
+Ogni brano porta la sua misura di loudness (`loudness`, `null` finché non è
+misurato) e la sua impostazione (`loudness_edit`: `excluded` e `trim_db`). Un
+lettore in riproduzione o in pausa, e ogni cart in riproduzione, dice con
+quale guadagno di [normalizzazione](loudness.md) è partito il suo brano e
+perché (`normalization`: `gain_db` e uno `status` come `applied`,
+`not_measured` o `bit_perfect`). `PUT /api/v1/tracks/<id>/loudness` con
+`{"excluded": false, "trim_db": -1.5}` cambia l'impostazione, come fa il
+popup **Loudness…**; un trim oltre il trim massimo viene rifiutato (`409`,
+con il motivo). Le impostazioni della normalizzazione stessa (attiva o no, il
+valore di riferimento, i limiti) si cambiano solo su questo computer. OSC e
+MIDI non hanno controlli di loudness.
+
+Il riferimento completo è nella [documentazione tecnica](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
 
 Provalo da un terminale:
 
@@ -136,6 +165,10 @@ minuto (`subscription_ttl_secs`) per continuare a ricevere:
 
     oscdump 9000 &
     oscsend localhost 7381 /fauste/subscribe i 9000
+
+Su un lettore la cui uscita Main è bit-perfect, i messaggi `/volume` vengono
+rifiutati (il log lo annota) e il lettore invia `/volume-locked` 1 ai
+sottoscrittori (0 altrimenti).
 
 Un sottoscrittore può indicare qualsiasi porta del proprio indirizzo, e ne
 vengono mantenuti fino a `max_subscribers`. Chiunque abbia il permesso di

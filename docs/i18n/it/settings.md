@@ -8,52 +8,68 @@ La finestra ha un'unica dimensione (900 × 640, più piccola su uno schermo
 piccolo) qualunque sia la sezione, e la sezione scorre al suo interno. Ogni
 sezione allinea le sue etichette in un'unica colonna.
 
-Le sezioni Lettori, Meter, Analisi e Scorciatoie da tastiera hanno nella
+Le sezioni Lettori, Meter, Analisi, Loudness e Scorciatoie da tastiera hanno nella
 loro intestazione un pulsante **Ripristina i valori predefiniti**. Chiede
 conferma e poi reimposta soltanto quella sezione (Lettori mantiene il numero
 di lettori e la lingua; Scorciatoie non ha altri pulsanti di ripristino).
-Uscite audio, Playlist, Cartwall, MIDI e Remoto non lo hanno.
+Uscite audio, Playlist, Cartwall, Libreria, MIDI e Remoto non lo hanno.
 
-## Riavvio in sospeso {#restart-pending}
+## Impostazioni in sospeso {#settings-pending}
 
-Alcune modifiche hanno effetto solo quando l'applicazione riparte: il
+Ogni impostazione si applica mentre l'applicazione è in esecuzione. Il
 sistema audio, la frequenza di campionamento, la dimensione del buffer
 (anche quella propria di un dispositivo), le uscite Main e Cue (lettori e
-cartwall), i dispositivi bit-perfect e le impostazioni DSD. Il numero di
-lettori non è tra queste: si applica subito.
+cartwall), i dispositivi bit-perfect e le impostazioni DSD cambiano il modo
+in cui si apre un dispositivo di uscita, quindi si applicano appena è sicuro
+farlo:
+
+- Le impostazioni di un dispositivo si applicano quando su quel dispositivo
+  non suona nulla: nessun lettore instradato su di esso sta suonando,
+  sfumando o preascoltando (CUE, anche quando è trattenuto), e nessun cart
+  vi suona. Un lettore in pausa, o con un brano solo caricato, non trattiene
+  un dispositivo: il suo brano resta in pausa dov'era.
+- L'uscita di un lettore o della cartwall si sposta quando quel lettore (o la
+  cartwall) non sta suonando; gli altri lettori sugli stessi dispositivi non
+  vengono interrotti.
+- Un nuovo sistema audio si applica quando non suona nulla da nessuna parte.
+
+Una modifica in attesa viene eseguita al primo momento in cui non suona nulla
+di ciò che riguarda. Può essere lo spazio tra la fine di un brano e l'inizio
+del successivo: il brano successivo parte allora più tardi del tempo che il
+dispositivo impiega a riaprirsi. **Applica ora** (sotto) forza invece la
+modifica subito.
 
 Una frequenza o un buffer assegnati a un dispositivo contano solo quando
 cambiano con cosa il dispositivo si apre: assegnare a un dispositivo lo
-stesso valore di quello globale, o cancellare un tale valore, non è in
-sospeso.
+stesso valore di quello globale, o cancellare un tale valore, non cambia
+nulla.
 
-I limiti e le regolazioni del motore si applicano anch'essi al prossimo
-avvio, ma si modificano nel file di configurazione con l'applicazione
-chiusa (vedi [Dati e backup](data-and-backups.md)), quindi non risultano mai
-in sospeso.
+Fino ad allora la barra superiore mostra **Impostazioni in sospeso**. Passa il
+puntatore per vedere cosa attende e su cosa; fai clic per l'elenco, che
+mostra anche ogni modifica che un dispositivo o un'uscita ha rifiutato (il
+dispositivo mantiene le sue impostazioni attuali; la modifica viene
+riprovata quando la cambi o premi **Applica ora**). Il piè di pagina delle
+Impostazioni dice «Alcune modifiche attendono che le uscite interessate siano
+libere.» e offre **Applica ora**; un breve avviso (per esempio, che
+un'impostazione è stata salvata) può prendere per un momento il posto di quel
+testo.
 
-Mentre una di queste è in attesa, il piè di pagina delle Impostazioni dice
-«Alcune modifiche hanno effetto dopo un riavvio.» e offre **Riavvia ora**, e
-la barra superiore mostra una pillola **Riavvio in sospeso**. Passa il
-puntatore sulla pillola per vedere cosa è in attesa. Un breve avviso (per
-esempio, che un'impostazione è stata salvata) può prendere per un momento il
-posto del testo del piè di pagina; **Riavvia ora** rimane. Entrambi fanno la
-stessa cosa:
+**Applica ora** applica subito ogni modifica alle uscite in attesa. Quando
+questo interromperebbe qualcosa, prima elenca i dispositivi e ciò che vi
+suona; **Interrompi e applica** interrompe poi brevemente l'audio su quei
+dispositivi: ciò che suonava riprende da dove era dopo una breve pausa, e
+nulla che fosse in pausa o fermo parte. **Annulla** (o `Esc`) continua ad
+aspettare.
 
-- Quando nulla è in onda, **Riavvia ora** (o la pillola) riavvia subito.
-- Quando qualcosa è in onda, compare la finestra che elenca ciò che sta
-  suonando, con **Ferma e riavvia** o **Annulla**.
-
-La sessione viene salvata per prima e l'audio e il controllo MIDI si
-fermano, poi l'applicazione riparte con la stessa cartella dei dati
-(`FAUSTE_HOME`), e dopo nulla va in onda da solo. Se l'applicazione non
-riesce a ripartire (in un Flatpak, anche quando la nuova non si avvia in
-tempo), lo dice; avviala dal menu delle applicazioni.
+I limiti e le regolazioni del motore si modificano nel file di
+configurazione con l'applicazione chiusa (vedi
+[Dati e backup](data-and-backups.md)).
 
 ## Uscite audio {#audio-outputs}
 
-Le modifiche in questa sezione aspettano un riavvio: vedi
-[Riavvio in sospeso](#restart-pending).
+Le modifiche in questa sezione si applicano mentre l'applicazione è in
+esecuzione, appena nulla di ciò che riguardano sta suonando: vedi
+[Impostazioni in sospeso](#settings-pending).
 
 ![Impostazioni, Uscite audio, vista Base: il selettore, il sistema audio, la frequenza di campionamento, la dimensione del buffer e le uscite Main e Cue di ogni lettore (qui il sistema silenzioso)](../../images/guide/settings-outputs.png)
 
@@ -74,25 +90,26 @@ dopo aver scambiato due dispositivi) li mantiene.
 |---|---|
 | Sistema audio | L'ultima scelta, **Nessuna uscita (silenzio)**, non riproduce nulla: le linee temporali scorrono a passo reale senza scheda audio (per una macchina che non ne ha una, o per fare prove). Linux: PipeWire (nelle build che lo includono), PulseAudio, JACK o ALSA. Windows: WASAPI, ASIO (nelle build che lo includono) o JACK. macOS: Core Audio o JACK. I sistemi assenti su questo computer, o senza dispositivo di uscita (un server JACK non in esecuzione), sono mostrati come non disponibili. «Predefinito di sistema» usa il primo disponibile in quell'ordine. |
 | Frequenza di campionamento | La frequenza a cui funziona ogni uscita, a meno che un dispositivo non ne abbia una propria (Avanzate); i file vengono convertiti a essa con un ricampionamento di alta qualità. I dispositivi bit-perfect partono alla loro frequenza e poi seguono i file. |
-| Dimensione del buffer | Frame per blocco audio, a meno che un dispositivo non ne abbia uno proprio; la latenza risultante è mostrata sotto |
-| Uscite per lettore | Per ogni lettore, un dispositivo **Main** (in onda) e un dispositivo **Cue** (preascolto), ciascuno con una coppia di canali. Una scheda audio che offre più profili di uscita (ALSA elenca anteriore, surround, hardware diretto…) mostra ciascuno come *scheda — profilo*; due voci che altrimenti risulterebbero uguali ricevono tra parentesi l'id del dispositivo. Le interfacce multicanale possono portare più lettori su coppie diverse. |
+| Dimensione del buffer | Frame per blocco audio, a meno che un dispositivo non ne abbia uno proprio; la latenza risultante è mostrata sotto. Le uscite attraverso un server audio o un mixer di sistema (PulseAudio, il dispositivo ALSA `default`) chiedono almeno 50 ms qualunque sia questa dimensione, o quanto il dispositivo accetta, così un computer occupato non si sente; la latenza lo dice allora (`shared_buffer_ms` nel file di configurazione) |
+| Uscite per lettore | Per ogni lettore, un dispositivo **Main** (in onda) e un dispositivo **Cue** (preascolto), ciascuno con una coppia di canali. Una scheda audio che offre più profili di uscita (ALSA elenca anteriore, surround, hardware diretto…) mostra ciascuno come *scheda — profilo*; due voci che altrimenti risulterebbero uguali ricevono tra parentesi l'id del dispositivo. Le interfacce multicanale possono portare più lettori su coppie diverse. Un'uscita Cue che condivide un'uscita in onda (il Main di qualsiasi lettore o quello della cartwall) è consentita: una nota sotto di essa dice che il suo preascolto si sente in onda e che chiede prima finché lì suona qualcosa. |
 | Prova Main / Prova Cue | Riproduce un breve tono (1 kHz su Main, 440 Hz su Cue, 1,5 s, −18 dBFS) sull'uscita scelta, così puoi controllare i collegamenti prima di andare in onda |
-| Cartwall | Le uscite Main e Cue della cartwall. Main usa per impostazione predefinita l'uscita di sistema. Senza un Cue non c'è il preascolto dei cart. |
+| Libreria | L'uscita Cue della libreria, con il suo **Prova Cue**: dove si sente il [preascolto](library.md#pre-listening) della finestra della libreria (su un telefono, quello della scheda Libreria). Senza, il Play della barra di preascolto è attenuato. Su Android la sua scelta vuota si legge *Predefinito di sistema* invece di *Nessuna*: il preascolto e **Prova Cue** suonano allora sull'uscita predefinita (vedi [Android → Libreria](android.md#library)). Un'uscita Libreria su un'uscita in onda funziona come il Cue di un lettore: una nota sotto di essa dice che il suo preascolto si sente in onda e che chiede prima finché lì suona qualcosa. È nelle viste Base e Avanzate, anche su un telefono |
+| Cartwall | Le uscite Main e Cue della cartwall. Main usa per impostazione predefinita l'uscita di sistema. Senza un Cue non c'è il preascolto dei cart; un Cue su un'uscita in onda funziona come per i lettori. |
 | Frequenza di campionamento: *dispositivo* (Avanzate) | **Globale (...)** usa la frequenza di campionamento qui sopra; un valore dà a questo dispositivo una frequenza propria. Vengono offerte solo le frequenze che il dispositivo indica; una frequenza salvata che non indica più resta in elenco con una nota che potrebbe non aprirsi (il dispositivo ripiega allora sulla frequenza globale). I valori propri si applicano solo ai dispositivi che un'uscita nomina, non all'uscita predefinita di sistema, a meno che una non la nomini. |
-| Dimensione del buffer: *dispositivo* (Avanzate) | **Globale (...)** usa la dimensione del buffer qui sopra; un valore dà a questo dispositivo una dimensione propria, con la sua latenza sotto. Un dispositivo che non accetta una dimensione propria del buffer ripiega su quella globale, e anche sulla frequenza globale quando non accetta nemmeno una frequenza propria. |
-| Bit-perfect: *dispositivo* (Avanzate) | Un dispositivo bit-perfect viene aperto con accesso esclusivo e segue la frequenza di campionamento di ogni file finché non vi suona nulla. L'interruttore è disattivato dove il dispositivo non può dare l'accesso esclusivo. Vedi [Uscita bit-perfect](bit-perfect.md). |
+| Dimensione del buffer: *dispositivo* (Avanzate) | **Globale (...)** usa la dimensione del buffer qui sopra (con il minimo che chiede un'uscita condivisa, come sopra); un valore dà a questo dispositivo una dimensione propria, usata così com'è, con la sua latenza sotto. Un dispositivo che non accetta una dimensione propria del buffer ripiega su quella globale, e anche sulla frequenza globale quando non accetta nemmeno una frequenza propria. |
+| Bit-perfect: *dispositivo* (Avanzate) | Disattivato per impostazione predefinita. Una modalità speciale per l'ascolto audiofilo, non per i programmi mixati: il dispositivo viene aperto con accesso esclusivo e segue la frequenza di campionamento di ogni brano. I lettori il cui Main è su di esso non fanno mai dissolvenze incrociate né mix, un cambio di frequenza lascia un breve silenzio tra due brani, e il loro volume è mantenuto al 100 %. L'interruttore è disattivato dove il dispositivo non può dare l'accesso esclusivo. Vedi [Cosa costa](bit-perfect.md#what-it-costs). |
 | DSD: *dispositivo* (Avanzate) | **Converti in PCM** (il valore predefinito), **DoP** o, su Linux, **DSD nativo**. Ogni dispositivo lo mostra; vengono offerte solo le modalità che il dispositivo può accettare, e una riga sotto dice perché le altre no. Vedi [DSD](bit-perfect.md#dsd). |
 | Quando un'altra sorgente ha bisogno di un'uscita DSD (Avanzate) | **Prosegui il brano DSD in PCM** (il valore predefinito), oppure **Mantieni il DSD e silenzia le altre sorgenti**. Vedi [DSD](bit-perfect.md#dsd). |
 | Silenzio DSD (Avanzate) | Silenzio inviato prima che inizi un flusso DSD, dopo la sua fine e al passaggio a PCM, perché il convertitore si agganci senza clic; 200 ms per impostazione predefinita, da 0 a 2000. |
 
-Un'uscita Cue non ripiega mai sull'uscita che usa Main, in modo che il
-preascolto non vada mai in onda. Un Cue che nomina un dispositivo di un
-sistema audio che questo computer non ha, o la stessa uscita (dispositivo e
-canali) di Main, significa «nessun cue». Quando un'uscita Cue coincide con la
-sua uscita Main, un avviso sotto di essa lo segnala. Un lettore senza
-un'uscita Cue, o con il suo Cue sulla sua uscita Main, ha il pulsante **CUE**
-attenuato; passandoci sopra il puntatore ti dice di scegliere qui
-un'uscita Cue. Lo stesso vale per **Preascolta nel CUE** della cartwall.
+Un'uscita Cue non ripiega mai sull'uscita che usa Main. Un Cue che nomina un
+dispositivo di un sistema audio che questo computer non ha significa «nessun
+cue». Un Cue su un'uscita in onda (lo stesso dispositivo e gli stessi canali
+di un Main, o che li sovrappongono) è consentito: una nota sotto di esso dice
+che il suo preascolto si sente in onda e che chiede prima finché lì suona
+qualcosa. Un lettore senza un'uscita Cue ha il pulsante **CUE** attenuato;
+passandoci sopra il puntatore ti dice di scegliere qui un'uscita Cue. Lo
+stesso vale per **Preascolta nel CUE** della cartwall.
 
 Se un dispositivo scompare durante la riproduzione, i lettori mantengono le
 loro linee temporali, e il dispositivo viene riaperto quando torna (vedi
@@ -105,12 +122,17 @@ loro linee temporali, e il dispositivo viene riaperto quando torna (vedi
 | Impostazione | Predefinito | Significato |
 |---|---|---|
 | Lingua | Sistema | Lingua dell'interfaccia |
-| Numero di lettori | 4 | Colonne nella schermata principale (un lettore in onda non si può rimuovere) |
+| Numero di lettori | 4 | Colonne nella schermata principale (un lettore in onda non si può rimuovere). Il numero si applica quando rilasci il cursore; un numero digitato nella casella si applica quando premi Invio o esci dalla casella, ed Esc lo annulla |
 | Modalità predefinita | CONT | La modalità con cui partono i lettori |
-| Durata della dissolvenza | 1000 ms | Usata da Play quando è in onda e da Stop in dissolvenza |
-| Mix automatico al punto MIX | Attivo | Sovrappone i brani in modalità continua |
+| Durata della dissolvenza | 1000 ms | Usata da Play quando è in onda e da Stop in dissolvenza. Su un lettore la cui uscita Main è bit-perfect, solo da Stop in dissolvenza |
+| Mix automatico al punto MIX | Attivo | Sovrappone i brani in modalità continua. Non vale per un lettore la cui uscita Main è bit-perfect |
 | Usa cue-in e cue-out | Attivo | Disattivato: i lettori suonano ogni brano dall'inizio alla fine del file; i marker vengono mantenuti e i cart usano comunque i propri. Le durate e i totali delle playlist seguono lo stesso intervallo |
 | Avviso di fine brano | 10 s | Quando il conto alla rovescia inizia a lampeggiare in rosso |
+
+Mentre l'uscita Main di un lettore è bit-perfect, una nota sotto **Mix
+automatico al punto MIX** dice che tali lettori non mixano né fanno
+dissolvenze incrociate. Entrambe le impostazioni restano modificabili:
+valgono ancora per gli altri lettori. Vedi [Cosa costa](bit-perfect.md#what-it-costs).
 
 ## Meter {#meters}
 
@@ -159,9 +181,16 @@ Ogni meter usa la scala del suo standard, con i suoi segni tra i canali:
 
 ![Impostazioni, Analisi: le soglie dei marker automatici](../../images/guide/settings-analysis.png)
 
-Le soglie descritte in [Marker e mix](markers-and-mixing.md).
+Le soglie descritte in [Marker e mix](markers-and-mixing.md); ogni riga ha
+sotto il suo nome un suggerimento di una riga che dice cosa fa il valore.
 **Rianalizza tutti i brani** esegue di nuovo l'analisi per l'intera
-libreria; i marker manuali vengono mantenuti.
+libreria, rileggendo ogni file; i marker manuali vengono mantenuti. Mentre è
+in corso il pulsante è attenuato e mostra a che punto è arrivato
+(**Analisi… 120 di 340**), così premerlo di nuovo non ricomincia da capo; il
+tooltip di **Analisi di N brani** nella barra di stato dà lo stesso
+avanzamento. Anche cambiare qui una soglia analizza di nuovo la libreria, e
+riavvia un'esecuzione già in corso in modo che nessun brano mantenga marker
+dei vecchi valori.
 
 Dopo un aggiornamento la cui analisi è cambiata, i brani analizzati dalla
 versione precedente mantengono i loro marker e le loro forme d'onda, che
@@ -172,6 +201,41 @@ man mano che vengono mostrati, e così i brani dei cart che non hanno un
 formato registrato (un cart suona bit-perfect solo quando il suo formato è
 noto). I brani il cui file manca non vengono contati finché il file non
 torna.
+
+L'analisi misura anche la loudness di ogni file per la
+[normalizzazione del loudness](loudness.md). I file analizzati prima che la
+loudness venisse misurata vengono misurati in background, quando l'analisi
+non ha altro da fare, con la normalizzazione attiva o no; i loro marker non
+vengono toccati. **Rianalizza** (nel menu della playlist) e **Rianalizza
+tutti i brani** misurano di nuovo.
+
+## Loudness {#loudness}
+
+![Impostazioni, Loudness: normalizzazione attiva, con l'obiettivo, il tetto di true peak, il guadagno massimo e il trim massimo ai valori predefiniti](../../images/guide/settings-loudness.png)
+
+Riproduce ogni brano e ogni cart alla stessa loudness, con un guadagno fisso
+per brano. La [normalizzazione del loudness](loudness.md) spiega come si
+calcola il guadagno, il badge nell'intestazione del lettore e le impostazioni
+per brano.
+
+| Impostazione | Predefinito | Intervallo | Significato |
+|---|---|---|---|
+| Normalizza la loudness | Attivo | | Normalizzazione attiva o no |
+| Obiettivo | −16 LUFS | da −36 a −6 LUFS, passi di 0,5 | La loudness integrata a cui viene portato ogni brano |
+| Tetto di true peak | −1 dBTP | da −12 a 0 dBTP, passi di 0,1 | Un aumento non porta mai il true peak del brano sopra questo valore. Le riduzioni non sono limitate |
+| Guadagno massimo | 12 dB | da 0 a 24 dB | Il guadagno più grande che un brano basso può ricevere. Le riduzioni non sono limitate |
+| Trim massimo | 12 dB | da 0 a 24 dB | Fin dove arriva il trim manuale di ogni brano, in su o in giù |
+
+Le modifiche si applicano ai brani caricati in seguito: ciò che è in
+riproduzione mantiene il suo guadagno, e il brano successivo in attesa su
+ogni lettore viene preparato di nuovo con quello nuovo. Una nota sotto le
+impostazioni dice quanti brani aspettano ancora la loro misura; suonano
+inalterati finché non è finita. Un lettore o un cart su un'uscita
+bit-perfect non viene mai normalizzato. **Ripristina i valori predefiniti**
+reimposta solo questa sezione (normalizzazione attiva). La normalizzazione è
+attiva per le nuove installazioni; una configurazione esistente mantiene la
+sua impostazione attuale (ogni configurazione salvata memorizza già il
+valore).
 
 ## Playlist {#playlists}
 
@@ -196,9 +260,9 @@ portoghese brasiliano usa il portoghese), e altrimenti l'inglese. Una lingua
 nel file delle impostazioni che l'interfaccia non ha viene mostrata come
 **Sistema** e segue il sistema operativo.
 
-Inglese e spagnolo sono scritti a mano. Le altre traduzioni sono state
-generate con l'IA e possono contenere errori; quando se ne usa una,
-**Informazioni su Fauste Player** lo dice. Le correzioni di madrelingua sono
+L'interfaccia in tutte le lingue, inglese e spagnolo compresi, è stata
+prodotta con l'IA e può contenere errori. **Informazioni su Fauste Player**
+riporta una dichiarazione generale che le copre tutte. Le correzioni sono
 benvenute come issue o pull request.
 
 ## Cartwall {#cartwall}
@@ -207,6 +271,14 @@ benvenute come issue o pull request.
 
 Pagine, dimensione della griglia, l'editor dei cart, e importazione ed
 esportazione delle pagine di cart. Vedi [Cartwall](cartwall.md).
+
+## Libreria {#library}
+
+Crea, rinomina, cambia il colore e il tipo, sposta (trascinando) ed elimina
+le categorie che raggruppano i tuoi brani, sorveglia una cartella con una
+categoria e rimuovi i suoi brani mancanti, senza aprire la finestra della
+libreria. Vedi [Libreria](library.md#categories) e
+[Cartelle sorvegliate](library.md#watched-folders).
 
 ## Scorciatoie da tastiera {#keyboard-shortcuts}
 
@@ -218,7 +290,8 @@ Vedi [Tastiera](keyboard.md).
 
 ![Impostazioni, MIDI, con il controllo MIDI disattivato](../../images/guide/settings-midi.png)
 
-Attiva le superfici di controllo MIDI, vedi le porte di ingresso e fai
+Attiva le superfici di controllo MIDI, vedi le porte di ingresso
+(**Riconnetti le porte** le riapre, come ricollegare i controller) e fai
 apprendere un controllo per ogni azione dei lettori. Vedi
 [Superfici di controllo MIDI](midi.md).
 

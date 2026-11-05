@@ -17,6 +17,8 @@ più tutti gli ingressi mentre fai apprendere un controllo; il programma non
 ascolta mai le proprie porte. I controller si possono collegare e scollegare mentre il programma è in esecuzione:
 ogni due secondi circa le porte vengono cercate di nuovo, e un controller
 che ritorna viene collegato per nome, con le sue luci reimpostate.
+**Riconnetti le porte** chiude ogni porta e la riapre senza toccare il cavo
+(vedi [Risoluzione dei problemi](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 Su Linux il MIDI passa per ALSA: il tuo utente deve poter aprire il
 sequencer (`/dev/snd/seq`, di solito facendo parte del gruppo `audio`).
@@ -44,12 +46,22 @@ un'associazione.
 - Un pulsante agisce quando viene premuto (un tasto o un pad che va giù, o
   un control change che sale attraverso la metà del suo intervallo),
   esattamente come il pulsante del lettore sullo schermo. Un pulsante
-  attenuato sullo schermo non fa nulla.
-- Un fader muove il volume sulla stessa scala del fader sullo schermo. Per
+  attenuato sullo schermo non fa nulla. Un pulsante **CUE** non fa nulla
+  anche quando il suo preascolto si sentirebbe in onda mentre lì suona
+  qualcosa: il MIDI non può rispondere alla domanda che pone lo schermo.
+  Fermare un preascolto funziona sempre.
+- Un fader muove il volume sulla stessa scala (la stessa legge da mixer) del fader sullo schermo. Per
   evitare salti, subentra solo quando raggiunge o supera il volume attuale
   (soft takeover); se il volume viene cambiato sullo schermo, il fader deve
   raggiungerlo di nuovo. Nulla cambia finché non muovi un controllo: avviare
   il programma non manda mai nulla in onda.
+- Un'associazione di volume di un lettore la cui uscita Main è
+  [bit-perfect](bit-perfect.md#what-it-costs) non fa nulla: il suo volume è
+  mantenuto al 100 %. Quando l'uscita non è più bit-perfect, porta il
+  controllo in cima per riprendere il volume.
+- Play/Successivo e Precedente su un lettore del genere cambiano brano
+  subito, senza dissolvenza incrociata. Le loro luci funzionano come al
+  solito.
 - Con **Accendi i pulsanti (feedback LED)** attivo, i pulsanti associati si
   accendono: Play mentre il lettore è in onda, Pausa che lampeggia mentre è
   in pausa, CUE durante il preascolto, e Stop, Stop in dissolvenza, Riavvia

@@ -8,6 +8,11 @@ playlist e il proprio trasporto. I lettori possono concatenare i brani con
 mix sovrapposti, preascoltare su un'uscita **CUE** separata e sopravvivere
 ai crash senza mandare nulla in onda da soli.
 
+> **Realizzato con l'aiuto dell'IA, fornito così com'è.** Fauste Player, questa
+> guida e le sue traduzioni sono stati sviluppati con un notevole aiuto di
+> strumenti di IA. Viene fornito senza alcuna garanzia e lo usi a tuo rischio:
+> vedi la [dichiarazione di esclusione di responsabilità](https://github.com/sanchezfauste/fauste-player#disclaimer).
+
 ![Schermata principale](../../images/main-screen.png)
 
 | Guida | Cosa tratta |
@@ -18,7 +23,8 @@ ai crash senza mandare nulla in onda da soli.
 | [Cartwall](cartwall.md) | Cart istantanei: lancio, pagine, loop, cart esclusivi, configurazione |
 | [Marker e mix](markers-and-mixing.md) | Cue-in/cue-out, il punto MIX, intro e outro, analisi automatica |
 | [Impostazioni](settings.md) | Uscite audio, lettori, analisi, playlist, MIDI, controllo remoto |
-| [Uscita bit-perfect](bit-perfect.md) | Dispositivi esclusivi che seguono la frequenza di ogni file, il badge BP, uscita DSD, verifica di una catena |
+| [Normalizzazione del loudness](loudness.md) | Ogni brano e ogni cart allo stesso loudness con un guadagno fisso per brano: il badge del guadagno, escludere e regolare un brano, uscite bit-perfect |
+| [Uscita bit-perfect](bit-perfect.md) | Una modalità speciale: nessuna dissolvenza incrociata, volume al 100 %. Dispositivi esclusivi che seguono la frequenza di ogni file, il badge BP, uscita DSD, verifica di una catena |
 | [Tastiera](keyboard.md) | Scorciatoie |
 | [Superfici di controllo MIDI](midi.md) | Pulsanti, fader e luci sui controller MIDI |
 | [Controllo remoto](remote-control.md) | Usare Fauste Player in rete: API HTTP, sicurezza |
@@ -28,9 +34,9 @@ ai crash senza mandare nulla in onda da soli.
 L'interfaccia è disponibile in inglese, spagnolo, catalano, olandese,
 francese, galiziano, tedesco, italiano, basco, polacco e portoghese. Segue
 la lingua del sistema operativo, a meno che non ne scegli una in
-Impostazioni. Inglese e spagnolo sono scritti a mano; le altre nove sono
-state generate con l'IA e possono contenere errori. Se parli una di queste
-lingue, le correzioni sono benvenute come issue o pull request.
+Impostazioni. L'interfaccia in tutte le lingue, inglese e spagnolo
+compresi, è stata prodotta con l'IA e può contenere errori. Le correzioni
+sono benvenute come issue o pull request.
 
 La guida è disponibile anche in altre lingue, tradotta con l'IA da
 questa guida in inglese: nella [guida online](https://sanchezfauste.com/fauste-player/guide/),

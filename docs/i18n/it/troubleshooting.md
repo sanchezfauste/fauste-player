@@ -5,8 +5,8 @@
 1. Apri **Impostazioni → Uscite audio** e premi **Prova Main** per il
    lettore. Se senti il tono, controlla il fader del volume del lettore.
 2. Se non senti nulla, scegli un altro dispositivo o un'altra coppia di
-   canali. Le modifiche alle uscite hanno effetto dopo un riavvio: premi
-   **Riavvia ora** nelle Impostazioni.
+   canali. Una modifica alle uscite si applica quando su di esse non suona più
+   nulla; **Applica ora** nelle Impostazioni la applica subito.
 3. Su Linux, preferisci **PipeWire** o **PulseAudio** in Impostazioni →
    Uscite audio → Sistema audio. Condividono la scheda audio con altri
    programmi. **ALSA** parla direttamente con la scheda e potrebbe trovarla
@@ -23,12 +23,24 @@
 ## Bit-perfect {#bit-perfect}
 
 - **Il badge BP resta spento.** Controlla ogni condizione in
-  [Uscita bit-perfect](bit-perfect.md#the-bp-badge): volume al 100 %, nessuna
-  dissolvenza, nient'altro sulle stesse uscite, un file lossless che sia
-  stato analizzato e un dispositivo che funzioni alla frequenza del file.
+  [Uscita bit-perfect](bit-perfect.md#the-bp-badge): nessuna dissolvenza,
+  nient'altro sulle stesse uscite, un file lossless che sia stato analizzato
+  e un dispositivo che funzioni alla frequenza del file.
 - **Un breve silenzio prima di un brano.** Il dispositivo bit-perfect è stato
-  riaperto alla frequenza di campionamento del brano. Tieni la libreria a
-  una sola frequenza per evitarlo.
+  riaperto alla frequenza di campionamento del brano. Succede solo quando la
+  frequenza cambia: i brani alla stessa frequenza si susseguono senza pausa.
+  Tieni la libreria a una sola frequenza per evitarlo. Vedi
+  [Cosa costa](bit-perfect.md#what-it-costs).
+- **I brani non si mixano, e Play non fa dissolvenze.** Su un lettore la cui
+  uscita Main è bit-perfect, ogni brano suona fino alla fine e poi parte il
+  successivo, e Play / Successivo e Precedente cambiano brano subito: su un
+  lettore del genere non ci sono dissolvenze incrociate né segue. Disattiva il
+  bit-perfect per il dispositivo, o sposta il lettore su un'altra uscita, per
+  tornare a mixare. Vedi [Cosa costa](bit-perfect.md#what-it-costs).
+- **Il fader del volume non si muove.** L'uscita Main del lettore è
+  bit-perfect, il che mantiene il volume al 100 %; lo dice il tooltip del
+  fader. Neanche i fader MIDI e l'API remota possono muoverlo. Vedi
+  [Cosa costa](bit-perfect.md#what-it-costs).
 - **Un brano suona ricampionato, e il log dice che il dispositivo è occupato
   (Linux).** Per cambiare frequenza, l'applicazione chiude il dispositivo e
   lo riapre. In quel momento il server audio (PipeWire) può prendersi la
@@ -120,6 +132,50 @@ quando finisce una copia. Per controllarlo subito usa **Rianalizza** nel menu
 della sua riga, oppure **Impostazioni → Analisi → Rianalizza tutti i brani**
 per l'intera libreria.
 
+Un WAV o FLAC che risulta illeggibile, o che suonerebbe come rumore forte,
+può essere un'estrazione di un CD DTS: il file contiene un bitstream DTS
+invece dell'audio. L'applicazione lo rifiuta (il log dice «encoded bitstream
+stored as PCM») e non decodifica il DTS. Convertilo prima in normale PCM con
+un altro strumento.
+
+## Una cartella sorvegliata mostra un avviso {#a-watched-folder-shows-a-warning}
+
+Una categoria che sorveglia una cartella mostra ⟳, di un altro colore quando
+la cartella non viene seguita; passaci sopra il puntatore per il motivo. Vedi
+[Cartelle sorvegliate](library.md#watched-folders).
+
+- **Non trovata o non leggibile**: l'unità o la condivisione non è montata o
+  non è raggiungibile. Anche una cartella vuota che dovrebbe contenere brani
+  della libreria conta come non trovata, perché una condivisione smontata
+  spesso sembra così. Nulla viene segnato o rimosso; la cartella viene
+  cercata di nuovo ogni 30 secondi e analizzata quando compare. Se hai
+  svuotato la cartella di proposito, elimina i suoi brani selezionandoli
+  nella tabella della libreria e scegliendo **Rimuovi dalla libreria…**,
+  oppure scegliendo **Rianalizza** su di essi, il che segna come mancanti
+  quelli il cui file è sparito così che **Rimuovi i brani mancanti…** possa
+  rimuoverli.
+- **Le modifiche non vengono seguite**: il sistema non vuole sorvegliarla,
+  di solito una cartella con moltissime sottocartelle. La cartella viene
+  comunque analizzata a ogni avvio e a ogni nuovo tentativo, quindi i nuovi
+  file compaiono allora, non subito. Su Linux, un albero di cartelle più
+  grande del limite di controlli per utente richiede un
+  `fs.inotify.max_user_watches` più alto (per esempio `sudo sysctl
+  fs.inotify.max_user_watches=524288`; rendilo permanente in
+  `/etc/sysctl.d/`).
+- **Non è un percorso completo**: la cartella memorizzata è stata modificata
+  a mano in un percorso non completo. Scegli **Cambia cartella
+  sorvegliata…** per sceglierla di nuovo.
+- **Una condivisione di rete non mostra alcun avviso, ma i file aggiunti da
+  un altro computer non compaiono**: su una condivisione di rete (SMB/CIFS,
+  NFS) il sistema di solito accetta il controllo ma segnala solo le modifiche
+  fatte da questo computer. Le modifiche fatte altrove si vedono al prossimo
+  avvio, non mentre l'applicazione è in esecuzione.
+- **Una cartella con migliaia di file** richiede un po' di tempo per essere
+  analizzata all'avvio; l'avanzamento dell'analisi lo mostra.
+- I brani il cui file ha lasciato una cartella sorvegliata restano nella
+  libreria segnati come mancanti. Rimuovili con **Rimuovi i brani
+  mancanti…** nel menu della categoria.
+
 ## Interruzioni audio {#audio-dropouts}
 
 La barra di stato avvisa per 5 secondi dopo ogni interruzione che
@@ -132,12 +188,58 @@ scadenza (uno xrun). Anche il log registra ognuna, al massimo una riga ogni
 segnalano gli xrun (PulseAudio no; la modalità esclusiva di Windows no).
 
 
-- Aumenta la **dimensione del buffer** nelle Impostazioni (e premi **Riavvia
-  ora**).
+- Aumenta la **dimensione del buffer** nelle Impostazioni (si applica quando
+  su quel dispositivo non suona più nulla, oppure subito con **Applica ora**).
+- Attraverso un server audio (PulseAudio, il dispositivo ALSA `default`),
+  ogni uscita chiede già almeno 50 ms qualunque sia la dimensione del buffer,
+  così un computer occupato non si sente; le Impostazioni lo mostrano accanto
+  alla latenza. Su un computer vecchio o molto carico, alza `shared_buffer_ms`
+  nella sezione `outputs` del file di configurazione (per esempio a 100). Il
+  sistema tiene in coda circa due di questi blocchi, quindi i pulsanti dei
+  cart e di play suonano poi circa il doppio dell'aumento più tardi. Per
+  l'uscita in onda, la voce hardware del dispositivo (`hw:` su Linux) evita
+  del tutto il server audio.
 - Su Linux, consenti la schedulazione in tempo reale. L'applicazione la
-  chiede al sistema tramite rtkit (D-Bus). Funziona anche l'appartenenza al
-  gruppo `audio` con un limite `rtprio`.
+  chiede al sistema tramite rtkit (D-Bus), e il log registra un rifiuto.
+  Molti desktop la rifiutano alle applicazioni.
 - Evita le unità di rete per la musica che va in onda.
+
+## L'interfaccia è lenta su un computer vecchio {#the-interface-is-slow-on-an-old-computer}
+
+Mentre qualcosa suona, l'interfaccia disegna al massimo 30 fotogrammi al
+secondo (`max_fps` nella sezione `ui` del file di configurazione), e i clic e
+i tasti ricevono risposta subito. Su un computer vecchio o occupato abbassalo
+(per esempio a 20) per lasciare più processore all'audio; 0 disegna ogni
+fotogramma che mostra lo schermo. I meter misurano lo stesso a qualsiasi
+frequenza; vengono solo disegnati meno spesso.
+
+## Non si possono rilasciare file su Linux {#files-cannot-be-dropped-on-linux}
+
+La finestra accetta file trascinati da un file manager solo quando gira su
+X11. Per impostazione predefinita lo fa, anche su un desktop Wayland
+(tramite XWayland, che ogni desktop ha). Se `ui.window_system` in
+`config.json` è impostato su `"Wayland"`, la finestra è una finestra Wayland
+nativa, che può apparire più nitida con la scala frazionaria dello schermo,
+ma non vi si possono rilasciare file: usa invece **+ Aggiungi**. Rimettilo su
+`"Auto"` (il valore predefinito) o `"X11"` e riavvia Fauste Player.
+
+## Un controller MIDI non risponde {#a-midi-controller-does-not-respond}
+
+Se **Impostazioni → MIDI** mostra il controller come connesso ma i suoi
+pulsanti e fader non fanno nulla, premi lì **Riconnetti le porte**: il
+programma chiude le porte MIDI e le riapre, come scollegare e ricollegare il
+controller. Se non basta, scollega il controller e ricollegalo.
+
+In entrambi i casi, il log dice cosa è successo. Elenca le porte MIDI ogni
+volta che cambiano, ogni porta aperta e chiusa (con il motivo), una porta che
+non si può aprire (una volta, finché non si apre o sparisce), il primo
+messaggio ricevuto su ogni connessione, il primo messaggio ignorato su ogni
+connessione con il motivo (nessuna associazione, un fader che non ha ancora
+raggiunto il volume, un'azione che ora non può agire) e il primo messaggio
+LED fallito. Un controller connesso che non registra mai un primo messaggio
+non sta inviando nulla che il programma riceva. Per ogni messaggio ignorato e
+ogni nuovo tentativo fallito, avvia il programma con
+`RUST_LOG=info,fp_control=debug`.
 
 ## «L'interfaccia ha riscontrato un errore» {#the-interface-hit-an-error}
 
@@ -147,6 +249,22 @@ segnalano gli xrun (PulseAudio no; la modalità esclusiva di Windows no).
 ## Log e report dei crash {#logs-and-crash-reports}
 
 Vedi [Dati e backup](data-and-backups.md) per la cartella dei log. C'è un
-file di log al giorno, e gli ultimi 14 vengono conservati. I report dei crash
-vengono salvati come `crash-<time>.txt`. Imposta `RUST_LOG=debug` nell'ambiente
-per maggiori dettagli. Allega entrambi i file quando segnali un bug.
+file di log al giorno. Le righe identiche che si ripetono una dopo l'altra
+vengono scritte una sola volta, seguite da una riga come `previous message
+repeated 12 times` (durante una lunga serie di ripetizioni quella riga viene
+scritta ogni minuto). Le righe che differiscono, per esempio perché portano un
+contatore, non vengono compattate. I messaggi di connessione di routine del
+client PulseAudio sono omessi per impostazione predefinita. Imposta
+`RUST_LOG=debug` nell'ambiente per maggiori dettagli (sostituisce il filtro
+predefinito, `info,pulseaudio=warn`).
+
+Il log è limitato: il file di un giorno smette di crescere a 10 MiB (la sua
+ultima riga lo dice; il resto di quel giorno non viene registrato, ed è ciò a
+cui porta un diluvio di righe diverse) e vengono conservati gli ultimi 14
+file. Si cambiano nel file di configurazione con `limits.max_log_file_mb` (da
+1 a 1024), `limits.max_log_files` (da 2 a 365) e
+`limits.log_repeat_summary_secs` (da 1 a 3600, predefinito 60, ogni quanto
+viene segnalata una lunga serie di ripetizioni); si applicano al prossimo
+avvio. I report dei crash vengono salvati come `crash-<time>.txt` nella stessa
+cartella e sono limitati separatamente (`limits.max_crash_reports` per
+esecuzione). Allega entrambi i file quando segnali un bug.

@@ -5,7 +5,9 @@
 | `1` … `9` | Play sui lettori 1–9 (come il loro pulsante Play) |
 | `F1` … `F12` | Lancia i cart 1–12 della pagina di cart mostrata |
 | `Ctrl+Space` | Ferma tutti i cart e il CUE dei cart (il pulsante **Ferma tutto** della cartwall) |
-| `Delete` / `Backspace` | Rimuove il brano selezionato dalla playlist mostrata (non mentre è in onda) |
+| `Up` / `Down` | Sposta la selezione nella playlist mostrata dal lettore usato per ultimo (all'avvio, il primo lettore mostrato), facendo scorrere la riga in vista. Senza selezione, il primo tasto premuto seleziona il brano successivo del lettore, oppure il primo brano |
+| `Enter` | Imposta il brano selezionato come brano successivo del lettore. Premi `Enter` una seconda volta sullo stesso brano entro il tempo di un doppio clic (il ritardo del doppio clic del sistema) per riprodurlo, come fa la scorciatoia Play del lettore. Un altro tasto, un clic o un cambio di selezione nel frattempo, oppure un'attesa più lunga, fanno tornare `Enter` a essere un primo `Enter` |
+| `Delete` / `Backspace` | Rimuove il brano selezionato dalla playlist mostrata (non mentre è in onda). Nascondere un lettore ne cancella la selezione |
 | `Esc` | Chiude i menu e le Impostazioni; annulla la finestra «C'è audio in onda»; cancella la selezione |
 
 - Tenere premuto un tasto non lo ripete: un `1` tenuto premuto preme Play una
@@ -38,4 +40,4 @@ qui sopra. Azioni disponibili, per ogni lettore e cart:
 - mostrare o nascondere la cartwall;
 - pagina di cart successiva o precedente.
 
-`Delete`, `Backspace` e `Esc` non si possono cambiare.
+`Delete`, `Backspace` e `Esc` non si possono cambiare. `Up`, `Down` e `Enter` sulla playlist funzionano solo quando nessuna scorciatoia li usa e nessun pulsante o cursore ha il focus della tastiera.
