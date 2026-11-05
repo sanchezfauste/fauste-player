@@ -1,0 +1,53 @@
+name: Install Ubuntu packages
+description: >
+  Installs Ubuntu packages with apt and keeps the downloaded archives in the
+  Actions cache. The runner's Ubuntu mirror is sometimes very slow (49 MB in
+  42 minutes); with the archives cached, apt only reads its index and
+  installs. apt still runs every package's scripts and takes the mirror's
+  current versions: a package that changed since the cache was saved is
+  downloaded again.
+
+inputs:
+  packages:
+    description: The packages to install, separated by spaces or newlines.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Name the archive cache
+      id: key
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+      # The runner image's version ends the key: a new image restores the
+      # archives of the previous one (the restore key) and saves its own.
+      run: |
+        list=$(printf '%s\n' $PACKAGES | sort -u | sha256sum | cut -c1-16)
+        echo "prefix=apt-${ImageOS}-${RUNNER_ARCH}-${list}-" >> "$GITHUB_OUTPUT"
+        echo "key=apt-${ImageOS}-${RUNNER_ARCH}-${list}-${ImageVersion}" >> "$GITHUB_OUTPUT"
+        echo "dir=${RUNNER_TEMP}/apt-archives" >> "$GITHUB_OUTPUT"
+    - uses: actions/cache@v6
+      with:
+        path: ${{ steps.key.outputs.dir }}
+        key: ${{ steps.key.outputs.key }}
+        restore-keys: ${{ steps.key.outputs.prefix }}
+    - name: Install the packages
+      shell: bash
+      env:
+        PACKAGES: ${{ inputs.packages }}
+        ARCHIVES: ${{ steps.key.outputs.dir }}
+      run: |
+        mkdir -p "$ARCHIVES/partial"
+        sudo apt-get update
+        # shellcheck disable=SC2086 # one word per package
+        sudo apt-get install -y --no-install-recommends \
+          -o Dir::Cache::Archives="$ARCHIVES" -o APT::Keep-Downloaded-Packages=true \
+          $PACKAGES
+        # Drop the archives the mirror no longer has, so the cache does not
+        # grow with every image.
+        sudo apt-get autoclean -o Dir::Cache::Archives="$ARCHIVES"
+        # apt leaves a root-only lock and download folder; the cache's post
+        # step runs as the runner user and must read everything it saves.
+        sudo rm -rf "$ARCHIVES/lock" "$ARCHIVES/partial"
+        sudo chown -R "$(id -u):$(id -g)" "$ARCHIVES"
