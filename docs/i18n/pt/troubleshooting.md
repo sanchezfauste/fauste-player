@@ -4,9 +4,9 @@
 
 1. Abra **Definições → Saídas de áudio** e prima **Testar Main** para o
    leitor. Se ouvir o tom, verifique o fader de volume do leitor.
-2. Se não ouvir nada, escolha outro dispositivo ou par de canais. As
-   alterações às saídas têm efeito após um reinício: prima **Reiniciar
-   agora** nas Definições.
+2. Se não ouvir nada, escolha outro dispositivo ou par de canais. Uma
+   alteração das saídas aplica-se quando nada toca nelas; **Aplicar agora**
+   nas Definições aplica-a de imediato.
 3. No Linux, prefira **PipeWire** ou **PulseAudio** em Definições → Saídas de
    áudio → Sistema de áudio. Partilham a placa de som com outros programas. O
    **ALSA** fala diretamente com a placa e pode encontrá-la ocupada.
@@ -23,12 +23,24 @@
 ## Bit-perfect {#bit-perfect}
 
 - **O indicador BP fica apagado.** Verifique cada condição em
-  [Saída bit-perfect](bit-perfect.md#the-bp-badge): volume a 100 %, nenhum
-  fade, nada mais nas mesmas saídas, um ficheiro sem perdas que tenha sido
-  analisado e um dispositivo a correr à frequência do ficheiro.
+  [Saída bit-perfect](bit-perfect.md#the-bp-badge): nenhum fade, nada
+  mais nas mesmas saídas, um ficheiro sem perdas que tenha sido analisado e
+  um dispositivo a correr à frequência do ficheiro.
 - **Um breve silêncio antes de uma faixa.** O dispositivo bit-perfect foi
-  aberto de novo à frequência de amostragem da faixa. Mantenha a biblioteca
-  a uma só frequência para o evitar.
+  aberto de novo à frequência de amostragem da faixa. Só acontece quando a
+  frequência muda: as faixas à mesma frequência seguem-se sem pausa. Mantenha
+  a biblioteca a uma só frequência para o evitar. Ver
+  [O que custa](bit-perfect.md#what-it-costs).
+- **As faixas não se misturam, e o Play não faz fade.** Num leitor cuja saída
+  Main é bit-perfect, cada faixa toca até ao fim e só então começa a
+  seguinte, e o Play / Seguinte e o Anterior mudam de imediato: não há
+  crossfades nem segues nesse leitor. Desative o bit-perfect do dispositivo,
+  ou mude o leitor para outra saída, para voltar a misturar. Ver
+  [O que custa](bit-perfect.md#what-it-costs).
+- **O fader de volume não se move.** A saída Main do leitor é bit-perfect, o
+  que mantém o volume a 100 %; a dica do fader di-lo. Os faders MIDI e a API
+  remota também não o conseguem mover. Ver
+  [O que custa](bit-perfect.md#what-it-costs).
 - **Uma faixa toca reamostrada, e o registo diz que o dispositivo está
   ocupado (Linux).** Para mudar de frequência, a aplicação fecha o
   dispositivo e abre-o de novo. Nesse momento, o servidor de som (PipeWire)
@@ -121,6 +133,49 @@ uma cópia termina. Para o verificar de imediato, use **Voltar a analisar** no
 menu da sua linha, ou **Definições → Análise → Voltar a analisar todas as
 faixas** para toda a biblioteca.
 
+Um WAV ou FLAC que aparece como ilegível, ou que tocaria como ruído alto,
+pode ser um rip de CD DTS: o ficheiro contém um fluxo de bits DTS em vez de
+áudio. A aplicação recusa-o (o registo diz «encoded bitstream stored as
+PCM») e não descodifica DTS. Converta-o primeiro para PCM normal com outra
+ferramenta.
+
+## Uma pasta vigiada mostra um aviso {#a-watched-folder-shows-a-warning}
+
+Uma categoria que vigia uma pasta mostra ⟳, com outra cor quando a pasta não
+é seguida; passe o rato por cima para ver o motivo. Ver [Pastas
+vigiadas](library.md#watched-folders).
+
+- **Não encontrada ou não pode ser lida**: a unidade ou a partilha não está
+  montada ou não está acessível. Uma pasta vazia que devia conter faixas da
+  biblioteca também conta como não encontrada, pois uma partilha desmontada
+  costuma parecer uma. Nada é marcado nem removido; a pasta é procurada de
+  novo a cada 30 segundos e analisada quando aparece. Se esvaziou a pasta de
+  propósito, limpe as suas faixas selecionando-as na tabela da biblioteca e
+  escolhendo **Remover da biblioteca…**, ou escolhendo **Voltar a analisar**
+  nelas, o que marca como em falta as que já não têm ficheiro para que
+  **Remover faixas em falta…** as possa remover.
+- **As alterações não são seguidas**: o sistema não a quis vigiar,
+  normalmente uma pasta com muitíssimas subpastas. A pasta continua a ser
+  analisada em cada arranque e em cada nova tentativa, por isso os ficheiros
+  novos aparecem então, não de imediato. No Linux, uma árvore de pastas
+  maior do que o limite de vigilâncias por utilizador precisa de um
+  `fs.inotify.max_user_watches` mais alto (por exemplo `sudo sysctl
+  fs.inotify.max_user_watches=524288`; torne-o permanente em
+  `/etc/sysctl.d/`).
+- **Não é um caminho completo**: a pasta guardada foi editada à mão para um
+  caminho que não está completo. Escolha **Alterar pasta vigiada…** para a
+  escolher de novo.
+- **Uma partilha de rede não mostra aviso, mas os ficheiros adicionados a
+  partir de outro computador não aparecem**: numa partilha de rede
+  (SMB/CIFS, NFS) o sistema costuma aceitar a vigilância mas só comunica as
+  alterações feitas a partir deste computador. As alterações feitas noutro
+  sítio são vistas no arranque seguinte, não enquanto a aplicação corre.
+- **Uma pasta com milhares de ficheiros** demora a ser analisada no arranque;
+  o progresso da análise mostra-o.
+- As faixas cujo ficheiro saiu de uma pasta vigiada ficam na biblioteca
+  marcadas como em falta. Remova-as com **Remover faixas em falta…** no menu
+  da categoria.
+
 ## Cortes de áudio {#audio-dropouts}
 
 A barra de estado avisa durante 5 segundos após cada corte que a aplicação
@@ -133,13 +188,57 @@ aconteceram. Nem todos os sistemas de áudio comunicam xruns (o PulseAudio
 não; o modo exclusivo do Windows não).
 
 
-- Aumente o **tamanho do buffer** nas Definições (e prima **Reiniciar
-  agora**).
+- Aumente o **tamanho do buffer** nas Definições (aplica-se quando nada toca
+  nesse dispositivo, ou de imediato com **Aplicar agora**).
+- Através de um servidor de som (PulseAudio, o dispositivo `default` do
+  ALSA), cada saída já pede pelo menos 50 ms seja qual for o tamanho do
+  buffer, para que um computador ocupado não se ouça; as Definições mostram-no
+  junto à latência. Num computador antigo ou muito carregado, aumente
+  `shared_buffer_ms` na secção `outputs` do ficheiro de configuração (por
+  exemplo para 100). O sistema mantém cerca de dois desses blocos em fila, por
+  isso os botões de cartucho e de play passam a soar cerca de duas vezes o
+  aumento mais tarde. Para a saída do ar, a entrada de hardware do próprio
+  dispositivo (`hw:` no Linux) evita por completo o servidor de som.
 - No Linux, permita o escalonamento em tempo real. A aplicação pede-o ao
-  sistema através do rtkit (D-Bus). Pertencer ao grupo `audio` com um limite
-  `rtprio` também funciona.
+  sistema através do rtkit (D-Bus), e o registo regista uma recusa. Muitos
+  ambientes de trabalho recusam-no às aplicações.
 - Evite unidades de rede para a música que toca no ar.
 
+## A interface está lenta num computador antigo {#the-interface-is-slow-on-an-old-computer}
+
+Enquanto algo toca, a interface desenha no máximo 30 imagens por segundo
+(`max_fps` na secção `ui` do ficheiro de configuração), e os cliques e as
+teclas são respondidos de imediato. Num computador antigo ou ocupado,
+baixe-o (por exemplo para 20) para deixar mais do processador para o áudio; 0
+desenha todas as imagens que o ecrã mostra. Os medidores medem o mesmo a
+qualquer ritmo; só são desenhados com menos frequência.
+
+## Não é possível largar ficheiros no Linux {#files-cannot-be-dropped-on-linux}
+
+A janela só aceita ficheiros arrastados de um gestor de ficheiros quando corre
+em X11. Por predefinição corre, também num ambiente de trabalho Wayland
+(através do XWayland, que todos os ambientes têm). Se `ui.window_system` em
+`config.json` estiver definido como `"Wayland"`, a janela é uma janela
+Wayland nativa, que pode ficar mais nítida com escala de ecrã fracionária,
+mas não é possível largar ficheiros nela: use **+ Adicionar**. Volte a
+pô-lo em `"Auto"` (a predefinição) ou `"X11"` e reinicie o Fauste Player.
+
+## Um controlador MIDI não responde {#a-midi-controller-does-not-respond}
+
+Se **Definições → MIDI** mostra o controlador como ligado mas os seus botões
+e faders não fazem nada, prima aí **Voltar a ligar as portas**: o programa
+fecha as portas MIDI e abre-as de novo, como se desligasse e voltasse a ligar
+o controlador. Se isso não ajudar, desligue o controlador e volte a ligá-lo.
+
+De qualquer forma, o registo diz o que aconteceu. Lista as portas MIDI sempre
+que mudam, cada porta aberta e fechada (com o motivo), uma porta que não
+pode ser aberta (uma vez, até abrir ou desaparecer), a primeira mensagem
+recebida em cada ligação, a primeira mensagem ignorada em cada ligação com o
+motivo (sem associação, um fader que ainda não alcançou o volume, uma ação
+que não pode atuar agora) e a primeira mensagem de LED que falhou. Um
+controlador ligado que nunca regista uma primeira mensagem não está a enviar
+nada que o programa receba. Para cada mensagem ignorada e cada nova tentativa
+falhada, arranque o programa com `RUST_LOG=info,fp_control=debug`.
 ## «A interface teve um erro» {#the-interface-hit-an-error}
 
 Foi detetado um erro de desenho. O áudio não é afetado. Prima **Reiniciar a
@@ -148,7 +247,23 @@ interface**. Comunique-o, por favor, com os registos.
 ## Registos e relatórios de falhas {#logs-and-crash-reports}
 
 Consulte [Dados e cópias de segurança](data-and-backups.md) para a pasta de
-registos. Há um ficheiro de registo por dia, e os últimos 14 são mantidos.
-Os relatórios de falhas são guardados como `crash-<hora>.txt`. Defina
-`RUST_LOG=debug` no ambiente para mais detalhe. Anexe ambos os ficheiros ao
+registos. Há um ficheiro de registo por dia. As linhas idênticas que se
+repetem umas a seguir às outras são escritas uma só vez, seguidas de uma linha
+como `previous message repeated 12 times` (durante uma longa sequência de
+repetições essa linha é escrita a cada minuto). As linhas que diferem, por
+exemplo por levarem um contador, não são reduzidas. As mensagens rotineiras de
+ligação do cliente PulseAudio são omitidas por predefinição. Defina
+`RUST_LOG=debug` no ambiente para mais detalhe (substitui o filtro
+predefinido, `info,pulseaudio=warn`).
+
+O registo é limitado: o ficheiro de um dia deixa de crescer aos 10 MiB (a sua
+última linha di-lo; o resto desse dia não é registado, o que é o que uma
+inundação de linhas diferentes provoca) e os últimos 14 ficheiros são
+mantidos. Altere-os no ficheiro de configuração com `limits.max_log_file_mb`
+(1 a 1024), `limits.max_log_files` (2 a 365) e
+`limits.log_repeat_summary_secs` (1 a 3600, predefinição 60, com que
+frequência uma longa sequência de repetições é comunicada); aplicam-se no
+arranque seguinte. Os relatórios de falhas são guardados como
+`crash-<hora>.txt` na mesma pasta e são limitados em separado
+(`limits.max_crash_reports` por execução). Anexe ambos os ficheiros ao
 comunicar um erro.

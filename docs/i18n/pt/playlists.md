@@ -16,10 +16,27 @@ separador que escolhe, e o que um leitor mostra, é trazido para a vista.
 Mudar de separador nunca altera o que está no ar nem o que é a seguinte.
 Quando uma faixa termina, o leitor continua na lista que contém essa faixa.
 
-As listas são criadas, renomeadas e eliminadas nas [Definições](settings.md).
-A última lista, e uma lista com uma faixa no ar, não podem ser eliminadas.
+O **+** na extremidade direita da fila cria uma lista nova: escreva um nome e
+prima Enter ou **Criar** (Escape ou um clique fora cancela). A lista nova
+aparece de imediato nos separadores desse leitor e o leitor mostra-a. As
+listas também podem ser criadas, e são renomeadas e eliminadas, nas
+[Definições](settings.md). A última lista, e uma lista com uma faixa no ar,
+não podem ser eliminadas.
 
 ## A tabela de faixas {#the-track-table}
+
+Cada ficheiro que adiciona a uma lista, a um cartucho ou ao importar um
+ficheiro M3U ou PLS torna-se uma *faixa* da biblioteca, e fica lá quando
+remove a sua entrada, limpa o cartucho ou elimina a lista: os seus
+marcadores, definições de loudness e etiquetas são mantidos para a próxima
+vez que adicionar o ficheiro. O mesmo ficheiro é sempre uma só faixa:
+adicioná-lo duas vezes, ou a uma lista e a um cartucho, partilha os seus
+marcadores e definições de loudness em todo o lado. No computador, um
+ficheiro adicionado a partir desta versão é a mesma faixa seja qual for o
+caminho que lhe chega (uma ligação simbólica ou `..` no caminho não cria uma
+segunda faixa). A única exceção: uma faixa sem categoria, cujo ficheiro
+desapareceu e que já ninguém usa sai por si só da biblioteca, com uma linha
+no registo.
 
 ![Uma lista: as faixas tocadas esbatidas, a faixa no ar a vermelho, a faixa seguinte a verde e o rodapé com o tempo restante](../../images/guide/playlist.png)
 
@@ -34,6 +51,7 @@ A última lista, e uma lista com uma faixa no ar, não podem ser eliminadas.
 | Dur. | Duração de reprodução, do cue-in ao cue-out (o ficheiro inteiro com **Usar cue-in e cue-out** desativado) |
 | Intro | Quanto dura a intro, desde onde a faixa começa a tocar até ao seu marcador de intro; vazio quando a faixa não tem marcador de intro |
 | Ficheiro | O nome do ficheiro, com a sua extensão |
+| Comentário | A etiqueta de comentário, numa só linha |
 
 Uma instalação nova mostra `#`, Título, Artista e Dur. As outras colunas são
 opcionais; veja **Escolher as colunas** abaixo. Uma faixa que não tem um
@@ -98,14 +116,16 @@ Cores das linhas:
 | **P2** a vermelho (ou outro número) na coluna do número | No ar nesse leitor |
 | **Verde**, com uma seta | A faixa seguinte deste leitor |
 | Esbatida | Já tocada neste leitor |
+| Contorno lavanda | A linha selecionada (clique nela, ou mova-se com Up e Down). Também aparece nas linhas vermelha e verde |
 | Ficheiro com uma cruz / ícone de aviso | Ficheiro em falta / ilegível (é saltado); passe o rato sobre a linha: a janela começa com o motivo, a âmbar, e depois os campos habituais. Um ficheiro em falta é procurado de novo a cada 30 s (`tuning.missing_recheck_ms`). |
 | Setas de recarregar à direita do título | Analisada por uma versão anterior; continua a tocar com essa análise. **Definições → Análise → Analisar faixas desatualizadas** põe-na em dia (as faixas num leitor são atualizadas de qualquer forma) |
-| Ampulheta à direita do título | A faixa está à espera da sua análise (passe o rato sobre a ampulheta: *Análise pendente*). Toca na mesma, e a ampulheta desaparece quando a análise termina |
+| Ampulheta à direita do título | A faixa está à espera da sua análise: *À espera de análise* quando está na fila, *Análise pendente* quando ainda não foi posta na fila. Toca na mesma, e a ampulheta desaparece quando a análise termina. Uma faixa analisada posta de novo na fila (por **Voltar a analisar todas as faixas**) também a mostra |
+| Ícone de forma de onda à direita do título | A faixa está a ser analisada agora (*A ser analisada agora*) |
 | Violeta | Selecionada |
 
 **Dica da faixa.** Passe o rato sobre uma linha durante um momento para ver o
 seu título, artista, álbum, data, género, duração, formato (tipo, frequência
-de amostragem e profundidade de bits, quando conhecidos) e o caminho do seu
+de amostragem, profundidade de bits e débito médio, por exemplo 320 kbps, quando conhecidos) e o caminho do seu
 ficheiro. Um campo que o ficheiro não tem é omitido. A janela é a única
 informação ao passar o rato sobre uma linha, e nunca se move enquanto é
 mostrada. Para um ficheiro em falta ou ilegível, começa com o motivo.
@@ -123,15 +143,19 @@ mostrada. Para um ficheiro em falta ou ilegível, começa com o motivo.
 |---|---|
 | Reproduzir agora | Iniciar esta faixa de imediato (misturando se o leitor estiver no ar) |
 | Definir como seguinte | O mesmo que o duplo clique. Na faixa no ar, toca mais uma vez, desde o início, quando a passagem atual terminar (misturando como o Repetir, sem interrupção), e depois o leitor continua. Atua uma só vez. O Stop no fim, o modo SINGLE e uma marca de Stop no fim continuam a terminar primeiro o leitor. Enquanto um CUE decorre, passa para a nova seguinte |
-| Pré-escutar no CUE | Tocá-la na saída CUE (abre a janela de CUE). Esbatido quando o leitor não tem uma saída Cue à parte da sua saída Main |
+| Pré-escutar no CUE | Tocá-la na saída CUE (abre a janela de CUE). Esbatido quando o leitor não tem saída Cue. Na saída que está no ar, pergunta primeiro enquanto algo toca aí (ver [CUE](players.md#cue-pre-listen)) |
 | Editar etiquetas… | Abrir o editor de etiquetas desta faixa. **Guardar** escreve as alterações no ficheiro de áudio; **Cancelar** (ou Esc, quando nenhuma gravação está em curso) fecha sem escrever. O item fica esbatido, com o motivo ao passar o rato, enquanto a faixa está no ar, em CUE ou num cartucho a tocar, enquanto as suas etiquetas ainda não foram lidas, quando o ficheiro está em falta e para formatos cujas etiquetas não podem ser escritas (por exemplo, DSD) |
-| Voltar a analisar | Analisar esta faixa de novo agora, seja qual for o seu estado. Um ficheiro corrigido que estava ilegível também é recolhido por si só (ver [Resolução de problemas](troubleshooting.md)). Os marcadores manuais são mantidos |
+| Voltar a analisar | Analisar esta faixa de novo agora, seja qual for o seu estado, lendo o ficheiro de novo (por isso um ficheiro que editou é medido outra vez mesmo que o tamanho e a data não tenham mudado). Um ficheiro corrigido que estava ilegível também é recolhido por si só (ver [Resolução de problemas](troubleshooting.md)). Os marcadores manuais são mantidos. Esbatido, com o motivo ao passar o rato, enquanto a faixa já está à espera da sua análise ou a ser analisada |
+| Loudness… | Abrir a janela de loudness desta faixa (ajuste e exclusão; ver [Loudness](loudness.md)) |
+| Mostrar na biblioteca | Abrir a [janela da biblioteca](library.md) na categoria desta faixa com a sua linha selecionada. Só no computador |
+| Mover para a categoria ▸ | Arrumar a faixa numa categoria, ou em Sem categoria, sem abrir a biblioteca. Só no computador |
+
 | Adicionar faixas abaixo… | Escolher ficheiros para inserir depois desta faixa |
 | Duplicar | Inserir abaixo uma cópia por tocar (com as suas marcas de repetir e de parar após a faixa) |
 | Repetir esta faixa | Assinale para a tocar vezes sem conta, sem interrupção, até premir Play (seguinte), Anterior, Stop ou Stop com fade, ou ativar Stop no fim. A Pausa mantém a repetição. Um ícone de repetir aparece antes do título |
 | Parar após esta faixa | Assinale para parar o leitor quando esta faixa termina, sempre que toca (em qualquer modo). Ao contrário do botão **Stop no fim** do leitor, a marca fica com a faixa e é guardada com a lista. O ícone de parar após a faixa aparece antes do título. Prevalece sobre o Repetir |
 | Mover para ▸ | Movê-la para o fim de outra lista |
-| Remover da lista | Removê-la; não é possível enquanto está no ar |
+| Remover da lista | Removê-la desta lista; não é possível enquanto está no ar. A faixa fica na biblioteca (os seus marcadores e definições de loudness são mantidos) |
 
 ## Editar etiquetas {#editing-tags}
 
@@ -227,7 +251,13 @@ são ignorados.
 - Largue ficheiros ou pastas do gestor de ficheiros sobre uma lista para os
   inserir na posição onde larga. Sobre o cabeçalho, a borda de uma coluna, a
   barra de deslocamento ou uma janela que cubra a lista, nada é inserido. Se
-  o sistema não comunicar a posição, vão para o fim da lista mostrada.
+  o sistema não comunicar a posição, vão para o fim da lista mostrada pelo
+  último leitor que usou, ou pelo primeiro leitor visível; com todos os
+  leitores ocultos, nada é inserido e a barra de estado di-lo (ver
+  [Disposição](layout.md#show-and-hide-panels)).
+  No Linux, largar ficheiros exige que a janela corra em X11, o que acontece
+  por predefinição, também num ambiente de trabalho Wayland (ver
+  [Resolução de problemas](troubleshooting.md#files-cannot-be-dropped-on-linux)).
 
 ## Rodapé {#footer}
 

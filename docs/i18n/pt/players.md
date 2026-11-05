@@ -3,18 +3,21 @@
 Cada coluna é um leitor. Os leitores são independentes: cada um tem os seus
 próprios separadores de listas, transporte, volume e saídas.
 
-![O leitor 1 no ar: o seu cabeçalho, capa, título, faixa seguinte, transporte, contagem decrescente, medidor, fader e forma de onda](../../images/guide/player.png)
+![O leitor 1 no ar: o seu cabeçalho com o ganho de loudness, capa, título, faixa seguinte, transporte, contagem decrescente, medidor, fader e forma de onda](../../images/guide/player.png)
 
 ## Cabeçalho {#header}
 
 | Elemento | Significado |
 |---|---|
 | `P1` … `Pn` | Número do leitor (a tecla numérica que o faz tocar) |
+| Botões **Ocultar** e **Maximizar** / **Restaurar** | Os dois botões pequenos na extremidade direita do cabeçalho: ocultam o leitor, ou maximizam-no por um momento (**Restaurar** enquanto está maximizado). Ficam esbatidos enquanto a disposição está bloqueada, o **Ocultar** no último painel visível e o **Maximizar** com um só painel visível (ver [Disposição](layout.md#maximize-a-panel)) |
 | Ponto e etiqueta de estado | **No ar** (vermelho), **Em pausa** (âmbar), **Parado** (cinzento) |
-| Indicador **Mistura** / **Fade** | Está a decorrer uma mistura com a faixa seguinte, ou um stop com fade |
+| Colunas estreitas | Quando a coluna é demasiado estreita para todos os indicadores, o cabeçalho deixa cair primeiro os menos importantes (o texto de estado, **Outras silenciadas**, o aviso de entrada, **Stop no fim**, **Mistura** / **Fade**, o ponto de estado), para que nada se sobreponha. O número do leitor, **CUE**, o modo, **BP**, o indicador de ganho e os botões **Ocultar** e **Maximizar** ficam sempre. Alargue a coluna para os ver todos |
+| Indicador **Mistura** / **Fade** | Está a decorrer uma mistura com a faixa seguinte, ou um stop com fade. A **Mistura** nunca se acende num leitor cuja saída Main é bit-perfect: não faz crossfade (ver [O que custa](bit-perfect.md#what-it-costs)) |
 | Indicador **Stop no fim** | O leitor para quando a faixa atual termina |
 | Indicador **Repetir** / **Parar após a faixa** | A faixa atual repete-se, ou para o leitor quando termina, por causa da sua própria marca no menu da lista. Passe o rato por cima para ver a frase completa. O botão **Stop no fim** do próprio leitor prevalece: enquanto está ativo, só aparece o seu indicador |
-| **BP** / **DSD** | O **BP** acende-se enquanto a faixa atual chega ao seu dispositivo Main sem alterações. O **DSD** substitui-o enquanto uma faixa DSD sai como DSD, sem alterações (ver [Saída bit-perfect](bit-perfect.md)). **Outras silenciadas** aparece ao lado quando esse fluxo DSD mantém as outras fontes fora da saída |
+| Indicador de ganho | Com a [normalização do loudness](loudness.md#the-gain-in-the-player-header) ativada, o ganho com que toca a faixa no ar (**+4.0 dB**), ou um **0.0 dB** âmbar quando a faixa toca sem alterações (ainda sem medição, uma saída bit-perfect, ou uma faixa excluída da normalização). Passe o rato por cima para ver o motivo. Mostra-se enquanto o leitor toca ou está em pausa |
+| **BP** / **DSD** | O indicador só aparece num leitor cujo dispositivo Main funciona em bit-perfect; o **BP** acende-se enquanto a faixa atual chega ao seu dispositivo Main sem alterações. O **DSD** substitui-o enquanto uma faixa DSD sai como DSD, sem alterações (ver [Saída bit-perfect](bit-perfect.md)). **Outras silenciadas** aparece ao lado quando esse fluxo DSD mantém as outras fontes fora da saída |
 | **SINGLE** \| **CONT** | Modo de reprodução (ver abaixo): um controlo único, a metade acesa é o modo ativo |
 | **CUE** | Pré-escutar a faixa seguinte na saída CUE |
 
@@ -91,9 +94,32 @@ próprios separadores de listas, transporte, volume e saídas.
     - Nada no leitor acrescenta ganho acima de 100 %. Um dispositivo de
       inteiros corta na escala completa; um dispositivo float recebe o nível
       tal como está e o sistema de som ou o controlador corta-o.
-- **Fader de volume** (à direita do medidor, com a mesma altura): arraste-o
-  ou use a roda do rato, um passo por clique da roda. A dica mostra o nível
-  em dB; o topo é 0 dB e a base é silêncio.
+- **Fader de volume** (à direita do medidor, com a mesma altura). Segue uma
+  lei de mesa de mistura: é fino perto do topo e mais inclinado para a base,
+  por isso baixá-lo um pouco baixa um pouco o nível (90 % do curso são cerca
+  de −2,5 dB, 50 % cerca de −15,9 dB, 10 % cerca de −48 dB). O topo é 0 dB e
+  a base é silêncio. Marcas ao longo do fader assinalam 0, −2, −4, −6, −8,
+  −10, −12, −15, −20, −25, −30, −40, −50 e −∞ dB, com o nível escrito à sua
+  direita.
+  - Arraste-o: o fader move-se tanto quanto o ponteiro, a partir de onde
+    está, por isso agarrá-lo nunca o faz saltar; um clique sem mover não
+    altera nada. Puxar para lá do topo ou da base e voltar deixa o botão na
+    ponta até o ponteiro regressar ao ponto onde lá chegou, para que o botão
+    nunca fique longe do ponteiro.
+  - Use a roda do rato: um passo por clique da roda (cerca de 0,6 dB perto
+    de 0 dB).
+  - Mantenha **Ctrl** ou **Shift** premido ao arrastar ou usar a roda para o
+    mover dez vezes mais devagar.
+  - Faça duplo clique no botão para voltar a 0 dB (um duplo clique noutro
+    sítio do fader não faz nada).
+
+  O nível em dB (uma casa decimal, ou −∞ para silêncio) está escrito por
+  baixo do fader, na mesma linha que a linha de loudness do medidor, e a
+  dica também o mostra. Uma sessão guardada antes desta lei mantém o nível de
+  cada leitor; só muda a posição do fader.
+  Num leitor cuja saída Main é bit-perfect, o fader fica bloqueado a 100 % e
+  cinzento, lê um 0.0 esbatido, e a sua dica diz porquê (ver
+  [O que custa](bit-perfect.md#what-it-costs)).
 - **Título, artista** e a linha da **seguinte**, com um quadrado verde.
   Enquanto o CUE está ativo, a posição da pré-escuta aparece a azul.
 
@@ -101,13 +127,17 @@ próprios separadores de listas, transporte, volume e saídas.
 
 | Botão | Ação |
 |---|---|
-| **Play / Seguinte** (grande) | Parado: iniciar a faixa seguinte. No ar: fade para a faixa seguinte (o tempo de fade define-se em [Definições](settings.md)). Em pausa: retomar. Com a faixa no ar como seguinte, o Play reinicia essa faixa com o fade habitual. |
+| **Play / Seguinte** (grande) | Parado: iniciar a faixa seguinte. No ar: fade para a faixa seguinte (o tempo de fade define-se em [Definições](settings.md)); enquanto faz o fade de um crossfade iniciado pelo Seguinte ou por um segue, uma faixa verde escoa-se pelo botão durante a duração do fade, com a margem a mover-se da esquerda para a direita como a de um cartucho (um crossfade iniciado pelo Anterior escoa-se no botão Anterior). Em pausa: retomar. Com a faixa no ar como seguinte, o Play reinicia essa faixa com o fade habitual. Numa saída bit-perfect muda de imediato, sem fade, e a sua dica di-lo (ver [O que custa](bit-perfect.md#what-it-costs)). |
 | **Stop** | Parar de imediato (com uma curta rampa anti-estalido) |
-| **Stop com fade** | Fade out e parar |
+| **Stop com fade** | Fade out e parar. Enquanto um stop com fade decorre, uma faixa escoa-se pelo botão durante a duração do fade, com a margem a mover-se da esquerda para a direita |
 | **Pausa** | Pausar ou retomar; pisca a âmbar enquanto está em pausa |
 | **Stop no fim** (um triângulo de play seguido de um quadrado) | Parar quando a faixa atual termina, uma só vez. No modo SINGLE só está disponível enquanto a faixa atual se repete: termina a repetição quando a passagem que está a tocar termina. Para parar após uma faixa sempre que toca, ou para repetir uma faixa, use o seu menu na lista (ver [Listas](playlists.md)) |
-| **Anterior** (uma barra e dois triângulos) | No ar: fade de volta para a faixa que este leitor tocou antes, como faz o Seguinte. Prima de novo para continuar a recuar. A faixa que deixou passa a ser a seguinte. |
+| **Anterior** (uma barra e dois triângulos) | No ar: fade de volta para a faixa que este leitor tocou antes, como faz o Seguinte. Prima de novo para continuar a recuar. A faixa que deixou passa a ser a seguinte. Numa saída bit-perfect muda de imediato, sem fade (ver [O que custa](bit-perfect.md#what-it-costs)). |
 | **Reiniciar** (uma barra e um triângulo) | Voltar ao início da faixa atual (o seu cue-in). Um leitor em pausa continua em pausa. |
+
+Pelo teclado, `Up` e `Down` movem a seleção pela lista, `Enter` define a faixa
+selecionada como seguinte, e um segundo `Enter` nela dentro do tempo de um
+duplo clique toca-a. Ver [Teclado](keyboard.md).
 
 Os botões que não podem atuar neste momento ficam esbatidos: Stop e
 Reiniciar sem nada carregado, Pausa e Stop com fade quando parado, Anterior
@@ -135,6 +165,8 @@ vermelho.
 
 - A parte já tocada é desenhada na cor da forma de onda; o resto é mais
   esbatido.
+  Com uma cor de forma de onda violeta, a linha MIX violeta destaca-se menos;
+  escolha outra cor de forma de onda se precisar de as distinguir.
 - O contorno mostra os picos, ténues; o corpo sólido no seu interior é o
   nível médio (RMS). Numa faixa alta, os picos preenchem a altura, e o corpo
   continua a mostrar onde a faixa é mais baixa ou mais alta.
@@ -142,8 +174,11 @@ vermelho.
   conta-a em decrescente. A intro só aparece quando foi definida.
 - Uma área sombreada a laranja no fim marca o **outro**, com a sua própria
   contagem decrescente.
-- Uma linha tracejada âmbar com uma etiqueta **MIX** marca onde a faixa
-  seguinte começa no modo contínuo. Fica esbatida no modo single.
+- Uma linha tracejada violeta (a cor do indicador **Mistura**, para não se
+  confundir com o outro laranja) com uma etiqueta **MIX** marca onde a faixa
+  seguinte começa no modo contínuo. Fica esbatida no modo single, e num leitor
+  cuja saída Main é bit-perfect, que não mistura (ver
+  [O que custa](bit-perfect.md#what-it-costs)).
 - O ficheiro inteiro é desenhado. O início e o fim silenciosos que a
   reprodução salta (antes do cue-in e depois do cue-out) são desenhados mais
   escuros, com uma linha fina onde a reprodução começa e acaba. Com **Usar
@@ -175,12 +210,28 @@ vermelho.
 ## CUE (pré-escuta) {#cue-pre-listen}
 
 Premir **CUE** (ou **Pré-escutar no CUE** no menu de uma faixa) toca a faixa
-na saída CUE do leitor, por exemplo uns auscultadores, sem tocar na saída do
-ar, e abre uma pequena **janela de CUE** para esse leitor. Podem estar
+na saída CUE do leitor, por exemplo uns auscultadores, e abre uma pequena
+**janela de CUE** para esse leitor. Podem estar
 abertas várias janelas, uma por leitor. Consulte as
 [Definições](settings.md) para escolher o dispositivo de CUE. Um leitor
-precisa de uma saída Cue que não seja a sua saída Main: sem ela, **CUE** e
-**Pré-escutar no CUE** ficam esbatidos, e passar o rato por cima explica porquê.
+precisa de uma saída Cue: sem ela, **CUE** e **Pré-escutar no CUE** ficam
+esbatidos, e passar o rato por cima explica porquê.
+
+Com uma só placa de som, a saída Cue pode ser a própria saída do ar (ou
+partilhá-la com outro leitor ou com a cartucheira). Aí, uma pré-escuta ouve-se
+no ar, por isso:
+
+- enquanto nada toca nessa saída, o CUE começa de imediato;
+- enquanto algo toca aí (um leitor a tocar ou em pausa, um cartucho, outra
+  pré-escuta, a pré-escuta da biblioteca), o CUE pergunta primeiro:
+  **Pré-escutar mesmo assim** ou **Cancelar** (Cancelar é a predefinição: Esc
+  e Enter cancelam). A mesma pergunta vem do menu da faixa, da janela de CUE,
+  da cartucheira e da janela da biblioteca;
+- quando algo começa nessa saída enquanto toca aí uma pré-escuta que não
+  confirmou, a pré-escuta pára e a barra de estado diz porquê. Uma
+  pré-escuta que confirmou continua a tocar.
+
+A dica do botão CUE diz quando a sua pré-escuta sai pela saída do ar.
 
 ![A janela de CUE do leitor 4, a pré-escutar a sua faixa seguinte](../../images/guide/cue-window.png)
 

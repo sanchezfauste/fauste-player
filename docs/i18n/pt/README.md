@@ -8,6 +8,12 @@ suas próprias listas e o seu próprio transporte. Os leitores podem encadear
 faixas com misturas sobrepostas, pré-escutar numa saída **CUE** separada e
 sobreviver a falhas sem pôr nada no ar por si sós.
 
+> **Criado com ajuda de IA, fornecido tal como está.** O Fauste Player, este guia
+> e as suas traduções foram desenvolvidos com ajuda substancial de
+> ferramentas de IA. É fornecido sem qualquer garantia e a sua utilização é
+> por sua conta e risco: ver o
+> [Aviso legal](https://github.com/sanchezfauste/fauste-player#disclaimer).
+
 ![Ecrã principal](../../images/main-screen.png)
 
 | Guia | O que abrange |
@@ -18,7 +24,8 @@ sobreviver a falhas sem pôr nada no ar por si sós.
 | [Cartucheira](cartwall.md) | Cartuchos instantâneos: disparo, páginas, ciclos, cartuchos exclusivos, configuração |
 | [Marcadores e mistura](markers-and-mixing.md) | Cue-in/cue-out, o ponto MIX, intro e outro, análise automática |
 | [Definições](settings.md) | Saídas de áudio, leitores, análise, listas, MIDI, controlo remoto |
-| [Saída bit-perfect](bit-perfect.md) | Dispositivos exclusivos que seguem a frequência de cada ficheiro, o indicador BP, saída DSD, verificar uma cadeia |
+| [Normalização do loudness](loudness.md) | Todas as faixas e cartuchos com o mesmo loudness graças a um ganho fixo por faixa: o indicador de ganho, excluir e ajustar uma faixa, saídas bit-perfect |
+| [Saída bit-perfect](bit-perfect.md) | Um modo especial: sem crossfades, volume a 100 %. Dispositivos exclusivos que seguem a frequência de cada ficheiro, o indicador BP, saída DSD, verificar uma cadeia |
 | [Teclado](keyboard.md) | Atalhos |
 | [Superfícies de controlo MIDI](midi.md) | Botões, faders e luzes em controladores MIDI |
 | [Controlo remoto](remote-control.md) | Operar o Fauste Player pela rede: API HTTP, segurança |
@@ -28,9 +35,8 @@ sobreviver a falhas sem pôr nada no ar por si sós.
 A interface está disponível em inglês, espanhol, catalão, neerlandês,
 francês, galego, alemão, italiano, basco, polaco e português. Segue o idioma
 do sistema operativo, a menos que escolha outro em Definições. O inglês e o
-espanhol são escritos à mão; os outros nove foram gerados com IA e podem
-conter erros. Se falar algum deles, as correções são bem-vindas como issues
-ou pull requests.
+espanhol incluídos, foi produzida com IA e pode conter erros. As correções
+são bem-vindas como issues ou pull requests.
 
 O guia também está disponível noutros idiomas, traduzido com IA a
 partir do guia em inglês: no [guia em linha](https://sanchezfauste.com/fauste-player/guide/),

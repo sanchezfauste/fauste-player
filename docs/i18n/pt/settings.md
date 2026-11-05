@@ -7,51 +7,64 @@ A janela tem um único tamanho (900 × 640, mais pequena num ecrã pequeno),
 seja qual for a secção, e a secção desloca-se dentro dela. Cada secção alinha
 as suas etiquetas numa só coluna.
 
-As secções Leitores, Medidores, Análise e Atalhos de teclado têm um botão
+As secções Leitores, Medidores, Análise, Loudness e Atalhos de teclado têm um botão
 **Repor predefinições** no cabeçalho. Pede confirmação e depois repõe apenas
 essa secção (os Leitores mantêm o número de leitores e o idioma; os Atalhos
 não têm outro botão de reposição). As Saídas de áudio, Listas, Cartucheira,
-MIDI e Remoto não têm nenhum.
+Biblioteca, MIDI e Remoto não têm nenhum.
 
-## Reinício pendente {#restart-pending}
+## Definições pendentes {#settings-pending}
 
-Algumas alterações só têm efeito quando a aplicação arranca de novo: o
-sistema de áudio, a frequência de amostragem, o tamanho do buffer (também o
-de um dispositivo próprio), as saídas Main e Cue (leitores e cartucheira), os
-dispositivos bit-perfect e as definições de DSD. O número de leitores não é
-uma delas: aplica-se de imediato.
+Todas as definições se aplicam com a aplicação em execução. O sistema de
+áudio, a frequência de amostragem, o tamanho do buffer (também o de um
+dispositivo próprio), as saídas Main e Cue (leitores e cartucheira), os
+dispositivos bit-perfect e as definições de DSD alteram a forma como um
+dispositivo de saída é aberto, por isso aplicam-se assim que isso é seguro:
+
+- As definições de um dispositivo aplicam-se quando nada toca nesse
+  dispositivo: nenhum leitor encaminhado para ele está a tocar, a fazer fade
+  ou a pré-escutar (CUE, também quando retido), e nenhum cartucho toca nele.
+  Um leitor em pausa, ou com uma faixa apenas carregada, não retém um
+  dispositivo: a sua faixa fica em pausa onde estava.
+- A saída de um leitor ou da cartucheira muda quando esse leitor (ou a
+  cartucheira) não está a tocar; os outros leitores nos mesmos dispositivos
+  não são interrompidos.
+- Um sistema de áudio novo aplica-se quando nada toca em lado nenhum.
+
+Uma alteração em espera corre no primeiro momento em que nada do que ela
+afeta toca. Pode ser o intervalo entre o fim de uma faixa e o começo da
+seguinte: a faixa seguinte começa então mais tarde, o tempo que o dispositivo
+demora a reabrir. **Aplicar agora** (abaixo) força antes a alteração de
+imediato.
 
 Uma frequência ou um buffer dado a um dispositivo só conta quando muda
 aquilo com que o dispositivo abre: dar a um dispositivo o mesmo valor que o
-global, ou limpar um valor desses, não fica pendente.
+global, ou limpar um valor desses, não altera nada.
 
-Os limites e a afinação do motor também se aplicam no arranque seguinte, mas
-são editados no ficheiro de configuração com a aplicação fechada (ver
-[Dados e cópias de segurança](data-and-backups.md)), por isso nunca aparecem
-como pendentes.
+Até lá, a barra superior mostra **Definições pendentes**. Passe o rato por
+cima para ver o que está à espera e de quê; clique para ver a lista, que
+também mostra qualquer alteração que um dispositivo ou uma saída recusou (o
+dispositivo mantém as suas definições atuais; a alteração é tentada de novo
+quando a alterar ou premir **Aplicar agora**). O rodapé das Definições diz
+«Algumas alterações aguardam que as saídas que afetam fiquem livres.» e
+oferece **Aplicar agora**; um aviso curto (por exemplo, que uma definição foi
+guardada) pode ocupar durante um momento o lugar desse texto.
 
-Enquanto uma destas está à espera, o rodapé das Definições diz «Algumas
-alterações só têm efeito após reiniciar.» e oferece **Reiniciar agora**, e a
-barra superior mostra uma etiqueta **Reinício pendente**. Passe o rato sobre
-a etiqueta para ver o que está à espera. Um aviso curto (por exemplo, que uma
-definição foi guardada) pode ocupar durante um momento o lugar do texto do
-rodapé; o **Reiniciar agora** mantém-se. Ambos fazem o mesmo:
+**Aplicar agora** aplica de imediato todas as alterações de saída em espera.
+Quando isso interromperia algo, lista primeiro os dispositivos e o que toca
+neles; **Interromper e aplicar** interrompe então por instantes o áudio
+nesses dispositivos: o que estava a tocar continua de onde estava depois de
+uma breve pausa, e nada que estivesse em pausa ou parado começa.
+**Cancelar** (ou `Esc`) continua à espera.
 
-- Quando nada está no ar, **Reiniciar agora** (ou a etiqueta) reinicia de
-  imediato.
-- Quando algo está no ar, aparece a janela que lista o que está a soar, com
-  **Parar e reiniciar** ou **Cancelar**.
-
-A sessão é guardada primeiro e o áudio e o controlo MIDI param; depois a
-aplicação arranca de novo com a mesma pasta de dados (`FAUSTE_HOME`), e nada
-vai para o ar por si só a seguir. Se a aplicação não conseguir arrancar de
-novo (num Flatpak, também quando a nova não arranca a tempo), di-lo; inicie-a
-a partir do menu de aplicações.
+Os limites e a afinação do motor são editados no ficheiro de configuração
+com a aplicação fechada (ver
+[Dados e cópias de segurança](data-and-backups.md)).
 
 ## Saídas de áudio {#audio-outputs}
 
-As alterações nesta secção esperam por um reinício: ver
-[Reinício pendente](#restart-pending).
+As alterações nesta secção aplicam-se com a aplicação em execução, assim que
+nada do que afetam está a tocar: ver [Definições pendentes](#settings-pending).
 
 ![Definições, Saídas de áudio, vista Básico: o seletor, o sistema de áudio, a frequência de amostragem, o tamanho do buffer e as saídas Main e Cue de cada leitor (aqui o sistema silencioso)](../../images/guide/settings-outputs.png)
 
@@ -71,23 +84,24 @@ exemplo, depois de trocar dois dispositivos) mantém-nos.
 |---|---|
 | Sistema de áudio | A última escolha, **Sem saída (silêncio)**, não toca nada: as linhas temporais correm ao ritmo do tempo real sem placa de som (para uma máquina sem ela, ou para ensaiar). Linux: PipeWire (nas versões que o incluem), PulseAudio, JACK ou ALSA. Windows: WASAPI, ASIO (nas versões que o incluem) ou JACK. macOS: Core Audio ou JACK. Os sistemas em falta neste computador, ou sem dispositivo de saída (um servidor JACK que não está em execução), são mostrados como indisponíveis. «Predefinido do sistema» usa o primeiro disponível por essa ordem. |
 | Frequência de amostragem | A frequência a que corre cada saída, a menos que um dispositivo tenha a sua própria (Avançado); os ficheiros são convertidos para ela com reamostragem de alta qualidade. Os dispositivos bit-perfect começam à sua frequência e depois seguem os ficheiros. |
-| Tamanho do buffer | Frames por bloco de áudio, a menos que um dispositivo tenha o seu próprio; a latência resultante é mostrada por baixo |
-| Saídas por leitor | Para cada leitor, um dispositivo **Main** (no ar) e um dispositivo **Cue** (pré-escuta), cada um com um par de canais. Uma placa de som que oferece vários perfis de saída (o ALSA lista frontal, surround, hardware direto…) mostra cada um como *placa — perfil*; duas entradas que ainda assim se leriam da mesma forma recebem o seu id de dispositivo entre parênteses. As interfaces multicanal podem transportar vários leitores em pares diferentes. |
+| Tamanho do buffer | Frames por bloco de áudio, a menos que um dispositivo tenha o seu próprio; a latência resultante é mostrada por baixo. As saídas através de um servidor de som ou de um misturador do sistema (PulseAudio, o dispositivo `default` do ALSA) pedem pelo menos 50 ms seja qual for este tamanho, ou o que o dispositivo aceitar, para que um computador ocupado não se ouça; a latência di-lo então (`shared_buffer_ms` no ficheiro de configuração) |
+| Saídas por leitor | Para cada leitor, um dispositivo **Main** (no ar) e um dispositivo **Cue** (pré-escuta), cada um com um par de canais. Uma placa de som que oferece vários perfis de saída (o ALSA lista frontal, surround, hardware direto…) mostra cada um como *placa — perfil*; duas entradas que ainda assim se leriam da mesma forma recebem o seu id de dispositivo entre parênteses. As interfaces multicanal podem transportar vários leitores em pares diferentes. Uma saída Cue que partilha uma saída do ar (o Main de qualquer leitor ou o da cartucheira) é permitida: uma nota por baixo diz que a sua pré-escuta se ouve no ar e que pergunta primeiro enquanto algo toca aí. |
 | Testar Main / Testar Cue | Toca um tom curto (1 kHz no Main, 440 Hz no Cue, 1,5 s, −18 dBFS) na saída escolhida, para poder verificar as ligações antes de ir para o ar |
-| Cartucheira | As saídas Main e Cue da cartucheira. O Main assume por predefinição a saída do sistema. Sem um Cue não há pré-escuta de cartuchos. |
+| Biblioteca | A saída Cue da biblioteca, com o seu próprio **Testar Cue**: onde se ouve a [pré-escuta](library.md#pre-listening) da janela da biblioteca (num telemóvel, a do separador Biblioteca). Sem ela, o Play da barra de pré-escuta fica esbatido. No Android a sua escolha vazia lê-se *Predefinido do sistema* em vez de *Nenhuma*: a pré-escuta e o **Testar Cue** tocam então na saída predefinida (ver [Android → Biblioteca](android.md#library)). Uma saída da Biblioteca numa saída do ar funciona como o Cue de um leitor: uma nota por baixo diz que a sua pré-escuta se ouve no ar e que pergunta primeiro enquanto algo toca aí. Está nas vistas Básico e Avançado, também num telemóvel |
+| Cartucheira | As saídas Main e Cue da cartucheira. O Main assume por predefinição a saída do sistema. Sem um Cue não há pré-escuta de cartuchos; um Cue numa saída do ar funciona como nos leitores. |
 | Frequência de amostragem: *dispositivo* (Avançado) | **Global (...)** usa a frequência de amostragem acima; um valor dá a este dispositivo a sua própria frequência. Só são oferecidas as frequências que o dispositivo indica; uma frequência guardada que ele já não indica continua listada com uma nota de que pode não abrir (o dispositivo recorre então à frequência global). Os valores próprios só se aplicam a dispositivos que uma saída nomeia, não à saída predefinida do sistema, a menos que uma o faça. |
-| Tamanho do buffer: *dispositivo* (Avançado) | **Global (...)** usa o tamanho do buffer acima; um valor dá a este dispositivo o seu próprio, com a latência por baixo. Um dispositivo que não aceita um tamanho de buffer próprio recorre ao global, e também à frequência global quando não aceita uma frequência própria. |
-| Bit-perfect: *dispositivo* (Avançado) | Um dispositivo bit-perfect é aberto com acesso exclusivo e segue a frequência de amostragem de cada ficheiro enquanto nada toca nele. O interruptor fica desativado onde o dispositivo não pode dar acesso exclusivo. Ver [Saída bit-perfect](bit-perfect.md). |
+| Tamanho do buffer: *dispositivo* (Avançado) | **Global (...)** usa o tamanho do buffer acima (com o mínimo que uma saída partilhada pede, como acima); um valor dá a este dispositivo o seu próprio, usado tal como está, com a latência por baixo. Um dispositivo que não aceita um tamanho de buffer próprio recorre ao global, e também à frequência global quando não aceita uma frequência própria. |
+| Bit-perfect: *dispositivo* (Avançado) | Desativado por predefinição. Um modo especial para reprodução audiófila, não para programas misturados: o dispositivo é aberto com acesso exclusivo e segue a frequência de amostragem de cada faixa. Os leitores cuja saída Main está nele nunca fazem crossfade nem misturam, uma mudança de frequência deixa um breve silêncio entre duas faixas, e o seu volume fica fixo em 100 %. O interruptor fica desativado onde o dispositivo não pode dar acesso exclusivo. Ver [O que custa](bit-perfect.md#what-it-costs). |
 | DSD: *dispositivo* (Avançado) | **Converter para PCM** (a predefinição), **DoP** ou, no Linux, **DSD nativo**. Todos os dispositivos o mostram; só são oferecidos os modos que o dispositivo pode aceitar, e uma linha por baixo diz porque não são os outros. Ver [DSD](bit-perfect.md#dsd). |
 | Quando outra fonte precisa de uma saída DSD (Avançado) | **Continuar a faixa DSD em PCM** (a predefinição), ou **Manter o DSD e silenciar as outras fontes**. Ver [DSD](bit-perfect.md#dsd). |
 | Silêncio DSD (Avançado) | Silêncio enviado antes de um fluxo DSD começar, depois de terminar e na passagem para PCM, para que o conversor sincronize sem estalidos; 200 ms por predefinição, de 0 a 2000. |
 
-Uma saída Cue nunca recorre à saída que o Main usa, para que a pré-escuta
-nunca vá para o ar. Um Cue que nomeia um dispositivo de um sistema de áudio
-que este computador não tem, ou a mesma saída (dispositivo e canais) que o
-Main, significa «sem cue». Quando uma saída Cue é igual à sua saída Main,
-um aviso por baixo di-lo. Um leitor sem saída Cue, ou com o Cue na sua saída
-Main, tem o botão **CUE** esbatido; passar o rato por cima diz para escolher
+Uma saída Cue nunca recorre à saída que o Main usa. Um Cue que nomeia um
+dispositivo de um sistema de áudio que este computador não tem significa
+«sem cue». Um Cue numa saída do ar (o mesmo dispositivo e canais que um Main,
+ou sobrepostos) é permitido: uma nota por baixo diz que a sua pré-escuta se
+ouve no ar e que pergunta primeiro enquanto algo toca aí. Um leitor sem saída
+Cue tem o botão **CUE** esbatido; passar o rato por cima diz para escolher
 aqui uma saída Cue. O mesmo vale para o **Pré-escutar no CUE** da
 cartucheira.
 
@@ -102,12 +116,17 @@ suas linhas temporais, e o dispositivo é aberto de novo quando regressar (ver
 | Definição | Predefinição | Significado |
 |---|---|---|
 | Idioma | Sistema | Idioma da interface |
-| Número de leitores | 4 | Colunas no ecrã principal (um leitor no ar não pode ser removido) |
+| Número de leitores | 4 | Colunas no ecrã principal (um leitor no ar não pode ser removido). O número aplica-se quando larga o controlo deslizante; um número escrito na caixa aplica-se ao premir Enter ou ao sair da caixa, e Escape cancela-o |
 | Modo predefinido | CONT | O modo em que os leitores arrancam |
-| Duração do fade | 1000 ms | Usada pelo Play com uma faixa no ar e pelo Stop com fade |
-| Mistura automática no ponto MIX | Ativada | Sobrepor as faixas no modo contínuo |
+| Duração do fade | 1000 ms | Usada pelo Play com uma faixa no ar e pelo Stop com fade. Num leitor cuja saída Main é bit-perfect, só pelo Stop com fade |
+| Mistura automática no ponto MIX | Ativada | Sobrepor as faixas no modo contínuo. Não se aplica a um leitor cuja saída Main é bit-perfect |
 | Usar cue-in e cue-out | Ativado | Desativado: os leitores tocam cada faixa do início ao fim do ficheiro; os marcadores são mantidos e os cartuchos continuam a usar os seus. As durações e os totais das listas seguem o mesmo intervalo |
 | Aviso de fim de faixa | 10 s | Quando a contagem decrescente começa a piscar a vermelho |
+
+Enquanto a saída Main de um leitor é bit-perfect, uma nota por baixo da
+**Mistura automática no ponto MIX** diz que esses leitores nunca misturam
+nem fazem crossfade. As duas definições continuam editáveis: aplicam-se aos
+outros leitores. Ver [O que custa](bit-perfect.md#what-it-costs).
 
 ## Medidores {#meters}
 
@@ -155,9 +174,15 @@ Cada medidor usa a escala da sua norma, com as suas marcas entre os canais:
 
 ![Definições, Análise: os limiares dos marcadores automáticos](../../images/guide/settings-analysis.png)
 
-Os limiares descritos em [Marcadores e mistura](markers-and-mixing.md).
+Os limiares descritos em [Marcadores e mistura](markers-and-mixing.md); cada
+linha tem por baixo do nome uma dica de uma linha a dizer o que o valor faz.
 **Voltar a analisar todas as faixas** executa a análise de novo para toda a
-biblioteca; os marcadores manuais são mantidos.
+biblioteca, lendo todos os ficheiros outra vez; os marcadores manuais são
+mantidos. Enquanto corre, o botão fica esbatido e mostra até onde chegou
+(**A analisar… 120 de 340**), por isso premi-lo de novo não recomeça; a dica
+do **A analisar N faixas** da barra de estado dá o mesmo progresso. Alterar
+aqui um limiar também analisa de novo a biblioteca, e reinicia uma execução
+já em curso para que nenhuma faixa fique com marcadores dos valores antigos.
 
 Após uma atualização cuja análise mudou, as faixas analisadas pela versão
 anterior mantêm os seus marcadores e formas de onda, que continuam a
@@ -168,6 +193,38 @@ qualquer forma, à medida que são mostradas, e o mesmo acontece com as faixas
 de cartuchos que não têm formato registado (um cartucho só toca bit-perfect
 quando o seu formato é conhecido). As faixas cujo ficheiro está em falta não
 são contadas até o ficheiro voltar.
+
+A análise também mede o loudness de cada ficheiro para a
+[normalização do loudness](loudness.md). Os ficheiros analisados antes de o
+loudness ser medido são medidos em segundo plano, quando a análise não tem
+mais nada a fazer, com a normalização ativada ou desativada; os seus
+marcadores não são tocados. **Voltar a analisar** (no menu da lista) e
+**Voltar a analisar todas as faixas** medem de novo.
+
+## Loudness {#loudness}
+
+![Definições, Loudness: a normalização ativada, com o objetivo, o teto de true peak, o ganho máximo e o ajuste máximo nas predefinições](../../images/guide/settings-loudness.png)
+
+Toca cada faixa e cada cartucho com o mesmo loudness, com um ganho fixo por
+faixa. A [normalização do loudness](loudness.md) explica como o ganho é
+calculado, o indicador no cabeçalho do leitor e as definições por faixa.
+
+| Definição | Predefinição | Intervalo | Significado |
+|---|---|---|---|
+| Normalizar o loudness | Ativada | | Normalização ativada ou desativada |
+| Objetivo | −16 LUFS | −36 … −6 LUFS, passos de 0,5 | O loudness integrado a que cada faixa é levada |
+| Teto de true peak | −1 dBTP | −12 … 0 dBTP, passos de 0,1 | Um aumento nunca leva o true peak da faixa acima disto. Os cortes não são limitados |
+| Ganho máximo | 12 dB | 0 … 24 dB | O maior ganho que uma faixa baixa pode receber. Os cortes não são limitados |
+| Ajuste máximo | 12 dB | 0 … 24 dB | Até onde pode ir o ajuste manual de cada faixa, para cima ou para baixo |
+
+As alterações aplicam-se às faixas carregadas depois: o que está a tocar
+mantém o seu ganho, e a faixa seguinte à espera em cada leitor é preparada de
+novo com o novo. Uma nota por baixo das definições diz quantas faixas ainda
+esperam pela sua medição; tocam sem alterações até estar feita. Um leitor ou
+cartucho numa saída bit-perfect nunca é normalizado. **Repor predefinições**
+repõe apenas esta secção (normalização ativada). A normalização está ativada
+nas instalações novas; uma configuração existente mantém a sua definição
+atual (toda a configuração guardada já armazena o valor).
 
 ## Listas {#playlists}
 
@@ -193,10 +250,10 @@ do Brasil usa o português) e, caso contrário, o inglês. Um idioma no
 ficheiro de definições que a interface não tem aparece como **Sistema** e
 segue o sistema operativo.
 
-O inglês e o espanhol são escritos à mão. As outras traduções foram geradas
-com IA e podem conter erros; quando uma delas está em uso, a janela
-**Acerca do Fauste Player** di-lo. As correções de falantes nativos são
-bem-vindas como issues ou pull requests.
+A interface em todos os idiomas, o inglês e o espanhol incluídos, foi
+produzida com IA e pode conter erros. A janela **Acerca do Fauste Player**
+traz um aviso geral que os abrange a todos. As correções são bem-vindas como
+issues ou pull requests.
 
 ## Cartucheira {#cartwall}
 
@@ -204,6 +261,14 @@ bem-vindas como issues ou pull requests.
 
 Páginas, tamanho da grelha, o editor de cartuchos e a importação e
 exportação de páginas de cartuchos. Ver [Cartucheira](cartwall.md).
+
+## Biblioteca {#library}
+
+Criar, renomear, recolorir, mudar o tipo de, mover (arrastando) e eliminar as
+categorias que agrupam as suas faixas, vigiar uma pasta com uma categoria e
+remover as suas faixas em falta, sem abrir a janela da biblioteca. Ver
+[Biblioteca](library.md#categories) e
+[Pastas vigiadas](library.md#watched-folders).
 
 ## Atalhos de teclado {#keyboard-shortcuts}
 
@@ -215,8 +280,9 @@ Ver [Teclado](keyboard.md).
 
 ![Definições, MIDI, com o controlo MIDI desativado](../../images/guide/settings-midi.png)
 
-Ative as superfícies de controlo MIDI, veja as portas de entrada e aprenda
-um controlo para cada ação do leitor. Ver
+Ative as superfícies de controlo MIDI, veja as portas de entrada (**Voltar a ligar as portas** abre-as de novo,
+como voltar a ligar os controladores) e aprenda um controlo para cada ação do
+leitor. Ver
 [Superfícies de controlo MIDI](midi.md).
 
 ## Remoto {#remote}
