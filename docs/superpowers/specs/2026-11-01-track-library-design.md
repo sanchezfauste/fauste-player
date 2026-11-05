@@ -797,7 +797,8 @@ Decided with the maintainer on 2026-11-05, after trying plan 6.
   device folder…* or *Change device folder…*, *Re-read device folder* and
   *Forget device folder*; the folder is chosen with Device music's folder
   pick (PL19b). The tree names the folder under the category, as the
-  desktop names a watched one, with no trouble marks. The path is stored as
+  desktop names a watched one, with no trouble marks; since a finger
+  cannot hover the mark, the menu names the folder above its items too. The path is stored as
   Device music gives it (MediaStore paths are not canonicalised, §5.1b).
 - **LB53.** **Re-read** (the menu's item, and a ↻ button in the phone list's
   header for a category with a device folder) adds every file Device music

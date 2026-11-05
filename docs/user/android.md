@@ -197,13 +197,13 @@ categories** at the top instead.
 folder of the device's music. In its menu (a long press on it in
 **Settings → Library**, or in the library window on a tablet), **Use a
 device folder…** opens Device music to choose the folder (**Use this
-folder**); the category then names it. Nothing watches the folder: when
+folder**); the category's menu then names it, above its folder items. Nothing watches the folder: when
 you have copied new music there, tap the **↻** in the category's track
 list header (or **Re-read device folder** in its menu). Every file Device
 music lists in the folder and its subfolders is added to the category,
 with the rules above (a file already in another category keeps it), and a
 notice says how many files were read. Files that left the folder stay in
-the library, marked missing. **Change device folder…** and **Forget
+the library; **Re-analyse** marks those whose file is gone as missing. **Change device folder…** and **Forget
 device folder** are in the same menu; one folder belongs to one category.
 
 ### Device music

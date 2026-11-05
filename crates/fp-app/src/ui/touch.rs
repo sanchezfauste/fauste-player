@@ -198,14 +198,21 @@ fn second_finger_tap(ui: &Ui, rect: Rect, layer: egui::LayerId) -> bool {
             }
         });
     }
-    let taps: Vec<(egui::Pos2, egui::Pos2)> = ui.ctx().data(|d| {
+    // Where this frame's taps on `rect` ended (the data lock is not held
+    // while asking for the layer there).
+    let ends: Vec<egui::Pos2> = ui.ctx().data(|d| {
         d.get_temp::<Fingers>(key)
-            .map(|f| f.taps.clone())
+            .map(|f| {
+                f.taps
+                    .iter()
+                    .filter(|(a, b)| rect.contains(*a) && rect.contains(*b))
+                    .map(|(_, b)| *b)
+                    .collect()
+            })
             .unwrap_or_default()
     });
-    taps.iter().any(|(a, b)| {
-        rect.contains(*a) && rect.contains(*b) && ui.ctx().layer_id_at(*b) == Some(layer)
-    })
+    ends.iter()
+        .any(|end| ui.ctx().layer_id_at(*end) == Some(layer))
 }
 
 /// How far from a widget a finger still hits it: the desktop's tiles are

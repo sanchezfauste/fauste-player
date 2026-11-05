@@ -364,6 +364,7 @@ fn lb52_the_menu_offers_a_device_folder() {
     h.run_steps(2);
     menu(&mut h, "Rock");
     assert!(h.query_by_label("Change device folder…").is_some());
+    assert_eq!(h.query_all_by_label(&label).count(), 2, "the menu names it");
     h.get_by_label("Forget device folder").click();
     h.run_steps(2);
     assert_eq!(

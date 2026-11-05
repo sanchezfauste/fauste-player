@@ -1028,7 +1028,7 @@ fn lb43_a_held_finger_opens_the_menu_without_a_tick() {
     assert!(!is_ticked(&h, &row("Alpha", "Band")));
 }
 
-const IDLE: &str = "Tap a track’s headphones to pre-listen it";
+const IDLE: &str = "Tap a track’s headphones to pre-listen to it";
 
 /// LB49: the strip's room is kept, so the rows stay where they are when a
 /// preview starts.

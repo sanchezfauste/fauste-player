@@ -584,8 +584,18 @@ fn menu(
     .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, kind_label.clone()));
     let has_folder = category.is_some_and(|c| c.watched_folder.is_some());
     if device {
-        // LB52, LB53: a device folder, re-read on demand.
+        // LB52, LB53: a device folder, re-read on demand. A finger has no
+        // hover to read the mark's text, so the menu names the folder.
         ui.separator();
+        if let Some(folder) = category.and_then(|c| c.watched_folder.as_ref()) {
+            ui.label(
+                egui::RichText::new(t.tr_args(
+                    "library-tree-device-folder",
+                    &[("folder", folder.display().to_string().into())],
+                ))
+                .color(theme::NEUTRAL_400),
+            );
+        }
         let key = if has_folder {
             "library-menu-change-device-folder"
         } else {
