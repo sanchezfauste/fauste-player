@@ -217,7 +217,7 @@ hand: release-please writes it from the commits.
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX, MSIX and Info.plist, the AUR PKGBUILD template, the Google Play listing (`packaging/android/play`) and the fastlane that uploads it (`packaging/android/fastlane`); the per-format package scripts |
 | `snap/` | The snap recipe (`snapcraft.yaml`, where snapcraft looks for it) |
 | `site/`, `scripts/site/` | The landing page and privacy policy templates with their texts in `site/locales/<lang>.toml` (rendered by `scripts/site/landing.py`), and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
-| `.github/workflows` | CI (with the SonarQube Cloud analysis and coverage; `sonar-project.properties`), Dependabot (`dependabot.yml`), release-please, release builds and packages, store publishing (`stores.yml`: Microsoft Store, Snap Store, Google Play, Flathub, WinGet, AUR), GitHub Pages, commit checks, screenshot retakes (`screenshots.yml` for `docs/images`, `play-screenshots.yml` for the Google Play listing) |
+| `.github/workflows` | CI (with the SonarQube Cloud analysis and coverage; `sonar-project.properties`), Dependabot (`dependabot.yml`), release-please, release builds and packages, store publishing (`stores.yml`: Microsoft Store, Snap Store, Google Play, Flathub, WinGet, AUR), GitHub Pages, commit checks, screenshot retakes (`screenshots.yml` for `docs/images`, `play-screenshots.yml` for the Google Play listing); `.github/actions/apt-install`, the Ubuntu package install with its archives cached, used by every workflow that checks out its own commit |
 
 ## Design source
 

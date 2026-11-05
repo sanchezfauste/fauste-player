@@ -27,7 +27,8 @@ runs:
         echo "prefix=apt-${ImageOS}-${RUNNER_ARCH}-${list}-" >> "$GITHUB_OUTPUT"
         echo "key=apt-${ImageOS}-${RUNNER_ARCH}-${list}-${ImageVersion}" >> "$GITHUB_OUTPUT"
         echo "dir=${RUNNER_TEMP}/apt-archives" >> "$GITHUB_OUTPUT"
-    - uses: actions/cache@v6
+    - uses: actions/cache/restore@v6
+      id: restore
       with:
         path: ${{ steps.key.outputs.dir }}
         key: ${{ steps.key.outputs.key }}
@@ -40,14 +41,25 @@ runs:
       run: |
         mkdir -p "$ARCHIVES/partial"
         sudo apt-get update
+        # The archives live in the runner's temporary folder, which apt's
+        # unprivileged download user cannot reach: download as root, which
+        # apt would fall back to with a warning anyway.
         # shellcheck disable=SC2086 # one word per package
         sudo apt-get install -y --no-install-recommends \
           -o Dir::Cache::Archives="$ARCHIVES" -o APT::Keep-Downloaded-Packages=true \
+          -o APT::Sandbox::User=root \
           $PACKAGES
         # Drop the archives the mirror no longer has, so the cache does not
         # grow with every image.
         sudo apt-get autoclean -o Dir::Cache::Archives="$ARCHIVES"
-        # apt leaves a root-only lock and download folder; the cache's post
-        # step runs as the runner user and must read everything it saves.
+        # apt leaves a root-only lock and download folder; the cache runs as
+        # the runner user and must read everything it saves.
         sudo rm -rf "$ARCHIVES/lock" "$ARCHIVES/partial"
         sudo chown -R "$(id -u):$(id -g)" "$ARCHIVES"
+    # Saved now, not at the end of the job: the archives are kept even when
+    # a later step fails.
+    - uses: actions/cache/save@v6
+      if: steps.restore.outputs.cache-hit != 'true'
+      with:
+        path: ${{ steps.key.outputs.dir }}
+        key: ${{ steps.key.outputs.key }}

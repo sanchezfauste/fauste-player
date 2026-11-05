@@ -34,7 +34,7 @@ Compilation is about 1.5 min with the Rust cache, so it is not the target.
 ## Decisions
 
 1. **Cache the `.deb` archives** (`.github/actions/apt-install`). apt
-   downloads into `~/.cache/apt-archives` (`-o Dir::Cache::Archives=`), and
+   downloads into `$RUNNER_TEMP/apt-archives` (`-o Dir::Cache::Archives=`), and
    `actions/cache` keeps that folder. The key is
    `apt-<ImageOS>-<hash of the sorted package list>-<ImageVersion>`, with
    the key minus the image version as restore key: a new runner image
@@ -107,6 +107,30 @@ Compilation is about 1.5 min with the Rust cache, so it is not the target.
 
 Jobs that only call a reusable workflow (`uses:`) cannot take a timeout;
 the called jobs carry theirs.
+
+**Rulings during execution:**
+
+- Ruling: the apt archives live in `$RUNNER_TEMP`, are downloaded as root
+  (`APT::Sandbox::User=root`) and are saved with `actions/cache/save` right
+  after the install — `_apt` cannot reach the runner's temporary folder,
+  and the cache's own post step saves only when the whole job succeeds —
+  cost if wrong: one more cache entry per package list.
+- Ruling: the test matrix is not skipped as a job; it runs with every step
+  skipped — a matrix job skipped as a whole reports one check named
+  `test (${{ matrix.os }})`, never the three required ones (seen on the
+  probe PR #217) — cost if wrong: three runners start for a few seconds
+  on a docs-only pull request.
+- Ruling: Markdown is docs only outside `vendor/` (`*.md`,
+  `.github/**/*.md`, `crates/**/*.md`) — the vendored winit includes its
+  changelog with `include_str!` — cost if wrong: a docs-only pull request
+  on another Markdown file runs the full CI.
+- Ruling: a pull request listing more than 2900 files runs everything —
+  the API lists at most 3000 files to the filter — cost if wrong: none.
+- Ruling: nextest is reverted (decision 2 is not kept) — measured on
+  #216, the tests took 494 s on macOS (590 before), 543 s on Linux (about
+  440) and 462 s on Windows (about 350): under coverage each test is its
+  own instrumented process writing the whole binary's counters — cost if
+  wrong: the possible gain of nextest without coverage is left for later.
 
 **Not done:** dropping the coverage on Windows or macOS (it counts the code
 built only there), larger paid runners, and splitting fmt and clippy out of

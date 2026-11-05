@@ -25,14 +25,15 @@ jobs:
     # report as skipped, which the required checks accept, and the pages
     # workflow still checks the guide and the site. No Rust code reads these
     # paths. Pushes to master run everything, and so does a pull request
-    # when the filter or this job fails (the jobs below test for 'false').
+    # when the filter or this job fails (the jobs below test for 'false')
+    # or when it changes more files than the API lists (3000).
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
       contents: read
       pull-requests: read
     outputs:
-      code: ${{ github.event_name != 'pull_request' || steps.filter.outcome != 'success' || steps.filter.outputs.code == 'true' }}
+      code: ${{ github.event_name != 'pull_request' || github.event.pull_request.changed_files > 2900 || steps.filter.outcome != 'success' || steps.filter.outputs.code == 'true' }}
     steps:
       - uses: dorny/paths-filter@v4
         id: filter
@@ -44,7 +45,11 @@ jobs:
             code:
               - '**'
               - '!docs/**'
-              - '!**/*.md'
+              # Markdown outside vendor/: a vendored crate may compile its
+              # own (winit includes its changelog with include_str!).
+              - '!*.md'
+              - '!.github/**/*.md'
+              - '!crates/**/*.md'
               - '!site/**'
               - '!scripts/site/**'
               - '!packaging/android/play/**'
