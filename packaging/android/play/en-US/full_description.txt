@@ -11,12 +11,18 @@ CARTWALL
 • Instant carts for jingles, effects and spots, on pages you swipe through
 • Fold the cartwall on the Live screen to give the players more room
 
+LIBRARY
+• A track library with categories and subcategories, and a search over the tags
+• Tick tracks and add them to a playlist, or hold one for its menu
+• Pre-listen a track before it goes on air
+• Browse the music on your device by folder, artist or album, and search it
+• Give a category a folder of your device and re-read it when you add music
+
 MADE FOR THE STUDIO
 • Playout keeps going with the screen off or another app in front, with a notification while something plays
 • Nothing goes on air by itself after a start, a restart or a crash
 • A padlock guards against stray touches during a show: the transport and the carts keep working
 • Choose the output of each player, the cartwall and their CUE: the speaker, wired headphones, a USB interface or a Bluetooth speaker
-• Browse the music on your device by folder, artist or album, and search it
 
 PRIVATE AND FREE
 Fauste Player has no accounts, no ads, no analytics and no tracking, and it does not ask for network access. It is free software under the GNU GPL (version 3 or later), and the same project runs on Linux, Windows and macOS.
