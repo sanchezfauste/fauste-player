@@ -4,9 +4,9 @@
 
 1. Otwórz **Ustawienia → Wyjścia audio** i naciśnij **Test Main** dla
    odtwarzacza. Jeśli słyszysz ton, sprawdź suwak głośności odtwarzacza.
-2. Jeśli nic nie słyszysz, wybierz inne urządzenie lub parę kanałów. Zmiany
-   wyjść zaczynają działać po restarcie: naciśnij **Uruchom ponownie teraz**
-   w Ustawieniach.
+2. Jeśli nic nie słyszysz, wybierz inne urządzenie lub parę kanałów. Zmiana
+   wyjść zaczyna działać, gdy nic na nich nie gra; **Zastosuj teraz** w
+   Ustawieniach stosuje ją od razu.
 3. W Linuksie wybieraj **PipeWire** lub **PulseAudio** w Ustawienia →
    Wyjścia audio → System audio. Współdzielą kartę dźwiękową z innymi
    programami. **ALSA** rozmawia z kartą bezpośrednio i może ją zastać
@@ -23,12 +23,24 @@
 ## Bit-perfect {#bit-perfect}
 
 - **Wskaźnik BP pozostaje wyłączony.** Sprawdź każdy warunek w rozdziale
-  [Wyjście bit-perfect](bit-perfect.md#the-bp-badge): głośność na 100 %, brak
-  wyciszania, nic innego na tych samych wyjściach, bezstratny plik, który
-  został przeanalizowany, i urządzenie pracujące z częstotliwością pliku.
+  [Wyjście bit-perfect](bit-perfect.md#the-bp-badge): brak wyciszania, nic
+  innego na tych samych wyjściach, bezstratny plik, który został
+  przeanalizowany, i urządzenie pracujące z częstotliwością pliku.
 - **Krótka cisza przed utworem.** Urządzenie bit-perfect zostało otwarte
-  ponownie z częstotliwością próbkowania utworu. Aby tego uniknąć, trzymaj
-  bibliotekę przy jednej częstotliwości.
+  ponownie z częstotliwością próbkowania utworu. Dzieje się tak tylko wtedy,
+  gdy częstotliwość się zmienia: utwory z tą samą częstotliwością następują
+  po sobie bez przerwy. Aby tego uniknąć, trzymaj bibliotekę przy jednej
+  częstotliwości. Zob. [Jakie są koszty](bit-perfect.md#what-it-costs).
+- **Utwory się nie miksują, a Play nie wycisza.** W odtwarzaczu, którego
+  wyjście Main jest bit-perfect, każdy utwór gra do końca, po czym startuje
+  następny, a Play / Następny i Poprzedni przełączają od razu: w takim
+  odtwarzaczu nie ma przenikania ani segue. Wyłącz bit-perfect dla
+  urządzenia albo przenieś odtwarzacz na inne wyjście, aby znów miksować. Zob.
+  [Jakie są koszty](bit-perfect.md#what-it-costs).
+- **Suwak głośności się nie rusza.** Wyjście Main odtwarzacza jest
+  bit-perfect, co utrzymuje głośność na 100 %; mówi o tym podpowiedź suwaka.
+  Nie poruszą go też suwaki MIDI ani API zdalne. Zob. [Jakie są
+  koszty](bit-perfect.md#what-it-costs).
 - **Utwór gra po resamplingu, a log mówi, że urządzenie jest zajęte
   (Linux).** Aby zmienić częstotliwość, aplikacja zamyka urządzenie i
   otwiera je ponownie. W tej chwili serwer dźwięku (PipeWire) może zabrać
@@ -118,6 +130,48 @@ kopiowanie. Aby sprawdzić go od razu, użyj **Analizuj ponownie** w menu
 jego wiersza, a dla całej biblioteki **Ustawienia → Analiza → Analizuj
 ponownie wszystkie utwory**.
 
+Plik WAV lub FLAC, który jest pokazywany jako nieczytelny albo zagrałby jako
+głośny szum, może być zgraniem płyty DTS-CD: plik zawiera strumień bitowy DTS
+zamiast dźwięku. Aplikacja go odrzuca (log mówi „encoded bitstream stored as
+PCM”) i nie dekoduje DTS. Najpierw przekonwertuj go na zwykłe PCM innym
+narzędziem.
+
+## Obserwowany folder pokazuje ostrzeżenie {#a-watched-folder-shows-a-warning}
+
+Kategoria obserwująca folder pokazuje ⟳, w innym kolorze, gdy folder nie jest
+śledzony; najedź na nią, aby zobaczyć przyczynę. Zob. [Obserwowane
+foldery](library.md#watched-folders).
+
+- **Nie znaleziono lub nie można odczytać**: dysk albo udział nie jest
+  zamontowany lub nie jest osiągalny. Pusty folder, który powinien zawierać
+  utwory biblioteki, też liczy się jako nieznaleziony, bo niezamontowany udział
+  często tak wygląda. Nic nie jest oznaczane ani usuwane; folderu szuka się
+  ponownie co 30 sekund i skanuje się go, gdy się pojawi. Jeśli opróżniłeś
+  folder celowo, wyczyść jego utwory, zaznaczając je w tabeli biblioteki i
+  wybierając **Usuń z biblioteki…**, albo wybierając na nich **Analizuj
+  ponownie**, co oznacza te, których plik zniknął, tak aby **Usuń brakujące
+  utwory…** mogło je usunąć.
+- **Zmiany nie są śledzone**: system nie chciał go obserwować, zwykle
+  folder z bardzo wieloma podfolderami. Folder jest nadal skanowany przy
+  każdym uruchomieniu i przy każdej ponownej próbie, więc nowe pliki pojawiają
+  się wtedy, a nie od razu. W Linuksie drzewo folderów większe niż limit
+  obserwacji na użytkownika wymaga wyższego `fs.inotify.max_user_watches` (na
+  przykład `sudo sysctl fs.inotify.max_user_watches=524288`; ustaw to na
+  stałe w `/etc/sysctl.d/`).
+- **Nie pełna ścieżka**: zapisany folder został ręcznie zmieniony na ścieżkę,
+  która nie jest pełna. Wybierz **Zmień obserwowany folder…**, aby wskazać go
+  ponownie.
+- **Udział sieciowy nie pokazuje ostrzeżenia, ale pliki dodane z innego
+  komputera się nie pojawiają**: na udziale sieciowym (SMB/CIFS, NFS) system
+  zwykle przyjmuje obserwację, ale zgłasza tylko zmiany wykonane z tego
+  komputera. Zmiany wykonane gdzie indziej są widoczne przy następnym
+  uruchomieniu, nie gdy aplikacja działa.
+- **Folder z tysiącami plików** skanuje się przy starcie dłuższą chwilę;
+  pokazuje to postęp analizy.
+- Utwory, których plik opuścił obserwowany folder, zostają w bibliotece
+  oznaczone jako brakujące. Usuń je przez **Usuń brakujące utwory…** w menu
+  kategorii.
+
 ## Przerwy w dźwięku {#audio-dropouts}
 
 Pasek stanu ostrzega przez 5 sekund po każdej przerwie wykrytej przez
@@ -129,12 +183,58 @@ wiersz co 10 sekund na rodzaj, z liczbą, ile ich było. Nie każdy system audio
 zgłasza xruny (PulseAudio nie; tryb wyłączny Windows też nie).
 
 
-- Zwiększ **rozmiar bufora** w Ustawieniach (i naciśnij **Uruchom ponownie
-  teraz**).
+- Zwiększ **rozmiar bufora** w Ustawieniach (działa, gdy nic nie gra na tym
+  urządzeniu, albo od razu po **Zastosuj teraz**).
+- Przez serwer dźwięku (PulseAudio, urządzenie ALSA `default`) każde wyjście
+  już prosi o co najmniej 50 ms bez względu na rozmiar bufora, aby zajęty
+  komputer nie był słyszalny; Ustawienia pokazują to obok opóźnienia. Na
+  starym lub mocno obciążonym komputerze zwiększ `shared_buffer_ms` w sekcji
+  `outputs` pliku konfiguracyjnego (na przykład do 100). System trzyma w
+  kolejce około dwóch takich bloków, więc przyciski carta i play reagują
+  wtedy około dwa razy tyle później. Dla wyjścia antenowego własny wpis
+  sprzętowy urządzenia (`hw:` w Linuksie) całkiem omija serwer dźwięku.
 - W Linuksie zezwól na planowanie w czasie rzeczywistym. Aplikacja prosi o
-  nie system przez rtkit (D-Bus). Działa też członkostwo w grupie `audio` z
-  limitem `rtprio`.
+  nie system przez rtkit (D-Bus), a log zapisuje odmowę. Wiele pulpitów
+  odmawia tego aplikacjom.
 - Unikaj dysków sieciowych dla muzyki, która gra na antenie.
+
+## Interfejs działa wolno na starym komputerze {#the-interface-is-slow-on-an-old-computer}
+
+Gdy coś gra, interfejs rysuje najwyżej 30 klatek na sekundę (`max_fps` w
+sekcji `ui` pliku konfiguracyjnego), a kliknięcia i klawisze są obsługiwane od
+razu. Na starym lub zajętym komputerze zmniejsz tę wartość (na przykład do
+20), aby zostawić więcej procesora dźwiękowi; 0 rysuje każdą klatkę, jaką
+pokazuje wyświetlacz. Mierniki mierzą tak samo przy każdej częstotliwości;
+są tylko rysowane rzadziej.
+
+## Nie można upuszczać plików w Linuksie {#files-cannot-be-dropped-on-linux}
+
+Okno przyjmuje pliki przeciągnięte z menedżera plików tylko wtedy, gdy działa
+w X11. Domyślnie tak jest, także na pulpicie Wayland (przez XWayland, który
+mają wszystkie pulpity). Jeśli `ui.window_system` w `config.json` ma wartość
+`"Wayland"`, okno jest natywnym oknem Wayland, które może wyglądać ostrzej
+przy ułamkowym skalowaniu wyświetlacza, ale nie można na nie upuszczać
+plików: użyj zamiast tego **+ Dodaj**. Ustaw z powrotem `"Auto"` (domyślne)
+lub `"X11"` i uruchom Fauste Player ponownie.
+
+## Kontroler MIDI nie reaguje {#a-midi-controller-does-not-respond}
+
+Jeśli **Ustawienia → MIDI** pokazuje kontroler jako podłączony, ale jego
+przyciski i suwaki nic nie robią, naciśnij tam **Połącz porty ponownie**:
+program zamyka porty MIDI i otwiera je od nowa, tak jak odłączenie i
+podłączenie kontrolera. Jeśli to nie pomaga, odłącz kontroler i podłącz go
+z powrotem.
+
+W obu przypadkach log mówi, co się stało. Wymienia porty MIDI przy każdej ich
+zmianie, każdy otwarty i zamknięty port (z przyczyną), port, którego nie da
+się otworzyć (raz, dopóki się nie otworzy lub nie zniknie), pierwszy
+komunikat otrzymany na każdym połączeniu, pierwszy komunikat zignorowany na
+każdym połączeniu z przyczyną (brak przypisania, suwak, który nie dotarł
+jeszcze do głośności, akcja, która nie może teraz działać) oraz pierwszy
+komunikat diody, który się nie powiódł. Podłączony kontroler, który nigdy nie
+zapisuje pierwszego komunikatu, nie wysyła niczego, co program otrzymuje. Aby
+zobaczyć każdy zignorowany komunikat i każdą nieudaną ponowną próbę,
+uruchom program z `RUST_LOG=info,fp_control=debug`.
 
 ## „W interfejsie wystąpił błąd” {#the-interface-hit-an-error}
 
@@ -144,6 +244,21 @@ ponownie interfejs**. Zgłoś go, prosimy, razem z logami.
 ## Logi i raporty o awariach {#logs-and-crash-reports}
 
 Folder z logami opisuje rozdział [Dane i kopie zapasowe](data-and-backups.md).
-Jest jeden plik logu na dzień, a zachowywanych jest ostatnich 14. Raporty o
-awariach są zapisywane jako `crash-<time>.txt`. Ustaw `RUST_LOG=debug` w
-środowisku, aby uzyskać więcej szczegółów. Dołącz oba pliki, zgłaszając błąd.
+Jest jeden plik logu na dzień. Identyczne wiersze powtarzane jeden po drugim
+są zapisywane raz, a po nich wiersz w rodzaju `previous message repeated 12
+times` (podczas długiej serii powtórzeń ten wiersz jest zapisywany co minutę).
+Wiersze, które się różnią, na przykład dlatego, że niosą licznik, nie są
+zwijane. Rutynowe komunikaty połączenia klienta PulseAudio są domyślnie
+pomijane. Ustaw `RUST_LOG=debug` w środowisku, aby uzyskać więcej szczegółów
+(zastępuje to domyślny filtr `info,pulseaudio=warn`).
+
+Log jest ograniczony: plik z jednego dnia przestaje rosnąć przy 10 MiB (jego
+ostatni wiersz o tym mówi; reszta tego dnia nie jest zapisywana, do czego
+prowadzi zalew różniących się wierszy), a zachowywanych jest ostatnich 14
+plików. Zmienisz to w pliku konfiguracyjnym przez `limits.max_log_file_mb`
+(od 1 do 1024), `limits.max_log_files` (od 2 do 365) i
+`limits.log_repeat_summary_secs` (od 1 do 3600, domyślnie 60, jak często
+zgłaszana jest długa seria powtórzeń); obowiązują od następnego uruchomienia.
+Raporty o awariach są zapisywane jako `crash-<time>.txt` w tym samym folderze
+i mają osobny limit (`limits.max_crash_reports` na uruchomienie).
+Dołącz oba pliki, zgłaszając błąd.

@@ -4,20 +4,29 @@ Jede Spalte ist ein Player. Die Player sind unabhängig: Jeder hat seine
 eigenen Playlist-Tabs, sein Transportfeld, seine Lautstärke und seine
 Ausgänge.
 
-![Player 1 on Air: Kopfzeile, Cover, Titel, nächster Track, Transport, Countdown, Pegelmesser, Fader und Wellenform](../../images/guide/player.png)
+![Player 1 on Air: Kopfzeile mit der Lautheitsverstärkung, Cover, Titel, nächster Track, Transport, Countdown, Pegelmesser, Fader und Wellenform](../../images/guide/player.png)
 
 ## Kopfzeile {#header}
 
 | Element | Bedeutung |
 |---|---|
 | `P1` … `Pn` | Player-Nummer (die Zifferntaste, die ihn abspielt) |
+| Buttons **Ausblenden** und **Maximieren** / **Wiederherstellen** | Die zwei kleinen Buttons am rechten Ende der Kopfzeile: den Player ausblenden oder ihn für einen Moment maximieren (**Wiederherstellen**, solange er maximiert ist). Abgeblendet, solange das Layout gesperrt ist, **Ausblenden** am letzten sichtbaren Panel und **Maximieren**, wenn nur ein Panel sichtbar ist (siehe [Layout](layout.md#maximize-a-panel)) |
 | Statuspunkt und Beschriftung | **On Air** (rot), **Pausiert** (bernsteinfarben), **Gestoppt** (grau) |
-| Symbol **Mix** / **Blende** | Ein Crossfade in den nächsten Track oder ein Ausblenden läuft |
+| Schmale Spalten | Ist die Spalte für alle Symbole zu schmal, lässt die Kopfzeile zuerst das unwichtigste weg (den Statustext, dann **Andere stumm**, den Hinweis des Eintrags, **Stopp danach**, **Mix** / **Blende**, den Statuspunkt), sodass sich nie etwas überlappt. Die Player-Nummer, **CUE**, der Modus, **BP**, das Verstärkungs-Badge und die Buttons **Ausblenden** und **Maximieren** bleiben immer. Mache die Spalte breiter, um alle zu sehen |
+| Symbol **Mix** / **Blende** | Ein Crossfade in den nächsten Track oder ein Ausblenden läuft. **Mix** leuchtet nie bei einem Player, dessen Main-Ausgang bit-perfect ist: Er überblendet nicht (siehe [Was es kostet](bit-perfect.md#what-it-costs)) |
 | Symbol **Stopp danach** | Der Player stoppt, wenn der aktuelle Track endet |
 | Symbol **Wiederholen** / **Stopp nach Track** | Der aktuelle Track wird wiederholt oder stoppt den Player an seinem Ende, aufgrund seiner eigenen Markierung im Playlist-Menü. Mit der Maus darüberfahren zeigt den ganzen Satz. Der eigene Button **Nach dem aktuellen Track stoppen** des Players hat Vorrang: Solange er aktiv ist, wird nur sein Symbol angezeigt |
-| **BP** / **DSD** | **BP** leuchtet, solange der aktuelle Track sein Main-Gerät unverändert erreicht. **DSD** ersetzt es, solange ein DSD-Track unverändert als DSD ausgegeben wird (siehe [Bit-perfect-Ausgabe](bit-perfect.md)). **Andere stumm** erscheint daneben, wenn dieser DSD-Stream andere Quellen vom Ausgang fernhält |
+| Verstärkungs-Badge | Bei eingeschalteter [Lautheitsnormalisierung](loudness.md#the-gain-in-the-player-header) die Verstärkung, mit der der Track on Air spielt (**+4.0 dB**), oder ein bernsteinfarbenes **0.0 dB**, wenn der Track unverändert spielt (noch keine Messung, ein Bit-perfect-Ausgang oder ein von der Normalisierung ausgenommener Track). Fahre mit der Maus darüber für den Grund. Wird angezeigt, solange der Player spielt oder pausiert ist |
+| **BP** / **DSD** | Das Symbol erscheint nur bei einem Player, dessen Main-Gerät bit-perfect läuft; **BP** leuchtet, solange der aktuelle Track dieses Gerät unverändert erreicht. **DSD** ersetzt es, solange ein DSD-Track unverändert als DSD ausgegeben wird (siehe [Bit-perfect-Ausgabe](bit-perfect.md)). **Andere stumm** erscheint daneben, wenn dieser DSD-Stream andere Quellen vom Ausgang fernhält |
 | **SINGLE** \| **CONT** | Wiedergabemodus (siehe unten): ein verbundenes Bedienelement, die leuchtende Hälfte ist der aktive Modus |
 | **CUE** | Den nächsten Track auf dem CUE-Ausgang vorhören |
+
+Die zwei kleinen Buttons am rechten Ende der Kopfzeile, **Ausblenden** und
+**Maximieren** (oder **Wiederherstellen**), blenden den Player aus oder maximieren
+ihn für einen Moment; dieselben zwei stehen im Menü eines Rechtsklicks auf den
+Hintergrund der Kopfzeile (nicht auf einen ihrer Buttons) (siehe
+[Layout](layout.md#maximize-a-panel)).
 
 ## Infozeile {#info-row}
 
@@ -93,9 +102,30 @@ Ausgänge.
     - Nichts im Player fügt über 100 % hinaus Verstärkung hinzu. Ein
       Integer-Gerät clippt am Vollausschlag; ein Float-Gerät erhält den Pegel
       unverändert, und das Soundsystem oder der Treiber clippt ihn.
-- **Lautstärke-Fader** (rechts vom Messer, so hoch wie dieser): ziehe ihn oder
-  nutze das Mausrad, ein Schritt pro Rastung. Der Tooltip zeigt den Pegel in
-  dB; oben ist 0 dB und unten Stille.
+- **Lautstärke-Fader** (rechts vom Messer, so hoch wie dieser). Er folgt einem
+  Mischpult-Gesetz: Er ist oben fein und wird nach unten steiler, sodass ein
+  wenig Absenken den Pegel ein wenig senkt (90 % des Wegs sind etwa −2,5 dB, 50 %
+  etwa −15,9 dB, 10 % etwa −48 dB). Oben ist 0 dB und unten Stille. Rastungen
+  quer über den Fader markieren 0, −2, −4, −6, −8, −10, −12, −15, −20, −25, −30,
+  −40, −50 und −∞ dB, mit dem Pegel rechts davon geschrieben.
+  - Ziehe ihn: Der Fader bewegt sich um so viel wie der Zeiger, von dort aus, wo
+    er ist, sodass er beim Greifen nie springt; ein Klick ohne Bewegen ändert
+    nichts. Ein Ziehen über das obere oder untere Ende hinaus und zurück lässt den
+    Knopf am Ende, bis der Zeiger dorthin zurückkehrt, wo er es erreicht hat, sodass
+    der Knopf nie vom Zeiger entfernt landet.
+  - Nutze das Mausrad: ein Schritt pro Rastung (etwa 0,6 dB nahe 0 dB).
+  - Halte **Strg** oder **Umschalt** beim Ziehen oder Verwenden des Rads, um ihn
+    zehnmal feiner zu bewegen.
+  - Doppelklicke auf den Knopf, um zu 0 dB zurückzukehren (ein Doppelklick
+    anderswo auf dem Fader bewirkt nichts).
+
+  Der Pegel in dB (eine Nachkommastelle, oder −∞ für Stille) steht unter dem Fader,
+  in derselben Zeile wie die Lautheitszeile des Messers, und der Tooltip zeigt ihn
+  ebenfalls. Eine vor diesem Gesetz gespeicherte Session behält den Pegel jedes
+  Players; nur die Position des Faders ändert sich. Bei einem Player, dessen
+  Main-Ausgang bit-perfect ist, ist der Fader auf 100 % gesperrt und grau, er
+  zeigt ein abgeblendetes 0.0, und sein Tooltip nennt den Grund (siehe [Was es
+  kostet](bit-perfect.md#what-it-costs)).
 - **Titel, Interpret** und die Zeile **Nächster** mit einem grünen Quadrat.
   Ist CUE aktiv, wird die Vorhörposition blau angezeigt.
 
@@ -103,13 +133,18 @@ Ausgänge.
 
 | Button | Aktion |
 |---|---|
-| **Play / Weiter** (groß) | Gestoppt: den nächsten Track starten. On Air: in den nächsten Track überblenden (die Blendzeit wird in den [Einstellungen](settings.md) festgelegt). Pausiert: fortsetzen. Ist der Track, der on Air ist, als nächster gesetzt, startet Play diesen Track mit der üblichen Blende neu. |
+| **Play / Weiter** (groß) | Gestoppt: den nächsten Track starten. On Air: in den nächsten Track überblenden (die Blendzeit wird in den [Einstellungen](settings.md) festgelegt); solange er für einen von Weiter oder einem Segue gestarteten Crossfade überblendet, läuft über die Länge der Blende ein grünes Band über den Button, dessen Rand sich wie bei einem Cart von links nach rechts bewegt (ein von Zurück gestarteter Crossfade läuft stattdessen über den Button Zurück). Pausiert: fortsetzen. Ist der Track, der on Air ist, als nächster gesetzt, startet Play diesen Track mit der üblichen Blende neu. Bei einem Bit-perfect-Ausgang wechselt er sofort, ohne Blende, und sein Tooltip sagt es (siehe [Was es kostet](bit-perfect.md#what-it-costs)). |
 | **Stopp** | Sofort stoppen (mit einer kurzen Rampe gegen Knacken) |
-| **Ausblenden** | Ausblenden und stoppen |
+| **Ausblenden** | Ausblenden und stoppen. Solange ein Ausblenden läuft, läuft über die Länge der Blende ein Band über den Button, dessen Rand sich von links nach rechts bewegt |
 | **Pause** | Pausieren oder fortsetzen; blinkt bernsteinfarben, solange pausiert ist |
 | **Nach dem aktuellen Track stoppen** (ein Play-Dreieck, dann ein Quadrat) | Stoppen, wenn der aktuelle Track endet, einmalig. Im SINGLE-Modus ist er nur verfügbar, solange der aktuelle Track wiederholt wird: Er beendet die Wiederholung, wenn der laufende Durchlauf endet. Um nach einem Track jedes Mal zu stoppen, wenn er gespielt wird, oder um einen Track zu wiederholen, nutze sein Menü in der Playlist (siehe [Playlists](playlists.md)) |
-| **Vorheriger Track** (ein Balken und zwei Dreiecke) | Solange on Air: in den Track zurückblenden, den dieser Player zuvor gespielt hat, wie Weiter es tut. Erneut drücken, um weiter zurückzugehen. Der Track, den du verlässt, wird zum nächsten. |
+| **Vorheriger Track** (ein Balken und zwei Dreiecke) | Solange on Air: in den Track zurückblenden, den dieser Player zuvor gespielt hat, wie Weiter es tut. Erneut drücken, um weiter zurückzugehen. Der Track, den du verlässt, wird zum nächsten. Bei einem Bit-perfect-Ausgang wechselt er sofort, ohne Blende (siehe [Was es kostet](bit-perfect.md#what-it-costs)). |
 | **Track neu starten** (ein Balken und ein Dreieck) | Zurück zum Anfang des aktuellen Tracks (sein Cue-in). Ein pausierter Player bleibt pausiert. |
+
+Auf der Tastatur bewegen `Up` und `Down` die Auswahl durch die Playlist, `Enter`
+setzt den ausgewählten Track als nächsten, und ein zweites `Enter` darauf
+innerhalb der Zeit eines Doppelklicks spielt ihn ab. Siehe
+[Tastatur](keyboard.md).
 
 Buttons, die gerade nichts bewirken können, sind abgeblendet: Stopp und Neustart,
 wenn nichts geladen ist, Pause und Ausblenden bei gestopptem Player, Zurück ohne
@@ -137,6 +172,8 @@ unter der Wellenform, rechts. In den letzten Sekunden vor dem Ende (standardmä�
 
 - Der bereits gespielte Teil ist in der Farbe der Wellenform gezeichnet, der
   Rest blasser.
+  Bei einer violetten Wellenformfarbe hebt sich die violette MIX-Linie weniger
+  ab; wähle eine andere Wellenformfarbe, wenn du sie unterscheiden musst.
 - Die Kontur zeigt die Spitzen, schwach; der volle Körper darin ist der
   Durchschnittspegel (RMS). Bei einem lauten Track füllen die Spitzen die
   Höhe, und der Körper zeigt dennoch, wo der Track leiser oder lauter ist.
@@ -144,8 +181,11 @@ unter der Wellenform, rechts. In den letzten Sekunden vor dem Ende (standardmä�
   Symbol zählt es herunter. Das Intro wird nur angezeigt, wenn es gesetzt ist.
 - Ein orangefarbener schattierter Bereich am Ende markiert das **Outro**, mit
   eigenem Countdown.
-- Eine gestrichelte bernsteinfarbene Linie mit der Marke **MIX** zeigt, wo im
-  CONT-Modus der nächste Track beginnt. Im SINGLE-Modus ist sie abgeblendet.
+- Eine gestrichelte violette Linie (die Farbe des Symbols **Mix**, damit sie
+  nicht mit dem orangefarbenen Outro verwechselt wird) mit der Marke **MIX** zeigt,
+  wo im CONT-Modus der nächste Track beginnt. Im SINGLE-Modus ist sie abgeblendet,
+  ebenso bei einem Player, dessen Main-Ausgang bit-perfect ist und der nicht mischt
+  (siehe [Was es kostet](bit-perfect.md#what-it-costs)).
 - Die ganze Datei wird gezeichnet. Der stille Anfang und das stille Ende, die
   die Wiedergabe überspringt (vor dem Cue-in und nach dem Cue-out), sind dunkler
   gezeichnet, mit einer dünnen Linie, wo die Wiedergabe beginnt und endet. Ist
@@ -179,11 +219,27 @@ unter der Wellenform, rechts. In den letzten Sekunden vor dem Ende (standardmä�
 
 Ein Druck auf **CUE** (oder **Auf CUE vorhören** im Menü eines Tracks) spielt
 den Track auf dem CUE-Ausgang des Players ab, zum Beispiel einem Kopfhörer,
-ohne den Ausgang on Air zu berühren, und öffnet ein kleines **CUE-Fenster** für
-diesen Player. Es können mehrere Fenster offen sein, eines pro Player. Siehe
-[Einstellungen](settings.md), um das CUE-Gerät zu wählen. Ein Player braucht
-einen Cue-Ausgang, der nicht sein Main-Ausgang ist: Ohne einen sind **CUE** und
-**Auf CUE vorhören** abgeblendet, und beim Darüberfahren steht der Grund.
+und öffnet ein kleines **CUE-Fenster** für diesen Player. Es können mehrere
+Fenster offen sein, eines pro Player. Siehe [Einstellungen](settings.md), um das
+CUE-Gerät zu wählen. Ein Player braucht einen Cue-Ausgang: Ohne einen sind **CUE**
+und **Auf CUE vorhören** abgeblendet, und beim Darüberfahren steht der Grund.
+
+Mit einer einzigen Soundkarte kann der Cue-Ausgang der Sendeausgang selbst sein
+(oder ihn mit einem anderen Player oder der Cartwall teilen). Ein Vorhören dort ist
+auf Sendung zu hören, daher:
+
+- solange nichts auf diesem Ausgang spielt, startet CUE sofort;
+- solange dort etwas spielt (ein Player spielt oder ist pausiert, ein Cart, ein
+  anderes Vorhören, das Vorhören der Bibliothek), fragt CUE zuerst:
+  **Trotzdem vorhören** oder **Abbrechen** (Abbrechen ist die Vorgabe: Esc und
+  Enter brechen ab). Dieselbe Frage kommt vom Track-Menü, vom CUE-Fenster, von der
+  Cartwall und vom Bibliotheksfenster;
+- startet etwas auf diesem Ausgang, während ein Vorhören spielt, das du nicht
+  bestätigt hast, stoppt das Vorhören, und die Statusleiste sagt, warum. Ein
+  Vorhören, das du bestätigt hast, spielt weiter.
+
+Der Tooltip des CUE-Buttons sagt, wenn sein Vorhören auf dem Sendeausgang
+ausgegeben wird.
 
 ![Das CUE-Fenster von Player 4, der seinen nächsten Track vorhört](../../images/guide/cue-window.png)
 

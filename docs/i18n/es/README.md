@@ -1,12 +1,18 @@
 # Fauste Player — Guía del usuario
 
-<div class="ai-notice" role="note">Esta guía se ha traducido con IA a partir de la guía en inglés (v0.5.0-120-g6932087, commit 6932087) y puede contener errores. Ante cualquier diferencia, vale la versión en inglés. <a href="../index.html" hreflang="en">Leer el original en inglés</a></div>
+<div class="ai-notice" role="note">Esta guía se ha traducido con IA a partir de la guía en inglés (v0.12.0-308-gdf2987e0, commit df2987e) y puede contener errores. Ante cualquier diferencia, vale la versión en inglés. <a href="../index.html" hreflang="en">Leer el original en inglés</a></div>
 
 Fauste Player es una aplicación de emisión (playout) para estudios de radio.
 Ejecuta varios **players** independientes, uno al lado del otro. Cada player
 tiene sus propias playlists y su propio transporte. Los players pueden
 encadenar pistas con mezclas solapadas, preescuchar en una salida **CUE**
 aparte y sobrevivir a fallos sin poner nada al aire por sí solos.
+
+> **Desarrollado con ayuda de IA y ofrecido tal cual.** Fauste Player, esta
+> guía y sus traducciones se han desarrollado con ayuda sustancial de
+> herramientas de IA. Se ofrece sin ninguna garantía y lo usas bajo tu propio
+> riesgo: consulta el
+> [aviso legal](https://github.com/sanchezfauste/fauste-player#disclaimer).
 
 ![Pantalla principal](../../images/main-screen.png)
 
@@ -18,7 +24,8 @@ aparte y sobrevivir a fallos sin poner nada al aire por sí solos.
 | [Cartuchera](cartwall.md) | Cartuchos instantáneos: disparo, páginas, bucles, cartuchos exclusivos, configuración |
 | [Marcadores y mezcla](markers-and-mixing.md) | Cue-in/cue-out, el punto MIX, intro y outro, análisis automático |
 | [Configuración](settings.md) | Salidas de audio, players, análisis, playlists, MIDI, control remoto |
-| [Salida bit-perfect](bit-perfect.md) | Dispositivos exclusivos que siguen la frecuencia de cada archivo, el distintivo BP, salida DSD, comprobar una cadena |
+| [Normalización de la sonoridad](loudness.md) | Todas las pistas y cartuchos con la misma sonoridad mediante una ganancia fija por pista: el distintivo de ganancia, excluir y ajustar una pista, salidas bit-perfect |
+| [Salida bit-perfect](bit-perfect.md) | Un modo especial: sin fundidos encadenados, volumen al 100 %. Dispositivos exclusivos que siguen la frecuencia de cada archivo, el distintivo BP, salida DSD, comprobar una cadena |
 | [Teclado](keyboard.md) | Atajos |
 | [Superficies de control MIDI](midi.md) | Botones, faders y luces en controladores MIDI |
 | [Control remoto](remote-control.md) | Manejar Fauste Player por la red: API HTTP, seguridad |
@@ -27,10 +34,10 @@ aparte y sobrevivir a fallos sin poner nada al aire por sí solos.
 
 La interfaz está disponible en inglés, español, catalán, neerlandés, francés,
 gallego, alemán, italiano, euskera, polaco y portugués. Sigue el idioma del
-sistema operativo salvo que elijas uno en Configuración. El inglés y el
-español están escritos a mano; los otros nueve se han generado con IA y
-pueden contener errores. Si hablas alguno de ellos, las correcciones son
-bienvenidas como issues o pull requests.
+sistema operativo salvo que elijas uno en Configuración. La interfaz en todos
+los idiomas, incluidos el inglés y el español, se ha generado con IA y puede
+contener errores. Las correcciones son bienvenidas como issues o pull
+requests.
 
 La guía también está disponible en otros idiomas, traducida con IA
 a partir de la guía en inglés: en la [guía en línea](https://sanchezfauste.com/fauste-player/guide/),

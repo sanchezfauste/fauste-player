@@ -19,6 +19,8 @@ escuta as suas próprias portas. Os controladores podem ser ligados e
 desligados com o programa em execução: de dois em dois segundos, as portas
 são procuradas de novo, e um controlador que regressa é ligado pelo seu nome,
 com as suas luzes repostas.
+**Voltar a ligar as portas** fecha todas as portas e abre-as de novo sem
+mexer no cabo (ver [Resolução de problemas](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 No Linux, o MIDI passa pelo ALSA: o seu utilizador tem de ter permissão para
 abrir o sequenciador (`/dev/snd/seq`, normalmente por pertencer ao grupo
@@ -47,11 +49,20 @@ associação.
 - Um botão atua quando é premido (uma tecla ou pad a descer, ou uma alteração
   de controlo a subir pelo meio do seu intervalo), exatamente como o botão do
   leitor no ecrã. Um botão que está esbatido no ecrã não faz nada.
-- Um fader move o volume na mesma escala que o fader no ecrã. Para evitar
+  Um botão **CUE** também não faz nada quando a sua pré-escuta se ouviria no
+  ar enquanto algo toca aí: o MIDI não consegue responder à pergunta que o
+  ecrã faz. Parar uma pré-escuta funciona sempre.
+- Um fader move o volume na mesma escala (a mesma lei de mesa de mistura) que o fader no ecrã. Para evitar
   saltos, só assume o controlo quando alcança ou ultrapassa o volume atual
   (soft takeover); se o volume for alterado no ecrã, o fader tem de o
   apanhar de novo. Nada muda até mover um controlo: arrancar o programa nunca
   envia nada para o ar.
+- Uma associação de volume de um leitor cuja saída principal é
+  [bit-perfect](bit-perfect.md#what-it-costs) não faz nada: o seu volume fica
+  fixo em 100 %. Quando a saída deixa de ser bit-perfect, mova o controlo até
+  ao topo para voltar a assumir o volume.
+- Play/Seguinte e Anterior num leitor assim mudam de imediato, sem
+  crossfade. As suas luzes funcionam como de costume.
 - Com **Acender os botões (LED)** ativado, os botões associados acendem-se:
   o Play enquanto o leitor está no ar, a Pausa a piscar enquanto está em
   pausa, o CUE durante a pré-escuta, e o Stop, o Stop com fade, o Reiniciar e

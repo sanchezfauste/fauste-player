@@ -2,8 +2,10 @@
 
 ## Installazione {#install}
 
-Scarica un pacchetto per il tuo sistema dalla pagina **Releases** del
-progetto. Ogni file ha accanto un file `.sha256`. Per verificare un download,
+Su Windows, Fauste Player è nel **Microsoft Store**
+(<https://apps.microsoft.com/detail/9NH4KCL73463>), e su Linux nello
+**Snap Store** (<https://snapcraft.io/fauste-player>). Oppure scarica un
+pacchetto per il tuo sistema dalla pagina **Releases** del progetto. Ogni file ha accanto un file `.sha256`. Per verificare un download,
 esegui `sha256sum -c <file>.sha256` su Linux, oppure
 `shasum -a 256 -c <file>.sha256` su macOS.
 
@@ -11,10 +13,11 @@ esegui `sha256sum -c <file>.sha256` su Linux, oppure
 
 | Pacchetto | Installazione | Aggiornamento | Rimozione |
 |---|---|---|---|
+| Snap (Snap Store) | `sudo snap install fauste-player` | automatico (`sudo snap refresh fauste-player` per aggiornare subito) | `sudo snap remove fauste-player` |
 | `.deb` (Debian, Ubuntu) | `sudo apt install ./fauste-player_<version>_amd64.deb` | installa il `.deb` più recente allo stesso modo | `sudo apt remove fauste-player` |
 | `.rpm` (Fedora, openSUSE) | `sudo dnf install ./fauste-player-<version>-1.x86_64.rpm` | installa il `.rpm` più recente | `sudo dnf remove fauste-player` |
 | AppImage (qualsiasi distribuzione) | `chmod +x fauste-player-<version>-x86_64.AppImage`, poi eseguilo | sostituisci il file | elimina il file |
-| Bundle Flatpak | `flatpak install --user fauste-player-<version>-x86_64.flatpak` | installa il bundle più recente | `flatpak uninstall org.fauste.FaustePlayer` |
+| Bundle Flatpak | `flatpak install --user fauste-player-<version>-x86_64.flatpak` | installa il bundle più recente | `flatpak uninstall com.sanchezfauste.FaustePlayer` |
 | Archivio | estrailo ed esegui `fauste-player` | estrai quello più recente | elimina la cartella |
 
 - **Integrazione con il desktop:** i pacchetti aggiungono **Fauste Player** al
@@ -25,6 +28,22 @@ esegui `sha256sum -c <file>.sha256` su Linux, oppure
   obbligatorio.
 - **AppImage:** se non si avvia perché manca FUSE, eseguila con
   `--appimage-extract-and-run`.
+- **Snap:** lo snap gira in una sandbox. Di serie legge la tua cartella home
+  (tranne file e cartelle nascosti), riproduce tramite PulseAudio o
+  PipeWire e può usare la rete per l'API di controllo remoto e per OSC
+  (entrambi disattivati finché non li attivi). Due funzioni richiedono un
+  permesso che dai una volta sola, da un terminale:
+  - L'uscita bit-perfect sui dispositivi ALSA `hw:` e le superfici di
+    controllo MIDI: `sudo snap connect fauste-player:alsa`.
+  - La musica su unità USB e altri dischi (`/media`, `/run/media`, `/mnt`):
+    `sudo snap connect fauste-player:removable-media`.
+
+  `snap connections fauste-player` mostra cosa è connesso. Riavvia Fauste
+  Player dopo aver connesso. La musica in altri posti (fuori dalla tua
+  cartella home e da questi tre) non può essere letta dallo snap: usa un
+  altro pacchetto. JACK non è disponibile nello snap. Le sue impostazioni e
+  playlist si trovano in `~/snap/fauste-player/` (vedi
+  [Dati e backup](data-and-backups.md)).
 - **Flatpak:**
   - Il bundle richiede il runtime freedesktop di Flathub. Se il remote
     Flathub non è configurato, esegui prima
@@ -33,13 +52,24 @@ esegui `sha256sum -c <file>.sha256` su Linux, oppure
     dove si trova).
   - Riproduce tramite PulseAudio, oppure direttamente tramite ALSA per i
     dispositivi bit-perfect.
+  - Può usare la rete, per l'API di controllo remoto e per OSC (entrambi
+    disattivati finché non li attivi).
+  - I bundle fino alla 0.10 si installavano come `org.fauste.FaustePlayer`, e
+    quelli più recenti si installano come `com.sanchezfauste.FaustePlayer`,
+    un'applicazione separata. Per conservare impostazioni, playlist e cart,
+    chiudi l'app ed esegui `mv ~/.var/app/org.fauste.FaustePlayer ~/.var/app/com.sanchezfauste.FaustePlayer`
+    prima di avviare quella nuova, poi `flatpak uninstall org.fauste.FaustePlayer`.
 - **Librerie del desktop:** la finestra usa libxkbcommon e EGL o OpenGL, con
   Wayland o X11. Ogni desktop le ha, e il `.deb` e il `.rpm` le dichiarano.
   Su un sistema molto minimale, installale prima di usare l'AppImage.
 
 ### Windows {#windows}
 
-Esegui `fauste-player-<version>-x86_64-pc-windows-msvc.msi`. Si installa per
+Il modo più semplice è il **Microsoft Store**: cerca *Fauste Player*, oppure
+apri <https://apps.microsoft.com/detail/9NH4KCL73463>, e scegli **Ottieni**.
+Lo Store lo mantiene aggiornato, e **Impostazioni → App** lo rimuove.
+
+Oppure esegui `fauste-player-<version>-x86_64-pc-windows-msvc.msi`. Si installa per
 tutti gli utenti in *Program Files* e aggiunge una voce al menu Start.
 - **Aggiornamento:** esegui il programma di installazione più recente.
   Sostituisce la versione installata.
@@ -86,11 +116,12 @@ su un solo computer), dai a ciascuna una propria cartella con `FAUSTE_HOME`.
 `fauste-player --version` stampa la versione. La barra del titolo della
 finestra mostra il nome e la versione, e il pulsante **Informazioni su
 Fauste Player** (un'icona di informazioni, a sinistra di **Impostazioni**)
-apre la finestra «Informazioni su Fauste Player», con il copyright e le note
-sulle licenze (**Licenze di terze parti** apre il file delle note installato
-con i pacchetti di rilascio). In una lingua tradotta con l'IA, la finestra
-dice anche che la traduzione può contenere errori. Chiudila con **Chiudi** o
-con `Esc`. `fauste-player --help` elenca le opzioni. I file di playlist
+apre la finestra «Informazioni su Fauste Player», con l'autore, il copyright,
+la licenza (GNU GPL versione 3 o successiva; **Leggi la licenza online** ne
+apre il testo), una breve dichiarazione di esclusione di responsabilità e le
+note sulle licenze (**Licenze di terze parti** apre il file delle note
+installato con i pacchetti di rilascio). Chiudila con **Chiudi** o con
+`Esc`. `fauste-player --help` elenca le opzioni. I file di playlist
 passati come argomenti vengono importati come nuove playlist.
 
 ![La finestra «Informazioni su Fauste Player»: versione, copyright e licenze dei componenti inclusi](../../images/guide/about.png)
@@ -99,9 +130,9 @@ Su Windows il programma di rilascio non apre alcuna finestra della console:
 `--version`, `--help` e gli errori di avvio compaiono invece in una finestra
 di messaggio.
 
-Quando un'impostazione richiede un riavvio, nella barra superiore compare
-una pillola **Riavvio in sospeso**: premila per riavviare (vedi
-[Impostazioni](settings.md#restart-pending)).
+Quando una modifica alle uscite attende qualcosa che è in onda, nella barra
+superiore compare una pillola **Impostazioni in sospeso**; dice cosa attende
+(vedi [Impostazioni](settings.md#settings-pending)).
 
 ### Chiudere con audio in onda {#closing-while-audio-is-on-air}
 
@@ -136,12 +167,30 @@ per 32 (88,2 kHz per il DSD64), oppure inalterati come DoP o DSD nativo su
 un dispositivo bit-perfect impostato in tal senso (vedi
 [Uscita bit-perfect](bit-perfect.md#dsd)). L'Opus suona sempre a 48 kHz. I
 file WavPack devono essere lossless e mono o stereo; i WavPack ibridi e
-multicanale risultano illeggibili, come i file DFF compressi con DST.
+multicanale risultano illeggibili, come i file DFF compressi con DST. Anche
+un WAV o FLAC che contiene un bitstream DTS (o un altro surround codificato)
+invece dell'audio, come alcune estrazioni di CD DTS, risulta illeggibile (il
+log ne spiega il motivo): convertilo prima in normale PCM.
+
+I file surround (quadrifonici, 5.1, 6.1, 7.1 e altre disposizioni fino a otto
+canali) suonano mixati in stereo in base alla posizione di ogni canale:
+anteriore sinistro e destro restano dal loro lato, il centrale e il
+posteriore centrale vanno su entrambi i lati, i canali laterali e posteriori
+vanno dal loro lato, e il canale LFE (subwoofer) viene scartato. I file Opus
+e AAC multicanale non si possono leggere e risultano illeggibili.
 
 Ogni file viene analizzato in background. L'analisi legge titolo, artista,
 album e copertina, disegna la forma d'onda e trova dove inizia e finisce il
 suono e dove mixare nel brano successivo. Puoi riprodurre un brano prima che
-la sua analisi finisca.
+la sua analisi finisca. Mentre i file vengono analizzati, a destra della barra
+di stato compare quanti sono (**Analisi di 12 brani**); passaci sopra il
+puntatore per vedere i file in analisi ora, quanti sono in attesa e, durante
+un **Rianalizza tutti i brani**, a che punto è arrivato. La legenda dei colori
+è alla sua destra; quando la finestra è stretta, le voci della legenda
+vengono nascoste per prime, poi questa voce, così un avviso a sinistra della
+barra di stato resta leggibile. Mentre sono in corso solo misure della
+loudness (vedi [Loudness](loudness.md)) compare **Misura della loudness di N
+brani**.
 
 ## Riprodurre {#play}
 

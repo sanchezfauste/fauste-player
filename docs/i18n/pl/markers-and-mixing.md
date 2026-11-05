@@ -15,14 +15,17 @@ zastępuje.
 
 ## Edycja markerów {#editing-markers}
 
-Na przebiegu odtwarzacza lub na przebiegu jego okna CUE (to samo menu i te
-same uchwyty; zmiana widoczna jest w obu naraz):
+Na przebiegu odtwarzacza, na przebiegu jego okna CUE lub na
+[pasku odsłuchu okna biblioteki](library.md#pre-listening) (to samo menu i te
+same uchwyty; zmiana jest od razu widoczna wszędzie tam, gdzie jest utwór):
 
 - **Kliknij prawym przyciskiem** w miejscu, gdzie chcesz marker, i wybierz
   **Ustaw tutaj cue-in**, **Ustaw tutaj koniec intro**, **Ustaw tutaj
   początek outro**, **Ustaw tutaj punkt MIX** lub **Ustaw tutaj cue-out**.
   **Przywróć automatyczne znaczniki** usuwa markery, które umieściłeś, a
-  utwór jest analizowany ponownie.
+  utwór jest analizowany ponownie. **Głośność…** otwiera ustawienia
+  [normalizacji głośności](loudness.md#per-track-exclude-and-trim) utworu:
+  wyłączenie go z normalizacji lub korektę jego wzmocnienia.
 - **Przytrzymaj Alt** (Option w macOS): na markerach pojawiają się uchwyty.
   Przeciągnij jeden, aby go przesunąć; podczas przeciągania widać czas.
   Przeciągnięcie nigdy nie przesuwa głowicy odtwarzania.
@@ -85,6 +88,10 @@ są analizowane ponownie automatycznie.
 - **Tryb single** lub **Stop po**: odtwarzacz zatrzymuje się w cue-out.
 - **Naciśnięcie Play na antenie:** następny utwór startuje od razu, a
   bieżący wycisza się przez *czas wyciszania* (domyślnie 1 s).
+- **Odtwarzacz, którego wyjście Main jest bit-perfect**, ignoruje punkt MIX i
+  automatyczny miks: każdy utwór gra do swojego cue-out, po czym startuje
+  następny, a Play na antenie przełącza od razu, bez wyciszania. Zobacz
+  [Jakie są koszty](bit-perfect.md#what-it-costs).
 - **Wyłączone Używaj cue-in i cue-out** (Ustawienia → Odtwarzacze):
   każdy odtwarzacz gra każdy utwór od 0 do końca pliku. Cue-in i cue-out,
   automatyczne i ręczne, są zachowywane, a przebieg rysuje je jako

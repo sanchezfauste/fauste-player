@@ -72,7 +72,7 @@ Klient może:
   cartwall;
 - odtwarzać, wstrzymywać, zatrzymywać, wyciszać, uruchamiać od początku i
   cofać się;
-- wybrać następną pozycję (także tę na antenie: zagra jeszcze raz), odsłuchiwać wstępnie i przewijać (w zatrzymanym odtwarzaczu przewinięcie wybiera, skąd Play uruchomi następną pozycję, a przewinięcie przed jej cue-in zaczyna w cue-in);
+- wybrać następną pozycję (także tę na antenie: zagra jeszcze raz), odsłuchiwać wstępnie (odsłuch wstępny, który byłby słyszalny na antenie, gdy coś tam gra, jest odrzucany, chyba że żądanie zawiera `"force": true`; zob. dokumentację API) i przewijać (w zatrzymanym odtwarzaczu przewinięcie wybiera, skąd Play uruchomi następną pozycję, a przewinięcie przed jej cue-in zaczyna w cue-in);
 - ustawiać głośności, tryby, stop po bieżącym oraz oznaczenia powtarzania i
   stopu po pozycji;
 - odpalać, zatrzymywać i odsłuchiwać wstępnie carty oraz zmieniać pokazywaną
@@ -80,14 +80,41 @@ Klient może:
 - edytować: tworzyć, zmieniać nazwy i usuwać playlisty; dodawać utwór, który
   jest już wczytany, oraz usuwać, przenosić lub duplikować pozycje; tworzyć,
   zmieniać nazwy, zmieniać rozmiar i usuwać strony cartów oraz konfigurować
-  cart wczytanym utworem; ustawiać lub resetować markery.
+  cart (nazwa, typ, kolor, pętla, wyłączność) wczytanym utworem; ustawiać lub
+  resetować markery; wyłączać utwór z [normalizacji głośności](loudness.md)
+  albo ustawiać jego korektę.
 
 Usunięcie tego, co jest na antenie, jest odrzucane, tak jak na ekranie.
 Plików, które nie są jeszcze wczytane, nie można dodawać zdalnie: leżą na tym
 komputerze, więc najpierw dodaj je tutaj.
 
-Przycisk wyszarzony na ekranie jest odrzucany także zdalnie. Pełna
-dokumentacja jest w [dokumentacji technicznej](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
+Przycisk wyszarzony na ekranie jest odrzucany także zdalnie.
+
+Odtwarzacz, którego wyjście Main jest [bit-perfect](bit-perfect.md#what-it-costs),
+nadal działa zdalnie, z tymi samymi ograniczeniami co na ekranie: `play` i
+`previous` przełączają od razu, bez przenikania, a jego głośność jest
+utrzymywana na 100 %. Głośność poniżej 100 % jest odrzucana (`409`, z
+przyczyną), a dokładnie 100 % jest przyjmowane. Każdy odtwarzacz podaje, czy
+jego głośność jest utrzymywana (`fader_locked`).
+
+Głośność wysłana jako położenie suwaka (`fader` w API, OSC `/volume`) to
+położenie w skali samego suwaka na ekranie, od 0 (cisza) do 1 (0 dB): 0,9 to
+około −2,5 dB, 0,8 około −5,3 dB, a 0,5 około −16 dB. Wcześniejsze wersje
+używały innej skali (0,8 było −12 dB, 0,5 było −30 dB), więc skrypt napisany
+dla nich ustawia teraz głośniejsze poziomy: sprawdź jego wartości.
+
+Każdy utwór niesie swój pomiar głośności (`loudness`, `null` do czasu pomiaru)
+i swoje ustawienie (`loudness_edit`: `excluded` i `trim_db`). Grający lub
+wstrzymany odtwarzacz oraz każdy grający cart podają, z jakim wzmocnieniem
+[normalizacji](loudness.md) wystartował ich utwór i dlaczego (`normalization`:
+`gain_db` oraz `status`, na przykład `applied`, `not_measured` lub
+`bit_perfect`). `PUT /api/v1/tracks/<id>/loudness` z
+`{"excluded": false, "trim_db": -1.5}` zmienia ustawienie, tak jak okienko
+**Głośność…**; korekta ponad maksymalną jest odrzucana (`409`, z przyczyną).
+Same ustawienia normalizacji (włączenie, wartość docelowa, limity) zmienia się
+tylko na tym komputerze. OSC i MIDI nie mają kontrolek głośności.
+
+Pełna dokumentacja jest w [dokumentacji technicznej](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
 
 Wypróbuj z terminala:
 
@@ -131,6 +158,10 @@ je wyczyściła. Musi subskrybować ponownie w ciągu minuty
 
     oscdump 9000 &
     oscsend localhost 7381 /fauste/subscribe i 9000
+
+W odtwarzaczu, którego wyjście Main jest bit-perfect, komunikaty `/volume` są
+odrzucane (log o tym wspomina), a odtwarzacz wysyła subskrybentom
+`/volume-locked` 1 (w przeciwnym razie 0).
 
 Subskrybent może wskazać dowolny port własnego adresu, a zachowywanych jest
 do `max_subscribers`. Każdy, kto może wysyłać, może więc też subskrybować. To

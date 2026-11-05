@@ -4,8 +4,9 @@
 
 1. Open **Instellingen → Audio-uitgangen** en druk op **Main testen** voor de
    speler. Hoor je de toon, controleer dan de volumefader van de speler.
-2. Hoor je niets, kies dan een ander apparaat of kanaalpaar. Wijzigingen aan
-   uitgangen werken na een herstart: druk in Instellingen op **Nu herstarten**.
+2. Hoor je niets, kies dan een ander apparaat of kanaalpaar. Een wijziging aan
+   de uitgangen wordt toegepast zodra er niets op speelt; **Nu toepassen** in
+   Instellingen past haar meteen toe.
 3. Kies op Linux bij voorkeur **PipeWire** of **PulseAudio** in Instellingen →
    Audio-uitgangen → Audiosysteem. Ze delen de geluidskaart met andere
    programma’s. **ALSA** praat rechtstreeks met de kaart en kan hem bezet
@@ -21,12 +22,24 @@
 ## Bit-perfect {#bit-perfect}
 
 - **De BP-badge blijft uit.** Controleer elke voorwaarde in
-  [Bit-perfect uitgang](bit-perfect.md#the-bp-badge): volume op 100 %, geen
-  fade, niets anders op dezelfde uitgangen, een lossless bestand dat is
-  geanalyseerd, en een apparaat dat op de frequentie van het bestand draait.
+  [Bit-perfect uitgang](bit-perfect.md#the-bp-badge): geen fade, niets
+  anders op dezelfde uitgangen, een lossless bestand dat is geanalyseerd, en
+  een apparaat dat op de frequentie van het bestand draait.
 - **Een korte stilte vóór een nummer.** Het bit-perfect apparaat is opnieuw
-  geopend op de samplefrequentie van het nummer. Houd de bibliotheek op één
-  frequentie om dat te voorkomen.
+  geopend op de samplefrequentie van het nummer. Het gebeurt alleen wanneer de frequentie
+  verandert: nummers met dezelfde frequentie volgen elkaar zonder gat op. Houd
+  de bibliotheek op één frequentie om het te voorkomen. Zie
+  [Wat het kost](bit-perfect.md#what-it-costs).
+- **Nummers mixen niet en Play fadet niet.** Op een speler waarvan de
+  Main-uitgang bit-perfect is, speelt elk nummer tot het einde en begint dan het
+  volgende, en Play / Volgende en Vorige schakelen meteen om: er zijn geen
+  crossfades of segues op zo'n speler. Zet bit-perfect uit voor het apparaat, of
+  verplaats de speler naar een andere uitgang, om weer te mixen. Zie
+  [Wat het kost](bit-perfect.md#what-it-costs).
+- **De volumefader beweegt niet.** De Main-uitgang van de speler is
+  bit-perfect, wat het volume op 100 % houdt; de tooltip van de fader zegt dat.
+  MIDI-faders en de API op afstand kunnen hem ook niet bewegen. Zie
+  [Wat het kost](bit-perfect.md#what-it-costs).
 - **Een nummer wordt geresampled afgespeeld en het logbestand zegt dat het
   apparaat bezet is (Linux).** Om van frequentie te wisselen sluit de
   applicatie het apparaat en opent ze het opnieuw. Op dat moment kan de
@@ -118,6 +131,50 @@ wanneer een kopie klaar is. Om het meteen te controleren gebruik je
 **Opnieuw analyseren** in het rijmenu, of **Instellingen → Analyse → Alle
 nummers opnieuw analyseren** voor de hele bibliotheek.
 
+Een WAV of FLAC die als onleesbaar wordt getoond, of als harde ruis zou spelen,
+kan een DTS-CD-rip zijn: het bestand bevat een DTS-bitstream in plaats van
+audio. De applicatie weigert het (het log zegt “encoded bitstream stored as
+PCM”) en decodeert geen DTS. Zet het eerst met een ander hulpmiddel om naar
+gewone PCM.
+
+## Een bewaakte map toont een waarschuwing {#a-watched-folder-shows-a-warning}
+
+Een categorie die een map bewaakt, toont ⟳, in een andere kleur wanneer de map
+niet wordt gevolgd; houd de muisaanwijzer erboven voor de reden. Zie [Bewaakte
+mappen](library.md#watched-folders).
+
+- **Niet gevonden of niet te lezen**: de schijf of share is niet gekoppeld of
+  niet bereikbaar. Een lege map die nummers van de bibliotheek zou moeten
+  bevatten, telt ook als niet gevonden, omdat een niet-gekoppelde share er vaak
+  zo uitziet. Er wordt niets gemarkeerd of verwijderd; de map wordt elke 30
+  seconden opnieuw gezocht en gescand zodra hij verschijnt. Heb je de map
+  met opzet geleegd, wis dan zijn nummers door ze te selecteren in de
+  bibliotheektabel en **Uit de bibliotheek verwijderen…** te kiezen, of door
+  **Opnieuw analyseren** erop te kiezen, wat de nummers waarvan het bestand weg
+  is als ontbrekend markeert zodat **Ontbrekende nummers verwijderen…** ze kan
+  verwijderen.
+- **Wijzigingen worden niet gevolgd**: het systeem wilde hem niet bewaken,
+  meestal een map met heel veel submappen. De map wordt nog steeds bij elke
+  start en bij elke nieuwe poging gescand, dus nieuwe bestanden verschijnen dan,
+  niet meteen. Op Linux heeft een maptree die groter is dan de limiet van
+  bewakingen per gebruiker een hogere `fs.inotify.max_user_watches` nodig
+  (bijvoorbeeld `sudo sysctl fs.inotify.max_user_watches=524288`; maak het
+  blijvend in `/etc/sysctl.d/`).
+- **Geen volledig pad**: de opgeslagen map is met de hand bewerkt tot een pad
+  dat niet volledig is. Kies **Bewaakte map wijzigen…** om hem opnieuw te
+  kiezen.
+- **Een netwerkshare toont geen waarschuwing, maar bestanden die vanaf een
+  andere computer zijn toegevoegd verschijnen niet**: op een netwerkshare
+  (SMB/CIFS, NFS) accepteert het systeem de bewaking meestal, maar meldt het
+  alleen de wijzigingen die vanaf deze computer zijn gemaakt. Wijzigingen die
+  elders zijn gemaakt, worden bij de volgende start gezien, niet terwijl de
+  applicatie draait.
+- **Een map met duizenden bestanden** heeft even nodig om bij de start te
+  worden gescand; de voortgang van de analyse toont het.
+- Nummers waarvan het bestand een bewaakte map heeft verlaten, blijven in de
+  bibliotheek als ontbrekend gemarkeerd. Verwijder ze met **Ontbrekende nummers
+  verwijderen…** in het menu van de categorie.
+
 ## Audio-onderbrekingen {#audio-dropouts}
 
 De statusbalk waarschuwt 5 seconden lang na elke onderbreking die de
@@ -130,11 +187,60 @@ gebeurd. Niet elk audiosysteem meldt xruns (PulseAudio niet; de exclusieve modus
 van Windows niet).
 
 
-- Verhoog de **buffergrootte** in Instellingen (en druk op **Nu herstarten**).
+- Verhoog de **buffergrootte** in Instellingen (ze wordt toegepast zodra er niets
+  op dat apparaat speelt, of meteen met **Nu toepassen**).
+- Via een geluidsserver (PulseAudio, het ALSA-apparaat `default`) vraagt elke
+  uitgang al om minstens 50 ms, wat de buffergrootte ook is, zodat een drukke
+  computer niet te horen is; Instellingen toont het naast de latentie. Verhoog
+  op een oude of zwaarbelaste computer `shared_buffer_ms` in de sectie
+  `outputs` van het configuratiebestand (bijvoorbeeld naar 100). Het systeem
+  houdt ongeveer twee van die blokken in de wachtrij, dus cart- en
+  play-knoppen klinken dan ongeveer twee keer zo veel van de verhoging later.
+  Voor de on-air uitgang vermijdt het eigen hardware-item van het apparaat
+  (`hw:` op Linux) de geluidsserver helemaal.
 - Sta op Linux realtime scheduling toe. De applicatie vraagt het systeem erom
-  via rtkit (D-Bus). Lidmaatschap van de groep `audio` met een `rtprio`-limiet
-  werkt ook.
+  via rtkit (D-Bus), en het log noteert een weigering. Veel bureaubladen
+  weigeren het aan applicaties.
 - Vermijd netwerkschijven voor muziek die on air speelt.
+
+## De interface is traag op een oude computer {#the-interface-is-slow-on-an-old-computer}
+
+Terwijl er iets speelt, tekent de interface hooguit 30 beelden per seconde
+(`max_fps` in de sectie `ui` van het configuratiebestand), en klikken en
+toetsen worden meteen beantwoord. Verlaag het op een oude of drukke computer
+(bijvoorbeeld naar 20) om meer van de processor aan de audio over te laten; 0
+tekent elk beeld dat het scherm toont. De meters meten hetzelfde bij elke
+snelheid; ze worden alleen minder vaak getekend.
+
+## Bestanden kunnen op Linux niet worden neergezet {#files-cannot-be-dropped-on-linux}
+
+Het venster neemt bestanden die uit een bestandsbeheerder worden gesleept alleen
+aan wanneer het op X11 draait. Standaard doet het dat, ook op een
+Wayland-bureaublad (via XWayland, dat elk bureaublad heeft). Staat
+`ui.window_system` in `config.json` op `"Wayland"`, dan is het venster een
+native Wayland-venster, dat er bij fractionele schaling scherper uit kan zien,
+maar bestanden kunnen er niet op worden neergezet: gebruik in plaats daarvan
+**+ Toevoegen**. Zet het terug op `"Auto"` (de standaard) of `"X11"` en herstart
+Fauste Player.
+
+## Een MIDI-bedieningspaneel reageert niet {#a-midi-controller-does-not-respond}
+
+Toont **Instellingen → MIDI** het bedieningspaneel als verbonden, maar doen zijn
+knoppen en faders niets, druk daar dan op **Poorten opnieuw verbinden**: het
+programma sluit de MIDI-poorten en opent ze opnieuw, alsof je het
+bedieningspaneel loskoppelt en weer aansluit. Helpt dat niet, koppel het
+bedieningspaneel dan los en sluit het weer aan.
+
+In beide gevallen zegt het log wat er gebeurde. Het vermeldt de MIDI-poorten
+telkens als ze veranderen, elke poort die wordt geopend en gesloten (met
+waarom), een poort die niet kan worden geopend (eenmalig, totdat hij opent of
+verdwijnt), het eerste bericht dat op elke verbinding is ontvangen, het eerste
+bericht dat op elke verbinding is genegeerd met de reden (geen koppeling, een
+fader die het volume nog niet heeft bereikt, een actie die nu niet kan werken)
+en het eerste LED-bericht dat mislukte. Een verbonden bedieningspaneel dat nooit
+een eerste bericht logt, stuurt niets dat het programma ontvangt. Start het
+programma voor elk genegeerd bericht en elke mislukte nieuwe poging met
+`RUST_LOG=info,fp_control=debug`.
 
 ## “De interface had een fout” {#the-interface-hit-an-error}
 
@@ -144,6 +250,22 @@ Er is een tekenfout opgevangen. De audio wordt er niet door beïnvloed. Druk op
 ## Logbestanden en crashrapporten {#logs-and-crash-reports}
 
 Zie [Gegevens en back-ups](data-and-backups.md) voor de logmap. Er is één
-logbestand per dag, en de laatste 14 blijven bewaard. Crashrapporten worden
-opgeslagen als `crash-<tijd>.txt`. Zet `RUST_LOG=debug` in de omgeving voor
-meer detail. Voeg beide bestanden bij wanneer je een bug meldt.
+logbestand per dag. Identieke regels die direct na elkaar herhalen, worden
+eenmaal geschreven, gevolgd door een regel zoals `previous message repeated 12
+times` (tijdens een lange reeks herhalingen wordt die regel elke minuut
+geschreven). Regels die verschillen, bijvoorbeeld omdat ze een teller bevatten,
+worden niet samengevoegd. De routineuze verbindingsberichten van de
+PulseAudio-client worden standaard weggelaten. Zet `RUST_LOG=debug` in de
+omgeving voor meer detail (het vervangt het standaardfilter,
+`info,pulseaudio=warn`).
+
+Het log is begrensd: het bestand van een dag groeit niet verder dan 10 MiB (de
+laatste regel zegt dat; de rest van die dag wordt niet gelogd, wat een stroom
+van verschillende regels veroorzaakt) en de laatste 14 bestanden blijven
+bewaard. Wijzig ze in het configuratiebestand met `limits.max_log_file_mb` (1
+tot 1024), `limits.max_log_files` (2 tot 365) en
+`limits.log_repeat_summary_secs` (1 tot 3600, standaard 60, hoe vaak een lange
+reeks herhalingen wordt gemeld); ze gelden vanaf de volgende start.
+Crashrapporten worden in dezelfde map opgeslagen als `crash-<tijd>.txt` en
+hebben een eigen limiet (`limits.max_crash_reports` per run).
+Voeg beide bestanden bij wanneer je een bug meldt.

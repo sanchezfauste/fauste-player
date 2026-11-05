@@ -3,20 +3,29 @@
 Chaque colonne est un lecteur. Les lecteurs sont indépendants : chacun a ses
 propres onglets de playlist, son transport, son volume et ses sorties.
 
-![Le lecteur 1 à l'antenne : son en-tête, sa pochette, son titre, la piste suivante, le transport, le compte à rebours, le vumètre, le fader et la forme d'onde](../../images/guide/player.png)
+![Le lecteur 1 à l'antenne : son en-tête avec le gain de loudness, sa pochette, son titre, la piste suivante, le transport, le compte à rebours, le vumètre, le fader et la forme d'onde](../../images/guide/player.png)
 
 ## En-tête {#header}
 
 | Élément | Signification |
 |---|---|
 | `P1` … `Pn` | Numéro du lecteur (la touche numérique qui le lance) |
+| Boutons **Masquer** et **Agrandir** / **Restaurer** | Les deux petits boutons à l'extrémité droite de l'en-tête : masquer le lecteur, ou l'agrandir un instant (**Restaurer** tant qu'il est agrandi). Grisés tant que la disposition est verrouillée, **Masquer** sur le dernier panneau affiché et **Agrandir** quand un seul panneau est affiché (voir [Disposition](layout.md#maximize-a-panel)) |
 | Point d'état et libellé | **À l'antenne** (rouge), **En pause** (ambre), **Arrêté** (gris) |
-| Badge **Mix** / **Fondu** | Un fondu enchaîné vers la piste suivante, ou un stop en fondu, est en cours |
+| Colonnes étroites | Quand la colonne est trop étroite pour tous les badges, l'en-tête abandonne d'abord les moins importants (le texte d'état, puis **Autres coupées**, l'avis d'entrée, **Stop à la fin**, **Mix** / **Fondu**, le point d'état), si bien que rien ne se chevauche jamais. Le numéro du lecteur, **CUE**, le mode, **BP**, le badge de gain et les boutons **Masquer** et **Agrandir** restent toujours. Élargissez la colonne pour tous les voir |
+| Badge **Mix** / **Fondu** | Un fondu enchaîné vers la piste suivante, ou un stop en fondu, est en cours. **Mix** ne s'allume jamais sur un lecteur dont la sortie Main est bit-perfect : il n'enchaîne pas en fondu (voir [Ce que cela coûte](bit-perfect.md#what-it-costs)) |
 | Badge **Stop à la fin** | Le lecteur s'arrête quand la piste en cours se termine |
 | Badge **Répéter** / **Arrêt après** | La piste en cours se répète, ou arrête le lecteur à sa fin, à cause de sa propre marque dans le menu de la playlist. Survolez pour lire la phrase complète. Le bouton **Stop à la fin** du lecteur l'emporte : tant qu'il est activé, seul son badge s'affiche |
-| **BP** / **DSD** | **BP** est allumé tant que la piste en cours parvient intacte à son périphérique Main. **DSD** le remplace pendant qu'une piste DSD sort en DSD, intacte (voir [Sortie bit-perfect](bit-perfect.md)). **Autres coupées** s'affiche à côté quand ce flux DSD tient les autres sources à l'écart de la sortie |
+| Badge de gain | Avec la [normalisation du loudness](loudness.md#the-gain-in-the-player-header) activée, le gain avec lequel joue la piste à l'antenne (**+4.0 dB**), ou un **0.0 dB** ambre quand la piste joue telle quelle (pas encore de mesure, une sortie bit-perfect, ou une piste exclue de la normalisation). Survolez pour la raison. Affiché tant que le lecteur joue ou est en pause |
+| **BP** / **DSD** | Le badge ne s'affiche que sur un lecteur dont le périphérique Main fonctionne en bit-perfect ; **BP** est allumé tant que la piste en cours parvient intacte à son périphérique Main. **DSD** le remplace pendant qu'une piste DSD sort en DSD, intacte (voir [Sortie bit-perfect](bit-perfect.md)). **Autres coupées** s'affiche à côté quand ce flux DSD tient les autres sources à l'écart de la sortie |
 | **SINGLE** \| **CONT** | Mode de lecture (voir plus bas) : un contrôle d'un seul tenant, la moitié allumée est le mode actif |
 | **CUE** | Pré-écouter la piste suivante sur la sortie CUE |
+
+Les deux petits boutons à l'extrémité droite de l'en-tête, **Masquer** et
+**Agrandir** (ou **Restaurer**), masquent le lecteur ou l'agrandissent un
+instant ; les deux mêmes se trouvent dans le menu d'un clic droit sur le fond
+de l'en-tête (pas sur l'un de ses boutons) (voir
+[Disposition](layout.md#maximize-a-panel)).
 
 ## Rangée d'informations {#info-row}
 
@@ -93,9 +102,33 @@ propres onglets de playlist, son transport, son volume et ses sorties.
     - Rien dans le lecteur n'ajoute de gain au-dessus de 100 %. Un périphérique
       entier écrête à la pleine échelle ; un périphérique en virgule flottante
       reçoit le niveau tel quel et le système audio ou le pilote écrête.
-- **Fader de volume** (à droite du vumètre, de la même hauteur) : faites-le
-  glisser ou utilisez la molette de la souris, un pas par cran. L'infobulle
-  indique le niveau en dB ; le haut est 0 dB et le bas est le silence.
+- **Fader de volume** (à droite du vumètre, de la même hauteur). Il suit une
+  loi de table de mixage : il est fin près du haut et plus raide vers le bas,
+  si bien que le baisser un peu baisse un peu le niveau (90 % de la course
+  font environ −2,5 dB, 50 % environ −15,9 dB, 10 % environ −48 dB). Le haut
+  est 0 dB et le bas est le silence. Des repères en travers du fader marquent
+  0, −2, −4, −6, −8, −10, −12, −15, −20, −25, −30, −40, −50 et −∞ dB, avec le
+  niveau écrit à leur droite.
+  - Faites-le glisser : le fader se déplace d'autant que le pointeur, à partir
+    d'où il se trouve, si bien que l'attraper ne le fait jamais sauter ; un
+    clic sans déplacement ne change rien. Tirer au-delà du haut ou du bas puis
+    revenir laisse le bouton à l'extrémité jusqu'à ce que le pointeur revienne
+    à l'endroit qu'il avait atteint, si bien que le bouton ne se retrouve
+    jamais loin du pointeur.
+  - Utilisez la molette de la souris : un pas par cran (environ 0,6 dB près de
+    0 dB).
+  - Maintenez **Ctrl** ou **Shift** pendant le glissement ou la molette pour
+    le déplacer dix fois plus finement.
+  - Double-cliquez sur le bouton pour revenir à 0 dB (un double clic ailleurs
+    sur le fader ne fait rien).
+
+  Le niveau en dB (une décimale, ou −∞ pour le silence) est écrit sous le
+  fader, sur la même rangée que la ligne de loudness du vumètre, et l'infobulle
+  l'indique aussi. Une session enregistrée avant cette loi conserve le niveau
+  de chaque lecteur ; seule la position du fader change.
+  Sur un lecteur dont la sortie Main est bit-perfect, le fader est verrouillé
+  à 100 % et grisé, il affiche un 0.0 atténué, et son infobulle en donne la
+  raison (voir [Ce que cela coûte](bit-perfect.md#what-it-costs)).
 - **Titre, artiste** et la ligne de la **suivante**, avec un carré vert.
   Quand le CUE est activé, la position de pré-écoute s'affiche en bleu.
 
@@ -103,13 +136,17 @@ propres onglets de playlist, son transport, son volume et ses sorties.
 
 | Bouton | Action |
 |---|---|
-| **PLAY / SUIV.** (grand) | À l'arrêt : démarrer la piste suivante. À l'antenne : fondre dans la piste suivante (la durée du fondu se règle dans les [Paramètres](settings.md)). En pause : reprendre. Quand la piste à l'antenne est aussi la suivante, PLAY redémarre cette piste avec le fondu habituel. |
+| **PLAY / SUIV.** (grand) | À l'arrêt : démarrer la piste suivante. À l'antenne : fondre dans la piste suivante (la durée du fondu se règle dans les [Paramètres](settings.md)) ; pendant le fondu d'un enchaînement lancé par Suivante ou par un segue, une bande verte se vide à travers le bouton sur la durée du fondu, son bord allant de gauche à droite comme celui d'une cartouche (un enchaînement lancé par Précédente se vide plutôt sur le bouton Précédente). En pause : reprendre. Quand la piste à l'antenne est aussi la suivante, PLAY redémarre cette piste avec le fondu habituel. Sur une sortie bit-perfect, il bascule aussitôt, sans fondu, et son infobulle le dit (voir [Ce que cela coûte](bit-perfect.md#what-it-costs)). |
 | **Stop** | Arrêter aussitôt (avec une courte rampe anti-clic) |
-| **Stop en fondu** | Fondu sortant puis arrêt |
+| **Stop en fondu** | Fondu sortant puis arrêt. Pendant qu'un stop en fondu se déroule, une bande se vide à travers le bouton sur la durée du fondu, son bord allant de gauche à droite |
 | **Pause** | Mettre en pause ou reprendre ; clignote en ambre pendant la pause |
 | **Stop à la fin** (un triangle de lecture puis un carré) | S'arrêter quand la piste en cours se termine, une seule fois. En mode SINGLE, il n'est disponible que pendant que la piste en cours se répète : il met fin à la répétition quand le passage en cours se termine. Pour s'arrêter après une piste à chaque fois qu'elle est lue, ou pour répéter une piste, utilisez son menu dans la playlist (voir [Playlists](playlists.md)) |
-| **Précédente** (une barre et deux triangles) | À l'antenne : revenir en fondu vers la piste que ce lecteur a jouée avant, comme le fait Suivante. Appuyez de nouveau pour continuer à reculer. La piste que vous quittez devient la suivante. |
+| **Précédente** (une barre et deux triangles) | À l'antenne : revenir en fondu vers la piste que ce lecteur a jouée avant, comme le fait Suivante. Appuyez de nouveau pour continuer à reculer. La piste que vous quittez devient la suivante. Sur une sortie bit-perfect, il bascule aussitôt, sans fondu (voir [Ce que cela coûte](bit-perfect.md#what-it-costs)). |
 | **Reprendre au début** (une barre et un triangle) | Retour au début de la piste en cours (son cue-in). Un lecteur en pause reste en pause. |
+
+Au clavier, `Up` et `Down` déplacent la sélection dans la playlist, `Enter`
+définit la piste sélectionnée comme suivante, et un second `Enter` sur elle
+dans le délai d'un double clic la lit. Voir [Clavier](keyboard.md).
 
 Les boutons qui ne peuvent pas agir pour l'instant sont grisés : Stop et
 Reprendre au début quand rien n'est chargé, Pause et Stop en fondu à l'arrêt,
@@ -138,7 +175,9 @@ clignote en rouge.
 ## Forme d'onde {#waveform}
 
 - La partie déjà jouée est dessinée dans la couleur de la forme d'onde ; le
-  reste est plus pâle.
+  reste est plus pâle. Avec une couleur de forme d'onde violette, la ligne MIX
+  violette ressort moins ; choisissez une autre couleur de forme d'onde si
+  vous devez les distinguer.
 - Le contour montre les crêtes, en filigrane ; le corps plein à l'intérieur
   est le niveau moyen (RMS). Sur une piste forte, les crêtes remplissent la
   hauteur, et le corps montre encore où la piste est plus faible ou plus
@@ -147,8 +186,11 @@ clignote en rouge.
   L'intro ne s'affiche que lorsqu'elle a été définie.
 - Une zone ombrée orange à la fin marque l'**outro**, avec son propre compte à
   rebours.
-- Une ligne ambre en tirets avec une étiquette **MIX** marque l'endroit où la
-  piste suivante démarre en mode continu. Elle est atténuée en mode single.
+- Une ligne violette en tirets (la couleur du badge **Mix**, pour qu'on ne la
+  confonde pas avec l'outro orange) avec une étiquette **MIX** marque l'endroit
+  où la piste suivante démarre en mode continu. Elle est atténuée en mode
+  single, et sur un lecteur dont la sortie Main est bit-perfect, qui n'enchaîne
+  pas (voir [Ce que cela coûte](bit-perfect.md#what-it-costs)).
 - Le fichier entier est dessiné. Le début et la fin silencieux que la lecture
   ignore (avant le cue-in et après le cue-out) sont dessinés plus sombres,
   avec un trait fin là où la lecture commence et finit. Avec **Utiliser le
@@ -182,12 +224,30 @@ clignote en rouge.
 ## CUE (pré-écoute) {#cue-pre-listen}
 
 Appuyer sur **CUE** (ou sur **Pré-écouter sur le CUE** dans le menu d'une
-piste) joue la piste sur la sortie CUE du lecteur, par exemple un casque, sans
-toucher à la sortie d'antenne, et ouvre une petite **fenêtre CUE** pour ce
-lecteur. Plusieurs fenêtres peuvent être ouvertes, une par lecteur. Voir les
-[Paramètres](settings.md) pour choisir le périphérique CUE. Un lecteur a
-besoin d'une sortie Cue distincte de sa sortie Main : sans elle, **CUE** et
-**Pré-écouter sur le CUE** sont grisés, et les survoler l'indique.
+piste) joue la piste sur la sortie CUE du lecteur, par exemple un casque, et
+ouvre une petite **fenêtre CUE** pour ce lecteur. Plusieurs fenêtres peuvent
+être ouvertes, une par lecteur. Voir les [Paramètres](settings.md) pour
+choisir le périphérique CUE. Un lecteur a besoin d'une sortie Cue : sans elle,
+**CUE** et **Pré-écouter sur le CUE** sont grisés, et les survoler l'indique.
+
+Avec une seule carte son, la sortie Cue peut être la sortie d'antenne
+elle-même (ou la partager avec un autre lecteur ou le mur de cartouches). Une
+pré-écoute y est entendue à l'antenne, donc :
+
+- tant que rien ne joue sur cette sortie, le CUE démarre aussitôt ;
+- tant que quelque chose y joue (un lecteur en lecture ou en pause, une
+  cartouche, une autre pré-écoute, la pré-écoute de la bibliothèque), le CUE
+  demande d'abord : **Pré-écouter quand même** ou **Annuler** (Annuler est le
+  choix par défaut : Échap et Entrée annulent). La même question vient du menu
+  de la piste, de la fenêtre CUE, du mur de cartouches et de la fenêtre de la
+  bibliothèque ;
+- quand quelque chose démarre sur cette sortie pendant qu'y joue une
+  pré-écoute que vous n'avez pas confirmée, la pré-écoute s'arrête et la
+  barre d'état en donne la raison. Une pré-écoute que vous avez confirmée
+  continue de jouer.
+
+L'infobulle du bouton CUE indique quand sa pré-écoute sort sur la sortie
+d'antenne.
 
 ![La fenêtre CUE du lecteur 4, pré-écoutant sa piste suivante](../../images/guide/cue-window.png)
 

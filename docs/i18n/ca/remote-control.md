@@ -74,7 +74,9 @@ Un client pot:
   d'ona) i la cartutxera;
 - reproduir, posar en pausa, aturar, fer fos, reiniciar i tornar enrere;
 - triar l'entrada següent (també l'entrada en antena: es reprodueix una
-  vegada més), preescoltar i cercar (en un reproductor aturat, una cerca tria
+  vegada més), preescoltar (una preescolta que se sentiria a l'antena mentre
+  hi sona alguna cosa es refusa tret que la petició digui `"force": true`; vegeu
+  la referència de l'API) i cercar (en un reproductor aturat, una cerca tria
   on Play inicia l'entrada següent, i una cerca abans del seu cue-in comença
   al cue-in);
 - definir volums, modes, stop al final de l'actual, i les marques de
@@ -84,14 +86,43 @@ Un client pot:
 - editar: crear, canviar el nom i eliminar llistes; afegir una pista que ja és
   carregada, i treure, moure o duplicar entrades; crear, canviar el nom,
   canviar la mida i eliminar pàgines de cartutxos, i configurar un cartutx
-  amb una pista carregada; definir o restablir marcadors.
+  (nom, tipus, color, bucle, exclusiu) amb una pista carregada; definir o
+  restablir marcadors; excloure una pista de la [normalització de la
+  sonoritat](loudness.md) o ajustar-la.
 
 Treure el que és en antena es refusa, com a la pantalla. Els fitxers que
 encara no estan carregats no es poden afegir de manera remota: són en aquest
 ordinador, de manera que afegeix-los primer aquí.
 
-Un botó atenuat a la pantalla també es refusa de manera remota. La
-referència completa és a [la documentació tècnica](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
+Un botó atenuat a la pantalla també es refusa de manera remota.
+
+Un reproductor la sortida Main del qual és [bit perfect](bit-perfect.md#what-it-costs)
+continua funcionant de manera remota, amb els mateixos límits que a la
+pantalla: `play` i `previous` canvien a l'instant, sense fos encadenat, i el
+seu volum es manté al 100 %. Un volum per sota del 100 % es refusa (`409`, amb
+el motiu), i exactament el 100 % s'accepta. Cada reproductor diu si el seu
+volum és retingut (`fader_locked`).
+
+Un volum enviat com a posició de fader (el `fader` de l'API, l'OSC `/volume`)
+és una posició a l'escala pròpia del fader de la pantalla, de 0 (silenci) a 1
+(0 dB): 0,9 és uns −2,5 dB, 0,8 uns −5,3 dB i 0,5 uns −16 dB. Les versions
+anteriors feien servir una altra escala (0,8 era −12 dB, 0,5 era −30 dB), de
+manera que un script escrit per a elles ara estableix nivells més alts:
+comprova'n els valors.
+
+Cada pista porta la seva mesura de sonoritat (`loudness`, `null` fins que es
+mesura) i el seu ajust (`loudness_edit`: `excluded` i `trim_db`). Un reproductor
+que sona o és en pausa, i cada cartutx que sona, diu amb quin guany de
+[normalització](loudness.md) ha començat la seva pista i per què
+(`normalization`: `gain_db` i un `status` com `applied`, `not_measured` o
+`bit_perfect`). `PUT /api/v1/tracks/<id>/loudness` amb
+`{"excluded": false, "trim_db": -1.5}` canvia l'ajust, com fa la finestra
+**Sonoritat…**; un ajust més enllà de l'ajust màxim es refusa (`409`, amb el
+motiu). Els ajustos de normalització en si (activada o desactivada, l'objectiu,
+els límits) només es canvien en aquest ordinador. L'OSC i el MIDI no tenen
+controls de sonoritat.
+
+La referència completa és a [la documentació tècnica](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
 
 Prova-ho des d'un terminal:
 
@@ -137,6 +168,10 @@ subscriure en un minut (`subscription_ttl_secs`) per continuar rebent:
 
     oscdump 9000 &
     oscsend localhost 7381 /fauste/subscribe i 9000
+
+En un reproductor la sortida Main del qual és bit perfect, els missatges
+`/volume` es refusen (el registre ho anota) i el reproductor envia
+`/volume-locked` 1 als subscriptors (0 altrament).
 
 Un subscriptor pot indicar qualsevol port de la seva pròpia adreça, i se'n
 conserven fins a `max_subscribers`. Per tant, qualsevol que pugui enviar

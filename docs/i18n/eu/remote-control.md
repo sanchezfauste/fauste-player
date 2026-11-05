@@ -76,7 +76,7 @@ Bezero batek hau egin dezake:
   eta kartutxo-panela irakurri;
 - jo, pausatu, gelditu, itzali, berrabiarazi eta atzera egin;
 - hurrengo sarrera aukeratu (airean dagoen sarrera ere bai: beste behin
-  jotzen da), aurrez entzun, eta jauzi egin (geldituta dagoen
+  jotzen da), aurrez entzun (airean entzungo litzatekeen aurrez entzute bat, han zerbait jotzen ari den bitartean, baztertu egiten da eskaerak `"force": true` esaten ez badu; ikus API erreferentzia), eta jauzi egin (geldituta dagoen
   erreproduzitzaile batean, jauzi batek Play-k hurrengo sarrera non hasiko
   duen aukeratzen du, eta bere cue-in aurreko jauzi bat cue-in puntuan
   hasten da);
@@ -87,14 +87,44 @@ Bezero batek hau egin dezake:
 - editatu: zerrendak sortu, izenez aldatu eta ezabatu; jada kargatuta
   dagoen pista bat gehitu, eta sarrerak kendu, mugitu edo bikoiztu;
   kartutxo-orriak sortu, izenez aldatu, tamainaz aldatu eta ezabatu, eta
-  kartutxo bat kargatutako pista batekin konfiguratu; markatzaileak ezarri
-  edo berrezarri.
+  kartutxo bat kargatutako pista batekin konfiguratu (izena, mota, kolorea,
+  begizta, esklusiboa); markatzaileak ezarri edo berrezarri; pista bat
+  [ozentasun-normalizaziotik](loudness.md) kanpo utzi edo doitu.
 
 Airean dagoena kentzea baztertu egiten da, pantailan bezala. Oraindik
 kargatu ez diren fitxategiak ezin dira urrunetik gehitu: ordenagailu honetan
 daude, beraz gehitu hemen lehenik.
 
 Pantailan grisez dagoen botoi bat urrunetik ere baztertu egiten da.
+
+Main irteera [bit perfect](bit-perfect.md#what-it-costs) duen
+erreproduzitzaile batek urrunetik funtzionatzen jarraitzen du, pantailako
+muga berekin: `play` eta `previous` berehala aldatzen dira, gurutzaketarik
+gabe, eta bere bolumena % 100ean finkatuta dago. % 100etik beherako bolumen
+bat baztertu egiten da (`409`, arrazoiarekin), eta zehazki % 100 onartzen da.
+Erreproduzitzaile bakoitzak dio bere bolumena finkatuta dagoen
+(`fader_locked`).
+
+Fader-posizio gisa bidalitako bolumen bat (APIaren `fader`, OSC `/volume`)
+pantailako faderraren eskala propioko posizio bat da, 0tik (isiltasuna) 1era
+(0 dB): 0,9 gutxi gorabehera −2,5 dB da, 0,8 −5,3 dB eta 0,5 −16 dB.
+Aurreko bertsioek beste eskala bat erabiltzen zuten (0,8 −12 dB zen, 0,5 −30
+dB), beraz haientzat idatzitako script batek orain maila ozenagoak ezartzen
+ditu: egiaztatu bere balioak.
+
+Pista bakoitzak bere ozentasun-neurketa darama (`loudness`, `null` neurtu
+arte) eta bere ezarpena (`loudness_edit`: `excluded` eta `trim_db`). Jotzen
+edo pausan dagoen erreproduzitzaile batek, eta jotzen ari den kartutxo
+bakoitzak, esaten du bere pistak zein [normalizazio](loudness.md)-irabazirekin
+hasi zen eta zergatik (`normalization`: `gain_db` eta `status` bat, hala nola
+`applied`, `not_measured` edo `bit_perfect`).
+`PUT /api/v1/tracks/<id>/loudness` eskaerak, `{"excluded": false, "trim_db":
+-1.5}` gorputzarekin, ezarpena aldatzen du, **Ozentasuna…** leiho txikiak
+bezala; gehieneko doikuntza gainditzen duen doikuntza bat baztertu egiten da
+(`409`, arrazoiarekin). Normalizazioaren ezarpenak berak (aktibo edo ez,
+helburua, mugak) ordenagailu honetan bakarrik aldatzen dira. OSC-k eta MIDIk
+ez dute ozentasun-kontrolik.
+
 Erreferentzia osoa [dokumentazio teknikoan](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md)
 dago.
 
@@ -149,6 +179,10 @@ Harpidedun batek bere helbideko edozein ataka izenda dezake, eta gehienez
 `max_subscribers` gordetzen dira. Beraz, bidaltzeko baimena duen edonork
 harpidetu ere egin daiteke. Hori beste arrazoi bat da OSC sare fidagarri
 batean mantentzeko.
+
+Main irteera bit perfect duen erreproduzitzaile batean, `/volume` mezuak
+baztertu egiten dira (erregistroak aipatzen du) eta erreproduzitzaileak
+`/volume-locked` 1 bidaltzen die harpidedunei (0 bestela).
 
 `oscsend` eta `oscdump` liblo-rekin datoz (`liblo-tools` Debian eta
 Ubuntun). Helbideen zerrenda osoa

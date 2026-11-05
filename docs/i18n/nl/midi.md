@@ -19,6 +19,9 @@ naar zijn eigen poorten. Controllers kunnen worden aan- of losgekoppeld terwijl
 het programma draait: om de paar seconden wordt opnieuw naar de poorten
 gezocht, en een controller die terugkomt wordt op naam verbonden, met zijn
 lampjes opnieuw ingesteld.
+**Poorten opnieuw verbinden** sluit elke poort en opent hem opnieuw zonder de
+kabel aan te raken (zie
+[Problemen oplossen](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 Op Linux loopt MIDI via ALSA: je gebruiker moet de sequencer mogen openen
 (`/dev/snd/seq`, meestal doordat hij in de groep `audio` zit).
@@ -46,13 +49,22 @@ verwijdert een koppeling.
 - Een knop werkt zodra hij wordt ingedrukt (een toets of pad dat omlaag gaat,
   of een control change die door het midden van zijn bereik omhoog gaat),
   precies als de knop van de speler op het scherm. Een knop die op het scherm
-  gedimd is, doet niets.
-- Een fader verandert het volume op dezelfde schaal als de fader op het
-  scherm. Om sprongen te vermijden neemt hij pas over wanneer hij het huidige
+  gedimd is, doet niets. Een **CUE**-knop doet ook niets wanneer zijn
+  voorbeluistering on air te horen zou zijn terwijl daar iets speelt: MIDI kan
+  de vraag die het scherm stelt niet beantwoorden. Een voorbeluistering
+  stoppen werkt altijd.
+- Een fader verandert het volume op dezelfde schaal (dezelfde mengtafelcurve)
+  als de fader op het scherm. Om sprongen te vermijden neemt hij pas over wanneer hij het huidige
   volume bereikt of passeert (soft takeover); wordt het volume op het scherm
   gewijzigd, dan moet de fader het weer inhalen. Er verandert niets totdat je
   een bedieningselement beweegt: het programma starten brengt nooit iets on
   air.
+- Een volumekoppeling van een speler waarvan de hoofduitgang
+  [bit-perfect](bit-perfect.md#what-it-costs) is, doet niets: het volume wordt
+  op 100 % gehouden. Zodra de uitgang niet meer bit-perfect is, zet je het
+  bedieningselement helemaal omhoog om het volume weer op te pakken.
+- Play/Volgende en Vorige op zo'n speler schakelen meteen om, zonder
+  crossfade. Hun lampjes werken zoals gewoonlijk.
 - Met **Knoppen laten oplichten (LED-feedback)** aan lichten gekoppelde
   knoppen op: Play terwijl de speler on air is, Pauze knipperend terwijl hij
   gepauzeerd is, CUE tijdens het voorbeluisteren, en Stop, Uitfaden, Opnieuw

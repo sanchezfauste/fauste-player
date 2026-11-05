@@ -2,7 +2,10 @@
 
 ## Instalazioa {#install}
 
-Deskargatu zure sistemarako pakete bat proiektuaren **Releases** orritik.
+Windowsen, Fauste Player **Microsoft Store**-n dago
+(<https://apps.microsoft.com/detail/9NH4KCL73463>), eta Linuxen **Snap
+Store**-n (<https://snapcraft.io/fauste-player>). Edo deskargatu zure
+sistemarako pakete bat proiektuaren **Releases** orritik.
 Fitxategi bakoitzak `.sha256` bat du ondoan. Deskarga bat egiaztatzeko,
 exekutatu `sha256sum -c <file>.sha256` Linuxen, edo
 `shasum -a 256 -c <file>.sha256` macOSen.
@@ -11,10 +14,11 @@ exekutatu `sha256sum -c <file>.sha256` Linuxen, edo
 
 | Paketea | Instalatu | Eguneratu | Kendu |
 |---|---|---|---|
+| Snap (Snap Store) | `sudo snap install fauste-player` | automatikoa (`sudo snap refresh fauste-player` orain eguneratzeko) | `sudo snap remove fauste-player` |
 | `.deb` (Debian, Ubuntu) | `sudo apt install ./fauste-player_<version>_amd64.deb` | instalatu `.deb` berriagoa modu berean | `sudo apt remove fauste-player` |
 | `.rpm` (Fedora, openSUSE) | `sudo dnf install ./fauste-player-<version>-1.x86_64.rpm` | instalatu `.rpm` berriagoa | `sudo dnf remove fauste-player` |
 | AppImage (edozein banaketa) | `chmod +x fauste-player-<version>-x86_64.AppImage`, eta exekutatu | ordeztu fitxategia | ezabatu fitxategia |
-| Flatpak paketea | `flatpak install --user fauste-player-<version>-x86_64.flatpak` | instalatu pakete berriagoa | `flatpak uninstall org.fauste.FaustePlayer` |
+| Flatpak paketea | `flatpak install --user fauste-player-<version>-x86_64.flatpak` | instalatu pakete berriagoa | `flatpak uninstall com.sanchezfauste.FaustePlayer` |
 | Artxibo konprimitua | erauzi eta exekutatu `fauste-player` | erauzi berriagoa | ezabatu karpeta |
 
 - **Mahaigainarekiko integrazioa:** paketeek **Fauste Player** gehitzen
@@ -26,6 +30,24 @@ exekutatu `sha256sum -c <file>.sha256` Linuxen, edo
   dagoenean erabiltzen da, eta ez da inoiz derrigorrezkoa.
 - **AppImage:** FUSE falta delako abiarazten ez bada, exekutatu
   `--appimage-extract-and-run` aukerarekin.
+- **Snap:** snap-a sandbox batean exekutatzen da. Berez zure karpeta
+  pertsonala irakurtzen du (ezkutuko fitxategiak eta karpetak izan ezik),
+  PulseAudio edo PipeWire bidez entzuten da, eta sarea erabil dezake
+  urruneko kontrolaren APIrako eta OSCrako (biak desaktibatuta daude zuk
+  aktibatu arte). Bi eginbidek behin ematen duzun baimen bat behar dute,
+  terminal batetik:
+  - Bit perfect irteera ALSA `hw:` gailuetan, eta MIDI kontrol-gainazalak:
+    `sudo snap connect fauste-player:alsa`.
+  - USB unitateetako eta beste disko batzuetako musika (`/media`,
+    `/run/media`, `/mnt`): `sudo snap connect fauste-player:removable-media`.
+
+  `snap connections fauste-player` komandoak zer dagoen konektatuta erakusten
+  du. Berrabiarazi Fauste Player konektatu ondoren. Beste leku batzuetako
+  musika (zure karpeta pertsonaletik eta hiru horietatik kanpo) ezin du
+  snap-ak irakurri: erabili beste pakete bat horretarako. JACK ez dago
+  snap-ean erabilgarri. Bere ezarpenak eta zerrendak
+  `~/snap/fauste-player/` karpetan gordetzen dira (ikus
+  [Datuak eta babeskopiak](data-and-backups.md)).
 - **Flatpak:**
   - Paketeak Flathub-eko freedesktop runtimea behar du. Flathub urruneko
     biltegia konfiguratuta ez badago, exekutatu lehenik
@@ -34,6 +56,14 @@ exekutatu `sha256sum -c <file>.sha256` Linuxen, edo
     lekuan erreproduzitzeko).
   - PulseAudio bidez entzuten da, edo zuzenean ALSA bidez bit perfect
     gailuetarako.
+  - Sarea erabil dezake, urruneko kontrolaren APIrako eta OSCrako (biak
+    desaktibatuta daude zuk aktibatu arte).
+  - 0.10 arteko bundleak `org.fauste.FaustePlayer` gisa instalatzen ziren, eta
+    berriagoak `com.sanchezfauste.FaustePlayer` gisa instalatzen dira, aplikazio
+    bereizi bat. Zure ezarpenak, zerrendak eta kartutxoak mantentzeko, itxi
+    aplikazioa eta exekutatu
+    `mv ~/.var/app/org.fauste.FaustePlayer ~/.var/app/com.sanchezfauste.FaustePlayer`
+    berria abiarazi aurretik, eta gero `flatpak uninstall org.fauste.FaustePlayer`.
 - **Mahaigaineko liburutegiak:** leihoak libxkbcommon eta EGL edo OpenGL
   erabiltzen ditu, Wayland edo X11rekin. Mahaigain guztiek dituzte, eta
   `.deb` eta `.rpm` paketeek adierazten dituzte. Sistema oso minimo batean,
@@ -41,7 +71,12 @@ exekutatu `sha256sum -c <file>.sha256` Linuxen, edo
 
 ### Windows {#windows}
 
-Exekutatu `fauste-player-<version>-x86_64-pc-windows-msvc.msi`. Erabiltzaile
+Modurik errazena **Microsoft Store** da: bilatu *Fauste Player*, edo ireki
+<https://apps.microsoft.com/detail/9NH4KCL73463>, eta aukeratu **Eskuratu**.
+Store-k eguneratuta mantentzen du, eta **Ezarpenak → Aplikazioak** atalak
+kentzen du.
+
+Edo exekutatu `fauste-player-<version>-x86_64-pc-windows-msvc.msi`. Erabiltzaile
 guztientzat instalatzen da *Program Files* karpetan, eta sarrera bat
 gehitzen dio Hasiera menuari.
 - **Eguneratzea:** exekutatu instalatzaile berriagoa. Instalatutako bertsioa
@@ -91,11 +126,12 @@ ordenagailu bakarrean), eman bakoitzari bere karpeta `FAUSTE_HOME` bidez.
 `fauste-player --version` komandoak bertsioa inprimatzen du. Leihoaren
 titulu-barrak izena eta bertsioa erakusten ditu, eta **Fauste Player-i
 buruz** botoiak (informazio-ikono bat, **Ezarpenak** botoiaren ezkerrean)
-**Fauste Player-i buruz** leihoa irekitzen du, copyrightarekin eta
-lizentzia-oharrekin (**Hirugarrenen lizentziak** botoiak argitalpen-paketeekin
-instalatzen den oharren fitxategia irekitzen du). AArekin itzulitako
-hizkuntza batean, leiho horrek itzulpenak akatsak izan ditzakeela ere
-adierazten du. Itxi **Itxi** botoiarekin edo `Esc` teklarekin.
+**Fauste Player-i buruz** leihoa irekitzen du, egilearekin,
+copyrightarekin, lizentziarekin (GNU GPL 3. bertsioa edo ondorengoa;
+**Irakurri lizentzia sarean** botoiak bere testua irekitzen du),
+erantzukizun-ukapen labur batekin eta lizentzia-oharrekin
+(**Hirugarrenen lizentziak** botoiak argitalpen-paketeekin instalatzen den
+oharren fitxategia irekitzen du). Itxi **Itxi** botoiarekin edo `Esc` teklarekin.
 `fauste-player --help` komandoak aukerak zerrendatzen ditu. Argumentu gisa
 emandako zerrenda-fitxategiak zerrenda berri gisa inportatzen dira.
 
@@ -105,9 +141,9 @@ Windowsen, argitalpeneko programak ez du kontsola-leihorik irekitzen:
 `--version`, `--help` eta abiaraztean gertatutako erroreak mezu-koadro
 batean agertzen dira.
 
-Ezarpen batek berrabiaraztea behar duenean, **Berrabiaraztea falta da**
-pilula bat agertzen da goiko barran: sakatu berrabiarazteko (ikus
-[Ezarpenak](settings.md#restart-pending)).
+Irteeren aldaketa batek airean dagoen zerbaiten zain egon behar duenean,
+**Zain dauden ezarpenak** pilula bat agertzen da goiko barran; zerk egiten
+duen zain adierazten du (ikus [Ezarpenak](settings.md#settings-pending)).
 
 ### Audioa airean dagoela ixtea {#closing-while-audio-is-on-air}
 
@@ -146,13 +182,31 @@ konfiguratutako bit perfect gailu batean (ikus
 [Bit perfect irteera](bit-perfect.md#dsd)). Opus beti 48 kHz-ean entzuten
 da. WavPack fitxategiek galerarik gabekoak eta mono edo estereo izan behar
 dute; WavPack hibridoak eta kanal anitzekoak irakurtezin gisa agertzen dira,
-baita DST bidez konprimitutako DFF fitxategiak ere.
+baita DST bidez konprimitutako DFF fitxategiak ere. Audioaren ordez DTS (edo
+beste surround kodetu bat) bitstream bat duen WAV edo FLAC batek ere
+irakurtezin gisa agertzen da, DTS-CD ripping batzuetan bezala (erregistroak
+arrazoia ematen du): bihurtu lehenik PCM arrunt batera.
+
+Surround fitxategiak (quad, 5.1, 6.1, 7.1 eta zortzi kanalera arteko beste
+diseinu batzuk) estereora nahastuta jotzen dira, kanal bakoitzaren
+posizioaren arabera: aurreko ezkerra eta eskuina beren aldean geratzen dira,
+erdikoa eta atzeko erdikoa bi aldeetara doaz, albo- eta atzeko kanalak beren
+aldera doaz, eta LFE (subwoofer) kanala baztertu egiten da. Kanal anitzeko
+Opus eta AAC fitxategiak ezin dira irakurri eta irakurtezin gisa agertzen dira.
 
 Fitxategi bakoitza atzeko planoan aztertzen da. Analisiak izenburua,
 artista, albuma eta azaleko irudia irakurtzen ditu, uhin-forma marrazten
 du, eta soinua non hasten eta amaitzen den eta hurrengo pistarekin non
 nahastu aurkitzen du. Pista bat erreproduzi dezakezu bere analisia amaitu
-aurretik.
+aurretik. Fitxategiak aztertzen ari diren bitartean, egoera-barraren
+eskuinaldeak zenbat diren esaten du (**12 pista aztertzen**); pasatu sagua
+gainetik orain aztertzen ari diren fitxategiak, zenbat dauden zain eta,
+**Berriro aztertu pista guztiak** egiten ari den bitartean, zenbat egin den
+ikusteko. Kolore-legenda haren eskuinean dago; leihoa estua denean, legendako
+elementuak ezkutatzen dira lehenik, gero elementu hau, egoera-barraren
+ezkerreko abisu bat irakurgarri geratzeko. Ozentasun-neurketak bakarrik
+exekutatzen ari direnean (ikus [Ozentasuna](loudness.md)), **N pistaren
+ozentasuna neurtzen** dio.
 
 ## Erreproduzitu {#play}
 

@@ -18,11 +18,26 @@ Canviar de pestanya mai no canvia el que és en antena ni el que és següent.
 Quan una pista acaba, el reproductor continua a la llista que conté aquesta
 pista.
 
-Les llistes es creen, se'ls canvia el nom i s'eliminen a
+El **+** a l'extrem dret de la fila crea una llista nova: escriu un nom i prem
+Enter o **Crea** (Escape o un clic a fora cancel·la). La llista nova apareix de
+seguida a les pestanyes d'aquell reproductor i el reproductor la mostra. Les
+llistes també es poden crear, i se'ls canvia el nom i s'eliminen, a
 [Configuració](settings.md). L'última llista, i una llista amb una pista en
 antena, no es poden eliminar.
 
 ## La taula de pistes {#the-track-table}
+
+Cada fitxer que afegeixes a una llista, a un cartutx o important un fitxer M3U
+o PLS esdevé una *pista* de la biblioteca, i hi continua quan en treus l'entrada,
+buides el cartutx o elimines la llista: els seus marcadors, ajustos de
+sonoritat i etiquetes es conserven per a la propera vegada que afegeixis el
+fitxer. El mateix fitxer sempre és una sola pista: afegir-lo dues vegades, o a
+una llista i a un cartutx, comparteix els seus marcadors i ajustos de sonoritat
+arreu. A l'escriptori, un fitxer afegit a partir d'aquesta versió és la mateixa
+pista sigui quin sigui el camí que hi arribi (un enllaç simbòlic o un `..` al
+camí no en fan una segona pista). L'única excepció: una pista que no té
+categoria, el fitxer de la qual ha desaparegut i que ja no fa servir res surt
+de la biblioteca per si sola, amb una línia al registre.
 
 ![Una llista: pistes reproduïdes atenuades, la pista en antena en vermell, la pista següent en verd, i el peu amb el temps que queda](../../images/guide/playlist.png)
 
@@ -37,6 +52,7 @@ antena, no es poden eliminar.
 | Dur. | Durada de reproducció, del cue-in al cue-out (tot el fitxer amb **Usar cue-in i cue-out** desactivat) |
 | Intro | Quant dura la intro, des d'on la pista comença a sonar fins al seu marcador d'intro; buida quan la pista no té marcador d'intro |
 | Fitxer | El nom del fitxer, amb la seva extensió |
+| Comentari | L'etiqueta de comentari, en una sola línia |
 
 Una instal·lació nova mostra `#`, Títol, Artista i Dur. Les altres columnes
 són opcionals; vegeu **Triar les columnes** més avall. Una pista que no té un
@@ -102,12 +118,14 @@ Colors de les files:
 | **P2** vermell (o un altre número) a la columna del número | En antena en aquell reproductor |
 | **Verda**, amb una fletxa | La pista següent d'aquest reproductor |
 | Atenuada | Ja reproduïda en aquest reproductor |
+| Contorn lavanda | La fila seleccionada (fes-hi clic, o mou-te amb Up i Down). També es mostra a les files vermelles i verdes |
 | Fitxer amb una icona de creu / advertència | Fitxer que falta / il·legible (se salta); posa-hi el ratolí a sobre: la finestra emergent comença amb el motiu, en ambre, i després els camps habituals. Un fitxer que falta es torna a buscar cada 30 s (`tuning.missing_recheck_ms`). |
 | Fletxes de recàrrega a la dreta del títol | Analitzada per una versió anterior; encara es reprodueix amb aquesta anàlisi. **Configuració → Anàlisi → Analitzar les pistes desactualitzades** l'actualitza (les pistes d'un reproductor s'actualitzen igualment) |
-| Rellotge de sorra a la dreta del títol | La pista espera la seva anàlisi (posa-hi el ratolí a sobre: *Anàlisi pendent*). Es reprodueix igualment, i el rellotge de sorra desapareix quan acaba l'anàlisi |
+| Rellotge de sorra a la dreta del títol | La pista espera la seva anàlisi: *En espera d'anàlisi* quan és a la cua, *Anàlisi pendent* quan encara no s'hi ha posat. Es reprodueix igualment, i el rellotge de sorra desapareix quan acaba l'anàlisi. Una pista analitzada que es torna a posar a la cua (per **Tornar a analitzar totes les pistes**) també el mostra |
+| Icona d'ona a la dreta del títol | La pista s'està analitzant ara (*S'està analitzant ara*) |
 | Violeta | Seleccionada |
 
-**Informació emergent de la pista.** Posa-hi el ratolí a sobre d'una fila un moment per veure'n el títol, l'artista, l'àlbum, la data, el gènere, la durada, el format (tipus, freqüència de mostreig i profunditat de bits quan es coneixen) i el camí del fitxer. Un camp que el fitxer no té s'omet. La finestra emergent és l'única informació en passar el ratolí sobre una fila, i no es mou mai mentre es mostra. Per a un fitxer que falta o és il·legible, comença amb el motiu.
+**Informació emergent de la pista.** Posa-hi el ratolí a sobre d'una fila un moment per veure'n el títol, l'artista, l'àlbum, la data, el gènere, la durada, el format (tipus, freqüència de mostreig, profunditat de bits i taxa de bits mitjana, per exemple 320 kbps, quan es coneixen) i el camí del fitxer. Un camp que el fitxer no té s'omet. La finestra emergent és l'única informació en passar el ratolí sobre una fila, i no es mou mai mentre es mostra. Per a un fitxer que falta o és il·legible, comença amb el motiu.
 
 ## Ratolí {#mouse}
 
@@ -122,15 +140,18 @@ Colors de les files:
 |---|---|
 | Reproduir ara | Inicia aquesta pista a l'instant (mesclant si el reproductor és en antena) |
 | Marcar com a següent | El mateix que el doble clic. En la pista en antena, es reprodueix una vegada més, des del principi, quan acabi la passada actual (mesclant com Repetir, sense pausa), i després el reproductor continua. Actua una sola vegada. Stop al final, el mode SINGLE i una marca de Stop al final encara aturen primer el reproductor. Mentre un CUE està en marxa, es mou a la nova pista següent |
-| Preescoltar al CUE | La reprodueix a la sortida CUE (obre la finestra de CUE). Atenuat quan el reproductor no té una sortida Cue apart de la seva sortida Main |
+| Preescoltar al CUE | La reprodueix a la sortida CUE (obre la finestra de CUE). Atenuat quan el reproductor no té sortida Cue. A la sortida d'antena pregunta primer mentre hi sona alguna cosa (vegeu [CUE](players.md#cue-pre-listen)) |
 | Editar les etiquetes… | Obre l'editor d'etiquetes d'aquesta pista. **Desar** escriu els canvis al fitxer d'àudio; **Cancel·lar** (o Esc, quan no hi ha cap desament en curs) tanca sense escriure. L'element apareix atenuat, amb el motiu en posar-hi el ratolí a sobre, mentre la pista és en antena, al CUE o en un cartutx que sona, mentre encara no s'han llegit les seves etiquetes, quan el fitxer falta, i per a formats les etiquetes dels quals no es poden escriure (per exemple DSD) |
-| Tornar a analitzar | Analitza aquesta pista de nou ara, sigui quin sigui el seu estat. Un fitxer il·legible que s'ha arreglat també es recull per si sol (vegeu [Resolució de problemes](troubleshooting.md)). Els marcadors manuals es conserven |
+| Tornar a analitzar | Analitza aquesta pista de nou ara, sigui quin sigui el seu estat, llegint el fitxer de nou (de manera que un fitxer que has editat es torna a mesurar encara que la seva mida i data no hagin canviat). Un fitxer il·legible que s'ha arreglat també es recull per si sol (vegeu [Resolució de problemes](troubleshooting.md)). Els marcadors manuals es conserven. Atenuat, amb el motiu en posar-hi el ratolí a sobre, mentre la pista ja espera la seva anàlisi o s'està analitzant |
+| Sonoritat… | Obre la finestra de sonoritat d'aquesta pista (ajust i exclusió; vegeu [Normalització de la sonoritat](loudness.md)) |
+| Mostra a la biblioteca | Obre la [finestra de la biblioteca](library.md) a la categoria d'aquesta pista amb la seva fila seleccionada. Només a l'escriptori |
+| Mou a la categoria ▸ | Arxiva la pista en una categoria, o a Sense categoria, sense obrir la biblioteca. Només a l'escriptori |
 | Afegir pistes a sota… | Tria fitxers per inserir-los després d'aquesta pista |
 | Duplicar | Insereix a sota una còpia sense reproduir (amb les seves marques de repetició i de stop al final) |
 | Repetir aquesta pista | Marca-ho per reproduir-la una vegada i una altra, sense pausa, fins que prems Play (següent), Anterior, Stop o Stop amb fos, o actives Stop al final. Pausa continua la repetició. Una icona de repetició apareix davant del títol |
 | Aturar després d'aquesta pista | Marca-ho per aturar el reproductor quan acabi aquesta pista, cada vegada que es reprodueix (en qualsevol mode). A diferència del botó **Stop al final** del reproductor, la marca es queda amb la pista i es desa amb la llista. La icona de stop al final apareix davant del títol. Té prioritat sobre Repetir |
 | Moure a ▸ | La mou al final d'una altra llista |
-| Treure de la llista | La treu; no és possible mentre és en antena |
+| Treure de la llista | La treu d'aquesta llista; no és possible mentre és en antena. La pista es queda a la biblioteca (els seus marcadors i ajustos de sonoritat es conserven) |
 
 ## Editar etiquetes {#editing-tags}
 
@@ -229,7 +250,13 @@ de l'aplicació s'ignoren.
   per inserir-los a la posició on els deixes. Sobre la capçalera, la vora
   d'una columna, la barra de desplaçament o una finestra que cobreix la
   llista no s'insereix res. Si el sistema no informa de la posició, van al
-  final de la llista mostrada.
+  final de la llista mostrada per l'últim reproductor que has fet servir, o pel
+  primer reproductor mostrat; amb tots els reproductors amagats no
+  s'insereix res i la barra d'estat ho diu (vegeu
+  [Disposició](layout.md#show-and-hide-panels)).
+  A Linux, deixar anar fitxers necessita que la finestra s'executi sobre X11,
+  cosa que fa per defecte, també en un escriptori Wayland (vegeu [Resolució de
+  problemes](troubleshooting.md#files-cannot-be-dropped-on-linux)).
 
 ## Peu {#footer}
 

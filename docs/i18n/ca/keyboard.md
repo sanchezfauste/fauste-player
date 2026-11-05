@@ -5,7 +5,9 @@
 | `1` … `9` | Play als reproductors 1–9 (el mateix que el seu botó Play) |
 | `F1` … `F12` | Dispara els cartutxos 1–12 de la pàgina de cartutxos mostrada |
 | `Ctrl+Space` | Atura tots els cartutxos, i el CUE dels cartutxos (el botó **Aturar-ho tot** de la cartutxera) |
-| `Delete` / `Backspace` | Treu la pista seleccionada de la llista mostrada (no mentre és en antena) |
+| `Up` / `Down` | Mou la selecció per la llista mostrada pel reproductor que has fet servir per últim cop (el primer reproductor mostrat a l'inici), desplaçant la fila fins que es vegi. Sense cap selecció, la primera pulsació selecciona la pista següent del reproductor, o la primera pista |
+| `Enter` | Estableix la pista seleccionada com a pista següent del reproductor. Prem `Enter` una segona vegada sobre la mateixa pista dins del temps d'un doble clic (el retard de doble clic del sistema) per reproduir-la, com fa la drecera de Play del reproductor. Una altra tecla, un clic o un canvi de selecció pel mig, o una espera més llarga, fan que torni a ser un primer `Enter` |
+| `Delete` / `Backspace` | Treu la pista seleccionada de la llista mostrada (no mentre és en antena). Amagar un reproductor n'esborra la selecció |
 | `Esc` | Tanca els menús i Configuració; cancel·la el diàleg «Hi ha àudio en antena»; esborra la selecció |
 
 - Mantenir una tecla premuda no la repeteix: un `1` mantingut prem Play una
@@ -37,4 +39,4 @@ a cada reproductor i cartutx:
 - mostrar o amagar la cartutxera;
 - pàgina de cartutxos següent o anterior.
 
-`Delete`, `Backspace` i `Esc` no es poden canviar.
+`Delete`, `Backspace` i `Esc` no es poden canviar. `Up`, `Down` i `Enter` a la llista només funcionen quan cap drecera no els utilitza i cap botó ni control lliscant té el focus del teclat.

@@ -5,7 +5,9 @@
 | `1` … `9` | Play op speler 1–9 (hetzelfde als hun Play-knop) |
 | `F1` … `F12` | Cart 1–12 van de getoonde cartpagina starten |
 | `Ctrl+Space` | Alle carts stoppen, en de cart-CUE (de knop **Alles stoppen** van de cartwall) |
-| `Delete` / `Backspace` | Het geselecteerde nummer uit de getoonde playlist verwijderen (niet zolang het on air is) |
+| `Up` / `Down` | De selectie verplaatsen door de playlist die wordt getoond door de speler die je het laatst gebruikte (bij het starten de eerste getoonde speler), waarbij de rij in beeld wordt gescrolld. Als niets is geselecteerd, selecteert de eerste druk het volgende nummer van de speler, of het eerste nummer |
+| `Enter` | Het geselecteerde nummer instellen als volgend nummer van de speler. Druk binnen de tijd van een dubbelklik (de dubbelklikvertraging van het systeem) een tweede keer op `Enter` op hetzelfde nummer om het af te spelen, zoals de Play-sneltoets van de speler doet. Een andere toets, een klik of een wijziging van de selectie ertussen, of een langere wachttijd, maakt er weer een eerste `Enter` van |
+| `Delete` / `Backspace` | Het geselecteerde nummer uit de getoonde playlist verwijderen (niet zolang het on air is). Een speler verbergen wist zijn selectie |
 | `Esc` | Menu’s en Instellingen sluiten; de dialoog “Er is audio on air” annuleren; de selectie wissen |
 
 - Een ingedrukt gehouden toets herhaalt niet: een ingedrukt gehouden `1`
@@ -38,4 +40,4 @@ Beschikbare acties, voor elke speler en cart:
 - de cartwall tonen of verbergen;
 - volgende of vorige cartpagina.
 
-`Delete`, `Backspace` en `Esc` kunnen niet worden gewijzigd.
+`Delete`, `Backspace` en `Esc` kunnen niet worden gewijzigd. `Up`, `Down` en `Enter` op de playlist werken alleen als geen enkele sneltoets ze gebruikt en geen knop of schuifregelaar de toetsenbordfocus heeft.

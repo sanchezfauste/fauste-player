@@ -2,9 +2,59 @@
 
 Um dispositivo **bit-perfect** recebe as amostras de cada ficheiro
 exatamente como estão no ficheiro: a mesma frequência de amostragem, os
-mesmos valores, sem reamostragem, alteração de volume nem mistura. É útil
-para cadeias de monitorização e ligações digitais, onde qualquer
-processamento no computador deve ser evitado.
+mesmos valores, sem reamostragem, alteração de volume nem mistura.
+
+A saída bit-perfect é um **modo especial para reprodução audiófila**: ouvir
+um arquivo, alimentar uma cadeia hi-fi ou de monitorização, verificar uma
+ligação digital, em qualquer lugar onde o processamento no computador deva
+ser evitado. Vem desativada por predefinição e não se destina a um programa
+musical misturado. Leia [O que custa](#what-it-costs) antes de a ativar.
+
+## O que custa {#what-it-costs}
+
+Para manter cada faixa intacta, um leitor cuja saída Main está num
+dispositivo bit-perfect toca de forma diferente dos outros:
+
+- **Sem crossfades nem segues.** Cada faixa toca até ao fim (o seu cue-out,
+  ou o fim do ficheiro com **Usar cue-in e cue-out** desativado) e só então
+  começa a seguinte. A **Mistura automática no ponto MIX** e o ponto MIX não
+  são usados: o marcador MIX é desenhado esbatido e o indicador **Mistura**
+  nunca se acende. **Play / Seguinte** e **Anterior** com uma faixa no ar
+  mudam de imediato, com uma curta paragem sem estalidos, em vez de fazerem
+  fade.
+- **Um breve silêncio quando a frequência de amostragem muda.** Entre duas
+  faixas cujas frequências de amostragem diferem, quando nada mais soa no
+  dispositivo, o dispositivo toca primeiro o que ainda tem em buffer (o fim
+  da faixa) e depois é aberto de novo à nova frequência, o que deixa um breve
+  silêncio (normalmente algumas dezenas de milissegundos, mais em alguns
+  dispositivos). As faixas à mesma frequência seguem-se sem pausa nem
+  sobreposição. Quando a frequência não pode acompanhar (ver
+  [O que acontece num dispositivo bit-perfect](#what-happens-on-a-bit-perfect-device)),
+  a faixa seguinte começa de imediato, convertida para a frequência do
+  dispositivo.
+- **Sem normalização do loudness.** Uma faixa num dispositivo bit-perfect
+  toca sempre com ganho unitário, mesmo com a
+  [normalização do loudness](loudness.md#bit-perfect-outputs) ativada: o
+  cabeçalho lê **0.0 dB** a âmbar, e a sua dica diz porquê. Os outros
+  leitores e cartuchos são normalizados como de costume.
+- **O volume fica fixo em 100 %.** O fader de volume do leitor fica
+  bloqueado no topo: no ecrã, nos controladores [MIDI](midi.md) e pela
+  [API remota e pelo OSC](remote-control.md). Vai a 100 % quando o
+  bit-perfect é ativado no dispositivo, e fica aí quando é desativado.
+- **O que continua a funcionar:** o **Stop com fade** (faz fade out durante
+  a duração do fade), a **Pausa**, o **Stop**, o **Reiniciar**, as marcas de
+  repetir e de parar após a faixa, os modos Single e Contínuo, o Cue
+  (pré-escuta, que não tem fader e não é afetada), os cartuchos, a
+  [saída DSD](#dsd) e todos os leitores cuja saída Main está noutro
+  dispositivo, que misturam como de costume. Um cartucho pode tocar no mesmo
+  dispositivo: enquanto soa, a faixa seguinte do leitor começa à frequência
+  atual do dispositivo, convertida (por isso não é bit-perfect), e não é
+  inserido silêncio.
+- **Quando a usar.** Ative-a quando cada faixa tem de chegar intacta ao
+  conversor. Mantenha-a desativada para um programa no ar que precisa de
+  transições misturadas ou de mudanças de nível. O modo define-se por
+  dispositivo, por isso os leitores de mistura podem ficar noutro
+  dispositivo.
 
 ## Tornar um dispositivo bit-perfect {#setting-a-device-bit-perfect}
 
@@ -15,7 +65,8 @@ processamento no computador deve ser evitado.
    no próximo arranque da aplicação.
 2. Escolha **Avançado** no topo da secção. Em **Definições por
    dispositivo**, ative **Bit-perfect** junto ao dispositivo.
-3. Reinicie a aplicação.
+3. O dispositivo passa a bit-perfect assim que nada toca nele (ver
+   [Definições pendentes](settings.md#settings-pending)).
 
 O dispositivo passa então a arrancar à sua própria frequência de amostragem,
 se lhe deu uma no mesmo sítio, e senão à frequência de amostragem global, e
@@ -46,28 +97,38 @@ exclusivo.
 - **Acesso exclusivo.** Nada mais no computador pode tocar no dispositivo
   enquanto a aplicação o usa. Se o acesso exclusivo for recusado, o
   dispositivo toca na mesma, partilhado, e o indicador BP fica apagado.
-- **A frequência segue o ficheiro.** Quando nada toca no dispositivo e começa
-  uma faixa a outra frequência de amostragem, o dispositivo é aberto de novo
-  a essa frequência.
-  - Isto acontece quando toca uma faixa, retoma uma carregada em pausa,
-    pré-escuta ou dispara um cartucho. As faixas que apenas estão à espera (a
-    faixa seguinte de cada leitor) são preparadas de novo à nova frequência.
-  - A reabertura demora o que o dispositivo precisar para arrancar
-    (normalmente algumas dezenas de milissegundos). O arranque fica atrasado
-    por esse tempo.
-  - Enquanto algo toca no dispositivo, a frequência nunca muda. Uma faixa a
-    outra frequência que comece então (por exemplo, uma faixa a 48 kHz
-    misturada a seguir a uma a 44,1 kHz, ou uma faixa iniciada enquanto outro
-    leitor ou um cartucho toca no mesmo dispositivo) é convertida em toda a
-    sua duração e não é bit-perfect.
-  - Se o dispositivo recusar uma frequência, mantém a anterior e a faixa é
-    convertida.
+- **A frequência segue o ficheiro.** O dispositivo é aberto de novo à
+  frequência de amostragem de uma faixa quando a faixa começa:
+  - **A partir do silêncio:** toca uma faixa, retoma uma carregada em pausa,
+    pré-escuta ou dispara um cartucho enquanto nada toca no dispositivo. As
+    faixas que apenas estão à espera (a faixa seguinte de cada leitor) são
+    preparadas de novo à nova frequência.
+  - **Entre duas faixas de um leitor:** a faixa no ar pára (no seu fim, ou
+    de imediato com **Play / Seguinte** e **Anterior**), o dispositivo
+    reabre e a faixa seguinte começa. É o breve silêncio de
+    [O que custa](#what-it-costs).
+  - O dispositivo só é reaberto depois de tocar tudo o que tinha em buffer,
+    por isso o fim da faixa anterior nunca é cortado. Depois, a reabertura
+    demora o que o dispositivo precisar para arrancar. No conjunto são
+    normalmente algumas dezenas de milissegundos; o arranque fica atrasado
+    por esse tempo. A espera pelo buffer nunca é superior a meio segundo
+    (`tuning.play_out_max_ms` no ficheiro de configuração, de 0 a 2000 ms),
+    seja o que for que o dispositivo indique.
+- **Quando a frequência não pode acompanhar.** O dispositivo mantém a sua
+  frequência, e uma faixa a outra frequência é convertida em toda a sua
+  duração (não é bit-perfect), quando:
+  - algo mais soa no dispositivo quando a faixa começa: outro leitor (ou um
+    em pausa com uma faixa), um cartucho ou uma pré-escuta;
+  - o dispositivo recusou antes essa frequência; mantém a anterior;
+  - a faixa ainda não foi analisada, por isso a sua frequência não é
+    conhecida.
+
+  A passagem entre as duas faixas continua a ser sem crossfade.
 - **Sem processamento, quando nada o pede.** As amostras passam sem
-  alterações enquanto se verificarem todas estas condições:
-  - o volume do leitor está a 100 %;
-  - nenhum fade está a decorrer;
-  - nada mais toca nas mesmas saídas (outro leitor, um cartucho, um tom de
-    teste).
+  alterações enquanto nenhum fade decorre (Stop com fade, as rampas de pausa
+  e de retoma, a curta paragem sem estalidos de uma faixa) e nada mais toca
+  nas mesmas saídas (outro leitor, um cartucho, um tom de teste). O volume
+  não é problema: uma saída bit-perfect mantém-no a 100 %.
 
 ## DSD {#dsd}
 
@@ -93,8 +154,8 @@ exclusivo, o DSD nativo precisa de Linux, ou o dispositivo não aceita DSD
 nativo. Um modo guardado para um dispositivo que não o pode aceitar aparece
 agora como PCM, que é o que toca; o modo guardado regressa quando o
 dispositivo o puder aceitar de novo. Alterar um modo, a definição de mistura
-ou o silêncio DSD precisa de um reinício, como as outras definições de
-saída.
+ou o silêncio DSD aplica-se quando nada toca no dispositivo, como as outras
+definições de saída.
 
 **Quando o DSD sai sem alterações.** Têm de se verificar todas estas
 condições quando a faixa começa:
@@ -102,8 +163,11 @@ condições quando a faixa começa:
   DSD nativo;
 - a faixa é DSD (DSF ou DFF), mono ou estéreo, e foi analisada (é assim que
   se conhece a sua frequência DSD);
-- o volume do leitor está a 100 %;
 - nada mais toca no dispositivo (outro leitor, um cartucho, um tom de teste);
+- a faixa não tem ganho de [normalização do loudness](loudness.md#bit-perfect-outputs):
+  uma carregada (por exemplo, em pausa) com ganho antes de o dispositivo se
+  tornar bit-perfect mantém-no, por isso toca convertida, sem **DSD** nem
+  **BP**;
 - o dispositivo aceita o fluxo. O DoP precisa de uma frequência do
   dispositivo igual à frequência DSD dividida por 16 (176,4 kHz para DSD64,
   352,8 kHz para DSD128, 705,6 kHz para DSD256) e de um formato de 24 ou 32
@@ -130,11 +194,8 @@ Enquanto o DSD sai sem alterações:
 - o indicador do cabeçalho diz **DSD** em vez de **BP**;
 - os medidores mostram o nível da conversão PCM da mesma faixa, por isso
   funcionam como de costume;
-- o volume tem de ficar a 100 %: a dica do fader di-lo. Movê-lo passa a
-  faixa para PCM (ver abaixo);
 - o Stop e o Stop com fade param a faixa de imediato, sem fade, uma vez que
-  um fluxo DSD não pode ter fade. Premir Play noutra faixa enquanto esta toca
-  corta-a da mesma forma em vez de fazer uma mistura;
+  um fluxo DSD não pode ter fade;
 - a pausa e a retoma também atuam de imediato, sem rampa.
 
 **Silêncio nas pontas.** Cada arranque, fim e passagem para PCM envia
@@ -149,23 +210,22 @@ duração. É o **Silêncio DSD** em Definições → Saídas de áudio, Avança
 **Quando outra fonte precisa do dispositivo.** **Quando outra fonte precisa
 de uma saída DSD**, em Definições → Saídas de áudio, escolhe o que acontece
 quando outro leitor, um cartucho ou um tom de teste começa no mesmo
-dispositivo (mover o fader do próprio leitor é a exceção: passa sempre a
-faixa para PCM):
+dispositivo:
 - **Continuar a faixa DSD em PCM** (a predefinição). O fluxo passa para PCM
   depois do silêncio DSD, e a faixa continua, convertida, a partir de onde
   estava. O mesmo acontece à faixa que se segue por si só (ver abaixo).
 - **Manter o DSD e silenciar as outras fontes.** Nada interrompe o fluxo DSD.
   As outras fontes encaminhadas para o dispositivo ficam silenciadas até a
   faixa DSD terminar, e o leitor mostra entretanto um indicador **Outras
-  silenciadas**. A faixa seguinte do próprio leitor não se sobrepõe: começa
-  quando a faixa DSD termina, sem mistura nem segue. Uma faixa PCM espera
-  pelo silêncio DSD; uma faixa DSD do mesmo tipo e frequência DSD continua o
-  fluxo sem ele. Mover o fader continua a passar a faixa para PCM.
+  silenciadas**. A faixa seguinte do próprio leitor
+  começa quando a faixa DSD termina: uma faixa PCM depois do silêncio DSD,
+  uma faixa DSD do mesmo tipo e frequência DSD de imediato, continuando o
+  fluxo.
 
 **Um álbum não fica em DSD com a definição predefinida.** Com *Continuar a
 faixa DSD em PCM*, só uma faixa DSD que começa num dispositivo livre sai
 como DSD. As faixas que o leitor inicia por si só a seguir (no fim de uma
-faixa, num segue ou numa mistura) começam a partir de uma pré-carga, que é
+faixa) começam a partir de uma pré-carga, que é
 sempre PCM, por isso o dispositivo passa a PCM e elas tocam convertidas. Uma
 faixa que inicia você (Play, duplo clique) sai de novo como DSD quando o
 dispositivo está livre ou o fluxo DSD anterior ainda está no seu silêncio à
@@ -178,9 +238,10 @@ transportar (por exemplo, sem acesso exclusivo), a faixa continua em PCM.
 
 ## O indicador BP {#the-bp-badge}
 
-O indicador **BP** no cabeçalho do leitor acende-se enquanto a faixa atual
-chega ao seu dispositivo Main sem alterações. Têm de se verificar todas
-estas condições:
+O indicador **BP** no cabeçalho do leitor só existe num leitor cujo
+dispositivo Main funciona em bit-perfect. Acende-se (borda e texto verdes;
+cinzento esbatido quando apagado) enquanto a faixa atual chega ao seu
+dispositivo Main sem alterações. Têm de se verificar todas estas condições:
 
 - o dispositivo é bit-perfect e está aberto com acesso exclusivo;
 - o dispositivo corre à frequência de amostragem da faixa;
@@ -195,8 +256,14 @@ estas condições:
   recebem o seu formato quando analisadas de novo (o aviso de arranque, ou
   Definições → Análise), ou assim que um leitor as mostra ou um cartucho as
   contém;
-- o volume está a 100 %, nenhum fade decorre e nada mais toca nas mesmas
-  saídas.
+- a faixa toca com ganho unitário: uma saída bit-perfect nunca é
+  normalizada, mas uma faixa que começou com um ganho de normalização antes
+  de o seu dispositivo se tornar bit-perfect mantém esse ganho até parar, e o
+  BP fica apagado para ela;
+- o volume está fixo em 100 % numa saída bit-perfect, nenhum fade decorre
+  (o Stop com fade, as rampas de pausa e de retoma e a curta paragem sem
+  estalidos de uma faixa são os únicos fades que restam num leitor assim) e
+  nada mais toca nas mesmas saídas.
 
 Alguns ficheiros nunca são mostrados como bit-perfect:
 - **Ficheiros com perdas** (MP3, AAC, Ogg Vorbis, Opus): as suas amostras
@@ -211,11 +278,18 @@ Para verificar uma cadeia de ponta a ponta:
 
 1. Ligue a saída digital do dispositivo (S/PDIF, AES ou loopback USB) a um
    gravador que capture bit a bit.
-2. Toque um ficheiro de teste sem perdas a 100 % sem mais nada a tocar.
+2. Toque um ficheiro de teste sem perdas sem mais nada a tocar.
 3. Grave-o.
 4. Compare a gravação com o ficheiro. Por exemplo, com o SoX, inverta um e
    misture-os: `sox -m -v 1 file.wav -v -1 recording.wav diff.wav` depois de
    alinhar os seus inícios. Todas as amostras da diferença têm de ser zero.
+5. Verifique uma mudança de frequência: no modo Contínuo, com a **Mistura
+   automática no ponto MIX** ativada, toque uma faixa de 44,1 kHz que tenha
+   um ponto MIX seguida de uma de 96 kHz. A primeira toca até ao seu cue-out
+   sem fade; depois de um breve silêncio, o conversor mostra 96 kHz na
+   segunda. O indicador BP acende-se em ambas.
+6. Depois toque duas faixas à mesma frequência: a segunda segue a primeira
+   sem pausa nem sobreposição.
 
 Os testes automáticos do projeto verificam a mesma propriedade dentro da
 aplicação, num dispositivo simulado.
@@ -225,22 +299,22 @@ aplicação, num dispositivo simulado.
 Os testes automáticos só verificam o DSD em dispositivos simulados. O DoP e o
 DSD nativo não foram experimentados pelo projeto num conversor real. Para
 verificar um:
-1. Defina o dispositivo como **DoP** (ou **DSD nativo** no Linux), reinicie e
-   toque um ficheiro DSD a 100 % sem mais nada a tocar. O cabeçalho tem de
+1. Defina o dispositivo como **DoP** (ou **DSD nativo** no Linux) e toque
+   um ficheiro DSD sem mais nada a tocar. O cabeçalho tem de
    mostrar **DSD**, e o próprio visor do conversor deve mostrar a frequência
    DSD (por exemplo, DSD64) em vez de uma frequência PCM. Um conversor que
    mostra uma frequência PCM ou toca ruído não reconhece o fluxo: volte a
    **Converter para PCM**.
 2. Ouça se há um estalido ou uma rajada de ruído no arranque, no Stop, no fim
-   da faixa e ao mover o fader. Um estalido significa que o conversor precisa
+   da faixa. Um estalido significa que o conversor precisa
    de um **Silêncio DSD** mais longo (Definições → Saídas de áudio,
    Avançado).
 3. Inicie um cartucho ou outro leitor no mesmo dispositivo, uma vez com cada
    definição de mistura, e verifique o comportamento descrito acima.
 4. No Linux, para verificar o DSD nativo sem a aplicação, execute
-   `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0 cargo test -p fp-backends --test conformance -- --ignored native_dsd_on_a_real_device`.
+   `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0 cargo test -p fp-backends --test it -- --ignored conformance::native_dsd_on_a_real_device`.
    Abre o dispositivo em DSD nativo a DSD64 e toca um segundo de silêncio
    DSD. Tem de passar, e o conversor deve sincronizar em DSD64.
-5. Com ficheiros DSD em `test-music/`, `cargo test --release -p fp-engine --test dsd_real_music -- --ignored`
+5. Com ficheiros DSD em `test-music/`, `cargo test --release -p fp-engine --test it dsd_real_music:: -- --ignored`
    toca-os através do motor num dispositivo simulado e compara as palavras
    com os bytes do ficheiro (ver [Testing](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/testing.md)).

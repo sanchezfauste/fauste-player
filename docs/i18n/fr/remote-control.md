@@ -75,7 +75,9 @@ Un client peut :
 - lire, mettre en pause, arrêter, faire un fondu, reprendre au début et
   revenir en arrière ;
 - choisir l'entrée suivante (l'entrée à l'antenne aussi : elle est rejouée),
-  pré-écouter, et se déplacer (sur un lecteur arrêté, un déplacement choisit
+  pré-écouter (une pré-écoute qui serait entendue à l'antenne alors que
+  quelque chose y joue est refusée, sauf si la requête indique `"force": true` ;
+  voir la référence de l'API), et se déplacer (sur un lecteur arrêté, un déplacement choisit
   où PLAY démarre l'entrée suivante, et un déplacement avant son cue-in
   démarre au cue-in) ;
 - régler les volumes, les modes, le stop après la piste en cours, et les
@@ -85,14 +87,43 @@ Un client peut :
 - modifier : créer, renommer et supprimer des playlists ; ajouter une piste
   déjà chargée, et retirer, déplacer ou dupliquer des entrées ; créer,
   renommer, redimensionner et supprimer des pages de cartouches, et configurer
-  une cartouche avec une piste chargée ; définir ou réinitialiser des
-  marqueurs.
+  une cartouche (nom, type, couleur, boucle, exclusive) avec une piste
+  chargée ; définir ou réinitialiser des marqueurs ; exclure une piste de la
+  [normalisation du loudness](loudness.md) ou l'ajuster.
 
 Retirer ce qui est à l'antenne est refusé, comme à l'écran. Les fichiers qui
 ne sont pas encore chargés ne peuvent pas être ajoutés à distance : ils se
 trouvent sur cet ordinateur, ajoutez-les donc d'abord ici.
 
-Un bouton grisé à l'écran est aussi refusé à distance. La référence complète
+Un bouton grisé à l'écran est aussi refusé à distance.
+
+Un lecteur dont la sortie Main est [bit-perfect](bit-perfect.md#what-it-costs)
+continue de fonctionner à distance, avec les mêmes limites qu'à l'écran :
+`play` et `previous` basculent aussitôt, sans fondu enchaîné, et son volume
+reste à 100 %. Un volume inférieur à 100 % est refusé (`409`, avec la
+raison), et exactement 100 % est accepté. Chaque lecteur indique si son
+volume est maintenu (`fader_locked`).
+
+Un volume envoyé comme position de fader (le `fader` de l'API, le `/volume`
+d'OSC) est une position sur l'échelle propre du fader à l'écran, de 0 (silence)
+à 1 (0 dB) : 0,9 fait environ −2,5 dB, 0,8 environ −5,3 dB et 0,5 environ
+−16 dB. Les versions précédentes utilisaient une autre échelle (0,8 valait
+−12 dB, 0,5 valait −30 dB), si bien qu'un script écrit pour elles règle
+maintenant des niveaux plus forts : vérifiez ses valeurs.
+
+Chaque piste porte sa mesure de loudness (`loudness`, `null` tant qu'elle
+n'est pas mesurée) et son réglage (`loudness_edit` : `excluded` et
+`trim_db`). Un lecteur en lecture ou en pause, et chaque cartouche en
+lecture, indique avec quel gain de [normalisation](loudness.md) sa piste a
+démarré et pourquoi (`normalization` : `gain_db` et un `status` tel que
+`applied`, `not_measured` ou `bit_perfect`). `PUT /api/v1/tracks/<id>/loudness`
+avec `{"excluded": false, "trim_db": -1.5}` change le réglage, comme le fait la
+fenêtre **Loudness…** ; un ajustement au-delà de l'ajustement maximal est
+refusé (`409`, avec la raison). Les réglages de normalisation eux-mêmes
+(activée ou non, la cible, les limites) ne se changent que sur cet ordinateur.
+OSC et MIDI n'ont aucune commande de loudness.
+
+La référence complète
 se trouve dans [la documentation technique](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
 
 Essayez depuis un terminal :
@@ -140,6 +171,10 @@ vide, afin que la surface les efface. Elle doit se réabonner dans la minute
 
     oscdump 9000 &
     oscsend localhost 7381 /fauste/subscribe i 9000
+
+Sur un lecteur dont la sortie Main est bit-perfect, les messages `/volume`
+sont refusés (le journal le note) et le lecteur envoie `/volume-locked` 1 aux
+abonnés (0 sinon).
 
 Un abonné peut désigner n'importe quel port de sa propre adresse, et jusqu'à
 `max_subscribers` sont conservés. Quiconque est autorisé à envoyer peut donc

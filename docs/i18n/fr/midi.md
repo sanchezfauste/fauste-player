@@ -19,6 +19,8 @@ commande ; le programme n'écoute jamais ses propres ports. Les contrôleurs
 peuvent être branchés ou débranchés pendant que le programme tourne : toutes
 les quelques secondes, les ports sont recherchés de nouveau, et un contrôleur
 qui revient est reconnecté par son nom, avec ses voyants rétablis.
+**Reconnecter les ports** ferme chaque port et le rouvre sans toucher au
+câble (voir [Dépannage](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 Sous Linux, le MIDI passe par ALSA : votre utilisateur doit être autorisé à
 ouvrir le séquenceur (`/dev/snd/seq`, généralement en faisant partie du
@@ -48,12 +50,23 @@ celle-ci. `Esc` ou un nouveau clic sur le bouton annule l'apprentissage.
 - Un bouton agit quand on appuie dessus (une touche ou un pad qui s'enfonce,
   ou un control change qui franchit le milieu de sa plage), exactement comme
   le bouton du lecteur à l'écran. Un bouton grisé à l'écran ne fait rien.
-- Un fader règle le volume sur la même échelle que le fader à l'écran. Pour
+  Un bouton **CUE** ne fait rien non plus lorsque sa pré-écoute serait
+  entendue à l'antenne alors que quelque chose y joue : le MIDI ne peut pas
+  répondre à la question que pose l'écran. Arrêter une pré-écoute fonctionne
+  toujours.
+- Un fader règle le volume sur la même échelle (la même loi de table de
+  mixage) que le fader à l'écran. Pour
   éviter les sauts, il ne prend la main que lorsqu'il atteint ou dépasse le
   volume actuel (reprise douce, ou soft takeover) ; si le volume est modifié
   à l'écran, le fader doit le rattraper de nouveau. Rien ne change tant que
   vous ne bougez pas une commande : démarrer le programme n'envoie jamais
   rien à l'antenne.
+- Une association de volume d'un lecteur dont la sortie Main est
+  [bit-perfect](bit-perfect.md#what-it-costs) ne fait rien : son volume reste
+  à 100 %. Une fois que la sortie n'est plus bit-perfect, amenez la commande
+  tout en haut pour reprendre le volume.
+- Lecture / Suivante et Précédente sur un tel lecteur basculent aussitôt, sans
+  fondu enchaîné. Leurs voyants fonctionnent comme d'habitude.
 - Avec **Allumer les boutons (retour LED)** activé, les boutons associés
   s'allument : Lecture quand le lecteur est à l'antenne, Pause clignotant
   pendant la pause, CUE pendant la pré-écoute, et Stop, Stop en fondu,

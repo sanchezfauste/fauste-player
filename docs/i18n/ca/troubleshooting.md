@@ -4,9 +4,9 @@
 
 1. Obre **Configuració → Sortides d'àudio** i prem **Provar Main** per al
    reproductor. Si sents el to, comprova el fader de volum del reproductor.
-2. Si no sents res, tria un altre dispositiu o parell de canals. Els canvis a
-   les sortides tenen efecte després d'un reinici: prem **Reiniciar ara** a
-   Configuració.
+2. Si no sents res, tria un altre dispositiu o parell de canals. Un canvi a les
+   sortides s'aplica quan no hi sona res; **Aplicar ara** a Configuració
+   l'aplica a l'instant.
 3. A Linux, prefereix **PipeWire** o **PulseAudio** a Configuració → Sortides
    d'àudio → Sistema d'àudio. Comparteixen la targeta de so amb altres
    programes. **ALSA** parla directament amb la targeta i pot trobar-la
@@ -23,12 +23,24 @@
 ## Bit perfect {#bit-perfect}
 
 - **El distintiu BP continua apagat.** Comprova cada condició a
-  [Sortida bit perfect](bit-perfect.md#the-bp-badge): volum al 100 %, cap fos,
-  res més a les mateixes sortides, un fitxer sense pèrdua que s'ha analitzat, i
-  un dispositiu que funciona a la freqüència del fitxer.
+  [Sortida bit perfect](bit-perfect.md#the-bp-badge): cap fos, res més a les
+  mateixes sortides, un fitxer sense pèrdua que s'ha analitzat, i un
+  dispositiu que funciona a la freqüència del fitxer.
 - **Un breu silenci abans d'una pista.** El dispositiu bit perfect s'ha tornat
-  a obrir a la freqüència de mostreig de la pista. Mantén la biblioteca a una
-  sola freqüència per evitar-ho.
+  a obrir a la freqüència de mostreig de la pista. Només passa quan canvia la
+  freqüència: les pistes a la mateixa freqüència se segueixen sense buit.
+  Mantén la biblioteca a una sola freqüència per evitar-ho. Vegeu [Què
+  costa](bit-perfect.md#what-it-costs).
+- **Les pistes no es mesclen, i Play no fa fos.** En un reproductor la sortida
+  Main del qual és bit perfect, cada pista es reprodueix fins al final i
+  després comença la següent, i Play / Següent i Anterior canvien a l'instant:
+  no hi ha fosos encadenats ni segues en aquest reproductor. Desactiva bit
+  perfect per al dispositiu, o mou el reproductor a una altra sortida, per
+  tornar a mesclar. Vegeu [Què costa](bit-perfect.md#what-it-costs).
+- **El fader de volum no es mou.** La sortida Main del reproductor és bit
+  perfect, cosa que manté el volum al 100 %; la informació emergent del fader
+  ho diu. Els faders MIDI i l'API remota tampoc no el poden moure. Vegeu [Què
+  costa](bit-perfect.md#what-it-costs).
 - **Una pista es reprodueix remostrejada, i el registre diu que el dispositiu
   és ocupat (Linux).** Per canviar la freqüència, l'aplicació tanca el
   dispositiu i el torna a obrir. En aquell moment el servidor de so (PipeWire)
@@ -120,6 +132,46 @@ comprovar-lo a l'instant usa **Tornar a analitzar** al menú de la seva fila, o
 **Configuració → Anàlisi → Tornar a analitzar totes les pistes** per a tota la
 biblioteca.
 
+Un WAV o FLAC que apareix com a il·legible, o que sonaria com a soroll fort,
+pot ser un rip de CD DTS: el fitxer conté un flux de bits DTS en lloc d'àudio.
+L'aplicació el refusa (el registre diu «encoded bitstream stored as PCM») i no
+descodifica DTS. Converteix-lo primer a PCM normal amb una altra eina.
+
+## Una carpeta vigilada mostra un avís {#a-watched-folder-shows-a-warning}
+
+Una categoria que vigila una carpeta mostra ⟳, d'un altre color quan la carpeta
+no se segueix; passa-hi el cursor per veure'n el motiu. Vegeu [Carpetes
+vigilades](library.md#watched-folders).
+
+- **No es troba o no es pot llegir**: la unitat o el recurs compartit no és
+  muntat o no és accessible. Una carpeta buida que hauria de contenir pistes de
+  la biblioteca també compta com a no trobada, perquè un recurs compartit
+  desmuntat sovint en sembla una. No es marca ni es treu res; la carpeta es
+  torna a buscar cada 30 segons i s'escaneja quan apareix. Si has buidat la
+  carpeta a propòsit, esborra'n les pistes seleccionant-les a la taula de la
+  biblioteca i triant **Treu de la biblioteca…**, o triant **Tornar a analitzar**
+  en elles, cosa que marca com a absents les que han perdut el fitxer perquè
+  **Treu les pistes que falten…** les pugui treure.
+- **Els canvis no se segueixen**: el sistema no l'ha volgut vigilar, normalment
+  una carpeta amb moltíssimes subcarpetes. La carpeta encara s'escaneja a cada
+  inici i a cada reintent, de manera que els fitxers nous apareixen llavors, no
+  a l'instant. A Linux, un arbre de carpetes més gran que el límit de
+  vigilàncies per usuari necessita un `fs.inotify.max_user_watches` més alt
+  (per exemple `sudo sysctl fs.inotify.max_user_watches=524288`; fes-ho
+  permanent a `/etc/sysctl.d/`).
+- **No és un camí complet**: la carpeta desada s'ha editat a mà fins a un camí
+  que no és complet. Tria **Canvia la carpeta vigilada…** per triar-la de nou.
+- **Un recurs compartit de xarxa no mostra cap avís, però els fitxers afegits
+  des d'un altre ordinador no apareixen**: en un recurs compartit de xarxa
+  (SMB/CIFS, NFS) el sistema normalment accepta la vigilància però només
+  informa dels canvis fets des d'aquest ordinador. Els canvis fets en un altre
+  lloc es veuen a l'inici següent, no mentre l'aplicació s'executa.
+- **Una carpeta amb milers de fitxers** triga una estona a escanejar-se a
+  l'inici; el progrés de l'anàlisi ho mostra.
+- Les pistes el fitxer de les quals ha sortit d'una carpeta vigilada es queden
+  a la biblioteca marcades com a absents. Treu-les amb **Treu les pistes que
+  falten…** al menú de la categoria.
+
 ## Talls d'àudio {#audio-dropouts}
 
 La barra d'estat avisa durant 5 segons després de cada tall que l'aplicació
@@ -132,11 +184,58 @@ tots els sistemes d'àudio informen dels xruns (PulseAudio no; el mode
 exclusiu de Windows no).
 
 
-- Augmenta la **mida del búfer** a Configuració (i prem **Reiniciar ara**).
+- Augmenta la **mida del búfer** a Configuració (s'aplica quan no hi sona res en
+  aquell dispositiu, o a l'instant amb **Aplicar ara**).
+- A través d'un servidor de so (PulseAudio, el dispositiu `default` d'ALSA),
+  cada sortida ja demana almenys 50 ms sigui quina sigui la mida del búfer,
+  perquè no se senti un ordinador ocupat; Configuració ho mostra al costat de
+  la latència. En un ordinador vell o molt carregat, augmenta
+  `shared_buffer_ms` a la secció `outputs` del fitxer de configuració (per
+  exemple a 100). El sistema manté en cua uns dos d'aquests blocs, de manera
+  que els botons dels cartutxos i de Play sonen llavors aproximadament el doble
+  d'aquest augment més tard. Per a la sortida d'antena, l'entrada de maquinari
+  del propi dispositiu (`hw:` a Linux) evita del tot el servidor de so.
 - A Linux, permet la planificació en temps real. L'aplicació la demana al
-  sistema a través de rtkit (D-Bus). Ser membre del grup `audio` amb un límit
-  `rtprio` també funciona.
+  sistema a través de rtkit (D-Bus), i el registre deixa constància d'una
+  denegació. Molts escriptoris la deneguen a les aplicacions.
 - Evita les unitats de xarxa per a la música que sona en antena.
+
+## La interfície va lenta en un ordinador vell {#the-interface-is-slow-on-an-old-computer}
+
+Mentre alguna cosa sona, la interfície dibuixa com a màxim 30 fotogrames per
+segon (`max_fps` a la secció `ui` del fitxer de configuració), i els clics i
+les tecles es responen a l'instant. En un ordinador vell o ocupat, abaixa'l
+(per exemple a 20) per deixar més processador a l'àudio; 0 dibuixa cada
+fotograma que mostra la pantalla. Els mesuradors mesuren el mateix a qualsevol
+ritme; només es dibuixen amb menys freqüència.
+
+## No es poden deixar anar fitxers a Linux {#files-cannot-be-dropped-on-linux}
+
+La finestra només accepta fitxers arrossegats des d'un gestor de fitxers quan
+s'executa sobre X11. Per defecte ho fa, també en un escriptori Wayland (a
+través de XWayland, que tots els escriptoris tenen). Si `ui.window_system` a
+`config.json` és `"Wayland"`, la finestra és una de Wayland nativa, que pot
+veure's més nítida amb l'escalat fraccionari de la pantalla, però no s'hi
+poden deixar anar fitxers: usa **Afegir** en el seu lloc. Torna'l a
+`"Auto"` (el valor per defecte) o a `"X11"` i reinicia Fauste Player.
+
+## Un controlador MIDI no respon {#a-midi-controller-does-not-respond}
+
+Si **Configuració → MIDI** mostra el controlador com a connectat però els seus
+botons i faders no fan res, prem-hi **Reconnecta els ports**: el programa tanca
+els ports MIDI i els torna a obrir, com si desconnectessis i tornessis a
+connectar el controlador. Si això no ajuda, desconnecta el controlador i torna'l
+a connectar.
+
+En qualsevol cas, el registre diu què ha passat. Llista els ports MIDI cada
+vegada que canvien, cada port obert i tancat (amb el motiu), un port que no es
+pot obrir (una vegada, fins que s'obre o desapareix), el primer missatge rebut
+a cada connexió, el primer missatge ignorat a cada connexió amb el motiu (cap
+assignació, un fader que encara no ha arribat al volum, una acció que ara no pot
+actuar) i el primer missatge de LED que ha fallat. Un controlador connectat que
+mai no registra un primer missatge no envia res que el programa rebi. Per veure
+cada missatge ignorat i cada reintent fallit, inicia el programa amb
+`RUST_LOG=info,fp_control=debug`.
 
 ## «La interfície ha tingut un error» {#the-interface-hit-an-error}
 
@@ -146,7 +245,22 @@ S'ha detectat un error de dibuix. L'àudio no se n'ha ressentit. Prem
 ## Registres i informes de fallades {#logs-and-crash-reports}
 
 Vegeu [Dades i còpies de seguretat](data-and-backups.md) per a la carpeta de
-registres. Hi ha un fitxer de registre per dia, i es conserven els últims 14.
-Els informes de fallades es desen com a `crash-<hora>.txt`. Defineix
-`RUST_LOG=debug` a l'entorn per a més detall. Adjunta tots dos fitxers quan
-informis d'un error.
+registres. Hi ha un fitxer de registre per dia. Les línies idèntiques que es
+repeteixen una darrere l'altra s'escriuen una vegada, seguides d'una línia com
+`previous message repeated 12 times` (durant una llarga sèrie de repeticions
+aquesta línia s'escriu cada minut). Les línies que difereixen, per exemple
+perquè porten un comptador, no es col·lapsen. Els missatges rutinaris de
+connexió del client PulseAudio s'ometen per defecte. Defineix
+`RUST_LOG=debug` a l'entorn per a més detall (substitueix el filtre per
+defecte, `info,pulseaudio=warn`).
+
+El registre és limitat: el fitxer d'un dia deixa de créixer als 10 MiB (la
+seva última línia ho diu; la resta d'aquell dia no es registra, que és a què
+porta una allau de línies diferents) i es conserven els últims 14 fitxers. Canvia'ls al
+fitxer de configuració amb `limits.max_log_file_mb` (d'1 a 1024),
+`limits.max_log_files` (de 2 a 365) i `limits.log_repeat_summary_secs` (d'1 a
+3600, 60 per defecte, cada quant s'informa d'una llarga sèrie de repeticions);
+s'apliquen a l'inici següent. Els informes de fallades es desen com a
+`crash-<hora>.txt` a la mateixa carpeta i es limiten per separat
+(`limits.max_crash_reports` per execució).
+Adjunta tots dos fitxers quan informis d'un error.

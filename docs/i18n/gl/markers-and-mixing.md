@@ -15,14 +15,18 @@ substitúe.
 
 ## Editar marcadores {#editing-markers}
 
-Na forma de onda dun reprodutor, ou na da súa xanela CUE (o mesmo menú e as
-mesmas asas; un cambio vese nas dúas ao instante):
+Na forma de onda dun reprodutor, na da súa xanela CUE ou na da
+[barra de preescoita da xanela da biblioteca](library.md#pre-listening) (o
+mesmo menú e as mesmas asas; un cambio vese ao instante en todos os sitios
+onde está a pista):
 
 - **Clic dereito** onde queiras un marcador e escolle **Poñer o cue-in aquí**,
   **Poñer o fin da intro aquí**, **Poñer o inicio do outro aquí**, **Poñer o
   punto MIX aquí** ou **Poñer o cue-out aquí**. **Volver aos marcadores
   automáticos** quita os marcadores que colocaches, e a pista analízase de
-  novo.
+  novo. **Sonoridade…** abre a configuración de
+  [normalización de sonoridade](loudness.md#per-track-exclude-and-trim) da
+  pista: excluíla ou axustar a súa ganancia.
 - **Mantén Alt** (Option en macOS): aparecen asas nos marcadores. Arrastra
   unha para movela; o tempo móstrase mentres arrastras. Un arrastre nunca
   move a cabeza de reprodución.
@@ -87,6 +91,10 @@ cambialos, as pistas analízanse de novo automaticamente.
 - **Modo single**, ou **Stop ao final**: o reprodutor detense no cue-out.
 - **Premer Play en antena:** a pista seguinte comeza ao instante e a actual
   esvaécese durante a *duración do fundido* (1 s de forma predeterminada).
+- **Un reprodutor cuxa saída Principal é bit-perfect** ignora o punto MIX e
+  a mestura automática: cada pista reprodúcese ata o seu cue-out, despois
+  comeza a seguinte, e Play en antena cambia ao instante, sen fundido. Ver
+  [O que custa](bit-perfect.md#what-it-costs).
 - **Usar cue-in e cue-out desactivado** (Configuración → Reprodutores): cada
   reprodutor reproduce cada pista de 0 ata o final do ficheiro. O cue-in e o
   cue-out, automáticos e manuais, consérvanse, e a forma de onda debúxaos

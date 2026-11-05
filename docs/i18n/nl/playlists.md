@@ -18,11 +18,26 @@ Van tabblad wisselen verandert nooit wat on air is of wat het volgende is.
 Wanneer een nummer eindigt, gaat de speler verder in de playlist die dat
 nummer bevat.
 
-Playlists worden aangemaakt, hernoemd en verwijderd in
-[Instellingen](settings.md). De laatste playlist, en een playlist met een
-nummer on air, kunnen niet worden verwijderd.
+De **+** aan het rechteruiteinde van de rij maakt een nieuwe playlist: typ een
+naam en druk op Enter of **Aanmaken** (Escape of een klik erbuiten annuleert).
+De nieuwe playlist verschijnt meteen bij de tabbladen van die speler en de
+speler toont hem. Playlists kunnen ook worden aangemaakt, en worden hernoemd en
+verwijderd, in [Instellingen](settings.md). De laatste playlist, en een
+playlist met een nummer on air, kunnen niet worden verwijderd.
 
 ## De nummertabel {#the-track-table}
+
+Elk bestand dat je aan een playlist, een cart of via het importeren van een
+M3U- of PLS-bestand toevoegt, wordt een *nummer* van de bibliotheek en blijft
+daar staan wanneer je zijn item verwijdert, de cart leegmaakt of de playlist
+verwijdert: zijn markers, loudness-instellingen en tags blijven bewaard voor de
+volgende keer dat je het bestand toevoegt. Hetzelfde bestand is altijd één
+nummer: het twee keer toevoegen, of aan een playlist en aan een cart, deelt zijn
+markers en loudness-instellingen overal. Op de desktop is een bestand dat vanaf
+deze versie wordt toegevoegd hetzelfde nummer, welk pad er ook naartoe leidt
+(een symlink of `..` in het pad maakt geen tweede nummer). De ene uitzondering:
+een nummer dat geen categorie heeft, waarvan het bestand verdwenen is en dat
+niets meer gebruikt, verlaat de bibliotheek vanzelf, met een regel in het log.
 
 ![Een playlist: gespeelde nummers gedimd, het nummer on air in rood, het volgende nummer in groen, en de voettekst met de resterende tijd](../../images/guide/playlist.png)
 
@@ -37,6 +52,7 @@ nummer on air, kunnen niet worden verwijderd.
 | Duur | Speelduur, van cue-in tot cue-out (het hele bestand met **Cue-in en cue-out gebruiken** uit) |
 | Intro | Hoe lang de intro duurt, vanaf waar het nummer begint te spelen tot zijn intromarker; leeg wanneer het nummer geen intromarker heeft |
 | Bestandsnaam | De naam van het bestand, met zijn extensie |
+| Opmerking | De opmerkingstag, op één regel |
 
 Een nieuwe installatie toont `#`, Titel, Artiest en Duur. De andere kolommen
 zijn optioneel; zie **De kolommen kiezen** hieronder. Een nummer dat een waarde
@@ -100,14 +116,17 @@ Rijkleuren:
 | Rode **P2** (of een ander nummer) in de nummerkolom | On air op die speler |
 | **Groen**, met een pijl | Het volgende nummer van deze speler |
 | Gedimd | Al gespeeld op deze speler |
+| Lavendelkleurige omlijning | De geselecteerde rij (klik erop, of ga ernaartoe met Up en Down). Ze is ook te zien op de rode en groene rijen |
 | Bestand met een kruis / waarschuwingspictogram | Bestand ontbreekt / onleesbaar (het wordt overgeslagen); houd de muisaanwijzer boven de rij: de pop-up begint met de reden, in amber, en toont dan de gebruikelijke velden. Een ontbrekend bestand wordt elke 30 s opnieuw gezocht (`tuning.missing_recheck_ms`). |
 | Herlaadpijlen rechts van de titel | Geanalyseerd door een eerdere versie; het speelt nog steeds met die analyse. **Instellingen → Analyse → Verouderde nummers analyseren** brengt het bij (nummers op een speler worden hoe dan ook bijgewerkt) |
-| Zandloper rechts van de titel | Het nummer wacht op zijn analyse (houd de muisaanwijzer boven de zandloper: *Analyse in afwachting*). Het speelt toch, en de zandloper verdwijnt wanneer de analyse klaar is |
+| Zandloper rechts van de titel | Het nummer wacht op zijn analyse: *Wacht op analyse* wanneer het in de wachtrij staat, *Analyse in afwachting* wanneer het nog niet in de wachtrij is gezet. Het speelt toch, en de zandloper verdwijnt wanneer de analyse klaar is. Een geanalyseerd nummer dat opnieuw in de wachtrij is gezet (door **Alle nummers opnieuw analyseren**) toont hem ook |
+| Golfvormpictogram rechts van de titel | Het nummer wordt nu geanalyseerd (*Wordt nu geanalyseerd*) |
 | Violet | Geselecteerd |
 
 **Tooltip van een nummer.** Houd de muisaanwijzer even boven een rij om de
 titel, artiest, het album, de datum, het genre, de lengte, het formaat (type,
-samplefrequentie en bitdiepte wanneer bekend) en het pad van het bestand te
+samplefrequentie, bitdiepte en gemiddelde bitrate, bijvoorbeeld 320 kbps,
+wanneer bekend) en het pad van het bestand te
 zien. Een veld dat het bestand niet heeft, wordt weggelaten. De pop-up is de
 enige hoverinformatie op een rij, en hij beweegt nooit zolang hij getoond
 wordt. Voor een ontbrekend of onleesbaar bestand begint hij met de reden.
@@ -125,15 +144,18 @@ wordt. Voor een ontbrekend of onleesbaar bestand begint hij met de reden.
 |---|---|
 | Nu afspelen | Dit nummer meteen starten (met mixen als de speler on air is) |
 | Als volgende instellen | Hetzelfde als dubbelklikken. Op het nummer dat on air is, speelt het nog een keer, vanaf zijn begin, wanneer de huidige ronde eindigt (mixend zoals Herhalen, zonder gat), waarna de speler verdergaat. Het werkt eenmalig. Stop na, de modus SINGLE en een markering Stop na beëindigen de speler nog steeds eerst. Terwijl een CUE loopt, verplaatst hij naar het nieuwe volgende |
-| Voorbeluisteren op CUE | Afspelen op de CUE-uitgang (het opent het CUE-venster). Gedimd wanneer de speler naast zijn Main-uitgang geen Cue-uitgang heeft |
+| Voorbeluisteren op CUE | Afspelen op de CUE-uitgang (het opent het CUE-venster). Gedimd wanneer de speler geen Cue-uitgang heeft. Op de on-air uitgang vraagt het eerst om bevestiging terwijl daar iets speelt (zie [CUE](players.md#cue-pre-listen)) |
 | Tags bewerken… | Open de tag-editor voor dit nummer. **Opslaan** schrijft de wijzigingen in het audiobestand; **Annuleren** (of Esc, wanneer er geen opslag loopt) sluit zonder te schrijven. Het item is gedimd, met de reden wanneer je de muisaanwijzer erboven houdt, zolang het nummer on air is, op CUE staat of op een spelende cart, zolang de tags nog niet zijn gelezen, wanneer het bestand ontbreekt, en voor formaten waarvan de tags niet kunnen worden geschreven (bijvoorbeeld DSD) |
-| Opnieuw analyseren | Dit nummer nu opnieuw analyseren, wat zijn toestand ook is. Een gerepareerd bestand dat onleesbaar was, wordt ook vanzelf opgepakt (zie [Problemen oplossen](troubleshooting.md)). Handmatige markers blijven bewaard |
+| Opnieuw analyseren | Dit nummer nu opnieuw analyseren, wat zijn toestand ook is, waarbij het bestand opnieuw wordt gelezen (zodat een bestand dat je hebt bewerkt opnieuw wordt gemeten, ook als zijn grootte en datum niet veranderden). Een gerepareerd bestand dat onleesbaar was, wordt ook vanzelf opgepakt (zie [Problemen oplossen](troubleshooting.md)). Handmatige markers blijven bewaard. Gedimd, met de reden wanneer je de muisaanwijzer erboven houdt, zolang het nummer al op zijn analyse wacht of wordt geanalyseerd |
+| Loudness… | Open de loudness-pop-up van dit nummer (trim en uitsluiting; zie [Loudness](loudness.md)) |
+| Tonen in bibliotheek | Open het [bibliotheekvenster](library.md) op de categorie van dit nummer met zijn rij geselecteerd. Alleen op de desktop |
+| Verplaatsen naar categorie ▸ | Het nummer in een categorie onderbrengen, of in Zonder categorie, zonder de bibliotheek te openen. Alleen op de desktop |
 | Nummers hieronder toevoegen… | Kies bestanden om na dit nummer in te voegen |
 | Dupliceren | Een ongespeelde kopie eronder invoegen (met zijn markeringen voor herhalen en stoppen na) |
 | Dit nummer herhalen | Vink aan om het steeds opnieuw af te spelen, zonder gat, totdat je op Play (volgende), Vorige, Stop of Uitfaden drukt, of Stop na aanzet. Pauze houdt het herhalend. Een herhaalpictogram staat voor de titel |
 | Stoppen na dit nummer | Vink aan om de speler te stoppen wanneer dit nummer eindigt, elke keer dat het speelt (in elke modus). In tegenstelling tot de knop **Stop na** van de speler blijft de markering bij het nummer en wordt ze met de playlist opgeslagen. Het pictogram voor stoppen na staat voor de titel. Het gaat voor Herhalen |
 | Verplaatsen naar ▸ | Het naar het einde van een andere playlist verplaatsen |
-| Uit playlist verwijderen | Het verwijderen; niet mogelijk zolang het on air is |
+| Uit playlist verwijderen | Het uit deze playlist verwijderen; niet mogelijk zolang het on air is. Het nummer blijft in de bibliotheek (zijn markers en loudness-instellingen blijven bewaard) |
 
 ## Tags bewerken {#editing-tags}
 
@@ -231,7 +253,13 @@ neergezet genegeerd.
 - Zet bestanden of mappen uit de bestandsbeheerder neer op een lijst om ze op
   de plek van het neerzetten in te voegen. Boven de kop, een kolomrand, de
   schuifbalk of een venster dat de lijst bedekt wordt niets ingevoegd. Meldt het
-  systeem de positie niet, dan gaan ze naar het einde van de getoonde lijst.
+  systeem de positie niet, dan gaan ze naar het einde van de lijst die wordt
+  getoond door de speler die je het laatst gebruikte, of door de eerste getoonde
+  speler; als elke speler verborgen is, wordt niets ingevoegd en zegt de
+  statusbalk dat (zie [Indeling](layout.md#show-and-hide-panels)).
+  Op Linux vereist het neerzetten van bestanden dat het venster op X11 draait,
+  wat standaard het geval is, ook op een Wayland-bureaublad (zie
+  [Problemen oplossen](troubleshooting.md#files-cannot-be-dropped-on-linux)).
 
 ## Voettekst {#footer}
 

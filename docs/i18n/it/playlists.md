@@ -18,11 +18,26 @@ Cambiare scheda non modifica mai ciò che è in onda né ciò che è successivo.
 Quando un brano finisce, il lettore prosegue nella playlist che contiene
 quel brano.
 
-Le playlist si creano, si rinominano e si eliminano in
+Il **+** all'estremità destra della riga crea una nuova playlist: digita un
+nome e premi Invio o **Crea** (Esc o un clic fuori annullano). La nuova
+playlist compare subito nelle schede di quel lettore e il lettore la mostra.
+Le playlist si possono creare, e si rinominano e si eliminano, anche in
 [Impostazioni](settings.md). L'ultima playlist, e una playlist con un brano
 in onda, non si possono eliminare.
 
 ## La tabella dei brani {#the-track-table}
+
+Ogni file che aggiungi a una playlist, a un cart o importando un file M3U o
+PLS diventa un *brano* della libreria, e vi resta quando ne rimuovi la voce,
+svuoti il cart o elimini la playlist: i suoi marker, le impostazioni di
+loudness e i tag vengono conservati per la prossima volta che aggiungi il
+file. Lo stesso file è sempre un solo brano: aggiungerlo due volte, o a una
+playlist e a un cart, condivide ovunque i suoi marker e le sue impostazioni di
+loudness. Sul desktop, un file aggiunto da questa versione in poi è lo stesso
+brano qualunque percorso lo raggiunga (un collegamento simbolico o un `..`
+nel percorso non crea un secondo brano). L'unica eccezione: un brano senza
+categoria, il cui file è sparito e che nessuno usa più esce da solo dalla
+libreria, con una riga nel log.
 
 ![Una playlist: brani già suonati attenuati, il brano in onda in rosso, il brano successivo in verde, e il piè di pagina con il tempo rimanente](../../images/guide/playlist.png)
 
@@ -37,6 +52,7 @@ in onda, non si possono eliminare.
 | Durata | Durata di riproduzione, dal cue-in al cue-out (l'intero file con **Usa cue-in e cue-out** disattivato) |
 | Intro | Quanto dura l'intro, da dove il brano inizia a suonare fino al suo marker di intro; vuota quando il brano non ha un marker di intro |
 | Nome del file | Il nome del file, con la sua estensione |
+| Commento | Il tag del commento, su una sola riga |
 
 Una nuova installazione mostra `#`, Titolo, Artista e Durata. Le altre
 colonne sono facoltative; vedi **Scegliere le colonne** più sotto. Un brano
@@ -104,12 +120,14 @@ Colori delle righe:
 | **P2** rosso (o un altro numero) nella colonna del numero | In onda su quel lettore |
 | **Verde**, con una freccia | Il brano successivo di questo lettore |
 | Attenuata | Già suonato su questo lettore |
+| Contorno lavanda | La riga selezionata (fai clic su di essa, o spostati con Up e Down). Si vede anche sulle righe rosse e verdi |
 | File con una croce / icona di avviso | File mancante / illeggibile (viene saltato); passa il puntatore sulla riga: il popup inizia con il motivo, in ambra, poi i consueti campi. Un file mancante viene cercato di nuovo ogni 30 s (`tuning.missing_recheck_ms`). |
 | Frecce di ricarica a destra del titolo | Analizzato da una versione precedente; suona comunque con quell'analisi. **Impostazioni → Analisi → Analizza i brani obsoleti** lo aggiorna (i brani su un lettore vengono comunque aggiornati) |
-| Clessidra a destra del titolo | Il brano è in attesa della sua analisi (passa il puntatore sulla clessidra: *Analisi in attesa*). Suona comunque, e la clessidra scompare quando l'analisi finisce |
+| Clessidra a destra del titolo | Il brano è in attesa della sua analisi: *In attesa di analisi* quando è in coda, *Analisi in attesa* quando non è ancora stato messo in coda. Suona comunque, e la clessidra scompare quando l'analisi finisce. La mostra anche un brano analizzato rimesso in coda (da **Rianalizza tutti i brani**) |
+| Icona di forma d'onda a destra del titolo | Il brano è in analisi ora (*In analisi ora*) |
 | Viola | Selezionata |
 
-**Tooltip del brano.** Passa il puntatore su una riga per un istante per vedere titolo, artista, album, data, genere, durata, formato (tipo, frequenza di campionamento e profondità di bit, quando noti) e il percorso del suo file. Un campo che il file non ha viene omesso. Il popup è l'unica informazione al passaggio del puntatore su una riga, e non si sposta mai mentre è mostrato. Per un file mancante o illeggibile inizia con il motivo.
+**Tooltip del brano.** Passa il puntatore su una riga per un istante per vedere titolo, artista, album, data, genere, durata, formato (tipo, frequenza di campionamento, profondità di bit e bitrate medio, per esempio 320 kbps, quando noti) e il percorso del suo file. Un campo che il file non ha viene omesso. Il popup è l'unica informazione al passaggio del puntatore su una riga, e non si sposta mai mentre è mostrato. Per un file mancante o illeggibile inizia con il motivo.
 
 ## Mouse {#mouse}
 
@@ -126,13 +144,16 @@ Colori delle righe:
 | Imposta come successivo | Come il doppio clic. Sul brano in onda suona ancora una volta, dall'inizio, quando finisce il passaggio in corso (con un mix come Ripeti, senza pause), poi il lettore prosegue. Agisce una volta sola. Stop alla fine, la modalità SINGLE e un segno Stop dopo fermano comunque prima il lettore. Mentre un CUE è in corso, si sposta sul nuovo successivo |
 | Preascolta nel CUE | Lo riproduce sull'uscita CUE (apre la finestra CUE). Attenuata quando il lettore non ha un'uscita Cue distinta dalla sua Main |
 | Modifica i tag… | Apre l'editor dei tag per questo brano. **Salva** scrive le modifiche nel file audio; **Annulla** (o Esc, quando non è in corso un salvataggio) chiude senza scrivere. La voce è attenuata, con il motivo al passaggio del puntatore, mentre il brano è in onda, nel CUE o su un cart in riproduzione, finché i suoi tag non sono stati letti, quando il file manca e per i formati i cui tag non si possono scrivere (per esempio il DSD) |
-| Rianalizza | Analizza di nuovo ora questo brano, qualunque sia il suo stato. Anche un file corretto che era illeggibile viene recuperato da solo (vedi [Risoluzione dei problemi](troubleshooting.md)). I marker manuali vengono mantenuti |
+| Rianalizza | Analizza di nuovo ora questo brano, qualunque sia il suo stato, rileggendo il file (così un file che hai modificato viene misurato di nuovo anche se la sua dimensione e la sua data non sono cambiate). Anche un file corretto che era illeggibile viene recuperato da solo (vedi [Risoluzione dei problemi](troubleshooting.md)). I marker manuali vengono mantenuti. Attenuata, con il motivo al passaggio del puntatore, mentre il brano è già in attesa della sua analisi o in analisi |
+| Loudness… | Apre il popup del loudness di questo brano (trim ed esclusione; vedi [Loudness](loudness.md)) |
+| Mostra nella libreria | Apre la [finestra della libreria](library.md) sulla categoria di questo brano con la sua riga selezionata. Solo desktop |
+| Sposta nella categoria ▸ | Archivia il brano in una categoria, o in Senza categoria, senza aprire la libreria. Solo desktop |
 | Aggiungi brani sotto… | Scegli i file da inserire dopo questo brano |
 | Duplica | Inserisce sotto una copia non ancora suonata (con i suoi segni di ripetizione e di stop dopo) |
 | Ripeti questo brano | Spuntala per riprodurlo di continuo, senza pause, finché non premi Play (successivo), Precedente, Stop o Stop in dissolvenza, o attivi Stop alla fine. Pausa lo lascia in ripetizione. Un'icona di ripetizione compare prima del titolo |
 | Stop dopo questo brano | Spuntala per fermare il lettore quando questo brano finisce, ogni volta che suona (in qualsiasi modalità). A differenza del pulsante **Stop alla fine** del lettore, il segno resta con il brano e viene salvato con la playlist. L'icona di stop dopo compare prima del titolo. Ha la precedenza su Ripeti |
 | Sposta in ▸ | Lo sposta in fondo a un'altra playlist |
-| Rimuovi dalla playlist | Lo rimuove; non è possibile mentre è in onda |
+| Rimuovi dalla playlist | Lo rimuove da questa playlist; non è possibile mentre è in onda. Il brano resta nella libreria (i suoi marker e le sue impostazioni di loudness vengono conservati) |
 
 ## Modificare i tag {#editing-tags}
 
@@ -235,7 +256,12 @@ dell'applicazione vengono ignorati.
   posizione di rilascio. Sopra l'intestazione, il bordo di una colonna, la
   barra di scorrimento o una finestra che copre l'elenco non viene inserito
   nulla. Se il sistema non comunica la posizione, vanno in fondo all'elenco
-  mostrato.
+  mostrato dall'ultimo lettore che hai usato, o dal primo lettore mostrato;
+  con tutti i lettori nascosti non viene inserito nulla e la barra di stato lo
+  dice (vedi [Layout](layout.md#show-and-hide-panels)).
+  Su Linux, rilasciare file richiede che la finestra giri su X11, cosa che
+  avviene per impostazione predefinita, anche su un desktop Wayland (vedi
+  [Risoluzione dei problemi](troubleshooting.md#files-cannot-be-dropped-on-linux)).
 
 ## Piè di pagina {#footer}
 

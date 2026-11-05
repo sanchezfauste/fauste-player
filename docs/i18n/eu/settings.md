@@ -8,54 +8,67 @@ Leihoak tamaina bakarra du (900 × 640, txikiagoa pantaila txiki batean),
 atala edozein dela ere, eta atalak barruan korritzen du. Atal bakoitzak
 bere etiketak zutabe bakarrean lerrokatzen ditu.
 
-Erreproduzitzaileak, Neurgailuak, Analisia eta Laster-teklak atalek
+Erreproduzitzaileak, Neurgailuak, Analisia, Ozentasuna eta Laster-teklak atalek
 **Leheneratu balio lehenetsiak** botoi bat dute goiburuan. Berrespena
 eskatzen du, eta ondoren atal hori bakarrik berrezartzen du
 (Erreproduzitzaileak atalak erreproduzitzaile kopurua eta hizkuntza
 mantentzen ditu; Laster-teklak atalak ez du beste berrezartze-botoirik).
-Audio-irteerak, Zerrendak, Kartutxoak, MIDI eta Urrunekoa atalek ez dute.
+Audio-irteerak, Zerrendak, Kartutxoak, Liburutegia, MIDI eta Urrunekoa atalek ez dute.
 
-## Berrabiaraztea falta da {#restart-pending}
+## Zain dauden ezarpenak {#settings-pending}
 
-Aldaketa batzuek aplikazioa berriro abiarazten denean bakarrik dute
-eragina: audio-sistemak, lagintze-maiztasunak, bufferraren tamainak (baita
-gailu batena ere), Main eta Cue irteerek (erreproduzitzaileenak eta
-kartutxo-panelarenak), bit perfect gailuek eta DSD ezarpenek.
-Erreproduzitzaile kopurua ez da horietako bat: berehala aplikatzen da.
+Ezarpen guztiak aplikazioa abian dagoela aplikatzen dira. Audio-sistemak,
+lagintze-maiztasunak, bufferraren tamainak (baita gailu batena ere), Main eta
+Cue irteerek (erreproduzitzaileenak eta kartutxo-panelarenak), bit perfect
+gailuek eta DSD ezarpenek irteera-gailu bat nola irekitzen den aldatzen
+dute, beraz segurua den ahalik eta lasterren aplikatzen dira:
+
+- Gailu baten ezarpenak gailu horretan ezer jotzen ez denean aplikatzen dira:
+  harantz bideratutako erreproduzitzailerik ez dago jotzen, itzaltzen edo
+  aurrez entzuten (CUE, eusten ari denean ere), eta ez dago kartutxorik
+  jotzen. Pausan dagoen erreproduzitzaile batek, edo pista bat kargatuta
+  baino ez duenak, ez du gailurik mantentzen: bere pista pausan geratzen da
+  zegoen lekuan.
+- Erreproduzitzaile baten edo kartutxo-panelaren irteera mugitu egiten da
+  erreproduzitzaile hori (edo kartutxo-panela) jotzen ari ez denean; gailu
+  berberetako beste erreproduzitzaileak ez dira etetzen.
+- Audio-sistema berri bat inon ezer jotzen ez denean aplikatzen da.
+
+Zain dagoen aldaketa bat eragiten dion ezerk jotzen ez duen lehen unean
+exekutatzen da. Hori pista bat amaitu eta hurrengoa hasi arteko tartea izan
+daiteke: orduan hurrengo pista gailua berriro irekitzeko behar den denbora
+beranduago hasten da. **Aplikatu orain** botoiak (behean) aldaketa
+berehala behartzen du.
 
 Gailu bati emandako maiztasun edo buffer batek gailua zerekin irekitzen den
 aldatzen duenean bakarrik du eragina: gailu bati orokorraren balio bera
-ematea, edo halako balio bat garbitzea, ez dago zain.
+ematea, edo halako balio bat garbitzea, ez du ezer aldatzen.
 
-Mugak eta motorraren doikuntza ere hurrengo abiaraztean aplikatzen dira,
-baina konfigurazio-fitxategian editatzen dira aplikazioa itxita dagoela
-(ikus [Datuak eta babeskopiak](data-and-backups.md)); beraz, ez dira inoiz
-zain gisa agertzen.
+Ordura arte, goiko barrak **Zain dauden ezarpenak** erakusten du. Pasatu
+sagua gainetik zer dagoen zain eta zeren zain ikusteko; egin klik zerrenda
+ikusteko, gailu edo irteera batek baztertu duen edozein aldaketa ere
+erakusten duena (gailuak bere uneko ezarpenak mantentzen ditu; aldaketa
+berriro saiatzen da aldatzen duzunean edo **Aplikatu orain** sakatzen
+duzunean). Ezarpenen oinak "Aldaketa batzuek ukitzen dituzten irteerak libre
+egon arte itxaroten dute." dio eta **Aplikatu orain** eskaintzen du; ohar
+labur batek (adibidez, ezarpen bat gorde dela) testu horren lekua har dezake
+une batez.
 
-Horietako bat zain dagoen bitartean, Ezarpenen oinak "Aldaketa batzuk
-berrabiarazi ondoren aplikatzen dira." dio eta **Berrabiarazi orain**
-eskaintzen du, eta goiko barrak **Berrabiaraztea falta da** pilula bat
-erakusten du. Pasatu sagua pilularen gainetik zer dagoen zain ikusteko.
-Ohar labur batek (adibidez, ezarpen bat gorde dela) oineko testuaren lekua
-har dezake une batez; **Berrabiarazi orain** bertan geratzen da. Biek gauza
-bera egiten dute:
+**Aplikatu orain** botoiak zain dauden irteera-aldaketa guztiak berehala
+aplikatzen ditu. Horrek zerbait eteingo balu, lehenik gailuak eta haietan
+jotzen duena zerrendatzen ditu; **Eten eta aplikatu** botoiak orduan gailu
+horietako audioa laburki eteten du: jotzen ari zena zegoen lekutik jarraitzen
+du tarte labur baten ondoren, eta pausan edo geldituta zegoen ezer ez da
+hasten. **Utzi** botoiak (edo `Esc` teklak) itxaroten jarraitzen du.
 
-- Airean ezer ez dagoenean, **Berrabiarazi orain** botoiak (edo pilulak)
-  berehala berrabiarazten du.
-- Zerbait airean dagoenean, entzuten ari dena zerrendatzen duen leihoa
-  agertzen da, **Gelditu eta berrabiarazi** edo **Utzi** aukerekin.
-
-Lehenik saioa gordetzen da eta audioa eta MIDI kontrola gelditzen dira,
-ondoren aplikazioa berriro abiarazten da datu-karpeta berarekin
-(`FAUSTE_HOME`), eta gero ez da ezer airera ateratzen bere kabuz.
-Aplikazioa ezin bada berriro abiarazi (Flatpak batean, baita berria
-garaiz abiarazten ez denean ere), hala adierazten du; abiarazi zure
-aplikazioen menutik.
+Mugak eta motorraren doikuntza konfigurazio-fitxategian editatzen dira
+aplikazioa itxita dagoela (ikus [Datuak eta babeskopiak](data-and-backups.md)).
 
 ## Audio-irteerak {#audio-outputs}
 
-Atal honetako aldaketek berrabiarazte baten zain geratzen dira: ikus
-[Berrabiaraztea falta da](#restart-pending).
+Atal honetako aldaketak aplikazioa abian dagoela aplikatzen dira, eragiten
+dieten ezerk jotzen ez duen bezain laster: ikus
+[Zain dauden ezarpenak](#settings-pending).
 
 ![Ezarpenak, Audio-irteerak, Oinarrizko ikuspegia: hautatzailea, audio-sistema, lagintze-maiztasuna, bufferraren tamaina eta erreproduzitzaile bakoitzaren Main eta Cue irteerak (hemen, sistema isila)](../../images/guide/settings-outputs.png)
 
@@ -77,26 +90,27 @@ badu, balio orokorretatik hasten da. Ordura arte, berriro aukeratzeak
 |---|---|
 | Audio-sistema | Azken aukerak, **Irteerarik ez (isilik)**, ez du ezer jotzen: denbora-lerroak denbora errealeko abiaduran doaz soinu-txartelik gabe (txartelik gabeko makina baterako, edo entseatzeko). Linux: PipeWire (hura barne duten konpilazioetan), PulseAudio, JACK edo ALSA. Windows: WASAPI, ASIO (hura barne duten konpilazioetan) edo JACK. macOS: Core Audio edo JACK. Ordenagailu honetan falta diren sistemak, edo irteera-gailurik ez dutenak (abian ez dagoen JACK zerbitzari bat), erabilgarri ez gisa agertzen dira. "Sistemaren lehenetsia" aukerak ordena horretan erabilgarri dagoen lehena erabiltzen du. |
 | Lagintze-maiztasuna | Irteera guztiek erabiltzen duten maiztasuna, gailu batek berea ez badu (Aurreratua); fitxategiak maiztasun horretara bihurtzen dira kalitate handiko birlaginketarekin. Bit perfect gailuak beren maiztasunean hasten dira eta ondoren fitxategiak jarraitzen dituzte. |
-| Bufferraren tamaina | Audio-bloke bakoitzeko frameak, gailu batek berea ez badu; ondoriozko latentzia azpian erakusten da |
-| Irteerak erreproduzitzaileko | Erreproduzitzaile bakoitzeko, **Main** gailu bat (airerakoa) eta **Cue** gailu bat (aurrez entzuteko), bakoitza kanal-bikote batekin. Hainbat irteera-profil eskaintzen dituen soinu-txartel batek (ALSAk front, surround, direct hardware… zerrendatzen ditu) bakoitza *txartela — profila* gisa erakusten du; berdin irakurtzen jarraituko luketen bi sarrerek beren gailu-identifikatzailea jasotzen dute kortxete artean. Kanal anitzeko interfazeek hainbat erreproduzitzaile eraman ditzakete bikote desberdinetan. |
+| Bufferraren tamaina | Audio-bloke bakoitzeko frameak, gailu batek berea ez badu; ondoriozko latentzia azpian erakusten da. Soinu-zerbitzari baten edo sistemaren nahasgailu baten bidezko irteerek (PulseAudio, ALSA `default` gailua) gutxienez 50 ms eskatzen dituzte tamaina honek dioena edozein dela ere, edo gailuak hartzen duen bezainbeste, ordenagailu lanpetu bat entzun ez dadin; latentziak orduan hala dio (`shared_buffer_ms` konfigurazio-fitxategian) |
+| Irteerak erreproduzitzaileko | Erreproduzitzaile bakoitzeko, **Main** gailu bat (airerakoa) eta **Cue** gailu bat (aurrez entzuteko), bakoitza kanal-bikote batekin. Hainbat irteera-profil eskaintzen dituen soinu-txartel batek (ALSAk front, surround, direct hardware… zerrendatzen ditu) bakoitza *txartela — profila* gisa erakusten du; berdin irakurtzen jarraituko luketen bi sarrerek beren gailu-identifikatzailea jasotzen dute kortxete artean. Kanal anitzeko interfazeek hainbat erreproduzitzaile eraman ditzakete bikote desberdinetan. Aireko irteera bat (edozein erreproduzitzaileren Main edo kartutxo-panelarena) partekatzen duen Cue irteera bat baimenduta dago: azpiko ohar batek dio bere aurrez entzutea airean entzuten dela eta han zerbait jotzen ari den bitartean lehenik galdetzen duela. |
 | Probatu Main / Probatu Cue | Tonu labur bat jotzen du (1 kHz Main irteeran, 440 Hz Cue irteeran, 1,5 s, −18 dBFS) aukeratutako irteeran, airera atera aurretik kableatua egiaztatu ahal izateko |
-| Kartutxo-panela | Kartutxo-panelaren Main eta Cue irteerak. Main lehenespenez sistemaren irteera da. Cue irteerarik gabe, ez dago kartutxoak aurrez entzuterik. |
+| Liburutegia | Liburutegiaren Cue irteera, bere **Probatu Cue** botoiarekin: liburutegiaren leihoko [aurrez entzutea](library.md#pre-listening) (telefono batean, Liburutegi fitxakoa) non entzuten den. Hura gabe, aurrez entzuteko barrako Play ilunduta dago. Androiden, bere aukera hutsak *Sistemaren lehenetsia* dio *Bat ere ez* ordez: aurrez entzuteak eta **Probatu Cue** botoiak irteera lehenetsian jotzen dute (ikus [Android → Liburutegia](android.md#library)). Aireko irteera batean dagoen Liburutegiko irteera batek erreproduzitzaile baten Cue-k bezala jokatzen du: azpiko ohar batek dio bere aurrez entzutea airean entzuten dela eta han zerbait jotzen ari den bitartean lehenik galdetzen duela. Oinarrizko eta Aurreratua ikuspegietan dago, telefono batean ere |
+| Kartutxo-panela | Kartutxo-panelaren Main eta Cue irteerak. Main lehenespenez sistemaren irteera da. Cue irteerarik gabe, ez dago kartutxoak aurrez entzuterik; aireko irteera batean dagoen Cue batek erreproduzitzaileetan bezala jokatzen du. |
 | Lagintze-maiztasuna: *gailua* (Aurreratua) | **Orokorra (...)** aukerak goiko lagintze-maiztasuna erabiltzen du; balio batek gailu honi bere maiztasuna ematen dio. Gailuak adierazten dituen maiztasunak bakarrik eskaintzen dira; gordeta dagoen eta gailuak jada adierazten ez duen maiztasun bat zerrendan geratzen da, agian ez dela irekiko dioen ohar batekin (orduan gailuak maiztasun orokorra erabiltzen du). Balio propioak irteera batek izendatzen dituen gailuei bakarrik aplikatzen zaizkie, ez sistemaren irteera lehenetsiari, irteera batek hura izendatzen ez badu. |
-| Bufferraren tamaina: *gailua* (Aurreratua) | **Orokorra (...)** aukerak goiko bufferraren tamaina erabiltzen du; balio batek gailu honi berea ematen dio, bere latentzia azpian duela. Bere bufferraren tamaina onartzen ez duen gailu batek orokorra erabiltzen du, eta baita maiztasun orokorra ere bere maiztasuna onartzen ez duenean. |
-| Bit perfect: *gailua* (Aurreratua) | Bit perfect gailu bat sarbide esklusiboarekin irekitzen da eta fitxategi bakoitzaren lagintze-maiztasuna jarraitzen du bertan ezer jotzen ari ez den bitartean. Etengailua desaktibatuta dago gailuak sarbide esklusiborik eman ezin duenean. Ikus [Bit perfect irteera](bit-perfect.md). |
+| Bufferraren tamaina: *gailua* (Aurreratua) | **Orokorra (...)** aukerak goiko bufferraren tamaina erabiltzen du (partekatutako irteera batek eskatzen duen gutxienekoarekin, goian bezala); balio batek gailu honi berea ematen dio, dagoen bezala erabilia, bere latentzia azpian duela. Bere bufferraren tamaina onartzen ez duen gailu batek orokorra erabiltzen du, eta baita maiztasun orokorra ere bere maiztasuna onartzen ez duenean. |
+| Bit perfect: *gailua* (Aurreratua) | Berez desaktibatuta. Audiofiloen erreprodukziorako modu berezi bat, ez programa nahasietarako: gailua sarbide esklusiboarekin irekitzen da eta pista bakoitzaren lagintze-maiztasuna jarraitzen du. Bere Main irteera horretan duten erreproduzitzaileek ez dute inoiz gurutzatzen ezta nahasten ere, maiztasun-aldaketa batek isilune labur bat uzten du bi pistaren artean, eta haien bolumena % 100ean finkatuta dago. Etengailua desaktibatuta dago gailuak sarbide esklusiborik eman ezin duenean. Ikus [Zer kostatzen den](bit-perfect.md#what-it-costs). |
 | DSD: *gailua* (Aurreratua) | **Bihurtu PCM** (lehenetsia), **DoP** edo, Linuxen, **DSD natiboa**. Gailu guztiek erakusten dute; gailuak onar ditzakeen moduak bakarrik eskaintzen dira, eta azpiko lerro batek besteak zergatik ez diren adierazten du. Ikus [DSD](bit-perfect.md#dsd). |
 | Beste iturri batek DSD irteera bat behar duenean (Aurreratua) | **Jarraitu DSD pista PCM gisa** (lehenetsia), edo **Mantendu DSDa eta isilarazi beste iturriak**. Ikus [DSD](bit-perfect.md#dsd). |
 | DSD isiltasuna (Aurreratua) | DSD fluxu bat hasi aurretik, amaitu ondoren eta PCMra aldatzean bidaltzen den isiltasuna, bihurgailua klikik gabe sinkroniza dadin; lehenespenez 200 ms, 0tik 2000ra. |
 
-Cue irteera bat ez da inoiz Main-ek erabiltzen duen irteerara pasatzen,
-aurrez entzutea inoiz airera atera ez dadin. Ordenagailu honek ez duen
-audio-sistema bateko gailu bat izendatzen duen Cue batek, edo Main-en
-irteera bera (gailua eta kanalak) duenak, "cuerik ez" esan nahi du. Cue
-irteera bat bere Main irteeraren berdina denean, azpiko abisu batek hala
-adierazten du. Cue irteerarik ez duen erreproduzitzaile batek, edo bere Cue
-irteera bere Main irteeran duenak, **CUE** botoia ilunduta du; gainetik
-pasatzean Cue irteera bat hemen aukeratzeko esaten dizu. Gauza bera
-gertatzen da kartutxo-panelaren **Aurrez entzun CUEan** aukerarekin.
+Cue irteera bat ez da inoiz Main-ek erabiltzen duen irteerara pasatzen.
+Ordenagailu honek ez duen audio-sistema bateko gailu bat izendatzen duen Cue
+batek "cuerik ez" esan nahi du. Aireko irteera batean dagoen Cue bat (Main
+baten gailu eta kanal berberak, edo haiekin gainjarriak) baimenduta dago:
+azpiko ohar batek dio bere aurrez entzutea airean entzuten dela eta han
+zerbait jotzen ari den bitartean lehenik galdetzen duela. Cue irteerarik ez
+duen erreproduzitzaile batek **CUE** botoia ilunduta du; gainetik pasatzean
+Cue irteera bat hemen aukeratzeko esaten dizu. Gauza bera gertatzen da
+kartutxo-panelaren **Aurrez entzun CUEan** aukerarekin.
 
 Gailu bat jotzen ari dela desagertzen bada, erreproduzitzaileek beren
 denbora-lerroak mantentzen dituzte, eta gailua berriro irekitzen da
@@ -109,12 +123,18 @@ itzultzen denean (ikus [Arazoen konponbidea](troubleshooting.md)).
 | Ezarpena | Lehenetsia | Esanahia |
 |---|---|---|
 | Hizkuntza | Sistema | Interfazearen hizkuntza |
-| Erreproduzitzaile kopurua | 4 | Pantaila nagusiko zutabeak (ezin da kendu airean dagoen erreproduzitzaile bat) |
+| Erreproduzitzaile kopurua | 4 | Pantaila nagusiko zutabeak (ezin da kendu airean dagoen erreproduzitzaile bat). Zenbakia graduatzailea askatzean aplikatzen da; koadroan idatzitako zenbaki bat Enter sakatzean edo koadrotik irtetean aplikatzen da, eta Escape-k bertan behera uzten du |
 | Modu lehenetsia | CONT | Erreproduzitzaileek hasieran duten modua |
-| Itzaltze-denbora | 1000 ms | Play-k airean dagoela eta Itzaltzearekin gelditu aukerak erabiltzen dute |
-| Nahasketa automatikoa MIX puntuan | Aktibo | Pistak gainjartzen ditu modu jarraituan |
+| Itzaltze-denbora | 1000 ms | Play-k airean dagoela eta Itzaltzearekin gelditu aukerak erabiltzen dute. Main irteera bit perfect duen erreproduzitzaile batean, Itzaltzearekin gelditu aukerak bakarrik |
+| Nahasketa automatikoa MIX puntuan | Aktibo | Pistak gainjartzen ditu modu jarraituan. Ez zaio aplikatzen Main irteera bit perfect duen erreproduzitzaile bati |
 | Erabili cue-in eta cue-out | Aktibo | Desaktibatuta: erreproduzitzaileek pista bakoitza fitxategiaren hasieratik amaierara jotzen dute; markatzaileak gorde egiten dira eta kartutxoek beren markatzaileak erabiltzen jarraitzen dute. Iraupenek eta zerrenden guztizkoek tarte bera jarraitzen dute |
 | Pista-amaierako abisua | 10 s | Atzerako kontaketa gorriz keinuka noiz hasten den |
+
+Erreproduzitzaile baten Main irteera bit perfect denean, **Nahasketa automatikoa
+MIX puntuan** aukeraren azpiko ohar batek dio erreproduzitzaile horiek ez
+dutela inoiz nahasten edo gurutzatzen. Bi ezarpenak editagarri geratzen dira:
+beste erreproduzitzaileei aplikatzen jarraitzen diete. Ikus
+[Zer kostatzen den](bit-perfect.md#what-it-costs).
 
 ## Neurgailuak {#meters}
 
@@ -165,8 +185,16 @@ kanalen artean dituela:
 ![Ezarpenak, Analisia: markatzaile automatikoen atalaseak](../../images/guide/settings-analysis.png)
 
 [Markatzaileak eta nahasketa](markers-and-mixing.md) atalean deskribatutako
-atalaseak. **Berriro aztertu pista guztiak** botoiak analisia berriro
-exekutatzen du liburutegi osorako; eskuzko markatzaileak gorde egiten dira.
+atalaseak; errenkada bakoitzak bere izenaren azpian lerro bateko iradokizun
+bat du, balioak zer egiten duen esaten duena. **Berriro aztertu pista
+guztiak** botoiak analisia berriro exekutatzen du liburutegi osorako,
+fitxategi guztiak berriro irakurriz; eskuzko markatzaileak gorde egiten dira.
+Abian dagoen bitartean botoia ilunduta dago eta zenbat egin duen erakusten du
+(**Aztertzen… 120 / 340**), beraz berriro sakatzeak ez du hasieratik hasten;
+egoera-barrako **N pista aztertzen** elementuaren argibideak aurrerapen bera
+ematen du. Hemen atalase bat aldatzeak ere liburutegia berriro aztertzen du,
+eta dagoeneko abian dagoen exekuzio bat berrabiarazten du, pistarik ez dadin
+balio zaharren markatzaileekin geratu.
 
 Analisia aldatu duen eguneratze baten ondoren, aurreko bertsioak aztertutako
 pistek beren markatzaileak eta uhin-formak mantentzen dituzte, eta
@@ -178,6 +206,41 @@ erakusten diren heinean, baita formatu erregistraturik ez duten kartutxoen
 pistak ere (kartutxo bat bit perfect jotzen da bere formatua ezagutzen
 denean bakarrik). Fitxategia falta duten pistak ez dira zenbatzen
 fitxategia itzuli arte.
+
+Analisiak fitxategi bakoitzaren ozentasuna ere neurtzen du
+[ozentasun-normalizaziorako](loudness.md). Ozentasuna neurtu aurretik
+aztertutako fitxategiak atzeko planoan neurtzen dira, analisiak beste
+ezer egiteko ez duenean, normalizazioa aktibo egon edo ez; haien markatzaileei
+ez zaie ukitzen. **Berriro aztertu** (zerrendaren menuan) eta **Berriro
+aztertu pista guztiak** aukerek berriro neurtzen dute.
+
+## Ozentasuna {#loudness}
+
+![Ezarpenak, Ozentasuna: normalizazioa aktibo, helburuarekin, true peak sabaiarekin, gehieneko igoerarekin eta gehieneko doikuntzarekin, beren balio lehenetsietan](../../images/guide/settings-loudness.png)
+
+Pista eta kartutxo guztiak ozentasun berean jotzen ditu, pista bakoitzeko
+irabazi finko batekin. [Ozentasun-normalizazioak](loudness.md) azaltzen du
+irabazia nola kalkulatzen den, erreproduzitzailearen goiburuko ikurra eta
+pista bakoitzeko ezarpenak.
+
+| Ezarpena | Lehenetsia | Tartea | Esanahia |
+|---|---|---|---|
+| Ozentasuna normalizatu | Aktibo | | Normalizazioa aktibo edo ez |
+| Helburua | −16 LUFS | −36 … −6 LUFS, 0,5eko urratsak | Pista guztiak eramaten diren ozentasun integratua |
+| True peak sabaia | −1 dBTP | −12 … 0 dBTP, 0,1eko urratsak | Igoera batek ez du inoiz pistaren true peak hau gainditzen. Jaitsierak ez dira mugatzen |
+| Gehieneko igoera | 12 dB | 0 … 24 dB | Pista baxu batek jaso dezakeen irabazirik handiena. Jaitsierak ez dira mugatzen |
+| Gehieneko doikuntza | 12 dB | 0 … 24 dB | Pista bakoitzaren doikuntza manualak noraino irits daitekeen, gora edo behera |
+
+Aldaketak geroago kargatzen diren pistei aplikatzen zaizkie: jotzen ari dena
+bere irabaziarekin jarraitzen du, eta erreproduzitzaile bakoitzean zain
+dagoen hurrengo pista berriro prestatzen da balio berriarekin. Ezarpenen
+azpiko ohar batek esaten du zenbat pista dauden oraindik beren neurketaren
+zain; aldatu gabe jotzen dira hura amaitu arte. Bit perfect irteera batean
+dagoen erreproduzitzaile edo kartutxo bat ez da inoiz normalizatzen.
+**Leheneratu balio lehenetsiak** botoiak atal hau bakarrik berrezartzen du
+(normalizazioa aktibo). Normalizazioa aktibo dago instalazio berrietan;
+lehendik dagoen konfigurazio batek bere uneko ezarpena mantentzen du
+(gordetako konfigurazio guztiek balioa gordeta dute jada).
 
 ## Zerrendak {#playlists}
 
@@ -204,10 +267,10 @@ frantsesa erabiltzen du, Brasilgo portugesak portugesa), eta bestela
 ingelesa. Interfazeak ez duen ezarpen-fitxategiko hizkuntza bat **Sistema**
 gisa agertzen da eta sistema eragilea jarraitzen du.
 
-Ingelesa eta gaztelania eskuz idatzita daude. Beste itzulpenak AArekin
-sortu dira, eta akatsak izan ditzakete; horietako bat erabiltzen ari denean,
-**Fauste Player-i buruz** leihoak hala adierazten du. Jatorrizko hiztunen
-zuzenketak ongi etorriak dira, issue edo pull request gisa.
+Hizkuntza guztietako interfazea, ingelesa eta gaztelania barne, AArekin sortu
+da eta akatsak izan ditzake. **Fauste Player-i buruz** leihoak hizkuntza
+guztiak hartzen dituen erantzukizun-ukapen orokor bat dauka. Zuzenketak ongi
+etorriak dira, issue edo pull request gisa.
 
 ## Kartutxoak {#cartwall}
 
@@ -215,6 +278,14 @@ zuzenketak ongi etorriak dira, issue edo pull request gisa.
 
 Orriak, saretaren tamaina, kartutxo-editorea, eta kartutxo-orrien
 inportazioa eta esportazioa. Ikus [Kartutxo-panela](cartwall.md).
+
+## Liburutegia {#library}
+
+Sortu, aldatu izena, aldatu kolorea, aldatu mota, mugitu (arrastatuz) eta
+ezabatu zure pistak taldekatzen dituzten kategoriak, kategoria batekin
+karpeta bat zaindu eta bere falta diren pistak kendu, liburutegiaren leihoa
+ireki gabe. Ikus [Liburutegia](library.md#categories) eta
+[Zaindutako karpetak](library.md#watched-folders).
 
 ## Laster-teklak {#keyboard-shortcuts}
 
@@ -226,8 +297,10 @@ Ikus [Teklatua](keyboard.md).
 
 ![Ezarpenak, MIDI, MIDI kontrola desaktibatuta](../../images/guide/settings-midi.png)
 
-Aktibatu MIDI kontrol-gainazalak, ikusi sarrera-atakak, eta ikasi kontrol
-bat erreproduzitzailearen ekintza bakoitzerako. Ikus
+Aktibatu MIDI kontrol-gainazalak, ikusi sarrera-atakak (**Konektatu berriro
+atakak** botoiak berriro irekitzen ditu, kontrolagailuak berriro konektatuko
+bazenitu bezala), eta ikasi kontrol bat erreproduzitzailearen ekintza
+bakoitzerako. Ikus
 [MIDI kontrol-gainazalak](midi.md).
 
 ## Urrunekoa {#remote}

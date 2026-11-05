@@ -73,7 +73,9 @@ Een client kan:
 - de spelers, playlists, nummers (met hoes en golfvorm) en de cartwall lezen;
 - afspelen, pauzeren, stoppen, faden, opnieuw starten en teruggaan;
 - het volgende item kiezen (ook het item dat on air is: het speelt nog een
-  keer), voorbeluisteren en zoeken (op een gestopte speler kiest een zoekactie
+  keer), voorbeluisteren (een voorbeluistering die on air te horen zou zijn
+  terwijl daar iets speelt, wordt geweigerd tenzij het verzoek `"force": true`
+  zegt; zie de API-referentie) en zoeken (op een gestopte speler kiest een zoekactie
   waar Play het volgende item start, en een zoekactie vóór de cue-in start bij
   de cue-in);
 - volumes, modi, stoppen na het huidige nummer en de markeringen voor herhalen
@@ -83,14 +85,42 @@ Een client kan:
 - bewerken: playlists aanmaken, hernoemen en verwijderen; een al geladen
   nummer toevoegen, en items verwijderen, verplaatsen of dupliceren; cartpagina’s
   aanmaken, hernoemen, het formaat wijzigen en verwijderen, en een cart
-  instellen met een geladen nummer; markers instellen of terugzetten.
+  instellen (naam, type, kleur, loop, exclusief) met een geladen nummer;
+  markers instellen of terugzetten; een nummer uitsluiten van
+  [loudness-normalisatie](loudness.md) of bijstellen met een trim.
 
 Verwijderen wat on air is, wordt geweigerd, net als op het scherm. Bestanden
 die nog niet geladen zijn, kunnen niet op afstand worden toegevoegd: ze staan
 op deze computer, dus voeg ze eerst hier toe.
 
-Een knop die op het scherm grijs is, wordt ook op afstand geweigerd. De
-volledige referentie staat in
+Een knop die op het scherm grijs is, wordt ook op afstand geweigerd.
+
+Een speler waarvan de Main-uitgang [bit-perfect](bit-perfect.md#what-it-costs)
+is, blijft op afstand werken, met dezelfde beperkingen als op het scherm:
+`play` en `previous` schakelen meteen om, zonder crossfade, en zijn volume
+wordt op 100 % gehouden. Een volume onder 100 % wordt geweigerd (`409`, met de
+reden), en precies 100 % wordt geaccepteerd. Elke speler zegt of zijn volume
+wordt vastgehouden (`fader_locked`).
+
+Een volume dat als faderpositie wordt verstuurd (`fader` van de API, OSC
+`/volume`) is een positie op de eigen schaal van de fader op het scherm, van 0
+(stilte) tot 1 (0 dB): 0,9 is ongeveer −2,5 dB, 0,8 ongeveer −5,3 dB en 0,5
+ongeveer −16 dB. Eerdere versies gebruikten een andere schaal (0,8 was −12 dB,
+0,5 was −30 dB), dus een script dat daarvoor is geschreven, zet nu luidere
+niveaus: controleer de waarden ervan.
+
+Elk nummer draagt zijn loudness-meting (`loudness`, `null` totdat het is
+gemeten) en zijn instelling (`loudness_edit`: `excluded` en `trim_db`). Een
+speler die speelt of gepauzeerd is, en elke spelende cart, zegt met welke
+[normalisatie](loudness.md)-gain zijn nummer begon en waarom (`normalization`:
+`gain_db` en een `status` zoals `applied`, `not_measured` of `bit_perfect`).
+`PUT /api/v1/tracks/<id>/loudness` met `{"excluded": false, "trim_db": -1.5}`
+wijzigt de instelling, zoals de pop-up **Loudness…** doet; een trim boven de
+maximale trim wordt geweigerd (`409`, met de reden). De
+normalisatie-instellingen zelf (aan of uit, het doel, de limieten) worden
+alleen op deze computer gewijzigd. OSC en MIDI hebben geen loudness-bediening.
+
+De volledige referentie staat in
 [de technische documentatie](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
 
 Probeer het vanuit een terminal:
@@ -143,6 +173,10 @@ Een abonnee kan elke poort van zijn eigen adres opgeven, en er worden er
 maximaal `max_subscribers` bijgehouden. Iedereen die mag versturen, kan zich
 dus ook abonneren. Dat is nog een reden om OSC op een vertrouwd netwerk te
 houden.
+
+Op een speler waarvan de Main-uitgang bit-perfect is, worden
+`/volume`-berichten geweigerd (het log noteert dat) en stuurt de speler
+`/volume-locked` 1 naar abonnees (anders 0).
 
 `oscsend` en `oscdump` komen met liblo (`liblo-tools` op Debian en Ubuntu). De
 volledige lijst met adressen staat in

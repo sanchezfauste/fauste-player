@@ -15,14 +15,19 @@ ditu inoiz ordezten.
 
 ## Markatzaileak editatzea {#editing-markers}
 
-Erreproduzitzaile baten uhin-forman, edo bere CUE leihoaren uhin-forman
-(menu eta helduleku berberak; aldaketa bat bietan agertzen da aldi berean):
+Erreproduzitzaile baten uhin-forman, bere CUE leihoaren uhin-forman edo
+[liburutegiaren leihoko aurrez entzuteko barran](library.md#pre-listening)
+(menu eta helduleku berberak; aldaketa bat pista agertzen den leku guztietan
+ikusten da aldi berean):
 
 - **Egin eskuineko klik** markatzaile bat nahi duzun lekuan eta aukeratu
   **Ezarri cue-in hemen**, **Ezarri introaren amaiera hemen**, **Ezarri
   outroaren hasiera hemen**, **Ezarri MIX puntua hemen** edo **Ezarri
   cue-out hemen**. **Berrezarri markatzaile automatikoak** aukerak jarri
   dituzun markatzaileak kentzen ditu, eta pista berriro aztertzen da.
+  **Ozentasuna…** aukerak pistaren
+  [ozentasun-normalizazioaren](loudness.md#per-track-exclude-and-trim)
+  ezarpenak irekitzen ditu: baztertu, edo bere irabazia doitu.
 - **Eutsi Alt** (Option macOSen): heldulekuak agertzen dira markatzaileetan.
   Arrastatu bat mugitzeko; denbora erakusten da arrastatzen duzun bitartean.
   Arrastatze batek ez du inoiz erreprodukzio-burua mugitzen.
@@ -90,6 +95,11 @@ ondoren, pistak berriro aztertzen dira automatikoki.
   cue-out puntuan gelditzen da.
 - **Play sakatzea airean dagoela:** hurrengo pista berehala hasten da, eta
   unekoa *itzaltze-denboran* (lehenespenez 1 s) itzaltzen da.
+- **Main irteera bit perfect duen erreproduzitzaile batek** ez ditu MIX
+  puntua eta nahasketa automatikoa kontuan hartzen: pista bakoitza bere
+  cue-out punturaino jotzen da, eta gero hurrengoa hasten da; airean dagoela
+  Play sakatzean, berehala aldatzen da, itzaltzerik gabe. Ikus
+  [Zer kostatzen den](bit-perfect.md#what-it-costs).
 - **Erabili cue-in eta cue-out desaktibatuta** (Ezarpenak →
   Erreproduzitzaileak): erreproduzitzaile guztiek pista bakoitza 0tik
   fitxategiaren amaierara jotzen dute. Cue-in eta cue-out, automatikoak eta

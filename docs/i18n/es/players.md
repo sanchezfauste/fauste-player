@@ -3,20 +3,29 @@
 Cada columna es un player. Los players son independientes: cada uno tiene
 sus propias pestañas de playlist, transporte, volumen y salidas.
 
-![El player 1 sonando: su cabecera, carátula, título, siguiente pista, transporte, cuenta atrás, vúmetro, fader y forma de onda](../../images/guide/player.png)
+![El player 1 sonando: su cabecera con la ganancia de sonoridad, carátula, título, siguiente pista, transporte, cuenta atrás, vúmetro, fader y forma de onda](../../images/guide/player.png)
 
 ## Cabecera {#header}
 
 | Elemento | Significado |
 |---|---|
 | `P1` … `Pn` | Número del player (la tecla numérica que lo reproduce) |
+| Botones **Ocultar** y **Maximizar** / **Restaurar** | Los dos botones pequeños del extremo derecho de la cabecera: ocultan el player, o lo maximizan un momento (**Restaurar** mientras está maximizado). Se atenúan mientras la distribución está bloqueada, **Ocultar** en el último panel visible y **Maximizar** cuando hay un solo panel visible (véase [Distribución](layout.md#maximize-a-panel)) |
 | Punto y etiqueta de estado | **Sonando** (rojo), **En pausa** (ámbar), **Detenido** (gris) |
-| Distintivo **Mezcla** / **Fundido** | Hay en curso una mezcla hacia la siguiente pista o un stop con fundido |
+| Columnas estrechas | Cuando la columna es demasiado estrecha para todos los distintivos, la cabecera suprime primero el menos importante (el texto de estado, luego **Otras silenciadas**, el aviso de entrada, **Stop al final**, **Mezcla** / **Fundido**, el punto de estado), de modo que nada se solapa nunca. El número del player, **CUE**, el modo, **BP**, el distintivo de ganancia y los botones **Ocultar** y **Maximizar** siempre se quedan. Ensancha la columna para verlos todos |
+| Distintivo **Mezcla** / **Fundido** | Hay en curso una mezcla hacia la siguiente pista o un stop con fundido. **Mezcla** no se enciende nunca en un player cuya salida Main es bit-perfect: no encadena con fundido (véase [Lo que cuesta](bit-perfect.md#what-it-costs)) |
 | Distintivo **Stop al final** | El player se detiene cuando acaba la pista actual |
 | Distintivo **Repetir** / **Parar tras la pista** | La pista actual se repite, o detiene el player al acabar, por su propia marca en el menú de la playlist. Pasa el puntero por encima para ver la frase completa. El botón **Stop al final** del propio player tiene prioridad: mientras está activo, solo se ve su distintivo |
-| **BP** / **DSD** | **BP** se enciende mientras la pista actual llega sin cambios a su dispositivo Main. **DSD** lo sustituye mientras una pista DSD sale como DSD, sin cambios (consulta [Salida bit-perfect](bit-perfect.md)). **Otras silenciadas** aparece a su lado cuando ese flujo DSD deja fuera de la salida a las demás fuentes |
+| Distintivo de ganancia | Con la [normalización de la sonoridad](loudness.md#the-gain-in-the-player-header) activada, la ganancia con la que suena la pista en antena (**+4.0 dB**), o un **0.0 dB** ámbar cuando la pista suena sin cambios (aún sin medición, una salida bit-perfect o una pista excluida de la normalización). Pasa el cursor por encima para ver el motivo. Se muestra mientras el player suena o está en pausa |
+| **BP** / **DSD** | El distintivo solo aparece en un player cuyo dispositivo Main funciona en bit-perfect; **BP** se enciende mientras la pista actual llega sin cambios a ese dispositivo. **DSD** lo sustituye mientras una pista DSD sale como DSD, sin cambios (consulta [Salida bit-perfect](bit-perfect.md)). **Otras silenciadas** aparece a su lado cuando ese flujo DSD deja fuera de la salida a las demás fuentes |
 | **SINGLE** \| **CONT** | Modo de reproducción (ver más abajo): un único control partido en dos; la mitad iluminada es el modo activo |
 | **CUE** | Preescucha de la siguiente pista en la salida CUE |
+
+Los dos botones pequeños del extremo derecho de la cabecera, **Ocultar** y
+**Maximizar** (o **Restaurar**), ocultan el player o lo maximizan un
+momento; los mismos dos están en el menú de un clic derecho sobre el fondo
+de la cabecera (no sobre uno de sus botones) (véase
+[Distribución](layout.md#maximize-a-panel)).
 
 ## Fila de información {#info-row}
 
@@ -93,23 +102,49 @@ sus propias pestañas de playlist, transporte, volumen y salidas.
     - Nada en el player añade ganancia por encima del 100 %. Un dispositivo
       de enteros recorta en la escala completa; uno de coma flotante recibe
       el nivel tal cual y lo recorta el sistema de sonido o el controlador.
-- **Fader de volumen** (a la derecha del vúmetro, igual de alto): arrástralo
-  o usa la rueda del ratón, un paso por muesca. La información emergente
-  muestra el nivel en dB; arriba del todo es 0 dB y abajo del todo, silencio.
-- **Título, artista** y la línea de la **siguiente**, con un cuadrado verde.
+- **Fader de volumen** (a la derecha del vúmetro, igual de alto). Sigue una
+  ley de mesa de mezclas: es fino cerca de la parte superior y más
+  pronunciado hacia abajo, de modo que bajarlo un poco baja un poco el nivel
+  (el 90 % del recorrido son unos −2,5 dB, el 50 % unos −15,9 dB, el 10 %
+  unos −48 dB). Arriba del todo es 0 dB y abajo del todo, silencio. Unas
+  muescas a lo largo del fader marcan 0, −2, −4, −6, −8, −10, −12, −15, −20,
+  −25, −30, −40, −50 y −∞ dB, con el nivel escrito a su derecha.
+  - Arrástralo: el fader se mueve tanto como el puntero, desde donde está,
+    así que agarrarlo nunca lo hace saltar; un clic sin mover no cambia
+    nada. Si te pasas por arriba o por abajo y vuelves, el botón se queda en
+    el extremo hasta que el puntero regresa al punto donde lo alcanzó, de
+    modo que el botón nunca queda lejos del puntero.
+  - Usa la rueda del ratón: un paso por muesca (unos 0,6 dB cerca de 0 dB).
+  - Mantén **Ctrl** o **Shift** mientras arrastras o usas la rueda para
+    moverlo diez veces más fino.
+  - Haz doble clic en el botón para volver a 0 dB (un doble clic en otro
+    punto del fader no hace nada).
+
+  El nivel en dB (con un decimal, o −∞ para el silencio) está escrito bajo el
+  fader, en la misma fila que la línea de sonoridad del vúmetro, y la
+  información emergente también lo muestra. Una sesión guardada antes de
+  esta ley conserva el nivel de cada player; solo cambia la posición del
+  fader. En un player cuya salida Main es bit-perfect el fader está bloqueado
+  al 100 % y en gris, lee un 0.0 atenuado, y su información emergente dice
+  por qué (véase [Lo que cuesta](bit-perfect.md#what-it-costs)).- **Título, artista** y la línea de la **siguiente**, con un cuadrado verde.
   Mientras el CUE está activo, la posición de la preescucha se ve en azul.
 
 ## Transporte {#transport}
 
 | Botón | Acción |
 |---|---|
-| **Play / Siguiente** (grande) | Detenido: inicia la siguiente pista. Sonando: hace un fundido hacia la siguiente pista (la duración del fundido se ajusta en [Configuración](settings.md)). En pausa: reanuda. Si la siguiente es la pista que está sonando, Play la vuelve a empezar con el fundido habitual. |
+| **Play / Siguiente** (grande) | Detenido: inicia la siguiente pista. Sonando: hace un fundido hacia la siguiente pista (la duración del fundido se ajusta en [Configuración](settings.md)); mientras dura el fundido de una mezcla iniciada por Siguiente o por un segue, una banda verde se vacía a lo largo del botón durante la duración del fundido, con su borde moviéndose de izquierda a derecha como el de un cartucho (una mezcla iniciada por Anterior se vacía en el botón Anterior). En pausa: reanuda. Si la siguiente es la pista que está sonando, Play la vuelve a empezar con el fundido habitual. En una salida bit-perfect cambia al momento, sin fundido, y su información emergente lo dice (véase [Lo que cuesta](bit-perfect.md#what-it-costs)). |
 | **Stop** | Se detiene al momento (con una rampa corta para evitar el chasquido) |
-| **Stop con fundido** | Baja el volumen con un fundido y se detiene |
+| **Stop con fundido** | Baja el volumen con un fundido y se detiene. Mientras dura un stop con fundido, una banda se vacía a lo largo del botón durante la duración del fundido, con su borde moviéndose de izquierda a derecha |
 | **Pausa** | Pausa o reanuda; parpadea en ámbar mientras está en pausa |
 | **Stop al final** (un triángulo de play y un cuadrado) | Se detiene cuando acaba la pista actual, una sola vez. En modo SINGLE solo está disponible mientras la pista actual se repite: termina la repetición cuando acaba la pasada en curso. Para detenerse tras una pista cada vez que suene, o para repetir una pista, usa su menú en la playlist (consulta [Playlists](playlists.md)) |
-| **Anterior** (una barra y dos triángulos) | Sonando: hace un fundido de vuelta a la pista que este player reprodujo antes, igual que Siguiente. Púlsalo otra vez para seguir retrocediendo. La pista que dejas pasa a ser la siguiente. |
+| **Anterior** (una barra y dos triángulos) | Sonando: hace un fundido de vuelta a la pista que este player reprodujo antes, igual que Siguiente. Púlsalo otra vez para seguir retrocediendo. La pista que dejas pasa a ser la siguiente. En una salida bit-perfect cambia al momento, sin fundido (véase [Lo que cuesta](bit-perfect.md#what-it-costs)). |
 | **Reiniciar** (una barra y un triángulo) | Vuelve al principio de la pista actual (su cue-in). Un player en pausa sigue en pausa. |
+
+Desde el teclado, `Up` y `Down` mueven la selección por la playlist,
+`Enter` fija la pista seleccionada como siguiente, y un segundo `Enter` sobre
+ella dentro del tiempo de un doble clic la reproduce. Véase
+[Teclado](keyboard.md).
 
 Los botones que no pueden actuar en ese momento aparecen atenuados: Stop y
 Reiniciar sin nada cargado, Pausa y Stop con fundido con el player detenido,
@@ -138,7 +173,9 @@ parpadea en rojo.
 ## Forma de onda {#waveform}
 
 - La parte ya reproducida se dibuja con el color de la forma de onda; el
-  resto, más tenue.
+  resto, más tenue. Con un color violeta de la forma de onda, la línea MIX
+  violeta destaca menos; elige otro color de forma de onda si necesitas
+  distinguirlos.
 - El contorno muestra los picos, de forma tenue; el cuerpo sólido de dentro
   es el nivel medio (RMS). En una pista fuerte los picos llenan la altura, y
   el cuerpo sigue mostrando dónde la pista suena más baja o más alta.
@@ -146,8 +183,11 @@ parpadea en rojo.
   distintivo la cuenta hacia atrás. La intro solo aparece si se ha fijado.
 - Una zona sombreada en naranja al final marca el **outro**, con su propia
   cuenta atrás.
-- Una línea discontinua ámbar con la etiqueta **MIX** marca dónde empieza la
-  siguiente pista en modo continuo. En modo single aparece atenuada.
+- Una línea discontinua violeta (el color del distintivo **Mezcla**, para no
+  confundirla con el outro naranja) con la etiqueta **MIX** marca dónde
+  empieza la siguiente pista en modo continuo. Aparece atenuada en modo
+  single, y en un player cuya salida Main es bit-perfect, que no mezcla
+  (véase [Lo que cuesta](bit-perfect.md#what-it-costs)).
 - Se dibuja el archivo entero. El principio y el final en silencio que la
   reproducción se salta (antes del cue-in y después del cue-out) se dibujan
   más oscuros, con una línea fina donde empieza y acaba la reproducción. Con
@@ -179,13 +219,29 @@ parpadea en rojo.
 ## CUE (preescucha) {#cue-pre-listen}
 
 Pulsar **CUE** (o **Preescuchar en CUE** en el menú de una pista) reproduce
-la pista en la salida CUE del player, por ejemplo unos auriculares, sin
-tocar la salida al aire, y abre una pequeña **ventana de CUE** para ese
-player. Puede haber varias ventanas abiertas, una por player. Consulta
-[Configuración](settings.md) para elegir el dispositivo de CUE. Un player
-necesita una salida Cue que no sea su salida Main: sin ella, **CUE** y
+la pista en la salida CUE del player, por ejemplo unos auriculares, y abre
+una pequeña **ventana de CUE** para ese player. Puede haber varias ventanas
+abiertas, una por player. Consulta [Configuración](settings.md) para elegir
+el dispositivo de CUE. Un player necesita una salida Cue: sin ella, **CUE** y
 **Preescuchar en CUE** aparecen atenuados, y al pasar el puntero por encima
 se explica por qué.
+
+Con una sola tarjeta de sonido, la salida Cue puede ser la propia salida al
+aire (o compartirla con otro player o con la cartuchera). Una preescucha
+allí se oye en antena, así que:
+
+- mientras no suena nada en esa salida, CUE empieza al momento;
+- mientras algo suena allí (un player sonando o en pausa, un cartucho,
+  otra preescucha, la preescucha de la biblioteca), CUE pregunta primero:
+  **Preescuchar igualmente** o **Cancelar** (Cancelar es lo predeterminado:
+  `Esc` y `Enter` cancelan). La misma pregunta viene del menú de la pista,
+  de la ventana de CUE, de la cartuchera y de la ventana de la biblioteca;
+- cuando algo empieza en esa salida mientras suena allí una preescucha que
+  no confirmaste, la preescucha se detiene y la barra de estado dice por
+  qué. Una preescucha que confirmaste sigue sonando.
+
+La información emergente del botón CUE dice cuándo su preescucha sale por
+la salida al aire.
 
 ![La ventana de CUE del player 4, preescuchando su siguiente pista](../../images/guide/cue-window.png)
 

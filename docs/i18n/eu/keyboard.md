@@ -5,7 +5,9 @@
 | `1` … `9` | Play 1–9 erreproduzitzaileetan (beren Play botoiaren berdina) |
 | `F1` … `F12` | Jaurti erakutsitako kartutxo-orriko 1–12 kartutxoak |
 | `Ctrl+Space` | Gelditu kartutxo guztiak, eta kartutxoen CUEa (kartutxo-panelaren **Gelditu dena** botoia) |
-| `Delete` / `Backspace` | Kendu hautatutako pista erakutsitako zerrendatik (ez airean dagoen bitartean) |
+| `Up` / `Down` | Mugitu hautapena azkenekoz erabili duzun erreproduzitzaileak erakusten duen zerrendan (abiaraztean, ikusgai dagoen lehen erreproduzitzailea), errenkada ikusgai jarriz korrituz. Ezer hautatuta ez badago, lehen sakatzeak erreproduzitzailearen hurrengo pista hautatzen du, edo lehen pista |
+| `Enter` | Ezarri hautatutako pista erreproduzitzailearen hurrengo pista gisa. Sakatu `Enter` bigarren aldiz pista berean klik bikoitz baten denboran (sistemaren klik bikoitzaren atzerapena) hura jotzeko, erreproduzitzailearen Play laster-teklak egiten duen bezala. Tarteko beste tekla batek, klik batek edo hautapen-aldaketa batek, edo itxaronaldi luzeago batek, berriro lehen `Enter` bihurtzen du |
+| `Delete` / `Backspace` | Kendu hautatutako pista erakutsitako zerrendatik (ez airean dagoen bitartean). Erreproduzitzaile bat ezkutatzean, bere hautapena garbitzen da |
 | `Esc` | Itxi menuak eta Ezarpenak; utzi "Audioa airean dago" elkarrizketa-koadroa; garbitu hautapena |
 
 - Tekla bati eusteak ez du errepikatzen: `1` teklari eutsiz gero, Play behin
@@ -41,4 +43,4 @@ ekintzak, erreproduzitzaile eta kartutxo guztietarako:
 - erakutsi edo ezkutatu kartutxo-panela;
 - hurrengo edo aurreko kartutxo-orria.
 
-`Delete`, `Backspace` eta `Esc` ezin dira aldatu.
+`Delete`, `Backspace` eta `Esc` ezin dira aldatu. Zerrendako `Up`, `Down` eta `Enter` teklek laster-tekla batek erabiltzen ez dituenean eta botoi edo graduatzaile batek teklatuaren fokua ez duenean bakarrik funtzionatzen dute.

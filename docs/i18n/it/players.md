@@ -4,20 +4,29 @@ Ogni colonna è un lettore. I lettori sono indipendenti: ciascuno ha le
 proprie schede di playlist, il proprio trasporto, il proprio volume e le
 proprie uscite.
 
-![Lettore 1 in onda: intestazione, copertina, titolo, brano successivo, trasporto, conto alla rovescia, meter, fader e forma d'onda](../../images/guide/player.png)
+![Lettore 1 in onda: intestazione con il guadagno del loudness, copertina, titolo, brano successivo, trasporto, conto alla rovescia, meter, fader e forma d'onda](../../images/guide/player.png)
 
 ## Intestazione {#header}
 
 | Elemento | Significato |
 |---|---|
 | `P1` … `Pn` | Numero del lettore (il tasto numerico che lo fa suonare) |
+| Pulsanti **Nascondi** e **Ingrandisci** / **Ripristina** | I due piccoli pulsanti all'estremità destra dell'intestazione: nascondono il lettore, o lo ingrandiscono per un momento (**Ripristina** mentre è ingrandito). Attenuati mentre il layout è bloccato, **Nascondi** sull'ultimo pannello mostrato e **Ingrandisci** con un solo pannello mostrato (vedi [Layout](layout.md#maximize-a-panel)) |
 | Punto di stato ed etichetta | **In onda** (rosso), **In pausa** (ambra), **Fermo** (grigio) |
-| Badge **Mix** / **Dissolvenza** | È in corso una dissolvenza incrociata verso il brano successivo, o uno stop in dissolvenza |
+| Colonne strette | Quando la colonna è troppo stretta per tutti i badge, l'intestazione toglie per primi i meno importanti (il testo dello stato, poi **Altre mute**, l'avviso della voce, **Stop alla fine**, **Mix** / **Dissolvenza**, il punto di stato), così nulla si sovrappone mai. Il numero del lettore, **CUE**, la modalità, **BP**, il badge del guadagno e i pulsanti **Nascondi** e **Ingrandisci** restano sempre. Allarga la colonna per vederli tutti |
+| Badge **Mix** / **Dissolvenza** | È in corso una dissolvenza incrociata verso il brano successivo, o uno stop in dissolvenza. **Mix** non si accende mai su un lettore la cui uscita Main è bit-perfect: non fa dissolvenze incrociate (vedi [Cosa costa](bit-perfect.md#what-it-costs)) |
 | Badge **Stop alla fine** | Il lettore si ferma quando finisce il brano attuale |
 | Badge **Ripeti** / **Stop dopo** | Il brano attuale si ripete, o ferma il lettore quando finisce, per un suo segno nel menu della playlist. Passa il puntatore per leggere la frase completa. Il pulsante **Stop alla fine** del lettore ha la precedenza: finché è attivo, si vede solo il suo badge |
-| **BP** / **DSD** | **BP** è acceso finché il brano attuale arriva inalterato al suo dispositivo Main. **DSD** lo sostituisce mentre un brano DSD esce come DSD, inalterato (vedi [Uscita bit-perfect](bit-perfect.md)). **Altre mute** compare accanto quando quel flusso DSD tiene le altre sorgenti fuori dall'uscita |
+| Badge del guadagno | Con la [normalizzazione del loudness](loudness.md#the-gain-in-the-player-header) attiva, il guadagno con cui suona il brano in onda (**+4.0 dB**), oppure un **0.0 dB** ambra quando il brano suona inalterato (nessuna misura ancora, un'uscita bit-perfect, o un brano escluso dalla normalizzazione). Passa il puntatore per il motivo. Mostrato mentre il lettore suona o è in pausa |
+| **BP** / **DSD** | Il badge compare solo su un lettore il cui dispositivo Main è bit-perfect; **BP** è acceso finché il brano attuale arriva inalterato a quel dispositivo. **DSD** lo sostituisce mentre un brano DSD esce come DSD, inalterato (vedi [Uscita bit-perfect](bit-perfect.md)). **Altre mute** compare accanto quando quel flusso DSD tiene le altre sorgenti fuori dall'uscita |
 | **SINGLE** \| **CONT** | Modalità di riproduzione (vedi sotto): un unico controllo unito, la metà accesa è la modalità attiva |
 | **CUE** | Preascolta il brano successivo sull'uscita CUE |
+
+I due piccoli pulsanti all'estremità destra dell'intestazione, **Nascondi** e
+**Ingrandisci** (o **Ripristina**), nascondono il lettore o lo ingrandiscono
+per un momento; gli stessi due sono nel menu di un clic destro sullo sfondo
+dell'intestazione (non su uno dei suoi pulsanti) (vedi
+[Layout](layout.md#maximize-a-panel)).
 
 ## Riga delle informazioni {#info-row}
 
@@ -90,9 +99,32 @@ proprie uscite.
     - Nel lettore nulla aggiunge guadagno oltre il 100 %. Un dispositivo a
       numeri interi taglia al fondo scala; un dispositivo float riceve il
       livello così com'è e il sistema audio o il driver lo taglia.
-- **Fader del volume** (a destra del meter, alto quanto lui): trascinalo o
-  usa la rotella del mouse, un passo per scatto. Il tooltip mostra il livello
-  in dB; la cima è 0 dB e il fondo è il silenzio.
+- **Fader del volume** (a destra del meter, alto quanto lui). Segue una
+  legge da mixer: è fine vicino alla cima e più ripido verso il fondo, così
+  abbassarlo un poco abbassa un poco il livello (il 90 % della corsa è circa
+  −2,5 dB, il 50 % circa −15,9 dB, il 10 % circa −48 dB). La cima è 0 dB e il
+  fondo è il silenzio. Delle tacche lungo il fader segnano 0, −2, −4, −6, −8,
+  −10, −12, −15, −20, −25, −30, −40, −50 e −∞ dB, con il livello scritto alla
+  loro destra.
+  - Trascinalo: il fader si muove quanto il puntatore, da dove si trova,
+    quindi afferrarlo non lo fa mai saltare; un clic senza spostarsi non
+    cambia nulla. Tirare oltre la cima o il fondo e tornare indietro lascia
+    la manopola all'estremo finché il puntatore non torna dove l'aveva
+    raggiunto, così la manopola non finisce mai lontana dal puntatore.
+  - Usa la rotella del mouse: un passo per scatto (circa 0,6 dB vicino a
+    0 dB).
+  - Tieni premuto **Ctrl** o **Shift** mentre trascini o usi la rotella per
+    muoverlo dieci volte più fine.
+  - Fai doppio clic sulla manopola per tornare a 0 dB (un doppio clic altrove
+    sul fader non fa nulla).
+
+  Il livello in dB (un decimale, o −∞ per il silenzio) è scritto sotto il
+  fader, sulla stessa riga della linea di loudness del meter, e lo mostra
+  anche il tooltip. Una sessione salvata prima di questa legge mantiene il
+  livello di ogni lettore; cambia solo la posizione del fader.
+  Su un lettore la cui uscita Main è bit-perfect il fader è bloccato al
+  100 % e in grigio, legge uno 0.0 attenuato, e il suo tooltip ne spiega il
+  motivo (vedi [Cosa costa](bit-perfect.md#what-it-costs)).
 - **Titolo, artista** e la riga del **successivo**, con un quadrato verde.
   Quando il CUE è attivo, la posizione di preascolto è mostrata in blu.
 
@@ -100,13 +132,17 @@ proprie uscite.
 
 | Pulsante | Azione |
 |---|---|
-| **Play / Successivo** (grande) | Fermo: avvia il brano successivo. In onda: passa in dissolvenza al brano successivo (il tempo di dissolvenza si imposta in [Impostazioni](settings.md)). In pausa: riprende. Con il brano in onda impostato come successivo, Play riavvia quel brano con la consueta dissolvenza. |
+| **Play / Successivo** (grande) | Fermo: avvia il brano successivo. In onda: passa in dissolvenza al brano successivo (il tempo di dissolvenza si imposta in [Impostazioni](settings.md)); mentre sfuma per una dissolvenza incrociata avviata da Successivo o da un segue, una banda verde si svuota attraverso il pulsante per la durata della dissolvenza, con il suo bordo che si sposta da sinistra a destra come in un cart (una dissolvenza incrociata avviata da Precedente si svuota invece sul pulsante Precedente). In pausa: riprende. Con il brano in onda impostato come successivo, Play riavvia quel brano con la consueta dissolvenza. Su un'uscita bit-perfect cambia brano subito, senza dissolvenza, e il suo tooltip lo dice (vedi [Cosa costa](bit-perfect.md#what-it-costs)). |
 | **Stop** | Si ferma subito (con una breve rampa anti-clic) |
-| **Stop in dissolvenza** | Dissolve fino al silenzio e si ferma |
+| **Stop in dissolvenza** | Dissolve fino al silenzio e si ferma. Mentre uno stop in dissolvenza è in corso, una banda si svuota attraverso il pulsante per la durata della dissolvenza, con il suo bordo che si sposta da sinistra a destra |
 | **Pausa** | Mette in pausa o riprende; lampeggia in ambra mentre è in pausa |
 | **Stop alla fine** (un triangolo di play e poi un quadrato) | Si ferma quando finisce il brano attuale, una volta. In modalità SINGLE è disponibile solo mentre il brano attuale si ripete: termina la ripetizione quando finisce il passaggio in corso. Per fermarsi dopo un brano ogni volta che suona, o per ripetere un brano, usa il suo menu nella playlist (vedi [Playlist](playlists.md)) |
-| **Precedente** (una barra e due triangoli) | In onda: torna in dissolvenza al brano che questo lettore ha suonato prima, come fa Successivo. Premi di nuovo per continuare a tornare indietro. Il brano che hai lasciato diventa il successivo. |
+| **Precedente** (una barra e due triangoli) | In onda: torna in dissolvenza al brano che questo lettore ha suonato prima, come fa Successivo. Premi di nuovo per continuare a tornare indietro. Il brano che hai lasciato diventa il successivo. Su un'uscita bit-perfect cambia brano subito, senza dissolvenza (vedi [Cosa costa](bit-perfect.md#what-it-costs)). |
 | **Riavvia** (una barra e un triangolo) | Torna all'inizio del brano attuale (il suo cue-in). Un lettore in pausa resta in pausa. |
+
+Da tastiera, `Up` e `Down` spostano la selezione nella playlist, `Enter`
+imposta il brano selezionato come successivo, e un secondo `Enter` su di esso
+entro il tempo di un doppio clic lo riproduce. Vedi [Tastiera](keyboard.md).
 
 I pulsanti che al momento non possono agire sono attenuati: Stop e Riavvia
 senza nulla di caricato, Pausa e Stop in dissolvenza da fermo, Precedente
@@ -136,6 +172,8 @@ in rosso.
 
 - La parte già suonata è disegnata con il colore della forma d'onda; il
   resto è più tenue.
+  Con un colore della forma d'onda viola, la linea viola del MIX risalta
+  meno; scegli un altro colore della forma d'onda se ti serve distinguerle.
 - Il contorno mostra i picchi, in modo discreto; il corpo pieno al suo
   interno è il livello medio (RMS). In un brano forte i picchi riempiono
   l'altezza, e il corpo mostra comunque dove il brano è più piano o più
@@ -144,8 +182,11 @@ in rosso.
   conto alla rovescia. L'intro compare solo quando è stata impostata.
 - Un'area arancione ombreggiata alla fine segna l'**outro**, con il proprio
   conto alla rovescia.
-- Una linea ambra tratteggiata con l'etichetta **MIX** segna dove inizia il
-  brano successivo in modalità continua. È attenuata in modalità single.
+- Una linea viola tratteggiata (il colore del badge **Mix**, così non si
+  confonde con l'outro arancione) con l'etichetta **MIX** segna dove inizia il
+  brano successivo in modalità continua. È attenuata in modalità single, e su
+  un lettore la cui uscita Main è bit-perfect, che non mixa (vedi
+  [Cosa costa](bit-perfect.md#what-it-costs)).
 - Viene disegnato l'intero file. L'inizio e la fine silenziosi che la
   riproduzione salta (prima del cue-in e dopo il cue-out) sono disegnati più
   scuri, con una linea sottile dove la riproduzione inizia e finisce. Con
@@ -179,13 +220,28 @@ in rosso.
 ## CUE (preascolto) {#cue-pre-listen}
 
 Premere **CUE** (o **Preascolta nel CUE** nel menu di un brano) riproduce il
-brano sull'uscita CUE del lettore, per esempio le cuffie, senza toccare
-l'uscita in onda, e apre una piccola **finestra CUE** per quel lettore.
-Possono essere aperte più finestre, una per lettore. Vedi
-[Impostazioni](settings.md) per scegliere il dispositivo CUE. Un lettore ha
-bisogno di un'uscita Cue diversa dalla sua uscita Main: senza, **CUE** e
-**Preascolta nel CUE** sono attenuati, e passandoci sopra il puntatore lo
-dicono.
+brano sull'uscita CUE del lettore, per esempio le cuffie, e apre una piccola
+**finestra CUE** per quel lettore. Possono essere aperte più finestre, una per
+lettore. Vedi [Impostazioni](settings.md) per scegliere il dispositivo CUE.
+Un lettore ha bisogno di un'uscita Cue: senza, **CUE** e **Preascolta nel
+CUE** sono attenuati, e passandoci sopra il puntatore lo dicono.
+
+Con una sola scheda audio, l'uscita Cue può essere l'uscita in onda stessa (o
+condividerla con un altro lettore o con la cartwall). Un preascolto lì si
+sente in onda, quindi:
+
+- finché su quell'uscita non suona nulla, il CUE parte subito;
+- finché lì suona qualcosa (un lettore in riproduzione o in pausa, un cart,
+  un altro preascolto, il preascolto della libreria), il CUE chiede prima:
+  **Preascolta comunque** o **Annulla** (Annulla è l'opzione predefinita: Esc
+  ed Enter annullano). La stessa domanda arriva dal menu del brano, dalla
+  finestra CUE, dalla cartwall e dalla finestra della libreria;
+- quando qualcosa parte su quell'uscita mentre un preascolto che non hai
+  confermato suona lì, il preascolto si ferma e la barra di stato ne dice il
+  motivo. Un preascolto che hai confermato continua a suonare.
+
+Il tooltip del pulsante CUE dice quando il suo preascolto esce sull'uscita in
+onda.
 
 ![La finestra CUE del lettore 4, che preascolta il suo brano successivo](../../images/guide/cue-window.png)
 

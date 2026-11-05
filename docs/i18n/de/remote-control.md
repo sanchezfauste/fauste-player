@@ -74,7 +74,9 @@ Ein Client kann:
   auslesen;
 - abspielen, pausieren, stoppen, ausblenden, neu starten und zurückgehen;
 - den nächsten Eintrag wählen (auch den Eintrag on Air: er spielt noch einmal),
-  vorhören und springen (bei einem gestoppten Player wählt ein Sprung, wo Play
+  vorhören (ein Vorhören, das auf Sendung zu hören wäre, während dort etwas
+  spielt, wird abgelehnt, es sei denn, die Anfrage enthält `"force": true`; siehe
+  die API-Referenz) und springen (bei einem gestoppten Player wählt ein Sprung, wo Play
   den nächsten Eintrag startet, und ein Sprung vor sein Cue-in startet am
   Cue-in);
 - Lautstärken, Modi, Stopp nach dem aktuellen Track sowie die Wiederholen- und
@@ -83,15 +85,44 @@ Ein Client kann:
 - bearbeiten: Playlists erstellen, umbenennen und löschen; einen bereits
   geladenen Track hinzufügen und Einträge entfernen, verschieben oder
   duplizieren; Cart-Seiten erstellen, umbenennen, in der Größe ändern und
-  löschen und ein Cart mit einem geladenen Track einrichten; Marker setzen oder
-  zurücksetzen.
+  löschen und ein Cart (Name, Typ, Farbe, Schleife, exklusiv) mit einem geladenen
+  Track einrichten; Marker setzen oder zurücksetzen; einen Track von der
+  [Lautheitsnormalisierung](loudness.md) ausnehmen oder seinen Trim setzen.
 
 Das Entfernen dessen, was on Air ist, wird abgelehnt, wie auf dem Bildschirm.
 Dateien, die noch nicht geladen sind, lassen sich nicht per Fernsteuerung
 hinzufügen: Sie liegen auf diesem Computer, füge sie also zuerst hier hinzu.
 
 Ein Button, der auf dem Bildschirm ausgegraut ist, wird auch per Fernsteuerung
-abgelehnt. Die vollständige Referenz steht in [der technischen
+abgelehnt.
+
+Ein Player, dessen Main-Ausgang [bit-perfect](bit-perfect.md#what-it-costs) ist,
+funktioniert per Fernsteuerung weiter, mit denselben Grenzen wie auf dem
+Bildschirm: `play` und `previous` wechseln sofort, ohne Crossfade, und seine
+Lautstärke ist auf 100 % festgehalten. Eine Lautstärke unter 100 % wird abgelehnt
+(`409`, mit dem Grund), genau 100 % wird akzeptiert. Jeder Player sagt, ob seine
+Lautstärke festgehalten ist (`fader_locked`).
+
+Eine als Fader-Position gesendete Lautstärke (das `fader` der API, OSC `/volume`)
+ist eine Position auf der eigenen Skala des Faders auf dem Bildschirm, von 0
+(Stille) bis 1 (0 dB): 0.9 sind etwa −2,5 dB, 0.8 etwa −5,3 dB und 0.5 etwa
+−16 dB. Frühere Versionen verwendeten eine andere Skala (0.8 waren −12 dB, 0.5
+waren −30 dB), sodass ein dafür geschriebenes Skript jetzt lautere Pegel setzt:
+Prüfe seine Werte.
+
+Jeder Track trägt seine Lautheitsmessung (`loudness`, `null`, bis er gemessen ist)
+und seine Einstellung (`loudness_edit`: `excluded` und `trim_db`). Ein spielender
+oder pausierter Player und jedes spielende Cart sagt, mit welcher
+[Normalisierungs](loudness.md)-Verstärkung sein Track gestartet ist und warum
+(`normalization`: `gain_db` und ein `status` wie `applied`, `not_measured` oder
+`bit_perfect`). `PUT /api/v1/tracks/<id>/loudness` mit
+`{"excluded": false, "trim_db": -1.5}` ändert die Einstellung, wie es das Popup
+**Lautheit…** tut; ein Trim über dem maximalen Trim hinaus wird abgelehnt (`409`,
+mit dem Grund). Die Normalisierungseinstellungen selbst (an oder aus, das Ziel,
+die Grenzen) werden nur auf diesem Computer geändert. OSC und MIDI haben keine
+Lautheitsregler.
+
+Die vollständige Referenz steht in [der technischen
 Dokumentation](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
 
 Probiere es in einem Terminal aus:
@@ -137,6 +168,10 @@ Oberfläche sie löscht. Sie muss sich innerhalb einer Minute
 
     oscdump 9000 &
     oscsend localhost 7381 /fauste/subscribe i 9000
+
+Bei einem Player, dessen Main-Ausgang bit-perfect ist, werden
+`/volume`-Nachrichten abgelehnt (das Log vermerkt es), und der Player sendet
+`/volume-locked` 1 an die Abonnenten (sonst 0).
 
 Ein Abonnent kann jeden Port seiner eigenen Adresse nennen, und bis zu
 `max_subscribers` werden behalten. Jeder, der senden darf, kann daher auch

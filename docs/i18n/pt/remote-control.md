@@ -74,7 +74,9 @@ Um cliente pode:
   cartucheira;
 - tocar, pausar, parar, fazer fade, reiniciar e recuar;
 - escolher a entrada seguinte (também a entrada no ar: toca mais uma vez),
-  pré-escutar e procurar (num leitor parado, uma procura escolhe onde o Play
+  pré-escutar (uma pré-escuta que se ouviria no ar enquanto algo toca aí é
+  recusada, a menos que o pedido diga `"force": true`; ver a referência da
+  API) e procurar (num leitor parado, uma procura escolhe onde o Play
   inicia a entrada seguinte, e uma procura antes do seu cue-in começa no
   cue-in);
 - definir volumes, modos, stop no fim da faixa atual e as marcas de repetir e
@@ -84,14 +86,43 @@ Um cliente pode:
 - editar: criar, renomear e eliminar listas; adicionar uma faixa que já está
   carregada e remover, mover ou duplicar entradas; criar, renomear,
   redimensionar e eliminar páginas de cartuchos, e configurar um cartucho com
-  uma faixa carregada; definir ou repor marcadores.
+  uma faixa carregada (nome, tipo, cor, ciclo, exclusivo); definir ou repor
+  marcadores; excluir uma faixa da [normalização do loudness](loudness.md) ou
+  ajustá-la.
 
 Remover o que está no ar é recusado, como no ecrã. Os ficheiros que ainda
 não estão carregados não podem ser adicionados remotamente: vivem neste
 computador, por isso adicione-os primeiro aqui.
 
-Um botão que está a cinzento no ecrã também é recusado remotamente. A
-referência completa está na
+Um botão que está a cinzento no ecrã também é recusado remotamente.
+
+Um leitor cuja saída Main é [bit-perfect](bit-perfect.md#what-it-costs)
+continua a funcionar remotamente, com os mesmos limites que no ecrã: `play` e
+`previous` mudam de imediato, sem crossfade, e o seu volume fica fixo em
+100 %. Um volume abaixo de 100 % é recusado (`409`, com o motivo), e
+exatamente 100 % é aceite. Cada leitor diz se o seu volume está fixo
+(`fader_locked`).
+
+Um volume enviado como posição do fader (o `fader` da API, o `/volume` do
+OSC) é uma posição na escala própria do fader no ecrã, de 0 (silêncio) a 1
+(0 dB): 0,9 são cerca de −2,5 dB, 0,8 cerca de −5,3 dB e 0,5 cerca de
+−16 dB. As versões anteriores usavam outra escala (0,8 era −12 dB, 0,5 era
+−30 dB), por isso um script escrito para elas define agora níveis mais
+altos: verifique os seus valores.
+
+Cada faixa traz a sua medição de loudness (`loudness`, `null` até ser
+medida) e a sua definição (`loudness_edit`: `excluded` e `trim_db`). Um
+leitor a tocar ou em pausa, e cada cartucho a tocar, diz com que ganho de
+[normalização](loudness.md) a sua faixa começou e porquê (`normalization`:
+`gain_db` e um `status` como `applied`, `not_measured` ou `bit_perfect`).
+`PUT /api/v1/tracks/<id>/loudness` com
+`{"excluded": false, "trim_db": -1.5}` altera a definição, como a janela
+**Loudness…**; um ajuste além do ajuste máximo é recusado (`409`, com o
+motivo). As próprias definições da normalização (ativada ou desativada, o
+objetivo, os limites) só se alteram neste computador. O OSC e o MIDI não têm
+controlos de loudness.
+
+A referência completa está na
 [documentação técnica](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md).
 
 Experimente num terminal:
@@ -138,6 +169,10 @@ minuto (`subscription_ttl_secs`) para continuar a receber:
 
     oscdump 9000 &
     oscsend localhost 7381 /fauste/subscribe i 9000
+
+Num leitor cuja saída Main é bit-perfect, as mensagens `/volume` são
+recusadas (o registo di-lo) e o leitor envia `/volume-locked` 1 aos
+subscritores (0 caso contrário).
 
 Um subscritor pode indicar qualquer porta do seu próprio endereço, e são
 mantidos até `max_subscribers`. Quem pode enviar pode, portanto, também

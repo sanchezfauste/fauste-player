@@ -8,53 +8,68 @@ La fenêtre a une seule taille (900 × 640, plus petite sur un petit écran)
 quelle que soit la section, et la section défile à l'intérieur. Chaque
 section aligne ses libellés sur une seule colonne.
 
-Les sections Lecteurs, Vumètres, Analyse et Raccourcis clavier ont un bouton
+Les sections Lecteurs, Vumètres, Analyse, Loudness et Raccourcis clavier ont un bouton
 **Rétablir les valeurs par défaut** dans leur en-tête. Il demande une
 confirmation puis réinitialise uniquement cette section (Lecteurs conserve le
 nombre de lecteurs et la langue ; Raccourcis n'a pas d'autre bouton de
-réinitialisation). Sorties audio, Playlists, Cartouches, MIDI et À distance
-n'en ont pas.
+réinitialisation). Sorties audio, Playlists, Cartouches, Bibliothèque, MIDI et
+À distance n'en ont pas.
 
-## Redémarrage en attente {#restart-pending}
+## Réglages en attente {#settings-pending}
 
-Certains changements ne prennent effet que lorsque l'application redémarre :
-le système audio, la fréquence d'échantillonnage, la taille du tampon (celle
-d'un périphérique aussi), les sorties Main et Cue (lecteurs et mur de
-cartouches), les périphériques bit-perfect et les réglages DSD. Le nombre de
-lecteurs n'en fait pas partie : il s'applique aussitôt.
+Chaque réglage s'applique pendant que l'application tourne. Le système audio,
+la fréquence d'échantillonnage, la taille du tampon (celle d'un périphérique
+aussi), les sorties Main et Cue (lecteurs et mur de cartouches), les
+périphériques bit-perfect et les réglages DSD changent la façon dont un
+périphérique de sortie est ouvert, si bien qu'ils s'appliquent dès que c'est
+sans risque :
+
+- Les réglages d'un périphérique s'appliquent quand rien ne joue sur ce
+  périphérique : aucun lecteur qui y est routé n'est en lecture, en fondu ou
+  en pré-écoute (CUE, même maintenue), et aucune cartouche n'y joue. Un
+  lecteur en pause, ou dont une piste est seulement chargée, ne retient pas un
+  périphérique : sa piste reste en pause là où elle était.
+- La sortie d'un lecteur ou du mur de cartouches se déplace quand ce lecteur
+  (ou le mur de cartouches) ne joue pas ; les autres lecteurs sur les mêmes
+  périphériques ne sont pas interrompus.
+- Un nouveau système audio s'applique quand rien ne joue nulle part.
+
+Un changement en attente s'exécute dès le premier moment où rien de ce qu'il
+affecte ne joue. Cela peut être l'intervalle entre la fin d'une piste et le
+début de la suivante : la piste suivante démarre alors plus tard du temps que
+met le périphérique à se rouvrir. **Appliquer maintenant** (plus bas) force le
+changement aussitôt à la place.
 
 Une fréquence ou un tampon donné à un périphérique ne compte que s'il change
 avec quoi le périphérique s'ouvre : donner à un périphérique la même valeur
-que la valeur globale, ou effacer une telle valeur, n'est pas en attente.
+que la valeur globale, ou effacer une telle valeur, ne change rien.
 
-Les limites et les réglages du moteur s'appliquent aussi au prochain
-démarrage, mais ils se modifient dans le fichier de configuration, application
-fermée (voir [Données et sauvegardes](data-and-backups.md)), si bien qu'ils
-n'apparaissent jamais en attente.
+D'ici là, la barre supérieure affiche **Réglages en attente**. Survolez-la
+pour voir ce qui attend et pourquoi ; cliquez dessus pour la liste, qui montre
+aussi tout changement qu'un périphérique ou une sortie a refusé (le
+périphérique garde ses réglages actuels ; le changement est réessayé quand
+vous le modifiez ou appuyez sur **Appliquer maintenant**). Le pied de page des
+Paramètres indique « Certains changements attendent que les sorties concernées
+soient libres. » et propose **Appliquer maintenant** ; un bref avis (par
+exemple, qu'un réglage a été enregistré) peut prendre un instant la place de ce
+texte.
 
-Tant que l'un d'eux attend, le pied de page des Paramètres indique « Certaines
-modifications s'appliquent après un redémarrage. » et propose **Redémarrer
-maintenant**, et la barre supérieure affiche une pastille **Redémarrage en
-attente**. Survolez la pastille pour voir ce qui attend. Un bref avis (par
-exemple, qu'un réglage a été enregistré) peut prendre un instant la place du
-texte du pied de page ; **Redémarrer maintenant** reste. Les deux font la même
-chose :
+**Appliquer maintenant** applique aussitôt tous les changements de sortie en
+attente. Quand cela interromprait quelque chose, il liste d'abord les
+périphériques et ce qui y joue ; **Interrompre et appliquer** interrompt alors
+brièvement l'audio sur ces périphériques : ce qui jouait reprend là où cela
+en était après une brève interruption, et rien de ce qui était en pause ou
+arrêté ne démarre. **Annuler** (ou `Esc`) continue d'attendre.
 
-- Quand rien n'est à l'antenne, **Redémarrer maintenant** (ou la pastille)
-  redémarre aussitôt.
-- Quand quelque chose est à l'antenne, la fenêtre qui liste ce qui sonne
-  apparaît, avec **Arrêter et redémarrer** ou **Annuler**.
-
-La session est d'abord enregistrée et l'audio et le contrôle MIDI s'arrêtent,
-puis l'application redémarre avec le même dossier de données (`FAUSTE_HOME`),
-et rien ne passe à l'antenne tout seul ensuite. Si l'application ne peut pas
-redémarrer (dans un Flatpak, aussi quand la nouvelle ne démarre pas à temps),
-elle le dit ; lancez-la depuis le menu de vos applications.
+Les limites et les réglages du moteur se modifient dans le fichier de
+configuration, application fermée (voir
+[Données et sauvegardes](data-and-backups.md)).
 
 ## Sorties audio {#audio-outputs}
 
-Les changements de cette section attendent un redémarrage : voir
-[Redémarrage en attente](#restart-pending).
+Les changements de cette section s'appliquent pendant que l'application
+tourne, dès que rien de ce qu'ils affectent ne joue : voir
+[Réglages en attente](#settings-pending).
 
 ![Paramètres, Sorties audio, vue Simple : le sélecteur, le système audio, la fréquence d'échantillonnage, la taille du tampon et les sorties Main et Cue de chaque lecteur (ici le système silencieux)](../../images/guide/settings-outputs.png)
 
@@ -75,25 +90,27 @@ valeurs globales. D'ici là, le choisir de nouveau (par exemple après avoir
 |---|---|
 | Système audio | Le dernier choix, **Aucune sortie (silence)**, ne joue rien : les lignes de temps tournent en temps réel sans carte son (pour une machine qui n'en a pas, ou pour répéter). Linux : PipeWire (dans les versions qui l'incluent), PulseAudio, JACK ou ALSA. Windows : WASAPI, ASIO (dans les versions qui l'incluent) ou JACK. macOS : Core Audio ou JACK. Les systèmes absents de cet ordinateur, ou sans périphérique de sortie (un serveur JACK qui ne tourne pas), sont indiqués comme indisponibles. « Par défaut du système » utilise le premier disponible dans cet ordre. |
 | Fréquence d'échantillonnage | La fréquence à laquelle chaque sortie tourne, sauf si un périphérique a la sienne (Avancé) ; les fichiers y sont convertis avec un rééchantillonnage de haute qualité. Les périphériques bit-perfect démarrent à leur fréquence puis suivent les fichiers. |
-| Taille du tampon | Trames par bloc audio, sauf si un périphérique a le sien ; la latence qui en résulte est affichée en dessous |
-| Sorties par lecteur | Pour chaque lecteur, un périphérique **Main** (antenne) et un périphérique **Cue** (pré-écoute), chacun avec une paire de canaux. Une carte son qui propose plusieurs profils de sortie (ALSA liste frontal, surround, matériel direct…) montre chacun sous la forme *carte — profil* ; deux entrées qui se liraient encore pareil reçoivent l'identifiant de leur périphérique entre parenthèses. Les interfaces multicanaux peuvent porter plusieurs lecteurs sur des paires différentes. |
+| Taille du tampon | Trames par bloc audio, sauf si un périphérique a le sien ; la latence qui en résulte est affichée en dessous. Les sorties passant par un serveur de son ou un mélangeur du système (PulseAudio, le périphérique ALSA `default`) demandent au moins 50 ms quelle que soit cette taille, ou autant que le périphérique en accepte, afin qu'un ordinateur occupé ne s'entende pas ; la latence l'indique alors (`shared_buffer_ms` dans le fichier de configuration) |
+| Sorties par lecteur | Pour chaque lecteur, un périphérique **Main** (antenne) et un périphérique **Cue** (pré-écoute), chacun avec une paire de canaux. Une carte son qui propose plusieurs profils de sortie (ALSA liste frontal, surround, matériel direct…) montre chacun sous la forme *carte — profil* ; deux entrées qui se liraient encore pareil reçoivent l'identifiant de leur périphérique entre parenthèses. Les interfaces multicanaux peuvent porter plusieurs lecteurs sur des paires différentes. Une sortie Cue qui partage une sortie d'antenne (le Main d'un lecteur quelconque ou celui du mur de cartouches) est permise : une note en dessous dit que sa pré-écoute s'entend à l'antenne et qu'elle demande d'abord tant que quelque chose y joue. |
 | Tester Main / Tester Cue | Joue une courte tonalité (1 kHz sur Main, 440 Hz sur Cue, 1,5 s, −18 dBFS) sur la sortie choisie, pour vérifier le câblage avant de passer à l'antenne |
-| Mur de cartouches | Les sorties Main et Cue du mur de cartouches. Main prend par défaut la sortie du système. Sans Cue, il n'y a pas de pré-écoute des cartouches. |
+| Bibliothèque | La sortie Cue de la bibliothèque, avec son propre **Tester Cue** : là où s'entend la [pré-écoute](library.md#pre-listening) de la fenêtre de la bibliothèque (sur un téléphone, celle de l'onglet Bibliothèque). Sans elle, le bouton de lecture de la barre de pré-écoute est grisé. Sur Android, son choix vide se lit *Par défaut du système* au lieu de *Aucune* : la pré-écoute et **Tester Cue** jouent alors sur la sortie par défaut (voir [Android → Bibliothèque](android.md#library)). Une sortie Bibliothèque sur une sortie d'antenne fonctionne comme le Cue d'un lecteur : une note en dessous dit que sa pré-écoute s'entend à l'antenne et qu'elle demande d'abord tant que quelque chose y joue. Elle est dans les vues Simple et Avancé, aussi sur un téléphone |
+| Mur de cartouches | Les sorties Main et Cue du mur de cartouches. Main prend par défaut la sortie du système. Sans Cue, il n'y a pas de pré-écoute des cartouches ; un Cue sur une sortie d'antenne fonctionne comme pour les lecteurs. |
 | Fréquence d'échantillonnage : *périphérique* (Avancé) | **Global (...)** utilise la fréquence d'échantillonnage ci-dessus ; une valeur donne à ce périphérique sa propre fréquence. Seules les fréquences que le périphérique annonce sont proposées ; une fréquence enregistrée qu'il n'annonce plus reste listée avec une note indiquant qu'il risque de ne pas s'ouvrir (le périphérique revient alors à la fréquence globale). Les valeurs propres ne s'appliquent qu'aux périphériques qu'une sortie nomme, pas à la sortie par défaut du système sauf si une sortie la nomme. |
-| Taille du tampon : *périphérique* (Avancé) | **Global (...)** utilise la taille du tampon ci-dessus ; une valeur donne à ce périphérique la sienne, avec sa latence en dessous. Un périphérique qui n'accepte pas sa propre taille de tampon revient à la taille globale, et aussi à la fréquence globale quand il n'accepte pas non plus sa propre fréquence. |
-| Bit-perfect : *périphérique* (Avancé) | Un périphérique bit-perfect est ouvert en accès exclusif et suit la fréquence d'échantillonnage de chaque fichier tant que rien n'y joue. L'interrupteur est désactivé là où le périphérique ne peut pas donner l'accès exclusif. Voir [Sortie bit-perfect](bit-perfect.md). |
+| Taille du tampon : *périphérique* (Avancé) | **Global (...)** utilise la taille du tampon ci-dessus (avec le minimum que demande une sortie partagée, comme plus haut) ; une valeur donne à ce périphérique la sienne, utilisée telle quelle, avec sa latence en dessous. Un périphérique qui n'accepte pas sa propre taille de tampon revient à la taille globale, et aussi à la fréquence globale quand il n'accepte pas non plus sa propre fréquence. |
+| Bit-perfect : *périphérique* (Avancé) | Désactivé par défaut. Un mode particulier pour l'écoute audiophile, pas pour les programmes mixés : le périphérique est ouvert en accès exclusif et suit la fréquence d'échantillonnage de chaque piste. Les lecteurs dont la sortie Main s'y trouve ne font jamais de fondu enchaîné ni de mixage, un changement de fréquence laisse un court silence entre deux pistes, et leur volume reste à 100 %. L'interrupteur est désactivé là où le périphérique ne peut pas donner l'accès exclusif. Voir [Ce que cela coûte](bit-perfect.md#what-it-costs). |
 | DSD : *périphérique* (Avancé) | **Convertir en PCM** (par défaut), **DoP** ou, sous Linux, **DSD natif**. Chaque périphérique le montre ; seuls les modes que le périphérique peut accepter sont proposés, et une ligne en dessous dit pourquoi les autres ne le sont pas. Voir [DSD](bit-perfect.md#dsd). |
 | Quand une autre source a besoin d'une sortie DSD (Avancé) | **Poursuivre la piste DSD en PCM** (par défaut), ou **Garder le DSD et couper les autres sources**. Voir [DSD](bit-perfect.md#dsd). |
 | Silence DSD (Avancé) | Silence envoyé avant le début d'un flux DSD, après sa fin et lors du passage en PCM, pour que le convertisseur se verrouille sans clic ; 200 ms par défaut, de 0 à 2000. |
 
-Une sortie Cue ne retombe jamais sur la sortie qu'utilise Main, afin que la
-pré-écoute n'aille jamais à l'antenne. Un Cue qui désigne un périphérique d'un
-système audio que cet ordinateur n'a pas, ou la même sortie (périphérique et
-canaux) que Main, signifie « pas de cue ». Quand une sortie Cue est la même
-que sa sortie Main, un avertissement en dessous l'indique. Un lecteur sans
-sortie Cue, ou dont le Cue est sur sa sortie Main, a son bouton **CUE**
-grisé ; le survoler vous invite à choisir une sortie Cue ici. Il en va de
-même pour **Pré-écouter sur le CUE** du mur de cartouches.
+Une sortie Cue ne retombe jamais sur la sortie qu'utilise Main. Un Cue qui
+désigne un périphérique d'un système audio que cet ordinateur n'a pas
+signifie « pas de cue ». Un Cue sur une sortie d'antenne (le même
+périphérique et les mêmes canaux qu'un Main, ou qui les recouvrent) est
+permis : une note en dessous dit que sa pré-écoute s'entend à l'antenne et
+qu'elle demande d'abord tant que quelque chose y joue. Un lecteur sans sortie
+Cue a son bouton **CUE** grisé ; le survoler vous invite à choisir une sortie
+Cue ici. Il en va de même pour **Pré-écouter sur le CUE** du mur de
+cartouches.
 
 Si un périphérique disparaît pendant la lecture, les lecteurs conservent leurs
 lignes de temps, et le périphérique est rouvert à son retour (voir
@@ -106,12 +123,18 @@ lignes de temps, et le périphérique est rouvert à son retour (voir
 | Réglage | Défaut | Signification |
 |---|---|---|
 | Langue | Système | Langue de l'interface |
-| Nombre de lecteurs | 4 | Colonnes de l'écran principal (un lecteur à l'antenne ne peut pas être retiré) |
+| Nombre de lecteurs | 4 | Colonnes de l'écran principal (un lecteur à l'antenne ne peut pas être retiré). Le nombre s'applique quand vous relâchez le curseur ; un nombre saisi dans la case s'applique quand vous appuyez sur Entrée ou quittez la case, et Échap l'annule |
 | Mode par défaut | CONT | Le mode dans lequel démarrent les lecteurs |
-| Durée du fondu | 1000 ms | Utilisée par PLAY pendant l'antenne et par Stop en fondu |
-| Enchaînement automatique au point MIX | Activé | Faire chevaucher les pistes en mode continu |
+| Durée du fondu | 1000 ms | Utilisée par PLAY pendant l'antenne et par Stop en fondu. Sur un lecteur dont la sortie Main est bit-perfect, seulement par Stop en fondu |
+| Enchaînement automatique au point MIX | Activé | Faire chevaucher les pistes en mode continu. Ne s'applique pas à un lecteur dont la sortie Main est bit-perfect |
 | Utiliser le cue-in et le cue-out | Activé | Désactivé : les lecteurs jouent chaque piste du début à la fin du fichier ; les marqueurs sont conservés et les cartouches utilisent toujours les leurs. Les durées et les totaux de playlist suivent la même plage |
 | Alerte de fin de piste | 10 s | Quand le compte à rebours commence à clignoter en rouge |
+
+Tant que la sortie Main d'un lecteur est bit-perfect, une note sous
+**Enchaînement automatique au point MIX** dit que de tels lecteurs ne mixent
+ni n'enchaînent jamais en fondu. Les deux réglages restent modifiables : ils
+s'appliquent toujours aux autres lecteurs. Voir
+[Ce que cela coûte](bit-perfect.md#what-it-costs).
 
 ## Vumètres {#meters}
 
@@ -161,9 +184,16 @@ canaux :
 
 ![Paramètres, Analyse : les seuils des marqueurs automatiques](../../images/guide/settings-analysis.png)
 
-Les seuils décrits dans [Marqueurs et mixage](markers-and-mixing.md).
+Les seuils décrits dans [Marqueurs et mixage](markers-and-mixing.md) ; chaque
+ligne a sous son nom une aide d'une ligne qui dit ce que fait la valeur.
 **Réanalyser toutes les pistes** relance l'analyse pour toute la
-bibliothèque ; les marqueurs manuels sont conservés.
+bibliothèque, en relisant chaque fichier ; les marqueurs manuels sont
+conservés. Pendant qu'elle tourne, le bouton est grisé et montre où elle en
+est (**Analyse… 120 sur 340**), si bien qu'appuyer de nouveau dessus ne
+repart pas de zéro ; l'infobulle de **Analyse de N pistes** dans la barre
+d'état donne la même progression. Modifier un seuil ici relance aussi
+l'analyse de la bibliothèque, et redémarre une exécution déjà en cours pour
+qu'aucune piste ne garde les marqueurs des anciennes valeurs.
 
 Après une mise à jour dont l'analyse a changé, les pistes analysées par la
 version antérieure gardent leurs marqueurs et leurs formes d'onde, qui
@@ -175,6 +205,39 @@ de même que les pistes des cartouches qui n'ont pas de format enregistré (une
 cartouche ne joue en bit-perfect que si son format est connu). Les pistes dont
 le fichier est introuvable ne sont pas comptées tant que le fichier n'est pas
 revenu.
+
+L'analyse mesure aussi le loudness de chaque fichier pour la
+[normalisation du loudness](loudness.md). Les fichiers analysés avant que le
+loudness soit mesuré sont mesurés en arrière-plan, quand l'analyse n'a rien
+d'autre à faire, que la normalisation soit activée ou non ; leurs marqueurs ne
+sont pas touchés. **Réanalyser** (dans le menu de la playlist) et **Réanalyser
+toutes les pistes** mesurent de nouveau.
+
+## Loudness {#loudness}
+
+![Paramètres, Loudness : normalisation activée, avec la cible, le plafond de true peak, le gain maximal et l'ajustement maximal à leurs valeurs par défaut](../../images/guide/settings-loudness.png)
+
+Joue chaque piste et chaque cartouche au même loudness, avec un gain fixe par
+piste. La [normalisation du loudness](loudness.md) explique comment le gain
+est calculé, le badge de l'en-tête du lecteur et les réglages par piste.
+
+| Réglage | Défaut | Plage | Signification |
+|---|---|---|---|
+| Normaliser le loudness | Activé | | Normalisation activée ou non |
+| Cible | −16 LUFS | −36 … −6 LUFS, par pas de 0,5 | Le loudness intégré auquel chaque piste est amenée |
+| Plafond de true peak | −1 dBTP | −12 … 0 dBTP, par pas de 0,1 | Un gain ne porte jamais le true peak de la piste au-dessus de cette valeur. Les atténuations ne sont pas limitées |
+| Gain maximal | 12 dB | 0 … 24 dB | Le plus grand gain qu'une piste faible peut recevoir. Les atténuations ne sont pas limitées |
+| Ajustement maximal | 12 dB | 0 … 24 dB | Jusqu'où l'ajustement manuel propre à chaque piste peut aller, vers le haut ou le bas |
+
+Les changements s'appliquent aux pistes chargées ensuite : ce qui joue garde
+son gain, et la piste suivante qui attend sur chaque lecteur est préparée de
+nouveau avec le nouveau. Une note sous les réglages dit combien de pistes
+attendent encore leur mesure ; elles jouent telles quelles jusqu'à ce qu'elle
+soit terminée. Un lecteur ou une cartouche sur une sortie bit-perfect n'est
+jamais normalisé. **Rétablir les valeurs par défaut** réinitialise cette
+section seulement (normalisation activée). La normalisation est activée pour
+les nouvelles installations ; une configuration existante garde son réglage
+actuel (toute configuration enregistrée stocke déjà la valeur).
 
 ## Playlists {#playlists}
 
@@ -201,9 +264,9 @@ français, le portugais brésilien utilise le portugais), et l'anglais sinon.
 Une langue présente dans le fichier de paramètres que l'interface n'a pas
 s'affiche comme **Système** et suit le système d'exploitation.
 
-L'anglais et l'espagnol sont écrits à la main. Les autres traductions ont été
-générées par IA et peuvent contenir des erreurs ; quand l'une d'elles est
-utilisée, **À propos** l'indique. Les corrections de locuteurs natifs sont les
+L'interface, dans toutes les langues, anglais et espagnol compris, a été
+produite par IA et peut contenir des erreurs. **À propos** porte un
+avertissement général qui les couvre toutes. Les corrections sont les
 bienvenues sous forme d'issues ou de pull requests.
 
 ## Cartouches {#cartwall}
@@ -212,6 +275,14 @@ bienvenues sous forme d'issues ou de pull requests.
 
 Pages, taille de la grille, éditeur de cartouche, et import et export de pages
 de cartouches. Voir [Mur de cartouches](cartwall.md).
+
+## Bibliothèque {#library}
+
+Créer, renommer, recolorer, changer le type de, déplacer (par glisser-déposer)
+et supprimer les catégories qui regroupent vos pistes, faire surveiller un
+dossier par une catégorie et retirer ses pistes manquantes, sans ouvrir la
+fenêtre de la bibliothèque. Voir [Bibliothèque](library.md#categories) et
+[Dossiers surveillés](library.md#watched-folders).
 
 ## Raccourcis clavier {#keyboard-shortcuts}
 
@@ -223,8 +294,9 @@ Voir [Clavier](keyboard.md).
 
 ![Paramètres, MIDI, avec le contrôle MIDI désactivé](../../images/guide/settings-midi.png)
 
-Activez les surfaces de contrôle MIDI, consultez les ports d'entrée et
-apprenez une commande pour chaque action de lecteur. Voir
+Activez les surfaces de contrôle MIDI, consultez les ports d'entrée (**Reconnecter les ports** les ouvre de nouveau,
+comme le ferait un rebranchement des contrôleurs) et apprenez une commande
+pour chaque action de lecteur. Voir
 [Surfaces de contrôle MIDI](midi.md).
 
 ## À distance {#remote}

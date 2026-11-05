@@ -2,9 +2,56 @@
 
 Ein **Bit-perfect**-Gerät erhält die Samples jeder Datei genau so, wie sie in der
 Datei stehen: dieselbe Abtastrate, dieselben Werte, ohne Resampling,
-Lautstärkeänderung oder Mischen. Das ist nützlich für Abhörketten und digitale
-Verbindungen, bei denen jede Verarbeitung auf dem Computer vermieden werden
-soll.
+Lautstärkeänderung oder Mischen.
+
+Die Bit-perfect-Ausgabe ist ein **Sondermodus für audiophile Wiedergabe**: ein
+Archiv hören, eine Hi-Fi- oder Abhörkette speisen, eine digitale Verbindung
+prüfen, überall dort, wo jede Verarbeitung auf dem Computer vermieden werden
+soll. Sie ist standardmäßig aus und nicht für ein gemischtes Musikprogramm
+gedacht. Lies [Was es kostet](#what-it-costs), bevor du sie einschaltest.
+
+## Was es kostet {#what-it-costs}
+
+Damit jeder Track unangetastet bleibt, spielt ein Player, dessen Main-Ausgang auf
+einem Bit-perfect-Gerät liegt, anders als die übrigen:
+
+- **Keine Crossfades und keine Segues.** Jeder Track spielt bis zu seinem Ende
+  (seinem Cue-out, oder dem Ende der Datei bei ausgeschaltetem **Cue-in und
+  Cue-out verwenden**), dann startet der nächste. Der **Automatische Mix am
+  MIX-Punkt** und der MIX-Punkt werden nicht verwendet: Der MIX-Marker wird blass
+  gezeichnet, und das Symbol **Mix** leuchtet nie. **Play / Weiter** und
+  **Vorheriger Track**, während ein Track on Air ist, wechseln sofort, mit einem
+  kurzen knackfreien Stopp, statt auszublenden.
+- **Eine kurze Stille, wenn sich die Abtastrate ändert.** Zwischen zwei Tracks mit
+  unterschiedlichen Abtastraten, wenn sonst nichts auf dem Gerät klingt, spielt
+  das Gerät zuerst, was es noch gepuffert hat (das Ende des Tracks), und wird
+  dann mit der neuen Rate neu geöffnet, was eine kurze Stille hinterlässt
+  (meist einige zehn Millisekunden, bei manchen Geräten länger). Tracks mit
+  derselben Rate folgen ohne Lücke und ohne Überlappung aufeinander. Kann die Rate
+  nicht folgen (siehe [Was auf einem Bit-perfect-Gerät
+  geschieht](#what-happens-on-a-bit-perfect-device)), startet der nächste Track
+  sofort, in die Rate des Geräts umgewandelt.
+- **Keine Lautheitsnormalisierung.** Ein Track auf einem Bit-perfect-Gerät spielt
+  immer mit Einheitsverstärkung, auch bei eingeschalteter
+  [Lautheitsnormalisierung](loudness.md#bit-perfect-outputs): Die Kopfzeile zeigt
+  **0.0 dB** in Bernstein, und ihr Tooltip nennt den Grund. Andere Player und
+  Carts werden wie gewohnt normalisiert.
+- **Die Lautstärke ist auf 100 % festgehalten.** Der Lautstärke-Fader des Players
+  ist oben gesperrt: auf dem Bildschirm, an [MIDI](midi.md)-Controllern und über
+  die [Remote-API und OSC](remote-control.md). Er geht auf 100 %, wenn Bit-perfect
+  für das Gerät eingeschaltet wird, und bleibt dort, wenn es ausgeschaltet wird.
+- **Was weiterhin funktioniert:** **Ausblenden** (es blendet über die Blendzeit
+  aus), **Pause**, **Stopp**, **Neustart**, die Markierungen Wiederholen und
+  Stopp danach, die Modi Single und Continuous, Cue (Vorhören, das keinen Fader
+  hat und nicht betroffen ist), Carts, die [DSD-Ausgabe](#dsd) und jeder Player,
+  dessen Main-Ausgang auf einem anderen Gerät liegt und der wie gewohnt mischt.
+  Ein Cart kann auf demselben Gerät spielen: Solange es klingt, startet der
+  nächste Track des Players mit der aktuellen Rate des Geräts, umgewandelt (er
+  ist also nicht bit-perfect), und es wird keine Stille eingefügt.
+- **Wann du es nutzen solltest.** Schalte es ein, wenn jeder Track den Wandler
+  unangetastet erreichen muss. Lass es aus bei einem Sendeprogramm, das gemischte
+  Übergänge oder Pegeländerungen braucht. Der Modus gilt pro Gerät, sodass
+  gemischte Player auf einem anderen Gerät bleiben können.
 
 ## Ein Gerät bit-perfect machen {#setting-a-device-bit-perfect}
 
@@ -15,7 +62,8 @@ soll.
    DSD-Modus beim nächsten Start der Anwendung.
 2. Wähle oben im Abschnitt **Erweitert**. Schalte unter **Einstellungen pro
    Gerät** neben dem Gerät **Bit-perfect** ein.
-3. Starte die Anwendung neu.
+3. Das Gerät wird bit-perfect, sobald nichts darauf spielt (siehe
+   [Einstellungen ausstehend](settings.md#settings-pending)).
 
 Das Gerät startet dann mit seiner eigenen Abtastrate, wenn du ihm an derselben
 Stelle eine gegeben hast, sonst mit der globalen Abtastrate, und folgt von dort
@@ -45,26 +93,39 @@ kann.
 - **Exklusiver Zugriff.** Nichts anderes auf dem Computer kann auf dem Gerät
   spielen, solange die Anwendung es verwendet. Wird der exklusive Zugriff
   verweigert, spielt das Gerät dennoch, geteilt, und das BP-Symbol bleibt aus.
-- **Die Rate folgt der Datei.** Spielt nichts auf dem Gerät und startet ein Track
-  mit einer anderen Abtastrate, wird das Gerät mit dieser Rate neu geöffnet.
-  - Das geschieht, wenn du einen Track abspielst, einen pausiert geladenen
-    fortsetzt, vorhörst oder ein Cart startest. Tracks, die nur warten (der
-    nächste Track jedes Players), werden mit der neuen Rate neu vorbereitet.
-  - Das erneute Öffnen dauert so lange, wie das Gerät zum Starten braucht
-    (meist einige zehn Millisekunden). Der Start verzögert sich um diese Zeit.
-  - Solange etwas auf dem Gerät spielt, ändert sich die Rate nie. Ein Track mit
-    einer anderen Rate, der dann startet (zum Beispiel ein 48-kHz-Track, in den
-    nach einem 44,1-kHz-Track gemixt wird, oder ein Track, der startet, während
-    ein anderer Player oder ein Cart auf demselben Gerät spielt), wird über seine
-    ganze Länge umgewandelt und ist nicht bit-perfect.
-  - Verweigert das Gerät eine Rate, behält es die vorherige, und der Track wird
-    umgewandelt.
+- **Die Rate folgt der Datei.** Das Gerät wird mit der Abtastrate eines Tracks neu
+  geöffnet, wenn der Track startet:
+  - **Aus der Stille:** Du spielst einen Track ab, setzt einen pausiert geladenen
+    fort, hörst vor oder startest ein Cart, während nichts auf dem Gerät spielt.
+    Tracks, die nur warten (der nächste Track jedes Players), werden mit der
+    neuen Rate neu vorbereitet.
+  - **Zwischen zwei Tracks eines Players:** Der Track on Air stoppt (an seinem
+    Ende oder sofort bei **Play / Weiter** und **Vorheriger Track**), das Gerät
+    wird neu geöffnet, und der nächste Track startet. Das ist die kurze Stille
+    aus [Was es kostet](#what-it-costs).
+  - Das Gerät wird erst neu geöffnet, wenn es alles gespielt hat, was es
+    gepuffert hatte, sodass das Ende des vorherigen Tracks nie abgeschnitten
+    wird. Dann dauert das erneute Öffnen so lange, wie das Gerät zum Starten
+    braucht. Zusammen sind das meist einige zehn Millisekunden; der Start
+    verzögert sich um diese Zeit. Das Warten auf den Puffer dauert nie länger als
+    eine halbe Sekunde (`tuning.play_out_max_ms` in der Konfigurationsdatei, 0
+    bis 2000 ms), was auch immer das Gerät meldet.
+- **Wenn die Rate nicht folgen kann.** Das Gerät behält seine Rate, und ein Track
+  mit einer anderen Rate wird über seine ganze Länge umgewandelt (er ist nicht
+  bit-perfect), wenn:
+  - etwas anderes auf dem Gerät klingt, wenn der Track startet: ein anderer
+    Player (oder einer, der mit einem Track pausiert ist), ein Cart oder ein
+    Vorhören;
+  - das Gerät diese Rate zuvor verweigert hat; es behält die vorherige;
+  - der Track noch nicht analysiert wurde, seine Rate also nicht bekannt ist.
+
+  Der Wechsel zwischen den beiden Tracks erfolgt weiterhin ohne Crossfade.
 - **Keine Verarbeitung, wenn nichts sie verlangt.** Die Samples laufen
-  unverändert durch, solange alles Folgende zutrifft:
-  - die Lautstärke des Players beträgt 100 %;
-  - es läuft keine Blende;
-  - nichts anderes spielt auf denselben Ausgängen (ein anderer Player, ein Cart,
-    ein Testton).
+  unverändert durch, solange keine Blende läuft (Ausblenden, die Rampen beim
+  Pausieren und Fortsetzen, der kurze knackfreie Stopp eines Tracks) und nichts
+  anderes auf denselben Ausgängen spielt (ein anderer Player, ein Cart, ein
+  Testton). Die Lautstärke spielt keine Rolle: Ein Bit-perfect-Ausgang hält sie
+  bei 100 %.
 
 ## DSD {#dsd}
 
@@ -89,7 +150,8 @@ erfordert Linux, oder das Gerät nimmt kein natives DSD an. Ein für ein Gerät
 gespeicherter Modus, den es jetzt nicht annehmen kann, wird als PCM angezeigt,
 was auch das ist, was spielt; der gespeicherte Modus kehrt zurück, wenn das Gerät
 ihn wieder annehmen kann. Das Ändern eines Modus, der Mischeinstellung oder der
-DSD-Stille erfordert einen Neustart, wie die anderen Ausgangseinstellungen.
+DSD-Stille gilt, sobald nichts auf dem Gerät spielt, wie die anderen
+Ausgangseinstellungen.
 
 **Wann DSD unverändert ausgegeben wird.** Alles Folgende muss beim Start des
 Tracks zutreffen:
@@ -97,9 +159,13 @@ Tracks zutreffen:
   natives DSD;
 - der Track ist DSD (DSF oder DFF), mono oder stereo, und wurde analysiert (so
   ist seine DSD-Rate bekannt);
-- die Lautstärke des Players beträgt 100 %;
 - nichts anderes spielt auf dem Gerät (ein anderer Player, ein Cart, ein
   Testton);
+- der Track hat keine Verstärkung der
+  [Lautheitsnormalisierung](loudness.md#bit-perfect-outputs): Einer, der vor dem
+  Umstellen des Geräts auf bit-perfect (zum Beispiel pausiert) mit einer
+  Verstärkung geladen wurde, behält sie, sodass er umgewandelt spielt, ohne
+  **DSD** oder **BP**;
 - das Gerät akzeptiert den Stream. DoP erfordert eine Geräterate von der DSD-Rate
   geteilt durch 16 (176,4 kHz für DSD64, 352,8 kHz für DSD128, 705,6 kHz für
   DSD256) und ein 24- oder 32-Bit-Format. Natives DSD erfordert ein Gerät, das
@@ -124,11 +190,8 @@ Solange DSD unverändert ausgegeben wird:
 - steht im Symbol der Kopfzeile **DSD** statt **BP**;
 - zeigen die Pegelmesser den Pegel der PCM-Umwandlung desselben Tracks, sodass
   sie wie gewohnt funktionieren;
-- muss die Lautstärke bei 100 % bleiben: Der Tooltip des Faders sagt es. Ihn zu
-  bewegen schaltet den Track auf PCM um (siehe unten);
 - stoppen Stopp und Ausblenden den Track sofort, ohne Blende, da sich ein
-  DSD-Stream nicht ausblenden lässt. Wird Play auf einem anderen Track gedrückt,
-  während er spielt, schneidet es ihn auf dieselbe Weise ab, statt überzublenden;
+  DSD-Stream nicht ausblenden lässt;
 - wirken auch Pause und Fortsetzen sofort, ohne Rampe.
 
 **Stille an den Rändern.** Jeder Start, jedes Ende und jeder Wechsel zu PCM
@@ -136,14 +199,13 @@ sendet zuerst DSD-Stille (standardmäßig 200 ms), damit der Wandler ohne Knacke
 einrastet. Die Ausnahme ist ein DSD-Track, der einen Stream derselben Art und
 DSD-Rate fortsetzt, dessen Stille noch läuft: Der Wandler ist noch eingerastet,
 also startet er ohne zusätzliche Stille. Ein Track startet daher um diese Zeit
-später, und ein Wechsel zu PCM hinterlässt eine Lücke dieser Länge. Sie heißt
-**DSD-Stille** unter Einstellungen → Audioausgänge, Erweitert (0 bis 2000 ms).
+später, und ein Wechsel zu PCM hinterlässt eine Lücke dieser Länge (ein natives
+DSD-Gerät spielt außerdem, was es gepuffert hat, bevor es als PCM neu geöffnet
+wird, einige Millisekunden mehr). Sie heißt **DSD-Stille** unter Einstellungen → Audioausgänge, Erweitert (0 bis 2000 ms).
 
 **Wenn eine andere Quelle das Gerät braucht.** **Wenn eine andere Quelle einen
 DSD-Ausgang braucht** unter Einstellungen → Audioausgänge wählt, was geschieht,
-wenn ein anderer Player, ein Cart oder ein Testton auf demselben Gerät startet
-(den Fader des Players selbst zu bewegen ist die Ausnahme: Das schaltet den Track
-immer auf PCM um):
+wenn ein anderer Player, ein Cart oder ein Testton auf demselben Gerät startet:
 - **DSD-Track als PCM fortsetzen** (Standard). Der Stream wechselt nach der
   DSD-Stille zu PCM, und der Track läuft umgewandelt von der Stelle aus weiter, an
   der er war. Dasselbe geschieht mit dem Track, der von selbst folgt (siehe
@@ -151,15 +213,14 @@ immer auf PCM um):
 - **DSD behalten und andere Quellen stummschalten.** Nichts unterbricht den
   DSD-Stream. Andere Quellen, die auf das Gerät geroutet sind, sind stumm, bis
   der DSD-Track endet, und der Player zeigt währenddessen ein Symbol **Andere
-  stumm**. Der nächste Track des Players überlappt nicht: Er startet, wenn der
-  DSD-Track endet, ohne Crossfade oder Segue. Ein PCM-Track wartet auf die
-  DSD-Stille; ein DSD-Track derselben Art und DSD-Rate setzt den Stream ohne sie
-  fort. Das Bewegen des Faders schaltet den Track weiterhin auf PCM um.
+  stumm**. Der nächste Track des Players startet, wenn der
+  DSD-Track endet: ein PCM-Track nach der DSD-Stille, ein DSD-Track derselben
+  Art und DSD-Rate sofort und setzt den Stream fort.
 
 **Ein Album bleibt unter der Standardeinstellung nicht DSD.** Mit *DSD-Track als
 PCM fortsetzen* wird nur ein DSD-Track, der auf einem ruhenden Gerät startet, als
 DSD ausgegeben. Die Tracks, die der Player danach von selbst startet (am Ende
-eines Tracks, bei einem Segue oder einem Crossfade), starten aus einem Preload,
+eines Tracks), starten aus einem Preload,
 der immer PCM ist, sodass das Gerät auf PCM wechselt und sie umgewandelt spielen.
 Ein Track, den du selbst startest (Play, Doppelklick), wird wieder als DSD
 ausgegeben, wenn das Gerät ruht oder der vorherige DSD-Stream mit derselben
@@ -172,8 +233,10 @@ zu können (zum Beispiel ohne exklusiven Zugriff), läuft der Track als PCM weit
 
 ## Das BP-Symbol {#the-bp-badge}
 
-Das Symbol **BP** in der Kopfzeile des Players leuchtet, solange der aktuelle
-Track sein Main-Gerät unverändert erreicht. Alles Folgende muss zutreffen:
+Das Symbol **BP** in der Kopfzeile des Players gibt es nur bei einem Player, dessen
+Main-Gerät bit-perfect läuft. Es leuchtet (grüner Rand und Text; blassgrau, wenn
+aus), solange der aktuelle Track sein Main-Gerät unverändert erreicht. Alles
+Folgende muss zutreffen:
 
 - das Gerät ist bit-perfect und mit exklusivem Zugriff geöffnet;
 - das Gerät läuft mit der Abtastrate des Tracks;
@@ -187,8 +250,14 @@ Track sein Main-Gerät unverändert erreicht. Alles Folgende muss zutreffen:
   Tracks, die eine frühere Version analysiert hat, erhalten ihr Format, sobald
   sie erneut analysiert wurden (die Meldung beim Start oder Einstellungen →
   Analyse) oder sobald ein Player sie anzeigt oder ein Cart sie enthält;
-- die Lautstärke beträgt 100 %, es läuft keine Blende, und nichts anderes spielt
-  auf denselben Ausgängen.
+- der Track spielt mit Einheitsverstärkung: Ein Bit-perfect-Ausgang wird nie
+  normalisiert, aber ein Track, der vor dem Umstellen seines Geräts auf
+  bit-perfect mit einer Normalisierungsverstärkung gestartet ist, behält diese
+  Verstärkung bis zu seinem Stopp, und BP bleibt für ihn aus;
+- die Lautstärke ist auf einem Bit-perfect-Ausgang auf 100 % festgehalten, es
+  läuft keine Blende (Ausblenden, die Rampen beim Pausieren und Fortsetzen und der
+  kurze knackfreie Stopp eines Tracks sind die einzigen Blenden, die auf einem
+  solchen Player bleiben), und nichts anderes spielt auf denselben Ausgängen.
 
 Einige Dateien werden nie als bit-perfect angezeigt:
 - **Verlustbehaftete Dateien** (MP3, AAC, Ogg Vorbis, Opus): Ihre dekodierten
@@ -203,13 +272,19 @@ So prüfst du eine Signalkette von Ende zu Ende:
 
 1. Verbinde den digitalen Ausgang des Geräts (S/PDIF, AES oder USB-Loopback) mit
    einem Recorder, der bitgenau aufnimmt.
-2. Spiele eine verlustfreie Testdatei bei 100 % ab, ohne dass etwas anderes
-   spielt.
+2. Spiele eine verlustfreie Testdatei ab, ohne dass etwas anderes spielt.
 3. Nimm sie auf.
 4. Vergleiche die Aufnahme mit der Datei. Zum Beispiel mit SoX: eine invertieren
    und beide mischen: `sox -m -v 1 file.wav -v -1 recording.wav diff.wav`,
    nachdem ihre Anfänge aufeinander ausgerichtet wurden. Jedes Sample der
    Differenz muss null sein.
+5. Prüfe einen Ratenwechsel: Spiele im Modus Continuous bei eingeschaltetem
+   **Automatischer Mix am MIX-Punkt** einen 44,1-kHz-Track mit MIX-Punkt ab,
+   gefolgt von einem 96-kHz-Track. Der erste spielt ohne Blende bis zu seinem
+   Cue-out; nach einer kurzen Stille zeigt der Wandler beim zweiten 96 kHz. Das
+   BP-Symbol leuchtet bei beiden.
+6. Spiele dann zwei Tracks mit derselben Rate ab: Der zweite folgt dem ersten
+   ohne Lücke und ohne Überlappung.
 
 Die automatisierten Tests des Projekts prüfen dieselbe Eigenschaft innerhalb der
 Anwendung, auf einem simulierten Gerät.
@@ -219,23 +294,23 @@ Anwendung, auf einem simulierten Gerät.
 Die automatisierten Tests prüfen DSD nur auf simulierten Geräten. DoP und
 natives DSD wurden vom Projekt nicht auf einem echten Wandler ausprobiert. So
 prüfst du einen:
-1. Stelle das Gerät auf **DoP** (oder **Natives DSD** unter Linux), starte neu
-   und spiele eine DSD-Datei bei 100 % ab, ohne dass etwas anderes spielt. Die
+1. Stelle das Gerät auf **DoP** (oder **Natives DSD** unter Linux) und spiele
+   eine DSD-Datei ab, ohne dass etwas anderes spielt. Die
    Kopfzeile muss **DSD** zeigen, und die eigene Anzeige des Wandlers sollte die
    DSD-Rate (zum Beispiel DSD64) statt einer PCM-Rate zeigen. Ein Wandler, der
    eine PCM-Rate zeigt oder Rauschen spielt, erkennt den Stream nicht: Gehe
    zurück zu **In PCM umwandeln**.
 2. Achte auf ein Knacken oder einen Rauschstoß beim Start, bei Stopp, am Ende
-   des Tracks und beim Bewegen des Faders. Ein Knacken bedeutet, dass der Wandler
+   des Tracks. Ein Knacken bedeutet, dass der Wandler
    eine längere **DSD-Stille** braucht (Einstellungen → Audioausgänge,
    Erweitert).
 3. Starte ein Cart oder einen anderen Player auf demselben Gerät, einmal mit
    jeder Mischeinstellung, und prüfe das oben beschriebene Verhalten.
 4. Um unter Linux natives DSD ohne die Anwendung zu prüfen, führe
-   `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0 cargo test -p fp-backends --test conformance -- --ignored native_dsd_on_a_real_device`
+   `FAUSTE_NATIVE_DSD_DEVICE=alsa:hw:CARD=<card>,DEV=0 cargo test -p fp-backends --test it -- --ignored conformance::native_dsd_on_a_real_device`
    aus. Es öffnet das Gerät in nativem DSD bei DSD64 und spielt eine Sekunde
    DSD-Stille. Es muss bestehen, und der Wandler sollte auf DSD64 einrasten.
 5. Mit DSD-Dateien in `test-music/` spielt
-   `cargo test --release -p fp-engine --test dsd_real_music -- --ignored` sie
+   `cargo test --release -p fp-engine --test it dsd_real_music:: -- --ignored` sie
    durch die Engine auf einem simulierten Gerät ab und vergleicht die Wörter mit
    den Bytes der Datei (siehe [Testing](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/testing.md)).

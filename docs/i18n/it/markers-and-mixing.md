@@ -15,15 +15,18 @@ li sostituisce mai.
 
 ## Modificare i marker {#editing-markers}
 
-Sulla forma d'onda di un lettore, o su quella della sua finestra CUE (lo
-stesso menu e le stesse maniglie; una modifica si vede in entrambe
-contemporaneamente):
+Sulla forma d'onda di un lettore, su quella della sua finestra CUE o sulla
+[barra di preascolto della finestra della libreria](library.md#pre-listening)
+(lo stesso menu e le stesse maniglie; una modifica si vede ovunque si trovi
+il brano, contemporaneamente):
 
 - **Fai clic destro** dove vuoi un marker e scegli **Imposta qui il cue-in**,
   **Imposta qui la fine dell'intro**, **Imposta qui l'inizio dell'outro**,
   **Imposta qui il punto MIX** o **Imposta qui il cue-out**. **Ripristina i
   marker automatici** rimuove i marker che hai posizionato, e il brano viene
-  analizzato di nuovo.
+  analizzato di nuovo. **Loudness…** apre le impostazioni di
+  [normalizzazione del loudness](loudness.md#per-track-exclude-and-trim) del
+  brano: escluderlo oppure regolarne il guadagno.
 - **Tieni premuto Alt** (Option su macOS): sui marker compaiono delle
   maniglie. Trascinane una per spostarlo; il tempo viene mostrato mentre
   trascini. Un trascinamento non sposta mai la testina.
@@ -92,6 +95,10 @@ cambiati, i brani vengono analizzati di nuovo automaticamente.
 - **Premere Play mentre è in onda:** il brano successivo parte subito e
   quello attuale sfuma nella *durata della dissolvenza* (1 s per
   impostazione predefinita).
+- **Un lettore la cui uscita Main è bit-perfect** ignora il punto MIX e il
+  mix automatico: ogni brano suona fino al suo cue-out, poi parte il
+  successivo, e Play mentre è in onda cambia brano subito, senza dissolvenza.
+  Vedi [Cosa costa](bit-perfect.md#what-it-costs).
 - **Usa cue-in e cue-out** disattivato (Impostazioni → Lettori): ogni
   lettore suona ogni brano da 0 alla fine del file. Cue-in e cue-out,
   automatici e manuali, vengono mantenuti, e la forma d'onda li disegna come

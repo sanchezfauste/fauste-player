@@ -17,6 +17,8 @@ mentres aprendes un control; o programa nunca escoita os seus propios portos.
 Os controladores pódense conectar e desconectar mentres o programa funciona:
 cada un par de segundos búscanse os portos de novo, e un controlador que
 volve conéctase polo seu nome, coas luces axustadas de novo.
+**Reconectar portos** pecha todos os portos e ábreos de novo sen tocar o
+cable (ver [Resolución de problemas](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 En Linux, o MIDI pasa por ALSA: o teu usuario ten que poder abrir o
 secuenciador (`/dev/snd/seq`, normalmente por pertencer ao grupo `audio`).
@@ -44,11 +46,20 @@ asignación.
 - Un botón actúa cando se preme (unha tecla ou pad que baixa, ou un cambio de
   control que sobe polo medio do seu rango), exactamente coma o botón do
   reprodutor na pantalla. Un botón atenuado na pantalla non fai nada.
-- Un fader move o volume na mesma escala que o fader da pantalla. Para evitar
+  Un botón **CUE** tampouco fai nada cando a súa preescoita se oiría en
+  antena mentres algo soa alí: o MIDI non pode responder á pregunta que
+  fai a pantalla. Deter unha preescoita funciona sempre.
+- Un fader move o volume na mesma escala (a mesma lei de mesa de mesturas) que o fader da pantalla. Para evitar
   saltos, só toma o control cando chega ao volume actual ou o pasa (soft
   takeover); se o volume se cambia na pantalla, o fader ten que alcanzalo de
   novo. Non cambia nada ata que moves un control: iniciar o programa nunca
   envía nada a antena.
+- Unha asignación de volume dun reprodutor cuxa saída Principal é
+  [bit-perfect](bit-perfect.md#what-it-costs) non fai nada: o seu volume
+  mantense ao 100 %. Cando a saída xa non sexa bit-perfect, leva o control
+  ao máximo para recoller o volume de novo.
+- Play/Seguinte e Anterior nese reprodutor cambian ao instante, sen fundido
+  cruzado. As súas luces funcionan coma sempre.
 - Con **Acender os botóns (LED)** activado, os botóns asignados acéndense:
   Play mentres o reprodutor está en antena, Pausa pestanexando mentres está en
   pausa, CUE mentres se preescoita, e Stop, Stop con fundido, Reiniciar e

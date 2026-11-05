@@ -3,20 +3,29 @@
 Elke kolom is een speler. Spelers zijn onafhankelijk: elk heeft zijn eigen
 playlisttabbladen, transport, volume en uitgangen.
 
-![Speler 1 on air: kop, hoes, titel, volgend nummer, transport, aftelling, meter, fader en golfvorm](../../images/guide/player.png)
+![Speler 1 on air: kop met de loudness-gain, hoes, titel, volgend nummer, transport, aftelling, meter, fader en golfvorm](../../images/guide/player.png)
 
 ## Kop {#header}
 
 | Element | Betekenis |
 |---|---|
 | `P1` … `Pn` | Spelernummer (de cijfertoets die hem laat spelen) |
+| Knoppen **Verbergen** en **Maximaliseren** / **Herstellen** | De twee kleine knoppen aan het rechteruiteinde van de kop: de speler verbergen, of hem even maximaliseren (**Herstellen** terwijl hij gemaximaliseerd is). Gedimd terwijl de indeling vergrendeld is, **Verbergen** op het laatste getoonde paneel en **Maximaliseren** als er één paneel getoond wordt (zie [Indeling](layout.md#maximize-a-panel)) |
 | Statusstip en -label | **On air** (rood), **Gepauzeerd** (amber), **Gestopt** (grijs) |
-| Badge **Mixen** / **Faden** | Er loopt een crossfade naar het volgende nummer, of een uitfade tot stop |
+| Smalle kolommen | Is de kolom te smal voor elke badge, dan laat de kop de minst belangrijke het eerst vallen (de statustekst, dan **Andere gedempt**, de melding bij binnenkomst, **Stop na**, **Mixen** / **Faden**, de statusstip), zodat niets ooit overlapt. Het spelernummer, **CUE**, de modus, **BP**, de gain-badge en de knoppen **Verbergen** en **Maximaliseren** blijven altijd. Maak de kolom breder om ze allemaal te zien |
+| Badge **Mixen** / **Faden** | Er loopt een crossfade naar het volgende nummer, of een uitfade tot stop. **Mixen** brandt nooit op een speler waarvan de Main-uitgang bit-perfect is: hij maakt geen crossfade (zie [Wat het kost](bit-perfect.md#what-it-costs)) |
 | Badge **Stop na** | De speler stopt wanneer het huidige nummer eindigt |
 | Badge **Herhalen** / **Stop na nummer** | Het huidige nummer wordt herhaald, of stopt de speler wanneer het eindigt, vanwege zijn eigen markering in het playlistmenu. Houd de muisaanwijzer erboven voor de volledige zin. De eigen knop **Stop na** van de speler gaat voor: zolang die aanstaat, wordt alleen zijn badge getoond |
-| **BP** / **DSD** | **BP** brandt zolang het huidige nummer zijn Main-apparaat ongewijzigd bereikt. **DSD** vervangt het zolang een DSD-nummer als DSD ongewijzigd naar buiten gaat (zie [Bit-perfect uitgang](bit-perfect.md)). **Andere gedempt** verschijnt ernaast wanneer die DSD-stream andere bronnen van de uitgang weghoudt |
+| Gain-badge | Met [loudness-normalisatie](loudness.md#the-gain-in-the-player-header) aan, de versterking waarmee het nummer dat on air is speelt (**+4.0 dB**), of een amberkleurige **0.0 dB** wanneer het nummer ongewijzigd speelt (nog geen meting, een bit-perfect uitgang, of een nummer dat van normalisatie is uitgesloten). Houd de muisaanwijzer erboven voor de reden. Getoond terwijl de speler speelt of gepauzeerd is |
+| **BP** / **DSD** | De badge verschijnt alleen op een speler waarvan het Main-apparaat bit-perfect draait; **BP** brandt zolang het huidige nummer dat apparaat ongewijzigd bereikt. **DSD** vervangt het zolang een DSD-nummer als DSD ongewijzigd naar buiten gaat (zie [Bit-perfect uitgang](bit-perfect.md)). **Andere gedempt** verschijnt ernaast wanneer die DSD-stream andere bronnen van de uitgang weghoudt |
 | **SINGLE** \| **CONT** | Afspeelmodus (zie hieronder): één samengevoegd bedieningselement, de verlichte helft is de actieve modus |
 | **CUE** | Het volgende nummer voorbeluisteren op de CUE-uitgang |
+
+De twee kleine knoppen aan het rechteruiteinde van de kop, **Verbergen** en
+**Maximaliseren** (of **Herstellen**), verbergen de speler of maximaliseren hem
+even; dezelfde twee staan in het menu van een rechtsklik op de achtergrond van
+de kop (niet op een van zijn knoppen) (zie
+[Indeling](layout.md#maximize-a-panel)).
 
 ## Infokolom {#info-row}
 
@@ -87,9 +96,31 @@ playlisttabbladen, transport, volume en uitgangen.
     - Niets in de speler voegt versterking boven 100 % toe. Een
       integer-apparaat clipt op full scale; een float-apparaat ontvangt het
       niveau zoals het is en het geluidssysteem of stuurprogramma clipt.
-- **Volumefader** (rechts van de meter, even hoog): sleep hem of gebruik het
-  muiswiel, één stap per tik. De tooltip toont het niveau in dB; bovenaan is 0
-  dB en onderaan is stilte.
+- **Volumefader** (rechts van de meter, even hoog). Hij volgt een
+  mengtafelcurve: hij is fijn bij de top en steiler naar beneden, zodat een
+  beetje omlaag een beetje minder niveau geeft (90 % van de slag is ongeveer
+  −2,5 dB, 50 % ongeveer −15,9 dB, 10 % ongeveer −48 dB). Bovenaan is 0 dB en
+  onderaan is stilte. Streepjes over de fader markeren 0, −2, −4, −6, −8, −10,
+  −12, −15, −20, −25, −30, −40, −50 en −∞ dB, met het niveau rechts ervan
+  geschreven.
+  - Sleep hem: de fader beweegt evenveel als de aanwijzer, vanaf waar hij is,
+    dus hem pakken laat hem nooit springen; een klik zonder te bewegen
+    verandert niets. Voorbij de top of de onderkant trekken en terug laat de
+    knop aan het uiteinde staan totdat de aanwijzer terug is waar hij het
+    bereikte, zodat de knop nooit ver van de aanwijzer eindigt.
+  - Gebruik het muiswiel: één stap per tik (ongeveer 0,6 dB bij 0 dB).
+  - Houd **Ctrl** of **Shift** ingedrukt tijdens het slepen of met het wiel om
+    hem tien keer fijner te bewegen.
+  - Dubbelklik op de knop om terug te keren naar 0 dB (een dubbelklik elders op
+    de fader doet niets).
+
+  Het niveau in dB (één decimaal, of −∞ voor stilte) staat onder de fader, op
+  dezelfde rij als de loudness-regel van de meter, en de tooltip toont het ook.
+  Een sessie die vóór deze curve is opgeslagen, behoudt het niveau van elke
+  speler; alleen de stand van de fader verandert.
+  Op een speler waarvan de Main-uitgang bit-perfect is, staat de fader vast op
+  100 % en is hij grijs, leest hij een gedimde 0.0 en zegt zijn tooltip waarom
+  (zie [Wat het kost](bit-perfect.md#what-it-costs)).
 - **Titel, artiest** en de regel **volgende**, met een groen vierkantje.
   Terwijl CUE aanstaat, wordt de voorbeluisterpositie in blauw getoond.
 
@@ -97,13 +128,18 @@ playlisttabbladen, transport, volume en uitgangen.
 
 | Knop | Actie |
 |---|---|
-| **Play / Volgende** (groot) | Gestopt: het volgende nummer starten. On air: overfaden naar het volgende nummer (de fadetijd stel je in bij [Instellingen](settings.md)). Gepauzeerd: hervatten. Als het nummer dat on air is ook het volgende is, start Play dat nummer opnieuw met de gebruikelijke fade. |
+| **Play / Volgende** (groot) | Gestopt: het volgende nummer starten. On air: overfaden naar het volgende nummer (de fadetijd stel je in bij [Instellingen](settings.md)); terwijl het faadt voor een crossfade die door Volgende of door een segue is gestart, loopt een groene band over de knop leeg gedurende de fadelengte, met zijn rand van links naar rechts bewegend zoals bij een cart (een crossfade die door Vorige is gestart loopt leeg op de knop Vorige). Gepauzeerd: hervatten. Als het nummer dat on air is ook het volgende is, start Play dat nummer opnieuw met de gebruikelijke fade. Op een bit-perfect uitgang schakelt het meteen om, zonder fade, en zegt zijn tooltip dat (zie [Wat het kost](bit-perfect.md#what-it-costs)). |
 | **Stop** | Meteen stoppen (met een korte de-click-helling) |
-| **Uitfaden** | Uitfaden en stoppen |
+| **Uitfaden** | Uitfaden en stoppen. Terwijl een uitfade loopt, loopt een band over de knop leeg gedurende de fadelengte, met zijn rand van links naar rechts bewegend |
 | **Pauze** | Pauzeren of hervatten; knippert amber terwijl gepauzeerd |
 | **Stop na** (een afspeeldriehoek en dan een vierkant) | Eenmalig stoppen wanneer het huidige nummer eindigt. In SINGLE-modus is het alleen beschikbaar zolang het huidige nummer herhaalt: het beëindigt de herhaling wanneer de lopende ronde eindigt. Om elke keer dat een nummer speelt erna te stoppen, of om een nummer te herhalen, gebruik je het menu ervan in de playlist (zie [Playlists](playlists.md)) |
-| **Vorig nummer** (een streep en twee driehoeken) | Terwijl on air: terugfaden naar het nummer dat deze speler eerder speelde, zoals Volgende doet. Druk nogmaals om verder terug te gaan. Het nummer dat je verliet, wordt het volgende. |
+| **Vorig nummer** (een streep en twee driehoeken) | Terwijl on air: terugfaden naar het nummer dat deze speler eerder speelde, zoals Volgende doet. Druk nogmaals om verder terug te gaan. Het nummer dat je verliet, wordt het volgende. Op een bit-perfect uitgang schakelt het meteen om, zonder fade (zie [Wat het kost](bit-perfect.md#what-it-costs)). |
 | **Nummer opnieuw starten** (een streep en één driehoek) | Terug naar het begin van het huidige nummer (zijn cue-in). Een gepauzeerde speler blijft gepauzeerd. |
+
+Via het toetsenbord verplaatsen `Up` en `Down` de selectie door de playlist,
+stelt `Enter` het geselecteerde nummer in als volgende, en speelt een tweede
+`Enter` erop binnen de tijd van een dubbelklik het af. Zie
+[Toetsenbord](keyboard.md).
 
 Knoppen die nu niets kunnen doen, zijn gedimd: Stop en Opnieuw starten zonder
 geladen nummer, Pauze en Uitfaden terwijl gestopt, Vorige zonder eerder nummer
@@ -130,6 +166,8 @@ in te stellen in Instellingen) knippert de aftelling rood.
 
 - Het deel dat al is gespeeld, is getekend in de kleur van de golfvorm; de rest
   is gedimder.
+  Bij een violette golfvormkleur valt de violette MIX-lijn minder op; kies een
+  andere golfvormkleur als je ze uit elkaar moet houden.
 - De omtrek toont de pieken, vaag; het volle lichaam erin is het gemiddelde
   (RMS) niveau. Bij een luid nummer vullen de pieken de hoogte, en het lichaam
   toont nog steeds waar het nummer zachter of luider is.
@@ -137,8 +175,11 @@ in te stellen in Instellingen) knippert de aftelling rood.
   telt hem af. De intro wordt alleen getoond wanneer hij is ingesteld.
 - Een oranje gearceerd gebied aan het einde markeert de **outro**, met een eigen
   aftelling.
-- Een gestippelde amberkleurige lijn met een label **MIX** markeert waar het
-  volgende nummer begint in doorlopende modus. In de modus SINGLE is hij gedimd.
+- Een gestippelde violette lijn (de kleur van de badge **Mixen**, zodat hij niet
+  voor de oranje outro wordt aangezien) met een label **MIX** markeert waar het
+  volgende nummer begint in doorlopende modus. In de modus SINGLE is hij gedimd,
+  en ook op een speler waarvan de Main-uitgang bit-perfect is, die niet mixt
+  (zie [Wat het kost](bit-perfect.md#what-it-costs)).
 - Het hele bestand wordt getekend. Het stille begin en einde dat bij het
   afspelen wordt overgeslagen (vóór de cue-in en na de cue-out) is donkerder
   getekend, met een dun lijntje waar het afspelen begint en eindigt. Met
@@ -172,12 +213,28 @@ in te stellen in Instellingen) knippert de aftelling rood.
 
 **CUE** indrukken (of **Voorbeluisteren op CUE** in het menu van een nummer)
 speelt het nummer af op de CUE-uitgang van de speler, bijvoorbeeld een
-koptelefoon, zonder de uitgang die on air is aan te raken, en opent een klein
-**CUE-venster** voor die speler. Er kunnen meerdere vensters open zijn, één per
-speler. Zie [Instellingen](settings.md) om het CUE-apparaat te kiezen. Een
-speler heeft een Cue-uitgang nodig die niet zijn Main-uitgang is: zonder die
-zijn **CUE** en **Voorbeluisteren op CUE** gedimd, en de muisaanwijzer erboven
-zegt dat.
+koptelefoon, en opent een klein **CUE-venster** voor die speler. Er kunnen
+meerdere vensters open zijn, één per speler. Zie [Instellingen](settings.md)
+om het CUE-apparaat te kiezen. Een speler heeft een Cue-uitgang nodig: zonder
+die zijn **CUE** en **Voorbeluisteren op CUE** gedimd, en de muisaanwijzer
+erboven zegt dat.
+
+Met één geluidskaart kan de Cue-uitgang de on-air uitgang zelf zijn (of hem
+delen met een andere speler of de cartwall). Een voorbeluistering daar is on
+air te horen, dus:
+
+- terwijl er niets op die uitgang speelt, start CUE meteen;
+- terwijl er daar iets speelt (een speler die speelt of gepauzeerd is, een
+  cart, een andere voorbeluistering, de voorbeluistering van de bibliotheek),
+  vraagt CUE eerst: **Toch voorbeluisteren** of **Annuleren** (Annuleren is de
+  standaard: Esc en Enter annuleren). Dezelfde vraag komt van het
+  nummermenu, het CUE-venster, de cartwall en het bibliotheekvenster;
+- wanneer er iets op die uitgang start terwijl een voorbeluistering die je niet
+  hebt bevestigd daar speelt, stopt de voorbeluistering en zegt de statusbalk
+  waarom. Een voorbeluistering die je hebt bevestigd blijft spelen.
+
+De tooltip van de CUE-knop zegt wanneer zijn voorbeluistering via de on-air
+uitgang gaat.
 
 ![Het CUE-venster van speler 4, dat zijn volgende nummer voorbeluistert](../../images/guide/cue-window.png)
 

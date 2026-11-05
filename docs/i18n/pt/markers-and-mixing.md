@@ -15,15 +15,18 @@ substitui.
 
 ## Editar marcadores {#editing-markers}
 
-Na forma de onda de um leitor, ou na forma de onda da sua janela de CUE (o
-mesmo menu e as mesmas pegas; uma alteração aparece nas duas ao mesmo
-tempo):
+Na forma de onda de um leitor, na forma de onda da sua janela de CUE ou na
+[barra de pré-escuta da janela da biblioteca](library.md#pre-listening) (o
+mesmo menu e as mesmas pegas; uma alteração aparece de uma só vez em todo o
+lado onde a faixa se mostra):
 
 - **Clique com o botão direito** onde quer um marcador e escolha **Pôr o
   cue-in aqui**, **Pôr o fim da intro aqui**, **Pôr o início do outro aqui**,
   **Pôr o ponto MIX aqui** ou **Pôr o cue-out aqui**. **Repor os marcadores
   automáticos** remove os marcadores que colocou, e a faixa é analisada de
-  novo.
+  novo. **Loudness…** abre as definições de
+  [normalização do loudness](loudness.md#per-track-exclude-and-trim) da faixa:
+  excluí-la ou ajustar o seu ganho.
 - **Mantenha Alt premido** (Option no macOS): aparecem pegas nos marcadores.
   Arraste uma para a mover; o tempo é mostrado enquanto arrasta. Um
   arrastamento nunca move a posição de reprodução.
@@ -88,6 +91,10 @@ as faixas são analisadas de novo automaticamente.
 - **Modo single**, ou **Stop no fim**: o leitor para no cue-out.
 - **Premir Play com uma faixa no ar:** a faixa seguinte começa de imediato e
   a atual desvanece durante a *duração do fade* (1 s por predefinição).
+- **Um leitor cuja saída principal é bit-perfect** ignora o ponto MIX e a
+  mistura automática: cada faixa toca até ao seu cue-out e só então começa a
+  seguinte, e Play com uma faixa no ar muda de imediato, sem fade. Ver
+  [O que custa](bit-perfect.md#what-it-costs).
 - **Usar cue-in e cue-out desativado** (Definições → Leitores): cada leitor
   toca cada faixa de 0 até ao fim do ficheiro. O cue-in e o cue-out,
   automáticos e manuais, são mantidos, e a forma de onda desenha-os como

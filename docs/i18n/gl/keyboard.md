@@ -5,7 +5,9 @@
 | `1` … `9` | Play nos reprodutores 1–9 (o mesmo que o seu botón Play) |
 | `F1` … `F12` | Dispara os cartuchos 1–12 da páxina de cartuchos que se ve |
 | `Ctrl+Space` | Para todos os cartuchos e o CUE de cartuchos (o botón **Paralo todo** da cartucheira) |
-| `Delete` / `Backspace` | Quita da lista que se ve a pista seleccionada (non mentres está en antena) |
+| `Up` / `Down` | Move a selección pola lista que mostra o reprodutor que usaches por última vez (ao iniciar, o primeiro reprodutor visible), desprazando a fila ata deixala á vista. Se non hai nada seleccionado, a primeira pulsación selecciona a seguinte pista do reprodutor, ou a primeira pista |
+| `Enter` | Fixa a pista seleccionada como seguinte pista do reprodutor. Preme `Enter` unha segunda vez sobre a mesma pista dentro do tempo dun dobre clic (o retardo de dobre clic do sistema) para reproducila, como fai o atallo Play do reprodutor. Outra tecla, un clic ou un cambio de selección polo medio, ou unha espera máis longa, fan que volva ser un primeiro `Enter` |
+| `Delete` / `Backspace` | Quita da lista que se ve a pista seleccionada (non mentres está en antena). Ocultar un reprodutor limpa a súa selección |
 | `Esc` | Pecha os menús e Configuración; cancela o diálogo «Hai audio en antena»; limpa a selección |
 
 No teclado, `Space` é a barra espazadora, `Delete` a tecla Supr e
@@ -40,4 +42,4 @@ Accións dispoñibles, para cada reprodutor e cartucho:
 - mostrar ou ocultar a cartucheira;
 - páxina de cartuchos seguinte ou anterior.
 
-`Delete`, `Backspace` e `Esc` non se poden cambiar.
+`Delete`, `Backspace` e `Esc` non se poden cambiar. `Up`, `Down` e `Enter` na lista só funcionan cando ningún atallo os usa e ningún botón nin control deslizante ten o foco do teclado.

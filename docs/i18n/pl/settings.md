@@ -8,51 +8,63 @@ Okno ma jeden rozmiar (900 × 640, mniejszy na małym ekranie) niezależnie od
 sekcji, a sekcja przewija się wewnątrz niego. Każda sekcja ustawia etykiety
 w jednej kolumnie.
 
-Sekcje Odtwarzacze, Mierniki, Analiza i Skróty klawiszowe mają w nagłówku
+Sekcje Odtwarzacze, Mierniki, Analiza, Głośność i Skróty klawiszowe mają w nagłówku
 przycisk **Przywróć domyślne**. Prosi o potwierdzenie, a potem resetuje
 tylko tę sekcję (Odtwarzacze zachowują liczbę odtwarzaczy i język; Skróty
 nie mają innego przycisku resetowania). Wyjścia audio, Playlisty, Cartwall,
-MIDI i Zdalne go nie mają.
+Biblioteka, MIDI i Zdalne go nie mają.
 
-## Wymagany restart {#restart-pending}
+## Oczekujące ustawienia {#settings-pending}
 
-Niektóre zmiany zaczynają działać dopiero po ponownym uruchomieniu
-aplikacji: system audio, częstotliwość próbkowania, rozmiar bufora (także
-własny urządzenia), wyjścia Main i Cue (odtwarzaczy i cartwalla), urządzenia
-bit-perfect i ustawienia DSD. Liczba odtwarzaczy do nich nie należy: działa
-od razu.
+Każde ustawienie obowiązuje, gdy aplikacja działa. System audio,
+częstotliwość próbkowania, rozmiar bufora (także własny urządzenia), wyjścia
+Main i Cue (odtwarzaczy i cartwalla), urządzenia bit-perfect i ustawienia DSD
+zmieniają sposób otwierania urządzenia wyjściowego, więc obowiązują, gdy tylko
+jest to bezpieczne:
+
+- Ustawienia urządzenia obowiązują, gdy nic nie gra na tym urządzeniu: żaden
+  skierowany na nie odtwarzacz nie gra, nie wycisza się ani nie odsłuchuje
+  wstępnie (CUE, także przytrzymane), i żaden cart nie gra na nim. Wstrzymany
+  odtwarzacz albo taki, w którym utwór tylko jest wczytany, nie trzyma
+  urządzenia: jego utwór zostaje wstrzymany tam, gdzie był.
+- Wyjście odtwarzacza lub cartwalla przenosi się, gdy ten odtwarzacz (lub
+  cartwall) nie gra; inne odtwarzacze na tych samych urządzeniach nie są
+  przerywane.
+- Nowy system audio obowiązuje, gdy nigdzie nic nie gra.
+
+Oczekująca zmiana jest wykonywana w pierwszej chwili, gdy nic, czego dotyczy,
+nie gra. Może to być przerwa między końcem jednego utworu a startem
+następnego: następny utwór startuje wtedy później o czas, którego urządzenie
+potrzebuje na ponowne otwarcie. **Zastosuj teraz** (niżej) wymusza zmianę od
+razu.
 
 Częstotliwość lub bufor nadane urządzeniu liczą się tylko wtedy, gdy zmieniają
 to, z czym urządzenie jest otwierane: nadanie urządzeniu tej samej wartości
-co globalna albo wyczyszczenie takiej wartości nie oczekuje na restart.
+co globalna albo wyczyszczenie takiej wartości niczego nie zmienia.
 
-Limity i strojenie silnika również obowiązują od następnego uruchomienia,
-ale edytuje się je w pliku konfiguracyjnym przy zamkniętej aplikacji (zob.
-[Dane i kopie zapasowe](data-and-backups.md)), więc nigdy nie są pokazywane
-jako oczekujące.
+Do tego czasu górny pasek pokazuje **Oczekujące ustawienia**. Najedź na nią,
+aby zobaczyć, co czeka i na co; kliknij ją, aby zobaczyć listę, która
+pokazuje też każdą zmianę odrzuconą przez urządzenie lub wyjście (urządzenie
+zachowuje bieżące ustawienia; zmiana jest podejmowana ponownie, gdy ją
+zmienisz lub naciśniesz **Zastosuj teraz**). Stopka Ustawień mówi „Niektóre
+zmiany czekają, aż wyjścia, których dotyczą, będą wolne.” i oferuje
+**Zastosuj teraz**; krótki komunikat (na przykład że ustawienie zostało
+zapisane) może na chwilę zająć miejsce tego tekstu.
 
-Gdy któraś z tych zmian czeka, stopka Ustawień mówi „Niektóre zmiany
-zadziałają po ponownym uruchomieniu.” i oferuje **Uruchom ponownie teraz**, a
-górny pasek pokazuje plakietkę **Wymagany restart**. Najedź na plakietkę, aby
-zobaczyć, co czeka. Krótki komunikat (na przykład że ustawienie zostało
-zapisane) może na chwilę zająć miejsce tekstu stopki; **Uruchom ponownie
-teraz** zostaje. Oba robią to samo:
+**Zastosuj teraz** stosuje od razu każdą oczekującą zmianę wyjść. Gdy
+cokolwiek by to przerwało, najpierw wymienia urządzenia i to, co na nich gra;
+**Przerwij i zastosuj** na krótko przerywa wtedy dźwięk na tych urządzeniach:
+to, co grało, idzie dalej od miejsca, w którym było, po krótkiej przerwie, a
+nic wstrzymanego ani zatrzymanego nie startuje. **Anuluj** (lub `Esc`) dalej
+czeka.
 
-- Gdy nic nie jest na antenie, **Uruchom ponownie teraz** (lub plakietka)
-  uruchamia ponownie od razu.
-- Gdy coś jest na antenie, pojawia się okno wymieniające to, co brzmi, z
-  przyciskami **Zatrzymaj i uruchom ponownie** oraz **Anuluj**.
-
-Najpierw zapisywana jest sesja, a dźwięk i sterowanie MIDI się zatrzymują,
-potem aplikacja startuje ponownie z tym samym folderem danych
-(`FAUSTE_HOME`), i nic nie trafia potem na antenę samo. Jeśli aplikacja nie
-może wystartować ponownie (we Flatpaku także wtedy, gdy nowa nie wystartuje
-na czas), mówi o tym; uruchom ją z menu aplikacji.
+Limity i strojenie silnika edytuje się w pliku konfiguracyjnym przy
+zamkniętej aplikacji (zob. [Dane i kopie zapasowe](data-and-backups.md)).
 
 ## Wyjścia audio {#audio-outputs}
 
-Zmiany w tej sekcji czekają na restart: zob.
-[Wymagany restart](#restart-pending).
+Zmiany w tej sekcji obowiązują, gdy aplikacja działa, gdy tylko nic, czego
+dotyczą, nie gra: zob. [Oczekujące ustawienia](#settings-pending).
 
 ![Ustawienia, Wyjścia audio, widok Podstawowe: przełącznik, system audio, częstotliwość próbkowania, rozmiar bufora oraz wyjścia Main i Cue każdego odtwarzacza (tu system cichy)](../../images/guide/settings-outputs.png)
 
@@ -72,25 +84,26 @@ ponowny wybór (na przykład po zamianie dwóch urządzeń) je zachowuje.
 |---|---|
 | System audio | Ostatni wybór, **Brak wyjścia (cisza)**, nie odtwarza niczego: osie czasu biegną w tempie rzeczywistym bez karty dźwiękowej (dla komputera bez niej lub do prób). Linux: PipeWire (w wersjach, które go zawierają), PulseAudio, JACK lub ALSA. Windows: WASAPI, ASIO (w wersjach, które go zawierają) lub JACK. macOS: Core Audio lub JACK. Systemy, których nie ma na tym komputerze, lub bez urządzenia wyjściowego (niedziałający serwer JACK), są pokazywane jako niedostępne. „Domyślny systemowy” używa pierwszego dostępnego w tej kolejności. |
 | Częstotliwość próbkowania | Częstotliwość, z jaką działa każde wyjście, chyba że urządzenie ma własną (Zaawansowane); pliki są do niej konwertowane resamplingiem wysokiej jakości. Urządzenia bit-perfect startują z własną częstotliwością, a potem podążają za plikami. |
-| Rozmiar bufora | Ramki na blok audio, chyba że urządzenie ma własny; wynikające z niego opóźnienie jest pokazane pod spodem |
-| Wyjścia odtwarzaczy | Dla każdego odtwarzacza urządzenie **Main** (na antenę) i urządzenie **Cue** (odsłuch wstępny), każde z parą kanałów. Karta dźwiękowa oferująca kilka profili wyjściowych (ALSA wymienia front, surround, bezpośredni sprzęt…) pokazuje każdy jako *karta — profil*; dwie pozycje, które nadal brzmiałyby tak samo, dostają w nawiasie identyfikator urządzenia. Interfejsy wielokanałowe mogą obsługiwać kilka odtwarzaczy na różnych parach. |
+| Rozmiar bufora | Ramki na blok audio, chyba że urządzenie ma własny; wynikające z niego opóźnienie jest pokazane pod spodem. Wyjścia przez serwer dźwięku lub mikser systemowy (PulseAudio, urządzenie ALSA `default`) proszą o co najmniej 50 ms bez względu na ten rozmiar, albo tyle, ile przyjmie urządzenie, aby zajęty komputer nie był słyszalny; opóźnienie mówi wtedy o tym (`shared_buffer_ms` w pliku konfiguracyjnym) |
+| Wyjścia odtwarzaczy | Dla każdego odtwarzacza urządzenie **Main** (na antenę) i urządzenie **Cue** (odsłuch wstępny), każde z parą kanałów. Karta dźwiękowa oferująca kilka profili wyjściowych (ALSA wymienia front, surround, bezpośredni sprzęt…) pokazuje każdy jako *karta — profil*; dwie pozycje, które nadal brzmiałyby tak samo, dostają w nawiasie identyfikator urządzenia. Interfejsy wielokanałowe mogą obsługiwać kilka odtwarzaczy na różnych parach. Wyjście Cue dzielące wyjście antenowe (Main dowolnego odtwarzacza lub cartwalla) jest dozwolone: uwaga pod nim mówi, że jego odsłuch wstępny jest słyszalny na antenie, i pyta najpierw, gdy coś tam gra. |
 | Test Main / Test Cue | Odtwarza krótki ton (1 kHz na Main, 440 Hz na Cue, 1,5 s, −18 dBFS) na wybranym wyjściu, abyś mógł sprawdzić okablowanie przed wejściem na antenę |
-| Cartwall | Wyjścia Main i Cue cartwalla. Main domyślnie jest wyjściem systemowym. Bez Cue nie ma odsłuchu wstępnego cartów. |
+| Biblioteka | Wyjście Cue biblioteki, z własnym przyciskiem **Test Cue**: tam słychać [odsłuch wstępny](library.md#pre-listening) okna biblioteki (na telefonie: karty Biblioteka). Bez niego przycisk Odsłuch paska odsłuchu jest przyciemniony. W Androidzie jego pusty wybór brzmi *Domyślne systemowe* zamiast *Brak*: odsłuch wstępny i **Test Cue** grają wtedy na wyjściu domyślnym (zob. [Android → Biblioteka](android.md#library)). Wyjście Biblioteki na wyjściu antenowym działa jak Cue odtwarzacza: uwaga pod nim mówi, że jego odsłuch wstępny jest słyszalny na antenie, i pyta najpierw, gdy coś tam gra. Jest w widokach Podstawowe i Zaawansowane, także na telefonie |
+| Cartwall | Wyjścia Main i Cue cartwalla. Main domyślnie jest wyjściem systemowym. Bez Cue nie ma odsłuchu wstępnego cartów; Cue na wyjściu antenowym działa jak w odtwarzaczach. |
 | Częstotliwość próbkowania: *urządzenie* (Zaawansowane) | **Globalna (...)** używa częstotliwości powyżej; wartość nadaje temu urządzeniu własną. Oferowane są tylko częstotliwości zgłaszane przez urządzenie; zapisana częstotliwość, której już nie zgłasza, pozostaje na liście z uwagą, że może się nie otworzyć (urządzenie wraca wtedy do częstotliwości globalnej). Własne wartości dotyczą tylko urządzeń wskazanych przez wyjście, nie domyślnego wyjścia systemowego, chyba że któreś je wskazuje. |
-| Rozmiar bufora: *urządzenie* (Zaawansowane) | **Globalny (...)** używa rozmiaru bufora powyżej; wartość nadaje temu urządzeniu własny, z opóźnieniem pod spodem. Urządzenie, które nie przyjmuje własnego rozmiaru bufora, wraca do globalnego, a do globalnej częstotliwości także wtedy, gdy nie przyjmuje własnej. |
-| Bit-perfect: *urządzenie* (Zaawansowane) | Urządzenie bit-perfect jest otwierane z dostępem na wyłączność i podąża za częstotliwością próbkowania każdego pliku, gdy nic na nim nie gra. Przełącznik jest wyłączony tam, gdzie urządzenie nie może dać dostępu na wyłączność. Zob. [Wyjście bit-perfect](bit-perfect.md). |
+| Rozmiar bufora: *urządzenie* (Zaawansowane) | **Globalny (...)** używa rozmiaru bufora powyżej (z minimum, o jakie prosi wyjście współdzielone, jak wyżej); wartość nadaje temu urządzeniu własny, używany bez zmian, z opóźnieniem pod spodem. Urządzenie, które nie przyjmuje własnego rozmiaru bufora, wraca do globalnego, a do globalnej częstotliwości także wtedy, gdy nie przyjmuje własnej. |
+| Bit-perfect: *urządzenie* (Zaawansowane) | Domyślnie wyłączone. Specjalny tryb do odsłuchu audiofilskiego, nie do programów z miksami: urządzenie jest otwierane z dostępem na wyłączność i podąża za częstotliwością próbkowania każdego utworu. Odtwarzacze, których wyjście Main jest na nim, nigdy nie przenikają ani nie miksują, zmiana częstotliwości zostawia krótką ciszę między dwoma utworami, a ich głośność jest utrzymywana na 100 %. Przełącznik jest wyłączony tam, gdzie urządzenie nie może dać dostępu na wyłączność. Zob. [Jakie są koszty](bit-perfect.md#what-it-costs). |
 | DSD: *urządzenie* (Zaawansowane) | **Konwertuj na PCM** (domyślnie), **DoP** lub, w Linuksie, **Natywne DSD**. Pokazuje je każde urządzenie; oferowane są tylko tryby, które urządzenie może przyjąć, a wiersz pod spodem mówi, dlaczego inne nie. Zob. [DSD](bit-perfect.md#dsd). |
 | Gdy inne źródło potrzebuje wyjścia DSD (Zaawansowane) | **Kontynuuj utwór DSD jako PCM** (domyślnie) lub **Zachowaj DSD i wycisz inne źródła**. Zob. [DSD](bit-perfect.md#dsd). |
 | Cisza DSD (Zaawansowane) | Cisza wysyłana przed rozpoczęciem strumienia DSD, po jego zakończeniu i przy przejściu na PCM, aby przetwornik zsynchronizował się bez trzasku; domyślnie 200 ms, od 0 do 2000. |
 
-Wyjście Cue nigdy nie wraca do wyjścia, którego używa Main, aby odsłuch
-wstępny nigdy nie trafił na antenę. Cue wskazujące urządzenie w systemie
-audio, którego ten komputer nie ma, lub to samo wyjście (urządzenie i kanały)
-co Main oznacza „brak cue”. Gdy wyjście Cue jest takie samo jak jego wyjście
-Main, ostrzeżenie pod nim o tym informuje. Odtwarzacz bez wyjścia Cue albo z
-Cue na wyjściu Main ma przyciemniony przycisk **CUE**; po najechaniu kursorem
-podpowiada, aby wybrać tutaj wyjście Cue. To samo dotyczy **Odsłuchaj na
-CUE** w cartwallu.
+Wyjście Cue nigdy nie wraca do wyjścia, którego używa Main. Cue wskazujące
+urządzenie w systemie audio, którego ten komputer nie ma, oznacza „brak cue”.
+Cue na wyjściu antenowym (to samo urządzenie i kanały co Main albo
+nakładające się na nie) jest dozwolone: uwaga pod nim mówi, że jego odsłuch
+wstępny jest słyszalny na antenie i że najpierw pyta, gdy coś tam gra.
+Odtwarzacz bez wyjścia Cue ma przyciemniony przycisk **CUE**; po najechaniu
+kursorem podpowiada, aby wybrać tutaj wyjście Cue. To samo dotyczy **Odsłuchaj
+na CUE** w cartwallu.
 
 Jeśli urządzenie zniknie podczas odtwarzania, odtwarzacze zachowują swoje
 osie czasu, a urządzenie jest otwierane ponownie, gdy wróci (zob.
@@ -103,12 +116,17 @@ osie czasu, a urządzenie jest otwierane ponownie, gdy wróci (zob.
 | Ustawienie | Domyślnie | Znaczenie |
 |---|---|---|
 | Język | Systemowy | Język interfejsu |
-| Liczba odtwarzaczy | 4 | Kolumny na ekranie głównym (nie można usunąć odtwarzacza na antenie) |
+| Liczba odtwarzaczy | 4 | Kolumny na ekranie głównym (nie można usunąć odtwarzacza na antenie). Liczba obowiązuje po puszczeniu suwaka; liczba wpisana w pole obowiązuje po naciśnięciu Enter lub opuszczeniu pola, a Escape ją anuluje |
 | Tryb domyślny | CONT | Tryb, w którym startują odtwarzacze |
-| Czas wyciszania | 1000 ms | Używany przez Play na antenie i przez Stop z wyciszeniem |
-| Automatyczny miks w punkcie MIX | Wł. | Nakłada utwory w trybie ciągłym |
+| Czas wyciszania | 1000 ms | Używany przez Play na antenie i przez Stop z wyciszeniem. W odtwarzaczu, którego wyjście Main jest bit-perfect, tylko przez Stop z wyciszeniem |
+| Automatyczny miks w punkcie MIX | Wł. | Nakłada utwory w trybie ciągłym. Nie dotyczy odtwarzacza, którego wyjście Main jest bit-perfect |
 | Używaj cue-in i cue-out | Wł. | Wył.: odtwarzacze grają każdy utwór od początku do końca pliku; markery są zachowywane, a carty nadal używają swoich. Czasy trwania i sumy playlist podążają za tym samym zakresem |
 | Ostrzeżenie o końcu utworu | 10 s | Kiedy odliczanie zaczyna migać na czerwono |
+
+Gdy wyjście Main odtwarzacza jest bit-perfect, uwaga pod **Automatyczny miks w
+punkcie MIX** mówi, że takie odtwarzacze nigdy nie miksują ani nie przenikają.
+Oba ustawienia pozostają edytowalne: nadal dotyczą pozostałych odtwarzaczy. Zob.
+[Jakie są koszty](bit-perfect.md#what-it-costs).
 
 ## Mierniki {#meters}
 
@@ -156,9 +174,15 @@ Każdy miernik używa skali swojej normy, ze znacznikami między kanałami:
 
 ![Ustawienia, Analiza: progi markerów automatycznych](../../images/guide/settings-analysis.png)
 
-Progi opisane w rozdziale [Markery i miksowanie](markers-and-mixing.md).
+Progi opisane w rozdziale [Markery i miksowanie](markers-and-mixing.md);
+każdy wiersz ma pod nazwą jednowierszową podpowiedź mówiącą, co robi wartość.
 **Analizuj ponownie wszystkie utwory** uruchamia analizę od nowa dla całej
-biblioteki; markery ręczne są zachowywane.
+biblioteki, czytając każdy plik jeszcze raz; markery ręczne są zachowywane.
+Gdy działa, przycisk jest przyciemniony i pokazuje, jak daleko zaszła
+(**Analiza… 120 z 340**), więc ponowne naciśnięcie nie zaczyna od początku;
+podpowiedź pozycji **Analiza N utworów** na pasku stanu podaje ten sam postęp.
+Zmiana progu tutaj też analizuje bibliotekę od nowa i restartuje trwający
+przebieg, tak aby żaden utwór nie zachował markerów ze starych wartości.
 
 Po aktualizacji, w której zmieniła się analiza, utwory przeanalizowane przez
 wcześniejszą wersję zachowują swoje markery i przebiegi, które nadal
@@ -168,6 +192,39 @@ robi to samo w dowolnej chwili. Utwory w odtwarzaczach i tak są aktualizowane
 w miarę wyświetlania, podobnie jak utwory cartów, które nie mają zapisanego
 formatu (cart gra bit-perfect tylko wtedy, gdy jego format jest znany).
 Utwory, których pliku brakuje, nie są liczone, dopóki plik nie wróci.
+
+Analiza mierzy też głośność każdego pliku na potrzeby [normalizacji
+głośności](loudness.md). Pliki przeanalizowane, zanim mierzono głośność, są
+mierzone w tle, gdy analiza nie ma nic innego do roboty, niezależnie od tego,
+czy normalizacja jest włączona; ich markery nie są ruszane. **Analizuj
+ponownie** (w menu playlisty) i **Analizuj ponownie wszystkie utwory** mierzą
+od nowa.
+
+## Głośność {#loudness}
+
+![Ustawienia, Głośność: normalizacja włączona, z wartością docelową, pułapem true peak, maksymalnym wzmocnieniem i maksymalną korektą w wartościach domyślnych](../../images/guide/settings-loudness.png)
+
+Odtwarza każdy utwór i każdy cart z tą samą głośnością, ze stałym wzmocnieniem
+dla każdego utworu. [Normalizacja głośności](loudness.md) wyjaśnia, jak
+obliczane jest wzmocnienie, plakietkę w nagłówku odtwarzacza i ustawienia dla
+każdego utworu.
+
+| Ustawienie | Domyślnie | Zakres | Znaczenie |
+|---|---|---|---|
+| Normalizuj głośność | Wł. | | Normalizacja włączona lub wyłączona |
+| Cel | −16 LUFS | −36 … −6 LUFS, krok 0,5 | Głośność zintegrowana, do której sprowadzany jest każdy utwór |
+| Pułap true peak | −1 dBTP | −12 … 0 dBTP, krok 0,1 | Podbicie nigdy nie wynosi szczytu rzeczywistego utworu powyżej tej wartości. Obniżenia nie są ograniczane |
+| Maksymalne wzmocnienie | 12 dB | 0 … 24 dB | Największe wzmocnienie, jakie może dostać cichy utwór. Obniżenia nie są ograniczane |
+| Maksymalna korekta | 12 dB | 0 … 24 dB | Jak daleko może sięgać własna ręczna korekta każdego utworu, w górę lub w dół |
+
+Zmiany dotyczą utworów wczytanych później: to, co gra, zachowuje swoje
+wzmocnienie, a następny utwór czekający w każdym odtwarzaczu jest
+przygotowywany od nowa z nowym. Uwaga pod ustawieniami mówi, ile utworów
+wciąż czeka na pomiar; do jego zakończenia grają bez zmian. Odtwarzacz lub
+cart na wyjściu bit-perfect nigdy nie jest normalizowany. **Przywróć
+domyślne** resetuje tylko tę sekcję (normalizacja włączona). Normalizacja jest
+włączona w nowych instalacjach; istniejąca konfiguracja zachowuje swoje
+bieżące ustawienie (każda zapisana konfiguracja już przechowuje tę wartość).
 
 ## Playlisty {#playlists}
 
@@ -192,11 +249,10 @@ portugalski używa portugalskiego), a w pozostałych przypadkach angielskiego.
 Język w pliku ustawień, którego interfejs nie ma, jest pokazywany jako
 **Systemowy** i podąża za systemem operacyjnym.
 
-Angielska i hiszpańska wersja zostały napisane ręcznie. Pozostałe
-tłumaczenia wygenerowano za pomocą AI i mogą zawierać błędy; gdy któreś z
-nich jest w użyciu, **O programie** o tym informuje. Poprawki od rodzimych
-użytkowników języka są mile widziane jako zgłoszenia (issues) lub pull
-requesty.
+Interfejs w każdym języku, także angielskim i hiszpańskim, został wykonany za
+pomocą AI i może zawierać błędy. **O programie** zawiera ogólne zastrzeżenie
+obejmujące je wszystkie. Poprawki są mile widziane jako zgłoszenia (issues)
+lub pull requesty.
 
 ## Cartwall {#cartwall}
 
@@ -204,6 +260,14 @@ requesty.
 
 Strony, rozmiar siatki, edytor cartów oraz import i eksport stron cartów.
 Zob. [Cartwall](cartwall.md).
+
+## Biblioteka {#library}
+
+Twórz, zmieniaj nazwy, kolory i rodzaj, przenoś (przeciąganiem) i usuwaj
+kategorie grupujące Twoje utwory, obserwuj folder za pomocą kategorii i usuwaj
+jej brakujące utwory, bez otwierania okna biblioteki. Zob.
+[Biblioteka](library.md#categories) i
+[Obserwowane foldery](library.md#watched-folders).
 
 ## Skróty klawiszowe {#keyboard-shortcuts}
 
@@ -215,8 +279,9 @@ Zob. [Klawiatura](keyboard.md).
 
 ![Ustawienia, MIDI, ze sterowaniem MIDI wyłączonym](../../images/guide/settings-midi.png)
 
-Włącz powierzchnie sterujące MIDI, zobacz porty wejściowe i naucz kontrolkę
-dla każdej akcji odtwarzacza. Zob. [Powierzchnie sterujące MIDI](midi.md).
+Włącz powierzchnie sterujące MIDI, zobacz porty wejściowe (**Połącz porty
+ponownie** otwiera je od nowa, tak jak ponowne podłączenie kontrolerów) i
+naucz kontrolkę dla każdej akcji odtwarzacza. Zob. [Powierzchnie sterujące MIDI](midi.md).
 
 ## Zdalne {#remote}
 

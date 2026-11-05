@@ -18,11 +18,27 @@ Cambiar de pestaña nunca cambia lo que suena ni lo que va a continuación.
 Cuando acaba una pista, el player sigue en la playlist que contiene esa
 pista.
 
-Las playlists se crean, renombran y eliminan en
-[Configuración](settings.md). No se pueden eliminar la última playlist ni
+El **+** del extremo derecho de la fila crea una playlist nueva: escribe un
+nombre y pulsa `Enter` o **Crear** (`Esc` o un clic fuera cancelan). La
+playlist nueva aparece al momento en las pestañas de ese player y el player
+la muestra. Las playlists también se pueden crear, y se renombran y eliminan,
+en [Configuración](settings.md). No se pueden eliminar la última playlist ni
 una playlist con una pista sonando.
 
 ## La tabla de pistas {#the-track-table}
+
+Todo archivo que añades a una playlist, a un cartucho o al importar un
+archivo M3U o PLS se convierte en una *pista* de la biblioteca, y se queda
+allí cuando quitas su entrada, vacías el cartucho o eliminas la playlist: sus
+marcadores, sus ajustes de sonoridad y sus etiquetas se conservan para la
+próxima vez que añadas el archivo. Un mismo archivo es siempre una sola
+pista: añadirlo dos veces, o a una playlist y a un cartucho, comparte sus
+marcadores y sus ajustes de sonoridad en todas partes. En el escritorio, un
+archivo añadido desde esta versión es la misma pista sea cual sea la ruta
+que llegue a él (un enlace simbólico o un `..` en la ruta no crea una segunda
+pista). La única excepción: una pista que no tiene categoría, cuyo archivo ha
+desaparecido y que nada usa ya sale sola de la biblioteca, con una línea en
+el registro.
 
 ![Una playlist: las pistas reproducidas atenuadas, la que suena en rojo, la siguiente en verde y el pie con el tiempo restante](../../images/guide/playlist.png)
 
@@ -37,6 +53,7 @@ una playlist con una pista sonando.
 | Dur. | Duración de reproducción, del cue-in al cue-out (el archivo entero con **Usar cue-in y cue-out** desactivado) |
 | Intro | Cuánto dura la intro, desde donde empieza a sonar la pista hasta su marcador de intro; vacía si la pista no tiene marcador de intro |
 | Archivo | El nombre del archivo, con su extensión |
+| Comentario | La etiqueta de comentario, en una línea |
 
 Una instalación nueva muestra `#`, Título, Artista y Dur. Las demás columnas
 son opcionales; consulta **Elegir las columnas** más abajo. Una pista a la
@@ -102,14 +119,16 @@ Colores de las filas:
 | **P2** (u otro número) en rojo en la columna del número | Sonando en ese player |
 | **Verde**, con una flecha | La siguiente pista de este player |
 | Atenuada | Ya reproducida en este player |
+| Contorno lavanda | La fila seleccionada (haz clic en ella, o muévete con `Up` y `Down`). También se ve en las filas roja y verde |
 | Archivo con una cruz / icono de aviso | Archivo que falta / ilegible (se salta); pasa el puntero por la fila: la ventana emergente empieza con el motivo, en ámbar, y después los campos habituales. Un archivo que falta se vuelve a buscar cada 30 s (`tuning.missing_recheck_ms`). |
 | Flechas de recarga a la derecha del título | Analizada por una versión anterior; sigue sonando con ese análisis. **Configuración → Análisis → Analizar las pistas desactualizadas** la pone al día (las pistas cargadas en un player se actualizan igualmente) |
-| Reloj de arena a la derecha del título | La pista espera su análisis (pasa el puntero por el reloj de arena: *Análisis pendiente*). Suena igualmente, y el reloj de arena desaparece cuando termina el análisis |
+| Reloj de arena a la derecha del título | La pista espera su análisis: *En espera de análisis* cuando está en la cola, *Análisis pendiente* cuando aún no se ha puesto en cola. Suena igualmente, y el reloj de arena desaparece cuando termina el análisis. Una pista analizada que se pone otra vez en cola (con **Volver a analizar todas las pistas**) también lo muestra |
+| Icono de forma de onda a la derecha del título | La pista se está analizando ahora (*Analizándose ahora*) |
 | Violeta | Seleccionada |
 
 **Información emergente de la pista.** Deja el puntero un momento sobre una
 fila para ver su título, artista, álbum, fecha, género, duración, formato
-(tipo, frecuencia de muestreo y profundidad de bits cuando se conocen) y la
+(tipo, frecuencia de muestreo, profundidad de bits y tasa de bits media, por ejemplo 320 kbps, cuando se conocen) y la
 ruta de su archivo. Un campo que el archivo no tiene se omite. La ventana
 emergente es la única información al pasar el puntero por una fila, y nunca
 se mueve mientras se muestra. Para un archivo que falta o es ilegible,
@@ -128,15 +147,18 @@ empieza con el motivo.
 |---|---|
 | Reproducir ahora | Inicia esta pista al momento (con mezcla si el player está sonando) |
 | Marcar como siguiente | Igual que el doble clic. Sobre la pista que suena, se reproduce una vez más, desde su inicio, cuando acaba la pasada en curso (con mezcla como Repetir, sin hueco), y después el player sigue. Actúa una sola vez. Stop al final, el modo SINGLE y una marca de Parar después de esta pista siguen deteniendo el player antes. Si hay un CUE en marcha, pasa a la nueva siguiente |
-| Preescuchar en CUE | La reproduce en la salida CUE (abre la ventana de CUE). Aparece atenuado si el player no tiene una salida Cue distinta de su salida Main |
+| Preescuchar en CUE | La reproduce en la salida CUE (abre la ventana de CUE). Aparece atenuado si el player no tiene salida Cue. En la salida en antena pregunta primero si algo suena allí (véase [CUE](players.md#cue-pre-listen)) |
 | Editar etiquetas… | Abre el editor de etiquetas de esta pista. **Guardar** escribe los cambios en el archivo de audio; **Cancelar** (o Esc, si no hay un guardado en curso) cierra sin escribir. El elemento aparece atenuado, con el motivo al pasar el puntero, mientras la pista suena, está en CUE o en un cartucho que suena, mientras aún no se han leído sus etiquetas, cuando el archivo falta, y en los formatos cuyas etiquetas no se pueden escribir (por ejemplo DSD) |
-| Volver a analizar | Analiza esta pista otra vez ahora, sea cual sea su estado. Un archivo ilegible que se haya arreglado también se recoge por sí solo (consulta [Solución de problemas](troubleshooting.md)). Los marcadores manuales se conservan |
+| Volver a analizar | Analiza esta pista otra vez ahora, sea cual sea su estado, leyendo el archivo otra vez (así un archivo que editaste se mide de nuevo aunque su tamaño y su fecha no hayan cambiado). Un archivo ilegible que se haya arreglado también se recoge por sí solo (consulta [Solución de problemas](troubleshooting.md)). Los marcadores manuales se conservan. Aparece atenuado, con el motivo al pasar el puntero, mientras la pista ya está esperando su análisis o analizándose |
+| Sonoridad… | Abre la ventana emergente de sonoridad de esta pista (ajuste y exclusión; véase [Sonoridad](loudness.md)) |
+| Mostrar en la biblioteca | Abre la [ventana de la biblioteca](library.md) en la categoría de esta pista con su fila seleccionada. Solo en el escritorio |
+| Mover a la categoría ▸ | Archiva la pista en una categoría, o en Sin categoría, sin abrir la biblioteca. Solo en el escritorio |
 | Añadir pistas debajo… | Elige archivos para insertarlos después de esta pista |
 | Duplicar | Inserta debajo una copia sin reproducir (con sus marcas de repetir y de parar después) |
 | Repetir esta pista | Márcalo para reproducirla una y otra vez, sin hueco, hasta que pulses Play (siguiente), Anterior, Stop o Stop con fundido, o actives Stop al final. La pausa mantiene la repetición. Aparece un icono de repetir delante del título |
 | Parar después de esta pista | Márcalo para detener el player cuando acabe esta pista, cada vez que suene (en cualquier modo). A diferencia del botón **Stop al final** del player, la marca va con la pista y se guarda con la playlist. El icono de parar después aparece delante del título. Tiene prioridad sobre Repetir |
 | Mover a ▸ | La mueve al final de otra playlist |
-| Quitar de la playlist | La quita; no es posible mientras suena |
+| Quitar de la playlist | La quita de esta playlist; no es posible mientras suena. La pista se queda en la biblioteca (sus marcadores y sus ajustes de sonoridad se conservan) |
 
 ## Editar etiquetas {#editing-tags}
 
@@ -237,7 +259,13 @@ en la ventana de la aplicación.
   para insertarlos en la posición donde los sueltas. Sobre la cabecera, el
   borde de una columna, la barra de desplazamiento o una ventana que tape la
   lista no se inserta nada. Si el sistema no informa de la posición, van al
-  final de la lista que se ve.
+  final de la lista que muestra el último player que usaste, o el primer
+  player visible; con todos los players ocultos no se inserta nada y la barra
+  de estado lo dice (véase
+  [Distribución](layout.md#show-and-hide-panels)). En Linux, soltar archivos
+  requiere que la ventana funcione en X11, lo que hace por defecto, también
+  en un escritorio Wayland (véase [Solución de
+  problemas](troubleshooting.md#files-cannot-be-dropped-on-linux)).
 
 ## Pie {#footer}
 
