@@ -5,7 +5,9 @@
 | `1` … `9` | Play en los players 1–9 (igual que su botón Play) |
 | `F1` … `F12` | Dispara los cartuchos 1–12 de la página de cartuchos que se ve |
 | `Ctrl+Space` | Detiene todos los cartuchos y el CUE de cartuchos (el botón **Parar todo** de la cartuchera) |
-| `Delete` / `Backspace` | Quita la pista seleccionada de la playlist que se ve (no mientras suena) |
+| `Up` / `Down` | Mueve la selección por la playlist que muestra el último player que usaste (el primer player visible al arrancar), desplazando la fila hasta que se vea. Sin nada seleccionado, la primera pulsación selecciona la siguiente pista del player, o la primera pista |
+| `Enter` | Fija la pista seleccionada como siguiente pista del player. Pulsa `Enter` una segunda vez sobre la misma pista dentro del tiempo de un doble clic (el retardo de doble clic del sistema) para reproducirla, como hace el atajo de Play del player. Otra tecla, un clic o un cambio de selección entre medias, o una espera más larga, hacen que vuelva a ser un primer `Enter` |
+| `Delete` / `Backspace` | Quita la pista seleccionada de la playlist que se ve (no mientras suena). Ocultar un player borra su selección |
 | `Esc` | Cierra los menús y Configuración; cancela el diálogo «Hay audio en el aire»; borra la selección |
 
 En el teclado, `Space` es la barra espaciadora, `Delete` la tecla Supr y
@@ -40,4 +42,4 @@ Acciones disponibles, para cada player y cartucho:
 - mostrar u ocultar la cartuchera;
 - página de cartuchos siguiente o anterior.
 
-`Delete`, `Backspace` y `Esc` no se pueden cambiar.
+`Delete`, `Backspace` y `Esc` no se pueden cambiar. `Up`, `Down` y `Enter` en la playlist solo funcionan cuando ningún atajo los usa y ningún botón ni deslizador tiene el foco del teclado.

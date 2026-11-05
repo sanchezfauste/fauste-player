@@ -4,9 +4,9 @@
 
 1. Abre **Configuración → Salidas de audio** y pulsa **Probar Main** para el
    player. Si oyes el tono, revisa el fader de volumen del player.
-2. Si no oyes nada, elige otro dispositivo u otro par de canales. Los
-   cambios en las salidas se aplican tras un reinicio: pulsa **Reiniciar
-   ahora** en Configuración.
+2. Si no oyes nada, elige otro dispositivo u otro par de canales. Un cambio
+   en las salidas se aplica cuando no suena nada en ellas; **Aplicar ahora**
+   en Configuración lo aplica al momento.
 3. En Linux, es preferible **PipeWire** o **PulseAudio** en Configuración →
    Salidas de audio → Sistema de audio. Comparten la tarjeta de sonido con
    otros programas. **ALSA** habla directamente con la tarjeta y puede
@@ -23,12 +23,24 @@
 ## Bit-perfect {#bit-perfect}
 
 - **El distintivo BP sigue apagado.** Comprueba cada condición de
-  [Salida bit-perfect](bit-perfect.md#the-bp-badge): volumen al 100 %, sin
-  fundido, nada más en las mismas salidas, un archivo sin pérdida que se ha
-  analizado y un dispositivo que funciona a la frecuencia del archivo.
+  [Salida bit-perfect](bit-perfect.md#the-bp-badge): sin fundido, nada más
+  en las mismas salidas, un archivo sin pérdida que se ha analizado y un
+  dispositivo que funciona a la frecuencia del archivo.
 - **Un breve silencio antes de una pista.** El dispositivo bit-perfect se ha
-  vuelto a abrir a la frecuencia de muestreo de la pista. Para evitarlo,
-  mantén la biblioteca a una sola frecuencia.
+  vuelto a abrir a la frecuencia de muestreo de la pista. Solo ocurre cuando
+  cambia la frecuencia: las pistas a la misma frecuencia se siguen sin
+  hueco. Para evitarlo, mantén la biblioteca a una sola frecuencia. Véase
+  [Lo que cuesta](bit-perfect.md#what-it-costs).
+- **Las pistas no se mezclan, y Play no hace fundido.** En un player cuya
+  salida Main es bit-perfect, cada pista suena hasta el final y luego
+  empieza la siguiente, y Play / Siguiente y Anterior cambian al momento: en
+  un player así no hay fundidos encadenados ni segues. Desactiva bit-perfect
+  en el dispositivo, o mueve el player a otra salida, para volver a mezclar.
+  Véase [Lo que cuesta](bit-perfect.md#what-it-costs).
+- **El fader de volumen no se mueve.** La salida Main del player es
+  bit-perfect, lo que mantiene el volumen al 100 %; la información emergente
+  del fader lo dice. Los faders MIDI y la API remota tampoco pueden moverlo.
+  Véase [Lo que cuesta](bit-perfect.md#what-it-costs).
 - **Una pista suena remuestreada y el registro dice que el dispositivo está
   ocupado (Linux).** Para cambiar de frecuencia, la aplicación cierra el
   dispositivo y lo vuelve a abrir. En ese momento el servidor de sonido
@@ -122,6 +134,50 @@ cuando termina una copia. Para comprobarlo al momento usa **Volver a
 analizar** en el menú de su fila, o **Configuración → Análisis → Volver a
 analizar todas las pistas** para toda la biblioteca.
 
+Un WAV o FLAC que aparece como ilegible, o que sonaría como un ruido fuerte,
+puede ser una extracción de un CD DTS: el archivo contiene un flujo de bits
+DTS en lugar de audio. La aplicación lo rechaza (el registro dice «encoded
+bitstream stored as PCM») y no decodifica DTS. Conviértelo antes a PCM
+normal con otra herramienta.
+
+## Una carpeta vigilada muestra un aviso {#a-watched-folder-shows-a-warning}
+
+Una categoría que vigila una carpeta muestra ⟳, de otro color cuando la
+carpeta no se sigue; pasa el puntero por encima para ver el motivo. Véase
+[Carpetas vigiladas](library.md#watched-folders).
+
+- **No se encuentra o no se puede leer**: la unidad o el recurso compartido
+  no está montado o no se puede alcanzar. Una carpeta vacía que debería
+  contener pistas de la biblioteca también cuenta como no encontrada, porque
+  un recurso compartido sin montar suele parecer una. No se marca ni se
+  quita nada; la carpeta se vuelve a buscar cada 30 segundos y se revisa
+  cuando aparece. Si vaciaste la carpeta a propósito, limpia sus pistas
+  seleccionándolas en la tabla de la biblioteca y eligiendo **Quitar de la
+  biblioteca…**, o eligiendo **Volver a analizar** en ellas, lo que marca
+  como faltantes las que ya no tienen archivo para que **Quitar pistas que
+  faltan…** pueda quitarlas.
+- **Los cambios no se siguen**: el sistema no quiso vigilarla, normalmente
+  una carpeta con muchísimas subcarpetas. La carpeta se sigue revisando en
+  cada arranque y en cada reintento, así que los archivos nuevos aparecen
+  entonces, no al momento. En Linux, un árbol de carpetas mayor que el límite
+  de vigilancias por usuario necesita un `fs.inotify.max_user_watches` más
+  alto (por ejemplo `sudo sysctl fs.inotify.max_user_watches=524288`; hazlo
+  permanente en `/etc/sysctl.d/`).
+- **No es una ruta completa**: la carpeta guardada se editó a mano hasta
+  dejarla en una ruta que no está completa. Elige **Cambiar carpeta
+  vigilada…** para elegirla de nuevo.
+- **Un recurso compartido de red no muestra ningún aviso, pero los archivos
+  añadidos desde otro ordenador no aparecen**: en un recurso compartido de
+  red (SMB/CIFS, NFS) el sistema suele aceptar la vigilancia pero solo
+  informa de los cambios hechos desde este ordenador. Los cambios hechos en
+  otro sitio se ven en el siguiente arranque, no mientras la aplicación
+  funciona.
+- **Una carpeta con miles de archivos** tarda un rato en revisarse al
+  arrancar; el progreso del análisis lo muestra.
+- Las pistas cuyo archivo salió de una carpeta vigilada se quedan en la
+  biblioteca marcadas como faltantes. Quítalas con **Quitar pistas que
+  faltan…** en el menú de la categoría.
+
 ## Cortes de audio {#audio-dropouts}
 
 La barra de estado avisa durante 5 segundos después de cada corte que
@@ -134,12 +190,61 @@ segundos por tipo, con cuántos ha habido. No todos los sistemas de audio
 informan de los xruns (PulseAudio no lo hace; el modo exclusivo de Windows
 tampoco).
 
-- Aumenta el **Tamaño de búfer** en Configuración (y pulsa **Reiniciar
-  ahora**).
+- Aumenta el **Tamaño de búfer** en Configuración (se aplica cuando no suena
+  nada en ese dispositivo, o al momento con **Aplicar ahora**).
+- A través de un servidor de sonido (PulseAudio, el dispositivo `default` de
+  ALSA), cada salida ya pide al menos 50 ms sea cual sea el tamaño de
+  búfer, para que un ordenador ocupado no se oiga; Configuración lo muestra
+  junto a la latencia. En un ordenador antiguo o muy cargado, sube
+  `shared_buffer_ms` en la sección `outputs` del archivo de configuración
+  (por ejemplo a 100). El sistema mantiene en cola unos dos de esos bloques,
+  así que los botones de cartuchos y de play suenan entonces unas dos veces
+  esa subida más tarde. Para la salida al aire, la entrada de hardware
+  propia del dispositivo (`hw:` en Linux) evita del todo el servidor de
+  sonido.
 - En Linux, permite la planificación en tiempo real. La aplicación se la
-  pide al sistema a través de rtkit (D-Bus). También sirve pertenecer al
-  grupo `audio` con un límite `rtprio`.
+  pide al sistema a través de rtkit (D-Bus), y el registro anota un rechazo.
+  Muchos escritorios se la niegan a las aplicaciones.
 - Evita las unidades de red para la música que suena al aire.
+
+## La interfaz va lenta en un ordenador antiguo {#the-interface-is-slow-on-an-old-computer}
+
+Mientras algo suena, la interfaz se dibuja como mucho a 30 fotogramas por
+segundo (`max_fps` en la sección `ui` del archivo de configuración), y los
+clics y las teclas se atienden al momento. En un ordenador antiguo u ocupado
+bájalo (por ejemplo a 20) para dejar más procesador al audio; 0 dibuja cada
+fotograma que muestra la pantalla. Los vúmetros miden lo mismo a cualquier
+frecuencia; solo se dibujan con menos frecuencia.
+
+## No se pueden soltar archivos en Linux {#files-cannot-be-dropped-on-linux}
+
+La ventana solo acepta archivos arrastrados desde un gestor de archivos
+cuando funciona en X11. Por defecto lo hace, también en un escritorio
+Wayland (a través de XWayland, que tienen todos los escritorios). Si
+`ui.window_system` en `config.json` está en `"Wayland"`, la ventana es una
+ventana Wayland nativa, que puede verse más nítida con escalado fraccionario
+de la pantalla, pero no se pueden soltar archivos en ella: usa **+ Añadir**
+en su lugar. Vuelve a ponerlo en `"Auto"` (el valor por defecto) o `"X11"` y
+reinicia Fauste Player.
+
+## Un controlador MIDI no responde {#a-midi-controller-does-not-respond}
+
+Si **Configuración → MIDI** muestra el controlador como conectado pero sus
+botones y faders no hacen nada, pulsa allí **Reconectar puertos**: el
+programa cierra los puertos MIDI y los vuelve a abrir, como si desenchufaras
+y volvieras a enchufar el controlador. Si eso no ayuda, desenchufa el
+controlador y vuelve a enchufarlo.
+
+En cualquier caso, el registro dice qué ha pasado. Lista los puertos MIDI
+cada vez que cambian, cada puerto que se abre y se cierra (con el motivo),
+un puerto que no se puede abrir (una vez, hasta que se abre o desaparece),
+el primer mensaje recibido en cada conexión, el primer mensaje ignorado en
+cada conexión con el motivo (sin asignación, un fader que aún no ha
+alcanzado el volumen, una acción que no puede actuar ahora) y el primer
+mensaje de LED que falló. Un controlador conectado que nunca registra un
+primer mensaje no envía nada de lo que recibe el programa. Para cada mensaje
+ignorado y cada reintento fallido, arranca el programa con
+`RUST_LOG=info,fp_control=debug`.
 
 ## «La interfaz ha tenido un error» {#the-interface-hit-an-error}
 
@@ -149,7 +254,22 @@ Se ha capturado un error de dibujo. El audio no se ve afectado. Pulsa
 ## Registros e informes de fallos {#logs-and-crash-reports}
 
 Consulta [Datos y copias de seguridad](data-and-backups.md) para la carpeta
-de registros. Hay un archivo de registro por día, y se conservan los últimos
-14. Los informes de fallos se guardan como `crash-<time>.txt`. Define
-`RUST_LOG=debug` en el entorno para obtener más detalle. Adjunta ambos
-archivos al informar de un error.
+de registros. Hay un archivo de registro por día. Las líneas idénticas que se repiten una
+tras otra se escriben una sola vez, seguidas de una línea como
+`previous message repeated 12 times` (durante una larga serie de repeticiones
+esa línea se escribe cada minuto). Las líneas que difieren, por ejemplo
+porque llevan un contador, no se agrupan. Los mensajes de conexión
+rutinarios del cliente de PulseAudio se omiten por defecto. Define
+`RUST_LOG=debug` en el entorno para obtener más detalle (sustituye al filtro
+por defecto, `info,pulseaudio=warn`).
+
+El registro tiene un límite: el archivo de un día deja de crecer a los
+10 MiB (su última línea lo dice; el resto de ese día no se registra, que es
+a lo que lleva una avalancha de líneas distintas) y se conservan los últimos
+14 archivos. Cámbialos en el archivo de configuración con
+`limits.max_log_file_mb` (de 1 a 1024), `limits.max_log_files` (de 2 a 365)
+y `limits.log_repeat_summary_secs` (de 1 a 3600, 60 por defecto, cada cuánto
+se informa de una larga serie de repeticiones); se aplican en el siguiente
+arranque. Los informes de fallos se guardan como `crash-<time>.txt` en la
+misma carpeta y tienen un límite aparte (`limits.max_crash_reports` por
+ejecución). Adjunta ambos archivos al informar de un error.

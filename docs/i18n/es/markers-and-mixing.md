@@ -15,14 +15,18 @@ nunca los sustituye.
 
 ## Editar marcadores {#editing-markers}
 
-En la forma de onda de un player, o en la de su ventana de CUE (el mismo
-menú y los mismos tiradores; un cambio se ve en las dos a la vez):
+En la forma de onda de un player, en la de su ventana de CUE o en la [barra
+de preescucha de la ventana de la biblioteca](library.md#pre-listening) (el
+mismo menú y los mismos tiradores; un cambio se ve a la vez en todos los
+sitios donde está la pista):
 
 - **Haz clic derecho** donde quieras un marcador y elige **Poner el inicio
   aquí**, **Poner el fin de la intro aquí**, **Poner el inicio del outro
   aquí**, **Poner el punto MIX aquí** o **Poner el final aquí**. **Volver a
   los marcadores automáticos** quita los marcadores que hayas colocado, y la
-  pista se vuelve a analizar.
+  pista se vuelve a analizar. **Sonoridad…** abre los ajustes de
+  [normalización de la sonoridad](loudness.md#per-track-exclude-and-trim) de
+  la pista: excluirla o ajustar su ganancia.
 - **Mantén pulsado Alt** (Opción en macOS): aparecen tiradores en los
   marcadores. Arrastra uno para moverlo; el tiempo se muestra mientras
   arrastras. Arrastrar nunca mueve el cabezal.
@@ -88,6 +92,10 @@ cambiarlos, las pistas se vuelven a analizar automáticamente.
 - **Pulsar Play mientras suena:** la siguiente pista empieza al momento y la
   actual baja con un fundido durante la *duración del fundido* (1 s por
   defecto).
+- **Un player cuya salida Main es bit-perfect** ignora el punto MIX y la
+  mezcla automática: cada pista se reproduce hasta su cue-out, luego empieza
+  la siguiente, y Play mientras suena cambia al momento, sin fundido. Véase
+  [Lo que cuesta](bit-perfect.md#what-it-costs).
 - **Usar cue-in y cue-out desactivado** (Configuración → Players): todos los
   players reproducen cada pista desde 0 hasta el final del archivo. El cue-in
   y el cue-out, automáticos y manuales, se conservan, y la forma de onda los

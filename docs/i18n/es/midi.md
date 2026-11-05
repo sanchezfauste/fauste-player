@@ -19,6 +19,9 @@ sus propios puertos. Los controladores se pueden conectar o desconectar con
 el programa en marcha: cada par de segundos se vuelven a buscar los
 puertos, y un controlador que vuelve se conecta por su nombre, con sus luces
 otra vez encendidas como corresponde.
+**Reconectar puertos** cierra todos los puertos y los vuelve a abrir sin
+tocar el cable (véase [Solución de
+problemas](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 En Linux, MIDI pasa por ALSA: tu usuario debe poder abrir el secuenciador
 (`/dev/snd/seq`, normalmente por estar en el grupo `audio`).
@@ -46,12 +49,21 @@ asignación.
 - Un botón actúa al pulsarlo (una tecla o un pad que baja, o un control
   change que sube y pasa por la mitad de su rango), exactamente igual que el
   botón del player en pantalla. Un botón que está atenuado en pantalla no
-  hace nada.
-- Un fader mueve el volumen en la misma escala que el fader de la pantalla.
+  hace nada. Un botón **CUE** tampoco hace nada cuando su preescucha se
+  oiría en antena mientras algo suena allí: MIDI no puede responder a la
+  pregunta que hace la pantalla. Detener una preescucha siempre funciona.
+- Un fader mueve el volumen en la misma escala (la misma ley de mesa de
+  mezclas) que el fader de la pantalla.
   Para evitar saltos, solo toma el control cuando alcanza o supera el
   volumen actual (soft takeover); si el volumen se cambia en pantalla, el
   fader tiene que volver a alcanzarlo. No cambia nada hasta que mueves un
   control: arrancar el programa nunca pone nada al aire.
+- Una asignación de volumen de un player cuya salida Main es
+  [bit-perfect](bit-perfect.md#what-it-costs) no hace nada: su volumen se
+  mantiene al 100 %. Cuando la salida deja de ser bit-perfect, mueve el
+  control hasta arriba para recuperar el volumen.
+- Play / Siguiente y Anterior en un player así cambian al momento, sin
+  fundido. Sus luces funcionan como siempre.
 - Con **Encender los botones (LED)** activado, los botones asignados se
   iluminan: Play mientras el player suena, Pausa parpadeando mientras está
   en pausa, CUE mientras preescucha, y Stop, Stop con fundido, Reiniciar y

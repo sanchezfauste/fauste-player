@@ -73,9 +73,11 @@ Un cliente puede:
   onda) y la cartuchera;
 - reproducir, pausar, detener, hacer un fundido, reiniciar y retroceder;
 - elegir la siguiente entrada (también la que suena: se reproduce una vez
-  más), preescuchar y saltar a una posición (en un player detenido, un salto
-  elige dónde empieza Play la siguiente entrada, y un salto antes de su
-  cue-in empieza en el cue-in);
+  más), preescuchar (una preescucha que se oiría en antena mientras algo
+  suena allí se rechaza salvo que la petición diga `"force": true`; véase la
+  referencia de la API) y saltar a una posición (en un player detenido, un
+  salto elige dónde empieza Play la siguiente entrada, y un salto antes de
+  su cue-in empieza en el cue-in);
 - fijar volúmenes, modos, stop al final de la pista actual, y las marcas de
   repetir y de parar después de una entrada;
 - disparar, detener y preescuchar cartuchos, y cambiar la página de
@@ -83,14 +85,43 @@ Un cliente puede:
 - editar: crear, renombrar y eliminar playlists; añadir una pista que ya
   está cargada, y quitar, mover o duplicar entradas; crear, renombrar,
   redimensionar y eliminar páginas de cartuchos, y configurar un cartucho
-  con una pista cargada; fijar o restablecer marcadores.
+  (nombre, tipo, color, bucle, exclusivo) con una pista cargada; fijar o
+  restablecer marcadores; excluir una pista de la [normalización de la
+  sonoridad](loudness.md) o ajustarla.
 
 Quitar lo que suena se rechaza, igual que en pantalla. Los archivos que aún
 no están cargados no se pueden añadir a distancia: están en este ordenador,
 así que añádelos antes aquí.
 
-Un botón que en pantalla aparece en gris también se rechaza a distancia. La
-referencia completa está en
+Un botón que en pantalla aparece en gris también se rechaza a distancia.
+
+Un player cuya salida Main es [bit-perfect](bit-perfect.md#what-it-costs)
+sigue funcionando a distancia, con los mismos límites que en pantalla:
+`play` y `previous` cambian al momento, sin fundido, y su volumen se
+mantiene al 100 %. Un volumen por debajo del 100 % se rechaza (`409`, con el
+motivo), y exactamente el 100 % se acepta. Cada player dice si su volumen
+está retenido (`fader_locked`).
+
+Un volumen enviado como posición de fader (el `fader` de la API, el
+`/volume` de OSC) es una posición en la escala propia del fader de la
+pantalla, de 0 (silencio) a 1 (0 dB): 0,9 son unos −2,5 dB, 0,8 unos −5,3 dB
+y 0,5 unos −16 dB. Las versiones anteriores usaban otra escala (0,8 era
+−12 dB, 0,5 era −30 dB), así que un script escrito para ellas ahora fija
+niveles más altos: comprueba sus valores.
+
+Cada pista lleva su medición de sonoridad (`loudness`, `null` hasta que se
+mide) y su ajuste (`loudness_edit`: `excluded` y `trim_db`). Un player que
+suena o está en pausa, y cada cartucho que suena, dice con qué ganancia de
+[normalización](loudness.md) empezó su pista y por qué (`normalization`:
+`gain_db` y un `status` como `applied`, `not_measured` o `bit_perfect`).
+`PUT /api/v1/tracks/<id>/loudness` con
+`{"excluded": false, "trim_db": -1.5}` cambia el ajuste, igual que la ventana
+emergente **Sonoridad…**; un ajuste más allá del máximo se rechaza (`409`,
+con el motivo). Los ajustes de la propia normalización (activada o no, el
+objetivo, los límites) solo se cambian en este ordenador. OSC y MIDI no
+tienen controles de sonoridad.
+
+La referencia completa está en
 [la documentación técnica](https://github.com/sanchezfauste/fauste-player/blob/master/docs/technical/remote-api.md)
 (en inglés).
 
@@ -144,6 +175,10 @@ Un suscriptor puede indicar cualquier puerto de su propia dirección, y se
 mantienen hasta `max_subscribers`. Por tanto, cualquiera que pueda enviar
 también puede suscribirse. Es un motivo más para mantener OSC en una red de
 confianza.
+
+En un player cuya salida Main es bit-perfect, los mensajes `/volume` se
+rechazan (el registro lo anota) y el player envía `/volume-locked` 1 a los
+suscriptores (0 en caso contrario).
 
 `oscsend` y `oscdump` vienen con liblo (`liblo-tools` en Debian y Ubuntu).
 La lista completa de direcciones está en
