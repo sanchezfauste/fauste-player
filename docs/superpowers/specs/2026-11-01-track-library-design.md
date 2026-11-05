@@ -805,7 +805,9 @@ Decided with the maintainer on 2026-11-05, after trying plan 6.
   lists under the folder, and its subfolders, to the category, with *Add to
   library*'s rules (§5.1b: a new or uncategorised track joins the category,
   one already in another category keeps it). Files gone from the folder
-  stay in the library (LB21). A notice says how many files were read, or
+  stay in the library, marked missing, and a missing one listed again is
+  analysed again, which brings it back (LB21; plan 8). With nothing listed
+  (no permission) nothing is marked. A notice says how many files were read, or
   that the folder has none (no permission, an emptied folder). Re-reading
   only happens on demand *(maintainer)*: not at start, not on MediaStore
   changes.

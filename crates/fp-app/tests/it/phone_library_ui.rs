@@ -1207,6 +1207,104 @@ fn lb53_reread_with_no_files_says_so() {
     );
 }
 
+/// Rock takes its files from `/sd/Rock` and already holds `held` (path,
+/// missing); the device lists `files`. A phone on Rock's list, with the
+/// services' requests.
+fn rock_holding(
+    held: &[(&str, bool)],
+    files: Vec<MediaFile>,
+) -> (
+    H,
+    Arc<Fake>,
+    crossbeam_channel::Receiver<fp_app::services::ServiceRequest>,
+    Vec<TrackId>,
+) {
+    let (mut s, rock) = with_categories();
+    fp_model::apply(
+        &mut s,
+        Command::SetWatchedFolder {
+            category: rock,
+            folder: Some(PathBuf::from("/sd/Rock")),
+        },
+    )
+    .unwrap();
+    let mut ids = Vec::new();
+    for (path, missing) in held {
+        let path = PathBuf::from(path);
+        fp_model::apply(
+            &mut s,
+            Command::AddToLibrary {
+                paths: vec![path.clone()],
+                category: Some(rock),
+            },
+        )
+        .unwrap();
+        let id = s.library.track_at(&path).unwrap();
+        if *missing {
+            s.library.get_mut(id).unwrap().file_state = FileState::Missing;
+        }
+        ids.push(id);
+    }
+    let browser = MediaBrowser::default();
+    browser.set_files(files);
+    let (tx, rx) = crossbeam_channel::bounded(8);
+    let (mut h, fake) = harness_sized(s, PORTRAIT, move |ui| {
+        ui.with_touch()
+            .with_media_browser(browser)
+            .with_services(tx)
+    });
+    h.run_steps(3);
+    tap(&mut h, "Library");
+    tap(&mut h, "Rock");
+    fake.take_sent();
+    (h, fake, rx, ids)
+}
+
+/// LB21 on a re-read: a file the device no longer lists under the folder
+/// is marked missing, one it lists again is analysed again (which brings
+/// it back), and nothing outside the folder is touched.
+#[test]
+fn lb53_reread_marks_the_gone_files_missing() {
+    let (mut h, fake, rx, ids) = rock_holding(
+        &[
+            ("/sd/Rock/a.mp3", false),
+            ("/sd/Rock/gone.mp3", false),
+            ("/sd/Rock/back.mp3", true),
+            ("/sd/Rocks/x.mp3", false),
+        ],
+        vec![media("/sd/Rock/a.mp3"), media("/sd/Rock/back.mp3")],
+    );
+    let (gone, back) = (ids[1], ids[2]);
+    tap(&mut h, REREAD);
+    let marked: Vec<(TrackId, FileState)> = fake
+        .take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::SetFileState { track, state } => Some((track, state)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(marked, [(gone, FileState::Missing)]);
+    assert_eq!(
+        rx.try_iter().collect::<Vec<_>>(),
+        [fp_app::services::ServiceRequest::ReanalyseTrack(back)]
+    );
+}
+
+/// With no permission the device lists nothing: nothing is marked.
+#[test]
+fn lb53_reread_with_no_permission_marks_nothing() {
+    let (mut h, fake, rx, _ids) = rock_holding(&[("/sd/Rock/a.mp3", false)], Vec::new());
+    tap(&mut h, REREAD);
+    assert!(
+        !fake
+            .take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::SetFileState { .. }))
+    );
+    assert!(rx.try_recv().is_err());
+}
+
 #[test]
 fn lb53_a_category_without_a_folder_has_no_reread() {
     let (s, _rock) = with_categories();

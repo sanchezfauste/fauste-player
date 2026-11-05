@@ -17,9 +17,11 @@ use egui::{
 };
 use egui_phosphor::regular as icon;
 use fp_model::{
-    AppState, CartColor, Categories, CategoryId, Command, LibrarySelection, LibraryView, PlayerId,
-    PlaylistId, Track, TrackId, Transport,
+    AppState, CartColor, Categories, CategoryId, Command, FileState, LibrarySelection, LibraryView,
+    PlayerId, PlaylistId, Track, TrackId, Transport,
 };
+
+use crate::services::ServiceRequest;
 
 use super::app::{Scene, ViewState};
 use super::glyphs::{self, TransportAction};
@@ -65,6 +67,10 @@ pub struct PhoneLibraryView {
     pub shown: Option<LibrarySelection>,
     /// Where the ticked tracks go: a player and a playlist (LB42, PL19).
     pub target: Option<(PlayerId, PlaylistId)>,
+    /// The rows (`LibraryUi::rows_revision`) the ticks were last checked
+    /// against: a tick is only ever added on a listed row, so the hidden
+    /// ones are looked for when the rows change, not every frame.
+    pub ticks_checked: u64,
 }
 
 impl PhoneLibraryView {
@@ -455,13 +461,20 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         scene.ctl.send(Command::SetLibraryView(Box::new(view)));
     }
     preview_strip(ui, scene);
+    let revision = {
+        view_state.library.rows(scene.state);
+        view_state.library.rows_revision()
+    };
     let rows = view_state.library.rows(scene.state);
     let tab = &mut view_state.phone_library;
     // Ticks the search or the scope hides, or the library lost, are not
     // added (LB42 acts on what the operator sees); the order stays.
-    if !tab.ticked.is_empty() {
-        let listed: HashSet<TrackId> = rows.iter().copied().collect();
-        tab.ticked.retain(|id| listed.contains(id));
+    if tab.ticks_checked != revision {
+        tab.ticks_checked = revision;
+        if !tab.ticked.is_empty() {
+            let listed: HashSet<TrackId> = rows.iter().copied().collect();
+            tab.ticked.retain(|id| listed.contains(id));
+        }
     }
     if rows.is_empty() {
         ui.add(
@@ -807,6 +820,27 @@ pub(crate) fn reread_folder(scene: &Scene<'_>, view_state: &mut ViewState, categ
         )
     };
     if !paths.is_empty() {
+        // LB21, as the folder watch does: a track under the folder whose
+        // file the device no longer lists is missing, and a missing one it
+        // lists again is analysed again, which brings it back. An empty
+        // list (no permission) says nothing about the files.
+        let listed: HashSet<&Path> = paths.iter().map(PathBuf::as_path).collect();
+        for track in scene
+            .state
+            .library
+            .iter()
+            .filter(|t| t.path != folder && t.path.starts_with(&folder))
+        {
+            let there = listed.contains(track.path.as_path());
+            if !there && track.file_state != FileState::Missing {
+                scene.ctl.send(Command::SetFileState {
+                    track: track.id,
+                    state: FileState::Missing,
+                });
+            } else if there && track.file_state == FileState::Missing {
+                scene.request(ServiceRequest::ReanalyseTrack(track.id));
+            }
+        }
         scene.ctl.send(Command::AddToLibrary {
             paths,
             category: Some(category),

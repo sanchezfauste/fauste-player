@@ -236,7 +236,10 @@ stops or changes playout.
   device folder (picked with `pick_watched_folder(id, false)`, not
   canonicalised) and *Re-read*, and the list's header a ↻;
   `reread_folder` sends `AddToLibrary` with `folder_files` (the listed
-  files under the folder, by path components) and sets a notice. No
+  files under the folder, by path components) and sets a notice; when the
+  list is not empty it also sets missing (`SetFileState`) the tracks under
+  the folder it lacks and asks `ServiceRequest::ReanalyseTrack` for the
+  missing ones it lists again (LB21). No
   watcher runs on Android, so nothing follows the folder. `follow_screen` stops the
   preview when the phone leaves the Library tab and `follow_layout` when
   the frame stops being a phone's. Back (`AppUi::back`) goes up Device
