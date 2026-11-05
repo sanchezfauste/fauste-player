@@ -657,8 +657,9 @@ layout** only; a tablet keeps what it has today.
 - **LB45.** A row's **🎧** button (and *Pre-listen* in its menu) plays the
   track on the library CUE (`Holder::LibraryCue`, §8), from its cue-in. A
   slim strip at the top of the track list shows the track's title, its
-  remaining time and **Pause/Play** and **Stop**. It has no waveform and no
-  marker editing *(my call)*. The 🎧 of another row switches the preview to
+  remaining time and **Pause/Play** and **Stop**. *(Plan 9, maintainer:)*
+  a tap on the strip opens the **pre-listen card** with the waveform and
+  marker editing (LB54). The 🎧 of another row switches the preview to
   that track, as LB34 does. The preview stops when its track is removed
   (LB35) and when the operator leaves the Library tab.
 - **LB46.** On the phone, a library CUE with no route plays on the
@@ -812,6 +813,43 @@ Decided with the maintainer on 2026-11-05, after trying plan 6.
   only happens on demand *(maintainer)*: not at start, not on MediaStore
   changes.
 
+### 11.3 The phone's pre-listen card (plan 9)
+
+The maintainer asked for the desktop preview bar's features on the phone:
+the seek bar and marker editing. A popup was weighed and rejected: it would
+hide the list, and stepping through tracks with the rows' 🎧 is how a
+preview is used. The card follows the Playlists screen instead (list above,
+card below).
+
+- **LB54.** A tap on the preview strip (LB45, LB49) outside its buttons
+  opens or closes the **pre-listen card**, while the library CUE has a track
+  (it keeps it after Stop, LB33). The strip shows a caret on its right
+  then, pointing up while the card is closed and down while it is open;
+  with no track it shows the hint alone and a tap does nothing. While the
+  card is open the strip shows the track even when stopped (title and
+  **Play**). The card stays open across tracks, other tabs and the
+  selector while the app runs, and closes when the library CUE loses its
+  track (LB35).
+- **LB55.** The card sits under the rows, as the Playlists screen's player
+  card does (PL8), at most half the list's height; on a phone held
+  sideways it takes the right half and the rows the left. The ticks' bar
+  (LB42) stays at the bottom under both. It holds, top to bottom: the
+  title and the artist; the waveform (the panel the players use, `WaveKey::
+  Library`) with its markers, intro and outro badges, zoom and **Full
+  view**; the elapsed time and the length on the left and the remaining
+  time on the right; and **Play**, **Pause** and **Stop** at a finger's
+  size with the library CUE's meter on the right.
+- **LB56.** The waveform works as a player card's on the Playlists screen
+  (PL11b, PL16): a tap seeks a running preview or, stopped, sets where
+  **Play** starts (LB33); a long press sets a marker there or removes one
+  set by hand; a pinch zooms and a drag moves a zoomed view; while it
+  plays a zoomed view follows the position. Markers are the track's, so a
+  change shows in every playlist and on the desktop. The padlock (PL12)
+  stops seeking and marker editing; zoom and pan go on. The 🎧 of another
+  row switches the card to that track (LB34).
+- **LB57.** Back closes an open card first, before it leaves the list
+  (PL2); the preview goes on.
+
 ## 12. What the automation phase will need (not built now)
 
 Recorded so this phase does not close doors:
@@ -882,6 +920,8 @@ agents work in parallel; expect rebases on `track.rs`, `playlist.rs` and
 5. **Watched folders** — §6.
 6. **Phone library screen** — §11.1 (LB38–LB48).
 7. **Phone follow-ups and device folders** — §11.2 (LB49–LB53).
+8. **Performance carry-overs** — no new rules (LB21 on re-read, LB53).
+9. **Phone pre-listen card** — §11.3 (LB54–LB57).
 
 ## 17. Documentation
 
