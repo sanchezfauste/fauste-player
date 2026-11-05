@@ -226,7 +226,18 @@ stops or changes playout.
   model's on-air check of LB47 applies) or switches a running one; it is
   disabled when `prelisten_blocked` names a reason (no Cue output, a
   missing or unreadable file). The strip over the list
-  (`preview_strip`) shows only on the list page. `follow_screen` stops the
+  (`preview_strip`) shows only on the list page and always takes its
+  height (LB49: a dim hint while stopped, so the rows never move). Device
+  music as a page of the tab has a header (`device_header`, LB50) whose
+  back leaves it at once, unless a pick is answered; opening a list from
+  the selector clears the search text (LB51). Plan 7's device folders
+  (LB52, LB53) reuse `Category::watched_folder`: where a `MediaBrowser`
+  exists (`ViewState::media`, Android) the category tree's menu offers a
+  device folder (picked with `pick_watched_folder(id, false)`, not
+  canonicalised) and *Re-read*, and the list's header a ↻;
+  `reread_folder` sends `AddToLibrary` with `folder_files` (the listed
+  files under the folder, by path components) and sets a notice. No
+  watcher runs on Android, so nothing follows the folder. `follow_screen` stops the
   preview when the phone leaves the Library tab and `follow_layout` when
   the frame stops being a phone's. Back (`AppUi::back`) goes up Device
   music's folders, then `PhoneLibraryView::back` (Device music to the list

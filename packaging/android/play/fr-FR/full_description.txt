@@ -11,12 +11,18 @@ CARTOUCHES
 • Cartouches instantanées pour les jingles, les effets et les spots, sur des pages que vous faites défiler du doigt
 • Repliez les cartouches sur l'écran Direct pour laisser plus de place aux lecteurs
 
+BIBLIOTHÈQUE
+• Une bibliothèque de pistes avec catégories et sous-catégories, et une recherche dans les tags
+• Cochez des pistes et ajoutez-les à une playlist, ou appuyez longuement sur l'une pour son menu
+• Pré-écoutez une piste avant qu'elle passe à l'antenne
+• Parcourez la musique de l'appareil par dossier, artiste ou album, et faites-y des recherches
+• Associez un dossier de l'appareil à une catégorie et relisez-le quand vous ajoutez de la musique
+
 PENSÉE POUR LE STUDIO
 • La diffusion continue écran éteint ou avec une autre app au premier plan, avec une notification tant que quelque chose joue
 • Rien ne passe à l'antenne tout seul après un démarrage, un redémarrage ou un plantage
 • Un cadenas protège des touches accidentelles pendant l'émission : le transport et les cartouches restent utilisables
 • Choisissez la sortie de chaque lecteur, des cartouches et de leur CUE : le haut-parleur, un casque filaire, une interface USB ou une enceinte Bluetooth
-• Parcourez la musique de l'appareil par dossier, artiste ou album, et faites-y des recherches
 
 PRIVÉE ET LIBRE
 Fauste Player n'a ni comptes, ni publicités, ni statistiques, ni pistage, et ne demande pas d'accès au réseau. C'est un logiciel libre sous GNU GPL (version 3 ou ultérieure), et le même projet fonctionne sous Linux, Windows et macOS.

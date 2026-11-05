@@ -11,12 +11,18 @@ CARTUTXERA
 • Cartutxos instantanis per a falques, efectes i anuncis, en pàgines que passes amb el dit
 • Plega la cartutxera a la pantalla Directe per donar més espai als reproductors
 
+BIBLIOTECA
+• Una biblioteca de pistes amb categories i subcategories, i cerca a les etiquetes
+• Marca pistes i afegeix-les a una llista, o mantén-ne premuda una per veure'n el menú
+• Preescolta una pista abans que surti en antena
+• Explora la música del dispositiu per carpeta, artista o àlbum, i cerca-hi
+• Assigna a una categoria una carpeta del dispositiu i rellegeix-la quan hi afegeixis música
+
 PENSADA PER A L'ESTUDI
 • L'emissió continua amb la pantalla apagada o amb una altra app al davant, amb una notificació mentre sona alguna cosa
 • Res no surt a l'aire tot sol després d'un inici, un reinici o una fallada
 • Un cadenat protegeix dels tocs accidentals durant el programa: el transport i els cartutxos continuen funcionant
 • Tria la sortida de cada reproductor, de la cartutxera i del seu CUE: l'altaveu, uns auriculars amb cable, una interfície USB o un altaveu Bluetooth
-• Explora la música del dispositiu per carpeta, artista o àlbum, i cerca-hi
 
 PRIVADA I LLIURE
 Fauste Player no té comptes, ni anuncis, ni analítica, ni seguiment, i no demana accés a la xarxa. És programari lliure sota la GNU GPL (versió 3 o posterior), i el mateix projecte funciona a Linux, Windows i macOS.

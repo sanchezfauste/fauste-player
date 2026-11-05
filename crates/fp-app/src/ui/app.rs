@@ -422,10 +422,11 @@ impl Scene<'_> {
         }
     }
 
-    /// The folder dialog for the folder `category` watches, starting in
-    /// the current folder or the music folder. The choice is canonicalised
-    /// on the dialog's helper thread (no file-system call on the UI one).
-    pub(crate) fn pick_watched_folder(&self, category: CategoryId) {
+    /// The folder dialog for the folder `category` watches (or takes its
+    /// files from, LB52), starting in the current folder or the music
+    /// folder. With `canonical` the choice is canonicalised on the dialog's
+    /// helper thread (no file-system call on the UI one).
+    pub(crate) fn pick_watched_folder(&self, category: CategoryId, canonical: bool) {
         let tx = self.picks.clone();
         let ctx = self.ctx.clone();
         let start = self
@@ -440,7 +441,13 @@ impl Scene<'_> {
             .spawn(move || {
                 let paths = platform
                     .pick_folder(start)
-                    .map(|folder| super::files::canonical_path(&folder))
+                    .map(|folder| {
+                        if canonical {
+                            super::files::canonical_path(&folder)
+                        } else {
+                            folder
+                        }
+                    })
                     .into_iter()
                     .collect();
                 let _ = tx.send(Picked {

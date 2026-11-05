@@ -11,12 +11,18 @@ CARTWALL
 • Cart istantanei per jingle, effetti e spot, su pagine che scorri con il dito
 • Chiudi la cartwall nella schermata Diretta per dare più spazio ai lettori
 
+LIBRERIA
+• Una libreria di brani con categorie e sottocategorie, e una ricerca nei tag
+• Spunta i brani e aggiungili a una playlist, o tieni premuto su uno per il suo menu
+• Preascolta un brano prima che vada in onda
+• Sfoglia la musica del dispositivo per cartella, artista o album, e fai ricerche al suo interno
+• Assegna a una categoria una cartella del dispositivo e rileggila quando aggiungi musica
+
 PENSATA PER LO STUDIO
 • La messa in onda continua a schermo spento o con un'altra app in primo piano, con una notifica finché qualcosa suona
 • Niente va in onda da solo dopo un avvio, un riavvio o un arresto anomalo
 • Un lucchetto protegge dai tocchi accidentali durante il programma: il trasporto e i cart continuano a funzionare
 • Scegli l'uscita di ogni lettore, della cartwall e del loro CUE: l'altoparlante, cuffie con filo, un'interfaccia USB o un altoparlante Bluetooth
-• Sfoglia la musica del dispositivo per cartella, artista o album, e fai ricerche al suo interno
 
 PRIVATA E LIBERA
 Fauste Player non ha account, né pubblicità, né analisi, né tracciamento, e non chiede l'accesso alla rete. È software libero sotto la GNU GPL (versione 3 o successiva), e lo stesso progetto funziona su Linux, Windows e macOS.

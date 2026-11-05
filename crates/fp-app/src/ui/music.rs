@@ -694,13 +694,7 @@ fn category_bar(
     wide: bool,
 ) -> bool {
     let t = scene.i18n;
-    let label = match category.and_then(|id| scene.state.categories.get(id)) {
-        Some(c) => t.tr_args(
-            "phone-library-add-to-category",
-            &[("category", c.name.clone().into())],
-        ),
-        None => t.tr("phone-library-add-to-uncategorised"),
-    };
+    let label = super::phone_library::add_to_category_label(scene, category);
     ui.separator();
     let mut add = false;
     let mut line = |ui: &mut Ui| {

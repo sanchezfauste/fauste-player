@@ -1027,3 +1027,245 @@ fn lb43_a_held_finger_opens_the_menu_without_a_tick() {
     assert!(h.query_by_label(MOVE).is_some(), "the menu is open");
     assert!(!is_ticked(&h, &row("Alpha", "Band")));
 }
+
+const IDLE: &str = "Tap a track’s headphones to pre-listen to it";
+
+/// LB49: the strip's room is kept, so the rows stay where they are when a
+/// preview starts.
+#[test]
+fn lb49_the_rows_do_not_move_when_a_preview_starts() {
+    let (s, a, _b) = with_tracks();
+    let (mut h, fake) = rock_list(s);
+    let alpha = row("Alpha", "Band");
+    let before = h.get_by_label(&alpha).rect().top();
+    assert!(h.query_by_label(IDLE).is_some(), "the idle hint");
+    // The list's own state (its open category), now pre-listening.
+    let mut s = (**fake.state.load()).clone();
+    previewing(&mut s, a);
+    fake.state.store(Arc::new(s));
+    h.run_steps(3);
+    assert!(h.query_by_label(STOP).is_some());
+    assert!(h.query_by_label(IDLE).is_none());
+    assert_eq!(h.get_by_label(&alpha).rect().top(), before);
+}
+
+const BACK_TO_LIST: &str = "Back to the list";
+
+/// LB50: Device music opened from ＋ has a back button to the list.
+#[test]
+fn lb50_device_music_from_plus_has_a_back_button() {
+    let (s, _a, _b, _gold) = with_gold();
+    let (mut h, _browser, _fake) = list_of(s, "Gold");
+    tap(&mut h, PLUS);
+    assert!(h.query_by_label("Folders").is_some(), "Device music");
+    let button = h.get_by_label(BACK_TO_LIST).rect();
+    assert!(button.height() >= 48.0, "{button:?}");
+    tap(&mut h, BACK_TO_LIST);
+    assert!(h.query_by_label("Folders").is_none());
+    assert!(h.query_by_label(PLUS).is_some(), "Gold's list");
+}
+
+/// LB50: opened from the selector, it goes back to the selector.
+#[test]
+fn lb50_device_music_from_the_selector_has_a_back_button() {
+    let (s, _rock) = with_categories();
+    let (mut h, _browser, _fake) = phone(s);
+    tap(&mut h, "Library");
+    tap(&mut h, DEVICE);
+    assert!(h.query_by_label("Folders").is_some());
+    assert!(h.query_by_label(BACK_TO_LIST).is_none());
+    tap(&mut h, BACK);
+    assert!(on_selector(&h));
+}
+
+/// LB50: a pick keeps its Cancel and shows no header.
+#[test]
+fn lb50_a_pick_shows_no_header() {
+    let (s, _rock) = with_categories();
+    let (mut h, browser, _fake) = phone(s);
+    let mode = BrowseMode::one_file(&["mp3"]).unwrap();
+    let asking = browser.clone();
+    let thread = std::thread::spawn(move || asking.browse(mode, None));
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_by_label("Cancel").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(h.query_by_label("Cancel").is_some(), "the pick is shown");
+    assert!(h.query_by_label(BACK).is_none());
+    assert!(h.query_by_label(BACK_TO_LIST).is_none());
+    browser.cancel_pending();
+    h.run_steps(3);
+    thread.join().unwrap();
+}
+
+/// LB51: a list opened from the selector starts with an empty search; the
+/// *Whole library* scope stays.
+#[test]
+fn lb51_opening_another_category_clears_the_search() {
+    let (mut s, rock) = with_categories();
+    let jazz = s.categories.iter().find(|c| c.name == "Jazz").unwrap().id;
+    track(&mut s, "one", "Canción uno", "Band", Some(rock));
+    track(&mut s, "two", "Blue", "Band", Some(jazz));
+    let (mut h, _fake) = rock_list(s);
+    search(&mut h, "cancion");
+    tap(&mut h, BACK);
+    tap(&mut h, "Jazz");
+    assert!(h.query_by_label(&row("Blue", "Band")).is_some());
+    assert_eq!(h.get_by_label(SEARCH).value().as_deref(), Some(""));
+}
+
+fn media(path: &str) -> MediaFile {
+    MediaFile {
+        path: PathBuf::from(path),
+        title: None,
+        artist: None,
+        album: None,
+        duration_secs: None,
+    }
+}
+
+/// LB53: whole path components, in the list's order.
+#[test]
+fn lb53_folder_files_take_only_what_is_under_the_folder() {
+    use fp_app::ui::phone_library::folder_files;
+    let files = [
+        media("/sd/Rock/b.mp3"),
+        media("/sd/Rocks/c.mp3"),
+        media("/sd/Rock/live/a.mp3"),
+        media("/sd/Other/d.mp3"),
+    ];
+    assert_eq!(
+        folder_files(&files, std::path::Path::new("/sd/Rock")),
+        [
+            PathBuf::from("/sd/Rock/b.mp3"),
+            PathBuf::from("/sd/Rock/live/a.mp3")
+        ]
+    );
+    assert!(folder_files(&[], std::path::Path::new("/sd/Rock")).is_empty());
+}
+
+const REREAD: &str = "Re-read the device folder";
+
+/// Rock takes its files from `/sd/Rock`; the device lists two files there
+/// and one in `/sd/Rocks`. A phone on Rock's list.
+fn rock_with_folder(files: Vec<MediaFile>) -> (H, Arc<Fake>, CategoryId) {
+    let (mut s, rock) = with_categories();
+    fp_model::apply(
+        &mut s,
+        Command::SetWatchedFolder {
+            category: rock,
+            folder: Some(PathBuf::from("/sd/Rock")),
+        },
+    )
+    .unwrap();
+    let (mut h, browser, fake) = phone(s);
+    browser.set_files(files);
+    tap(&mut h, "Library");
+    tap(&mut h, "Rock");
+    fake.take_sent();
+    (h, fake, rock)
+}
+
+#[test]
+fn lb53_reread_adds_the_files_under_the_folder() {
+    let files = vec![
+        media("/sd/Rock/b.mp3"),
+        media("/sd/Rocks/c.mp3"),
+        media("/sd/Rock/a.mp3"),
+    ];
+    let (mut h, fake, rock) = rock_with_folder(files);
+    let button = h.get_by_label(REREAD).rect();
+    assert!(button.height() >= 48.0, "{button:?}");
+    tap(&mut h, REREAD);
+    assert_eq!(
+        added(&fake),
+        [(
+            vec![
+                PathBuf::from("/sd/Rock/b.mp3"),
+                PathBuf::from("/sd/Rock/a.mp3")
+            ],
+            Some(rock)
+        )]
+    );
+    assert!(
+        h.query_by_label_contains("Files read from /sd/Rock: 2")
+            .is_some()
+    );
+}
+
+#[test]
+fn lb53_reread_with_no_files_says_so() {
+    let (mut h, fake, _rock) = rock_with_folder(vec![media("/sd/Rocks/c.mp3")]);
+    tap(&mut h, REREAD);
+    assert!(added(&fake).is_empty());
+    assert!(
+        h.query_by_label_contains("No music files in /sd/Rock on this device")
+            .is_some()
+    );
+}
+
+#[test]
+fn lb53_a_category_without_a_folder_has_no_reread() {
+    let (s, _rock) = with_categories();
+    let (mut h, _browser, _fake) = phone(s);
+    tap(&mut h, "Library");
+    tap(&mut h, "Rock");
+    assert!(h.query_by_label(REREAD).is_none());
+}
+
+/// A finger held at `at` for about a second, as the phone sends it.
+fn hold_finger(h: &mut H, at: egui::Pos2) {
+    let touch = |phase| egui::Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase,
+        pos: at,
+        force: None,
+    };
+    let press = |pressed| egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed,
+        modifiers: egui::Modifiers::NONE,
+    };
+    h.event(touch(egui::TouchPhase::Start));
+    h.event(egui::Event::PointerMoved(at));
+    h.event(press(true));
+    for _ in 0..60 {
+        h.step();
+    }
+    h.event(touch(egui::TouchPhase::End));
+    h.event(press(false));
+    h.run_steps(3);
+}
+
+/// PL38: a held finger's tap belongs to what is on top. Held on Settings,
+/// it must not open the selector row drawn beneath.
+#[test]
+fn a_held_finger_on_settings_does_not_open_the_row_beneath() {
+    let (s, _rock) = with_categories();
+    let (mut h, _browser, fake) = phone(s);
+    tap(&mut h, "Library");
+    let at = h.get_by_label("Uncategorised").rect().center();
+    tap(&mut h, "More");
+    tap(&mut h, "Settings");
+    fake.take_sent();
+    hold_finger(&mut h, at);
+    let opened = fake
+        .take_sent()
+        .into_iter()
+        .any(|c| matches!(c, Command::SetLibraryView(_)));
+    assert!(!opened, "a list opened under Settings");
+}
+
+/// The header's buttons sit at its right edge, whatever the name's length.
+#[test]
+fn the_header_buttons_sit_at_the_right() {
+    let (s, _a, _b, _gold) = with_gold();
+    let (h, _browser, _fake) = list_of(s, "Gold");
+    let plus = h.get_by_label(PLUS).rect();
+    assert!(plus.right() >= PORTRAIT.x - 24.0, "{plus:?}");
+}

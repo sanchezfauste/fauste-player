@@ -11,12 +11,18 @@ CARTWALL
 • Sofort startende Carts für Jingles, Effekte und Spots, auf Seiten, zwischen denen du wischst
 • Die Cartwall im Live-Bildschirm einklappen, damit die Player mehr Platz haben
 
+BIBLIOTHEK
+• Eine Titelbibliothek mit Kategorien und Unterkategorien und einer Suche in den Tags
+• Titel abhaken und zu einer Playlist hinzufügen, oder einen gedrückt halten für sein Menü
+• Einen Titel vorhören, bevor er auf Sendung geht
+• Die Musik auf dem Gerät nach Ordner, Interpret oder Album durchsuchen und durchblättern
+• Einer Kategorie einen Ordner des Geräts zuweisen und ihn neu einlesen, wenn neue Musik da ist
+
 FÜR DAS STUDIO GEMACHT
 • Das Playout läuft bei ausgeschaltetem Bildschirm oder mit einer anderen App im Vordergrund weiter, mit einer Benachrichtigung, solange etwas spielt
 • Nach einem Start, Neustart oder Absturz geht nichts von selbst auf Sendung
 • Ein Vorhängeschloss schützt während der Sendung vor versehentlichen Berührungen: Transport und Carts funktionieren weiter
 • Den Ausgang jedes Players, der Cartwall und ihres CUE wählen: Lautsprecher, kabelgebundene Kopfhörer, ein USB-Interface oder ein Bluetooth-Lautsprecher
-• Die Musik auf dem Gerät nach Ordner, Interpret oder Album durchsuchen und durchblättern
 
 PRIVAT UND FREI
 Fauste Player hat keine Konten, keine Werbung, keine Analyse und kein Tracking, und er fragt nicht nach Netzwerkzugriff. Er ist freie Software unter der GNU GPL (Version 3 oder neuer), und dasselbe Projekt läuft unter Linux, Windows und macOS.

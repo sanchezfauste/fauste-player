@@ -11,12 +11,18 @@ CARTWALL
 • Directe carts voor jingles, effecten en spots, op pagina's waar je doorheen veegt
 • Klap de cartwall in op het Live-scherm om de spelers meer ruimte te geven
 
+BIBLIOTHEEK
+• Een nummerbibliotheek met categorieën en subcategorieën, en zoeken in de tags
+• Vink nummers aan en voeg ze toe aan een playlist, of houd er een ingedrukt voor het menu
+• Beluister een nummer voor voordat het in de uitzending gaat
+• Blader door de muziek op je apparaat per map, artiest of album, en doorzoek die
+• Geef een categorie een map van je apparaat en lees die opnieuw in als je muziek toevoegt
+
 GEMAAKT VOOR DE STUDIO
 • De playout gaat door met het scherm uit of een andere app op de voorgrond, met een melding zolang er iets speelt
 • Niets gaat vanzelf de lucht in na een start, een herstart of een crash
 • Een hangslot beschermt tijdens een uitzending tegen per ongeluk aanraken: het transport en de carts blijven werken
 • Kies de uitgang van elke speler, de cartwall en hun CUE: de luidspreker, een bedrade koptelefoon, een USB-interface of een Bluetooth-speaker
-• Blader door de muziek op je apparaat per map, artiest of album, en doorzoek die
 
 PRIVÉ EN VRIJ
 Fauste Player heeft geen accounts, geen advertenties, geen analyses en geen tracking, en vraagt geen netwerktoegang. Het is vrije software onder de GNU GPL (versie 3 of later), en hetzelfde project draait op Linux, Windows en macOS.

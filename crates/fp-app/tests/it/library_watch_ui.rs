@@ -331,3 +331,63 @@ fn a_folder_another_category_watches_is_refused_naming_it() {
             .is_some()
     );
 }
+
+/// LB52: where the device's music is listed (Android), the menu offers a
+/// device folder instead of watching, and the tree names it without
+/// trouble marks.
+fn open_device(s: AppState) -> (H, Arc<Fake>) {
+    let browser = fp_app::ui::media_browser::MediaBrowser::default();
+    browser.set_files(vec![fp_app::ui::media_browser::MediaFile {
+        path: rock_folder().join("one.mp3"),
+        ..Default::default()
+    }]);
+    let (mut h, fake) = harness_sized(s, vec2(1200.0, 800.0), move |ui| {
+        ui.with_media_browser(browser)
+    });
+    h.run_steps(2);
+    fake.take_sent();
+    (h, fake)
+}
+
+#[test]
+fn lb52_the_menu_offers_a_device_folder() {
+    let (s, tree) = tree_state();
+    let (mut h, fake) = open_device(s);
+    let label = format!("Takes files from {}", rock_folder().display());
+    assert!(h.query_by_label(&label).is_some());
+    assert!(h.query_by_label_contains("Watches").is_none());
+    menu(&mut h, "Jingles");
+    assert!(h.query_by_label("Use a device folder…").is_some());
+    assert!(h.query_by_label("Watch folder…").is_none());
+    assert!(h.query_by_label("Re-read device folder").is_none());
+    h.key_press(egui::Key::Escape);
+    h.run_steps(2);
+    menu(&mut h, "Rock");
+    assert!(h.query_by_label("Change device folder…").is_some());
+    assert_eq!(h.query_all_by_label(&label).count(), 2, "the menu names it");
+    h.get_by_label("Forget device folder").click();
+    h.run_steps(2);
+    assert_eq!(
+        others(fake.take_sent()),
+        vec![Command::SetWatchedFolder {
+            category: tree.rock,
+            folder: None,
+        }]
+    );
+}
+
+#[test]
+fn lb53_the_menu_re_reads_the_device_folder() {
+    let (s, tree) = tree_state();
+    let (mut h, fake) = open_device(s);
+    menu(&mut h, "Rock");
+    h.get_by_label("Re-read device folder").click();
+    h.run_steps(2);
+    assert_eq!(
+        others(fake.take_sent()),
+        vec![Command::AddToLibrary {
+            paths: vec![rock_folder().join("one.mp3")],
+            category: Some(tree.rock),
+        }]
+    );
+}

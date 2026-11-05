@@ -74,6 +74,11 @@ enum Action {
     Delete(CategoryId),
     /// The folder dialog for the folder the category watches.
     WatchFolder(CategoryId),
+    /// Device music's folder pick for the category's device folder (LB52).
+    DeviceFolder(CategoryId),
+    /// Re-reads the category's device folder (LB53).
+    RereadFolder(CategoryId),
+    /// Forgets the watched or device folder.
     StopWatching(CategoryId),
     RemoveMissing(CategoryId),
     Drag(CategoryId),
@@ -161,6 +166,9 @@ pub(crate) fn category_tree(
         .tree_drag
         .and_then(|(from, id)| (from == mode).then_some(id));
     let touch = view_state.touch;
+    // LB52: where the device's music is listed (Android), a category may
+    // take its files from a device folder.
+    let device = view_state.media.is_some();
     let mut drawn: Vec<(Item, Rect)> = Vec::new();
     let body = ui.available_rect_before_wrap();
     egui::ScrollArea::vertical()
@@ -178,6 +186,7 @@ pub(crate) fn category_tree(
                     &view,
                     dragging,
                     touch,
+                    device,
                     &mut actions,
                 );
                 drawn.push((*item, rect));
@@ -259,6 +268,7 @@ fn row(
     view: &LibraryView,
     dragging: Option<CategoryId>,
     touch: bool,
+    device: bool,
     actions: &mut Vec<Action>,
 ) -> Rect {
     let t = scene.i18n;
@@ -298,7 +308,7 @@ fn row(
         info.current_text_value = Some(count.to_string());
         info
     });
-    let watch = category.and_then(|c| watch_mark(scene, c));
+    let watch = category.and_then(|c| watch_mark(scene, c, device));
     let being_dragged = matches!(item, Item::Category { id, .. } if dragging == Some(id));
     if ui.is_rect_visible(rect) {
         let painter = ui.painter();
@@ -455,7 +465,7 @@ fn row(
             actions.push(Action::Drag(id));
         }
         response.context_menu(|ui| {
-            if let Some(action) = menu(ui, scene, id, category) {
+            if let Some(action) = menu(ui, scene, id, category, device) {
                 actions.push(action);
                 ui.close();
             }
@@ -472,11 +482,21 @@ struct WatchMark {
     trouble: bool,
 }
 
-fn watch_mark(scene: &Scene<'_>, category: &Category) -> Option<WatchMark> {
+fn watch_mark(scene: &Scene<'_>, category: &Category, device: bool) -> Option<WatchMark> {
+    let stored = category.watched_folder.as_ref()?;
+    // LB52: a device folder is only named; nothing watches it.
+    if device {
+        let folder = stored.display().to_string();
+        return Some(WatchMark {
+            text: scene
+                .i18n
+                .tr_args("library-tree-device-folder", &[("folder", folder.into())]),
+            trouble: false,
+        });
+    }
     if cfg!(target_os = "android") {
         return None;
     }
-    let stored = category.watched_folder.as_ref()?;
     let folder = stored.display().to_string();
     // The services ignore it (not an absolute path): not watched at all.
     if !crate::watch::usable_folder(stored) {
@@ -506,6 +526,7 @@ fn menu(
     scene: &Scene<'_>,
     id: CategoryId,
     category: Option<&Category>,
+    device: bool,
 ) -> Option<Action> {
     let t = scene.i18n;
     let mut action = None;
@@ -561,8 +582,42 @@ fn menu(
     })
     .response
     .widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, kind_label.clone()));
-    // File-system watching is desktop only (spec §11).
-    if !cfg!(target_os = "android") {
+    let has_folder = category.is_some_and(|c| c.watched_folder.is_some());
+    if device {
+        // LB52, LB53: a device folder, re-read on demand. A finger has no
+        // hover to read the mark's text, so the menu names the folder.
+        ui.separator();
+        if let Some(folder) = category.and_then(|c| c.watched_folder.as_ref()) {
+            ui.label(
+                egui::RichText::new(t.tr_args(
+                    "library-tree-device-folder",
+                    &[("folder", folder.display().to_string().into())],
+                ))
+                .color(theme::NEUTRAL_400),
+            );
+        }
+        let key = if has_folder {
+            "library-menu-change-device-folder"
+        } else {
+            "library-menu-device-folder"
+        };
+        if item(ui, icon::FOLDER_OPEN, key) {
+            action = Some(Action::DeviceFolder(id));
+        }
+        if has_folder
+            && item(
+                ui,
+                icon::ARROWS_CLOCKWISE,
+                "library-menu-reread-device-folder",
+            )
+        {
+            action = Some(Action::RereadFolder(id));
+        }
+        if has_folder && item(ui, icon::X, "library-menu-forget-device-folder") {
+            action = Some(Action::StopWatching(id));
+        }
+    } else if !cfg!(target_os = "android") {
+        // File-system watching is desktop only (spec §11).
         ui.separator();
         let watching = category.is_some_and(|c| c.watched_folder.is_some());
         let key = if watching {
@@ -744,7 +799,10 @@ fn act(scene: &Scene<'_>, view_state: &mut ViewState, mode: TreeMode, action: Ac
             scene.ctl.send(Command::SetCategoryKind { category, kind });
         }
         Action::Delete(id) => ask_removal(scene, view_state, Removal::Category(id)),
-        Action::WatchFolder(id) => scene.pick_watched_folder(id),
+        Action::WatchFolder(id) => scene.pick_watched_folder(id, true),
+        // MediaStore's paths are kept as Device music gives them (§5.1b).
+        Action::DeviceFolder(id) => scene.pick_watched_folder(id, false),
+        Action::RereadFolder(id) => crate::ui::phone_library::reread_folder(scene, view_state, id),
         Action::StopWatching(category) => {
             scene.ctl.send(Command::SetWatchedFolder {
                 category,

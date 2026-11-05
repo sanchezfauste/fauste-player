@@ -11,12 +11,18 @@ CARTUCHERA
 • Cartuchos instantáneos para cuñas, efectos y anuncios, en páginas que pasas con el dedo
 • Pliega la cartuchera en la pantalla Directo para dar más sitio a los players
 
+BIBLIOTECA
+• Una biblioteca de pistas con categorías y subcategorías, y búsqueda en las etiquetas
+• Marca pistas y añádelas a una playlist, o mantén pulsada una para ver su menú
+• Preescucha una pista antes de que salga al aire
+• Explora la música del dispositivo por carpeta, artista o álbum, y busca en ella
+• Asigna a una categoría una carpeta del dispositivo y reléela cuando añadas música
+
 PENSADA PARA EL ESTUDIO
 • La emisión sigue con la pantalla apagada o con otra app delante, con una notificación mientras algo suena
 • Nada sale al aire por sí solo tras un arranque, un reinicio o un fallo
 • Un candado protege de toques accidentales durante el programa: el transporte y los cartuchos siguen funcionando
 • Elige la salida de cada player, de la cartuchera y de su CUE: el altavoz, unos auriculares con cable, una interfaz USB o un altavoz Bluetooth
-• Explora la música del dispositivo por carpeta, artista o álbum, y busca en ella
 
 PRIVADA Y LIBRE
 Fauste Player no tiene cuentas, ni anuncios, ni analítica, ni rastreo, y no pide acceso a la red. Es software libre bajo la GNU GPL (versión 3 o posterior), y el mismo proyecto funciona en Linux, Windows y macOS.

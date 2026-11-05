@@ -765,9 +765,50 @@ layout** only; a tablet keeps what it has today.
 **Not in plan 6.**
 
 - Watched folders on Android (maintainer: "OK, no watched folders"). The
-  maintainer's later idea is a category bound to a device folder, with a
-  button that re-reads it on demand. It is recorded here and not built.
+  maintainer's later idea, a category bound to a device folder with a
+  button that re-reads it on demand, is §11.2 (plan 7).
 - Carts from the library, tag, loudness and marker editing on the phone.
+
+### 11.2 Phone follow-ups and device folders (plan 7)
+
+Decided with the maintainer on 2026-11-05, after trying plan 6.
+
+- **LB49.** The preview strip's room at the top of the track list is always
+  kept (maintainer: "reserve the space at the top"). While nothing
+  pre-listens it shows a dim hint, *Tap 🎧 to pre-listen* *(my call)*, so
+  the rows never move when a preview starts or stops and a tap cannot land
+  on the neighbouring row.
+- **LB50.** Device music shown as a page of the Library tab has a header
+  with a back button and its name, *Device music*: opened from a list's ＋
+  (maintainer) the button reads *Back to the list* and returns there,
+  opened from the selector *(my call, for the same reason)* it reads *Back
+  to the categories*. The button leaves the page at once (the folder
+  breadcrumb goes up a folder); the system Back keeps PL2 and goes up a
+  folder first. While it answers a pick (PL19b) it keeps its *Cancel* and
+  shows no header.
+- **LB51.** Opening a list from the selector clears the search text
+  (maintainer), so a search left in one category cannot make another look
+  empty. The *Whole library* scope is kept (LB40).
+- **LB52.** On Android a category may take its files from a **device
+  folder**: a folder of the device's music as Device music lists it. It is
+  kept in the same field as a watched folder (LB19, the same rule: one
+  category per folder), and nothing watches it. The category's menu (the
+  library window on a tablet, Settings → Library on both) offers *Use a
+  device folder…* or *Change device folder…*, *Re-read device folder* and
+  *Forget device folder*; the folder is chosen with Device music's folder
+  pick (PL19b). The tree names the folder under the category, as the
+  desktop names a watched one, with no trouble marks; since a finger
+  cannot hover the mark, the menu names the folder above its items too. The path is stored as
+  Device music gives it (MediaStore paths are not canonicalised, §5.1b).
+- **LB53.** **Re-read** (the menu's item, and a ↻ button in the phone list's
+  header for a category with a device folder) adds every file Device music
+  lists under the folder, and its subfolders, to the category, with *Add to
+  library*'s rules (§5.1b: a new or uncategorised track joins the category,
+  one already in another category keeps it). Files gone from the folder
+  stay in the library (LB21). A notice says how many files were read, or
+  that the folder has none (no permission, an emptied folder). Re-reading
+  only happens on demand *(maintainer)*: not at start, not on MediaStore
+  changes.
 
 ## 12. What the automation phase will need (not built now)
 
@@ -803,7 +844,7 @@ The JSON-specific `limits.max_state_file_bytes` keeps applying to
 
 ## 14. Testing
 
-- One test per rule LB1–LB48 at the lowest level that can see it: `fp-model`
+- One test per rule LB1–LB53 at the lowest level that can see it: `fp-model`
   for LB9–LB18 (LB12b measured), LB29–LB30, LB33–LB37; `fp-store` (temporary directories) for
   LB1, LB4–LB7, LB14 on reload; `fp-app` services for LB2–LB3, LB19–LB23
   (with a fake watcher and a temporary folder; no sleeping, as the engine
@@ -838,6 +879,7 @@ agents work in parallel; expect rebases on `track.rs`, `playlist.rs` and
 4. **Library pre-listen** — §8: holder, route, preview bar, marker editing.
 5. **Watched folders** — §6.
 6. **Phone library screen** — §11.1 (LB38–LB48).
+7. **Phone follow-ups and device folders** — §11.2 (LB49–LB53).
 
 ## 17. Documentation
 
