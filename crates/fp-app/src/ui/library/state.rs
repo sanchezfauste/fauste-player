@@ -122,6 +122,9 @@ impl Selection {
 
     /// `track` alone.
     pub(crate) fn set_one(&mut self, track: TrackId) {
+        if self.order.as_slice() == [track] {
+            return;
+        }
         self.clear();
         self.push(track);
     }
@@ -153,6 +156,7 @@ impl Selection {
     }
 }
 
+#[cfg(test)]
 impl PartialEq<Vec<TrackId>> for Selection {
     fn eq(&self, other: &Vec<TrackId>) -> bool {
         self.order == *other
@@ -335,14 +339,17 @@ impl LibraryUi {
     /// the rows or the selection changed.
     pub(crate) fn selected_in_order(&self) -> Rc<[TrackId]> {
         let (rows, selection) = (self.rows_revision(), self.selected.revision());
-        let mut ordered = self.ordered.borrow_mut();
+        let listed = self.rows.as_ref().map_or(&[][..], |c| c.rows.as_slice());
+        // Never borrowed elsewhere; if it were, the order is computed anew.
+        let Ok(mut ordered) = self.ordered.try_borrow_mut() else {
+            return selected_among(listed, &self.selected).into();
+        };
         if let Some(o) = ordered.as_ref()
             && o.rows == rows
             && o.selection == selection
         {
             return o.tracks.clone();
         }
-        let listed = self.rows.as_ref().map_or(&[][..], |c| c.rows.as_slice());
         let tracks: Rc<[TrackId]> = selected_among(listed, &self.selected).into();
         *ordered = Some(Ordered {
             rows,
