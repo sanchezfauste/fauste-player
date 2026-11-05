@@ -1497,3 +1497,26 @@ fn lb55_the_rows_stay_put_when_the_card_opens() {
     let wave = h.get_by_label(CARD_WAVE).rect();
     assert!(wave.top() > after.bottom(), "the card is under the rows");
 }
+
+#[test]
+fn lb54_a_tap_on_the_dimmed_stop_leaves_the_card_open() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = card_open(s);
+    h.get_all_by_label(STOP).next().unwrap().click();
+    h.run_steps(3);
+    assert_eq!(cue_commands(&fake), [Command::StopLibraryCue]);
+    // Stopped: the strip's Stop is dimmed; a tap on it is no tap on the strip.
+    let stop = h.get_all_by_label(STOP).next().unwrap().rect();
+    click_at(&mut h, stop.center(), egui::PointerButton::Primary);
+    assert!(h.query_by_label(CARD_WAVE).is_some(), "still open");
+}
+
+#[test]
+fn lb57_the_headers_arrow_leaves_the_list_at_once() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, _fake) = card_open(s);
+    tap(&mut h, BACK);
+    assert!(on_selector(&h), "one tap on the arrow");
+}

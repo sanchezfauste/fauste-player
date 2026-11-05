@@ -172,6 +172,8 @@ is dimmed when the file is missing or cannot be played.
 the card under the list, with the track's waveform as on a player's card
 in Playlists; the arrow at the strip's right shows whether it is open.
 Tap the strip again, or press Back, to close it; the pre-listen goes on.
+The arrow in the list's header goes back to the categories at once and
+leaves the card open for the next list.
 On the card:
 
 - a tap on the waveform jumps there, or, while stopped, sets where

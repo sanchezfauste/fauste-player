@@ -38,10 +38,12 @@ fn rest() -> f32 {
 }
 
 /// The height an upright phone gives the card in `room` (the rows' and the
-/// card's): its waveform as tall as half the room allows, within limits.
+/// card's): its waveform as tall as half the room allows, within limits,
+/// and never more than half.
 pub(crate) fn upright_height(room: f32) -> f32 {
     let wave = (room * CARD_SHARE - rest()).clamp(WAVE_MIN, WAVE_MAX);
-    (rest() + wave).min(room.max(0.0))
+    // Never more than its share: on a short screen the rows keep half.
+    (rest() + wave).min((room * CARD_SHARE).max(0.0))
 }
 
 /// The library CUE's telemetry while it is the card's track.
@@ -204,7 +206,9 @@ fn transport_row(ui: &mut Ui, scene: &Scene<'_>, v: &LibraryCueView) {
             .layout(Layout::left_to_right(Align::Center)),
     );
     buttons.spacing_mut().item_spacing = vec2(GAP, 0.0);
-    let can_play = fp_model::command_available(scene.state, &Command::PlayLibraryCue);
+    // Play starts a stopped preview or releases a held one.
+    let can_play = v.transport != Transport::Playing
+        && fp_model::command_available(scene.state, &Command::PlayLibraryCue);
     let play_style = if paused {
         paused_play_style(blink)
     } else {

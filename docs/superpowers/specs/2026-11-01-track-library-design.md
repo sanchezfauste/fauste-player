@@ -847,8 +847,10 @@ card below).
   change shows in every playlist and on the desktop. The padlock (PL12)
   stops seeking and marker editing; zoom and pan go on. The 🎧 of another
   row switches the card to that track (LB34).
-- **LB57.** Back closes an open card first, before it leaves the list
-  (PL2); the preview goes on.
+- **LB57.** The system Back closes an open card first, before it leaves
+  the list (PL2); the preview goes on. The header's arrow leaves the list
+  at once, and the card stays open for the next list *(my call, after
+  review: the arrow is the list's own button)*.
 
 ## 12. What the automation phase will need (not built now)
 

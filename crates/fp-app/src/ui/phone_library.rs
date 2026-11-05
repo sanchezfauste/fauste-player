@@ -87,9 +87,7 @@ impl PhoneLibraryView {
                 true
             }
             LibraryPage::Tracks => {
-                self.page = LibraryPage::Selector;
-                self.ticked.clear();
-                self.shown = None;
+                self.leave_list();
                 true
             }
             LibraryPage::Device => {
@@ -101,6 +99,13 @@ impl PhoneLibraryView {
                 true
             }
         }
+    }
+
+    /// The list goes back to the selector, its ticks cleared.
+    pub(crate) fn leave_list(&mut self) {
+        self.page = LibraryPage::Selector;
+        self.ticked.clear();
+        self.shown = None;
     }
 
     /// Opens `selection`'s list: sends `SetLibraryView` with it, clears ticks.
@@ -148,6 +153,11 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
         view_state.phone_library.page = LibraryPage::Device;
     } else {
         view_state.phone_library.settle(&scene.state.categories);
+    }
+    // LB54: the card closes when the library CUE loses its track, on any
+    // page of the tab.
+    if phone_prelisten::card_view(scene).is_none() {
+        view_state.phone_library.card_open = false;
     }
     match view_state.phone_library.page {
         LibraryPage::Selector => selector(ui, scene, view_state),
@@ -436,8 +446,10 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         _ => None,
     };
     match header(ui, scene, selection, folder.is_some()) {
+        // The arrow leaves the list at once; an open card stays open for
+        // the next list (LB54), and only Back closes it first (LB57).
         Some(HeaderTap::Back) => {
-            view_state.phone_library.back();
+            view_state.phone_library.leave_list();
             return;
         }
         Some(HeaderTap::Reread) => {
@@ -475,11 +487,7 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         view.whole_library = !view.whole_library;
         scene.ctl.send(Command::SetLibraryView(Box::new(view)));
     }
-    // LB54: the card closes when the library CUE has no track.
     let card = phone_prelisten::card_view(scene);
-    if card.is_none() {
-        view_state.phone_library.card_open = false;
-    }
     preview_strip(ui, scene, &mut view_state.phone_library.card_open);
     let card = card.filter(|_| view_state.phone_library.card_open);
     let revision = {
@@ -619,6 +627,11 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         phone_prelisten::card(ui, scene, view_state, v, rect);
     }
     let tab = &mut view_state.phone_library;
+    // The bar's room was laid out before this frame's ticks: a change
+    // draws again at once, with the room it needs.
+    if bar != !tab.ticked.is_empty() {
+        ui.ctx().request_repaint();
+    }
     if bar && !tab.ticked.is_empty() {
         let shown = view_state.phone.shown_player(&scene.state.player_ids());
         let tab = &mut view_state.phone_library;
@@ -636,19 +649,9 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
 fn preview_strip(ui: &mut Ui, scene: &Scene<'_>, card_open: &mut bool) {
     let has_track = phone_prelisten::card_view(scene).is_some();
     // Exactly this room, whatever the strip holds.
-    let sense = if has_track {
-        Sense::click()
-    } else {
-        Sense::hover()
-    };
-    let (rect, response) = ui.allocate_exact_size(vec2(ui.available_width(), touch::TARGET), sense);
+    let (rect, _) =
+        ui.allocate_exact_size(vec2(ui.available_width(), touch::TARGET), Sense::hover());
     let content = if has_track {
-        let label = scene.i18n.tr(if *card_open {
-            "phone-library-card-close"
-        } else {
-            "phone-library-card-open"
-        });
-        response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label.clone()));
         ui.painter().text(
             pos2(rect.right() - CARET / 2.0, rect.center().y),
             Align2::CENTER_CENTER,
@@ -664,20 +667,18 @@ fn preview_strip(ui: &mut Ui, scene: &Scene<'_>, card_open: &mut bool) {
     } else {
         rect
     };
-    // The buttons are drawn over the strip, so a tap on one is theirs.
-    if has_track && response.clicked() {
-        *card_open = !*card_open;
-    }
     let mut strip = ui.new_child(
         UiBuilder::new()
             .max_rect(content)
             .layout(Layout::left_to_right(Align::Center)),
     );
     strip.set_clip_rect(content.intersect(ui.clip_rect()));
+    let buttons_end;
     {
         let ui = &mut strip;
         ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
-        if !strip_controls(ui, scene, *card_open) {
+        buttons_end = strip_controls(ui, scene, *card_open);
+        if buttons_end.is_none() {
             ui.add_space(8.0);
             ui.add(
                 egui::Label::new(
@@ -698,22 +699,45 @@ fn preview_strip(ui: &mut Ui, scene: &Scene<'_>, card_open: &mut bool) {
             );
         }
     }
+    if !has_track {
+        return;
+    }
+    // The strip beside its buttons, never under them: a tap on a dimmed
+    // button is not a tap on the strip.
+    let toggle = Rect::from_min_max(
+        pos2(
+            buttons_end.map_or(rect.left(), |x| (x + 6.0).min(rect.right())),
+            rect.top(),
+        ),
+        rect.max,
+    );
+    let response = ui.interact(toggle, ui.scope_id().with("library-strip"), Sense::click());
+    let label = scene.i18n.tr(if *card_open {
+        "phone-library-card-close"
+    } else {
+        "phone-library-card-open"
+    });
+    response.widget_info(|| WidgetInfo::labeled(Role::Button, true, label.clone()));
+    if touch::tapped(ui, &response) {
+        *card_open = !*card_open;
+        ui.ctx().request_repaint();
+    }
 }
 
 /// The strip's controls while the library CUE runs or is held, or has a
-/// track and the card is open (LB54); false (nothing drawn) otherwise.
-fn strip_controls(ui: &mut Ui, scene: &Scene<'_>, card_open: bool) -> bool {
+/// track and the card is open (LB54): where its buttons end, or `None`
+/// (nothing drawn).
+fn strip_controls(ui: &mut Ui, scene: &Scene<'_>, card_open: bool) -> Option<f32> {
     let t = scene.i18n;
     let stopped = scene.state.library_cue.transport == Transport::Stopped;
     if stopped && !card_open {
-        return false;
+        return None;
     }
-    let Some(v) = phone_prelisten::card_view(scene) else {
-        return false;
-    };
+    let v = phone_prelisten::card_view(scene)?;
     let paused = v.transport == Transport::Paused;
     let blink = widgets::blink(scene.time);
     let size = vec2(touch::TARGET, touch::TARGET);
+    let end;
     {
         let (label, action, style, enabled) = if stopped {
             (
@@ -756,6 +780,7 @@ fn strip_controls(ui: &mut Ui, scene: &Scene<'_>, card_open: bool) -> bool {
             TileStyle::plain(),
             |p, r, c| glyphs::paint(p, r, TransportAction::Stop, 16.0, c),
         );
+        end = stop.rect.right();
         if touch::tapped(ui, &stop) {
             scene.ctl.send(Command::StopLibraryCue);
         }
@@ -775,7 +800,7 @@ fn strip_controls(ui: &mut Ui, scene: &Scene<'_>, card_open: bool) -> bool {
             .truncate(),
         );
     }
-    true
+    Some(end)
 }
 
 /// What a tap on the list's header asked for.
