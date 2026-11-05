@@ -2,8 +2,10 @@
 
 ## Installeren {#install}
 
-Download een pakket voor je systeem van de pagina **Releases** van het
-project. Bij elk bestand hoort een `.sha256`-bestand. Om een download te
+Op Windows staat Fauste Player in de **Microsoft Store**
+(<https://apps.microsoft.com/detail/9NH4KCL73463>), en op Linux in de
+**Snap Store** (<https://snapcraft.io/fauste-player>). Of download een pakket
+voor je systeem van de pagina **Releases** van het project. Bij elk bestand hoort een `.sha256`-bestand. Om een download te
 controleren voer je op Linux `sha256sum -c <bestand>.sha256` uit, en op macOS
 `shasum -a 256 -c <bestand>.sha256`.
 
@@ -11,10 +13,11 @@ controleren voer je op Linux `sha256sum -c <bestand>.sha256` uit, en op macOS
 
 | Pakket | Installeren | Bijwerken | Verwijderen |
 |---|---|---|---|
+| Snap (Snap Store) | `sudo snap install fauste-player` | automatisch (`sudo snap refresh fauste-player` om nu bij te werken) | `sudo snap remove fauste-player` |
 | `.deb` (Debian, Ubuntu) | `sudo apt install ./fauste-player_<version>_amd64.deb` | installeer de nieuwere `.deb` op dezelfde manier | `sudo apt remove fauste-player` |
 | `.rpm` (Fedora, openSUSE) | `sudo dnf install ./fauste-player-<version>-1.x86_64.rpm` | installeer de nieuwere `.rpm` | `sudo dnf remove fauste-player` |
 | AppImage (elke distributie) | `chmod +x fauste-player-<version>-x86_64.AppImage`, en voer het dan uit | vervang het bestand | verwijder het bestand |
-| Flatpak-bundel | `flatpak install --user fauste-player-<version>-x86_64.flatpak` | installeer de nieuwere bundel | `flatpak uninstall org.fauste.FaustePlayer` |
+| Flatpak-bundel | `flatpak install --user fauste-player-<version>-x86_64.flatpak` | installeer de nieuwere bundel | `flatpak uninstall com.sanchezfauste.FaustePlayer` |
 | Archief | pak het uit en voer `fauste-player` uit | pak het nieuwere uit | verwijder de map |
 
 - **Integratie met het bureaublad:** de pakketten voegen **Fauste Player** toe
@@ -26,6 +29,21 @@ controleren voer je op Linux `sha256sum -c <bestand>.sha256` uit, en op macOS
   gebruikt als het geïnstalleerd is, maar is nooit vereist.
 - **AppImage:** start het niet doordat FUSE ontbreekt, voer het dan uit met
   `--appimage-extract-and-run`.
+- **Snap:** de snap draait in een sandbox. Standaard leest hij je homemap
+  (behalve verborgen bestanden en mappen), speelt hij via PulseAudio of
+  PipeWire en kan hij het netwerk gebruiken voor de API voor bediening op
+  afstand en OSC (beide uit totdat je ze aanzet). Twee functies hebben een
+  toestemming nodig die je eenmalig geeft, vanuit een terminal:
+  - Bit-perfect uitgang op ALSA `hw:`-apparaten, en MIDI-bedieningspanelen:
+    `sudo snap connect fauste-player:alsa`.
+  - Muziek op USB-schijven en andere schijven (`/media`, `/run/media`, `/mnt`):
+    `sudo snap connect fauste-player:removable-media`.
+
+  `snap connections fauste-player` toont wat er verbonden is. Herstart Fauste
+  Player na het verbinden. Muziek op andere plaatsen (buiten je homemap en die
+  drie) kan de snap niet lezen: gebruik daarvoor een ander pakket. JACK is niet
+  beschikbaar in de snap. Zijn instellingen en playlists staan in
+  `~/snap/fauste-player/` (zie [Gegevens en back-ups](data-and-backups.md)).
 - **Flatpak:**
   - De bundel heeft de freedesktop-runtime van Flathub nodig. Is de
     Flathub-remote niet ingesteld, voer dan eerst
@@ -34,6 +52,15 @@ controleren voer je op Linux `sha256sum -c <bestand>.sha256` uit, en op macOS
   - De sandbox kan je homemap lezen (om je muziek af te spelen waar die staat).
   - Het speelt via PulseAudio, of rechtstreeks via ALSA voor bit-perfect
     apparaten.
+  - Het kan het netwerk gebruiken, voor de API voor bediening op afstand en
+    OSC (beide uit totdat je ze aanzet).
+  - Bundels tot en met 0.10 werden geïnstalleerd als
+    `org.fauste.FaustePlayer`, en de nieuwere installeren als
+    `com.sanchezfauste.FaustePlayer`, een aparte applicatie. Om je
+    instellingen, playlists en carts te behouden, sluit je de app en voer je
+    `mv ~/.var/app/org.fauste.FaustePlayer ~/.var/app/com.sanchezfauste.FaustePlayer`
+    uit voordat je de nieuwe start, en daarna
+    `flatpak uninstall org.fauste.FaustePlayer`.
 - **Bureaubladbibliotheken:** het venster gebruikt libxkbcommon en EGL of
   OpenGL, met Wayland of X11. Elk bureaublad heeft ze, en de `.deb` en `.rpm`
   vermelden ze als afhankelijkheid. Installeer ze op een erg minimaal systeem
@@ -41,7 +68,11 @@ controleren voer je op Linux `sha256sum -c <bestand>.sha256` uit, en op macOS
 
 ### Windows {#windows}
 
-Voer `fauste-player-<version>-x86_64-pc-windows-msvc.msi` uit. Het installeert
+De eenvoudigste manier is de **Microsoft Store**: zoek naar *Fauste Player*,
+of open <https://apps.microsoft.com/detail/9NH4KCL73463>, en kies **Ophalen**.
+De Store houdt het up-to-date, en **Instellingen → Apps** verwijdert het.
+
+Of voer `fauste-player-<version>-x86_64-pc-windows-msvc.msi` uit. Het installeert
 voor alle gebruikers onder *Program Files* en voegt een item toe aan het
 Startmenu.
 - **Bijwerken:** voer het nieuwere installatieprogramma uit. Het vervangt de
@@ -89,11 +120,11 @@ eigen map met `FAUSTE_HOME`.
 
 `fauste-player --version` toont de versie. De titelbalk van het venster toont
 de naam en de versie, en de knop **Over Fauste Player** (een info-pictogram,
-links van **Instellingen**) opent het venster Over Fauste Player, met het
-copyright en de licentievermeldingen (**Licenties van derden** opent het
-bestand met vermeldingen dat met de releasepakketten wordt geïnstalleerd). In
-een taal die met AI is vertaald, zegt dat venster ook dat de vertaling fouten
-kan bevatten. Sluit het met **Sluiten** of `Esc`. `fauste-player --help`
+links van **Instellingen**) opent het venster Over Fauste Player, met de
+auteur, het copyright, de licentie (GNU GPL versie 3 of later; **Lees de
+licentie online** opent de tekst ervan), een korte disclaimer en de
+licentievermeldingen (**Licenties van derden** opent het bestand met
+vermeldingen dat met de releasepakketten wordt geïnstalleerd). Sluit het met **Sluiten** of `Esc`. `fauste-player --help`
 toont de opties. Afspeellijstbestanden die als argument worden meegegeven,
 worden als nieuwe playlists geïmporteerd.
 
@@ -102,9 +133,9 @@ worden als nieuwe playlists geïmporteerd.
 Op Windows opent het releaseprogramma geen consolevenster: `--version`,
 `--help` en opstartfouten verschijnen in plaats daarvan in een berichtvenster.
 
-Heeft een instelling een herstart nodig, dan verschijnt in de bovenbalk een
-label **Herstart nodig**: druk erop om te herstarten (zie
-[Instellingen](settings.md#restart-pending)).
+Wacht een wijziging aan de uitgangen op iets dat on air is, dan verschijnt in
+de bovenbalk een label **Instellingen in afwachting**; het zegt waarop gewacht
+wordt (zie [Instellingen](settings.md#settings-pending)).
 
 ### Sluiten terwijl er audio on air is {#closing-while-audio-is-on-air}
 
@@ -140,12 +171,30 @@ bit-perfect apparaat dat daarvoor is ingesteld (zie
 [Bit-perfect uitgang](bit-perfect.md#dsd)). Opus speelt altijd op 48 kHz.
 WavPack-bestanden moeten lossless en mono of stereo zijn; hybride en
 meerkanaals WavPack worden als onleesbaar getoond, net als DFF-bestanden met
-DST-compressie.
+DST-compressie. Een WAV of FLAC die een DTS-bitstream (of een andere
+gecodeerde surround-bitstream) bevat in plaats van audio, zoals bij sommige
+DTS-CD-rips, wordt ook als onleesbaar getoond (het log zegt waarom): zet het
+eerst om naar gewone PCM.
+
+Surroundbestanden (quad, 5.1, 6.1, 7.1 en andere indelingen van maximaal acht
+kanalen) spelen naar stereo gemixt op de positie van elk kanaal: voorste links
+en rechts blijven aan hun kant, het midden en het achtermidden gaan naar beide
+kanten, de zij- en achterkanalen gaan naar hun kant, en het LFE-kanaal
+(subwoofer) wordt weggelaten. Meerkanaals Opus- en AAC-bestanden kunnen niet
+worden gelezen en worden als onleesbaar getoond.
 
 Elk bestand wordt op de achtergrond geanalyseerd. De analyse leest de titel,
 artiest, het album en de hoes, tekent de golfvorm en bepaalt waar het geluid
 begint en eindigt en waar in het volgende nummer gemixt moet worden. Je kunt
-een nummer afspelen voordat de analyse klaar is.
+een nummer afspelen voordat de analyse klaar is. Terwijl bestanden worden
+geanalyseerd, zegt de rechterkant van de statusbalk hoeveel (**12 nummers
+worden geanalyseerd**); houd de muisaanwijzer erboven om de bestanden te zien
+die nu worden geanalyseerd, hoeveel er wachten en, tijdens **Alle nummers
+opnieuw analyseren**, hoever het is. De kleurenlegenda staat rechts ervan; is
+het venster smal, dan worden eerst legenda-items verborgen, dan dit item, zodat
+een waarschuwing links in de statusbalk leesbaar blijft. Terwijl alleen
+loudness-metingen lopen (zie [Loudness](loudness.md)) staat er **Loudness van
+N nummers wordt gemeten**.
 
 ## Afspelen {#play}
 

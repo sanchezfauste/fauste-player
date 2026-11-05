@@ -7,50 +7,63 @@ Het venster heeft één formaat (900 × 640, kleiner op een klein scherm), welke
 sectie ook, en de sectie scrolt erin. Elke sectie lijnt haar labels uit in één
 kolom.
 
-De secties Spelers, Meters, Analyse en Sneltoetsen hebben in hun kop een knop
+De secties Spelers, Meters, Analyse, Loudness en Sneltoetsen hebben in hun kop een knop
 **Standaardwaarden herstellen**. Die vraagt om bevestiging en zet dan alleen die
 sectie terug (Spelers behoudt het aantal spelers en de taal; Sneltoetsen heeft
-geen andere resetknop). Audio-uitgangen, Playlists, Cartwall, MIDI en Op
+geen andere resetknop). Audio-uitgangen, Playlists, Cartwall, Bibliotheek, MIDI en Op
 afstand hebben er geen.
 
-## Herstart nodig {#restart-pending}
+## Instellingen in afwachting {#settings-pending}
 
-Sommige wijzigingen werken pas wanneer de applicatie opnieuw start: het
-audiosysteem, de samplefrequentie, de buffergrootte (ook die van een apparaat
-zelf), de Main- en Cue-uitgangen (spelers en cartwall), de bit-perfect
-apparaten en de DSD-instellingen. Het aantal spelers hoort daar niet bij: het
-werkt meteen.
+Elke instelling werkt terwijl de applicatie draait. Het audiosysteem, de
+samplefrequentie, de buffergrootte (ook die van een apparaat zelf), de Main- en
+Cue-uitgangen (spelers en cartwall), de bit-perfect apparaten en de
+DSD-instellingen veranderen hoe een uitvoerapparaat wordt geopend, dus ze
+werken zodra dat veilig is:
+
+- De instellingen van een apparaat werken wanneer er niets op dat apparaat
+  speelt: geen enkele speler die ernaartoe is gerouteerd speelt, faadt of
+  voorbeluistert (CUE, ook wanneer vastgehouden), en er speelt geen cart op.
+  Een gepauzeerde speler, of een speler met alleen een geladen nummer, houdt
+  een apparaat niet vast: zijn nummer blijft gepauzeerd waar het was.
+- De uitgang van een speler of van de cartwall verhuist wanneer die speler (of
+  de cartwall) niet speelt; andere spelers op dezelfde apparaten worden niet
+  onderbroken.
+- Een nieuw audiosysteem werkt wanneer er nergens iets speelt.
+
+Een wachtende wijziging wordt uitgevoerd op het eerste moment dat er niets
+speelt wat ze raakt. Dat kan het gat zijn tussen het einde van het ene nummer en
+het begin van het volgende: het volgende nummer begint dan later, met de tijd
+die het apparaat nodig heeft om te heropenen. **Nu toepassen** (hieronder) forceert
+de wijziging in plaats daarvan meteen.
 
 Een frequentie of buffer die aan een apparaat wordt gegeven, telt alleen mee
 wanneer ze verandert waarmee het apparaat opent: een apparaat dezelfde waarde
-geven als de globale, of zo’n waarde wissen, is niet in afwachting.
+geven als de globale, of zo’n waarde wissen, verandert niets.
 
-De limieten en de engine-afstelling werken ook bij de volgende start, maar ze
-worden bewerkt in het configuratiebestand terwijl de applicatie gesloten is
-(zie [Gegevens en back-ups](data-and-backups.md)), dus ze verschijnen nooit als
-in afwachting.
+Tot dan toont de bovenbalk **Instellingen in afwachting**. Houd de
+muisaanwijzer erboven om te zien wat er wacht en waarop; klik erop voor de
+lijst, die ook elke wijziging toont die een apparaat of uitgang weigerde (het
+apparaat behoudt zijn huidige instellingen; de wijziging wordt opnieuw
+geprobeerd wanneer je haar wijzigt of op **Nu toepassen** drukt). De voettekst
+van Instellingen zegt “Sommige wijzigingen wachten tot de uitgangen die ze raken
+vrij zijn.” en biedt **Nu toepassen** aan; een korte melding (bijvoorbeeld dat
+een instelling is opgeslagen) kan een moment de plaats van die tekst innemen.
 
-Terwijl een van deze wacht, zegt de voettekst van Instellingen “Sommige
-wijzigingen werken pas na een herstart.” en biedt **Nu herstarten** aan, en
-toont de bovenbalk een label **Herstart nodig**. Houd de muisaanwijzer boven het
-label om te zien wat er wacht. Een korte melding (bijvoorbeeld dat een
-instelling is opgeslagen) kan een moment de plaats van de voettekst innemen;
-**Nu herstarten** blijft. Beide doen hetzelfde:
+**Nu toepassen** past elke wachtende uitgangswijziging meteen toe. Zou dat iets
+onderbreken, dan toont het eerst de apparaten en wat erop speelt; **Onderbreken
+en toepassen** onderbreekt dan kort de audio op die apparaten: wat speelde gaat
+na een kort gat verder vanaf waar het was, en niets dat gepauzeerd of gestopt
+was, begint. **Annuleren** (of `Esc`) blijft wachten.
 
-- Wanneer niets on air is, herstart **Nu herstarten** (of het label) meteen.
-- Wanneer er iets on air is, verschijnt het venster dat opsomt wat er klinkt,
-  met **Stoppen en herstarten** of **Annuleren**.
-
-De sessie wordt eerst opgeslagen en de audio en MIDI-besturing stoppen, daarna
-start de applicatie opnieuw met dezelfde gegevensmap (`FAUSTE_HOME`), en er
-gaat daarna niets uit zichzelf on air. Kan de applicatie niet opnieuw starten
-(in een Flatpak ook wanneer de nieuwe niet op tijd start), dan zegt ze dat;
-start haar dan vanuit je programmamenu.
+De limieten en de engine-afstelling worden bewerkt in het configuratiebestand
+terwijl de applicatie gesloten is (zie
+[Gegevens en back-ups](data-and-backups.md)).
 
 ## Audio-uitgangen {#audio-outputs}
 
-Wijzigingen in deze sectie wachten op een herstart: zie
-[Herstart nodig](#restart-pending).
+Wijzigingen in deze sectie werken terwijl de applicatie draait, zodra er niets
+speelt wat ze raken: zie [Instellingen in afwachting](#settings-pending).
 
 ![Instellingen, Audio-uitgangen, weergave Basis: de keuzeschakelaar, het audiosysteem, de samplefrequentie, de buffergrootte en de Main- en Cue-uitgangen van elke speler (hier het stille systeem)](../../images/guide/settings-outputs.png)
 
@@ -70,25 +83,26 @@ het opnieuw kiezen ervan (bijvoorbeeld na het omwisselen van twee apparaten) ze.
 |---|---|
 | Audiosysteem | De laatste keuze, **Geen uitgang (stil)**, speelt niets af: tijdlijnen lopen in realtime zonder geluidskaart (voor een machine zonder kaart, of om te oefenen). Linux: PipeWire (in builds die het bevatten), PulseAudio, JACK of ALSA. Windows: WASAPI, ASIO (in builds die het bevatten) of JACK. macOS: Core Audio of JACK. Systemen die op deze computer ontbreken, of zonder uitvoerapparaat (een JACK-server die niet draait), worden als niet beschikbaar getoond. “Systeemstandaard” gebruikt de eerste beschikbare in die volgorde. |
 | Samplefrequentie | De frequentie waarop elke uitgang draait, tenzij een apparaat een eigen heeft (Geavanceerd); bestanden worden ernaar omgezet met hoogwaardige resampling. Bit-perfect apparaten starten op hun frequentie en volgen daarna de bestanden. |
-| Buffergrootte | Frames per audioblok, tenzij een apparaat een eigen heeft; de resulterende latentie wordt eronder getoond |
-| Uitgangen per speler | Voor elke speler een **Main**-apparaat (on air) en een **Cue**-apparaat (voorbeluisteren), elk met een kanaalpaar. Een geluidskaart die meerdere uitvoerprofielen biedt (ALSA toont front, surround, direct hardware…) toont elk als *kaart — profiel*; twee items die nog steeds hetzelfde zouden lezen, krijgen hun apparaat-id tussen haakjes. Meerkanaals interfaces kunnen meerdere spelers op verschillende paren dragen. |
+| Buffergrootte | Frames per audioblok, tenzij een apparaat een eigen heeft; de resulterende latentie wordt eronder getoond. Uitgangen via een geluidsserver of een systeemmixer (PulseAudio, het ALSA-apparaat `default`) vragen om minstens 50 ms, wat deze grootte ook is, of zoveel als het apparaat aanneemt, zodat een drukke computer niet te horen is; de latentie zegt dat dan (`shared_buffer_ms` in het configuratiebestand) |
+| Uitgangen per speler | Voor elke speler een **Main**-apparaat (on air) en een **Cue**-apparaat (voorbeluisteren), elk met een kanaalpaar. Een geluidskaart die meerdere uitvoerprofielen biedt (ALSA toont front, surround, direct hardware…) toont elk als *kaart — profiel*; twee items die nog steeds hetzelfde zouden lezen, krijgen hun apparaat-id tussen haakjes. Meerkanaals interfaces kunnen meerdere spelers op verschillende paren dragen. Een Cue-uitgang die een on-air uitgang deelt (de Main van een speler of die van de cartwall) is toegestaan: een opmerking eronder zegt dat zijn voorbeluistering on air te horen is en vraagt eerst om bevestiging terwijl daar iets speelt. |
 | Main testen / Cue testen | Speelt een korte toon (1 kHz op Main, 440 Hz op Cue, 1,5 s, −18 dBFS) af op de gekozen uitgang, zodat je de bedrading kunt controleren voordat je on air gaat |
-| Cartwall | De Main- en Cue-uitgangen van de cartwall. Main staat standaard op de systeemuitgang. Zonder Cue is er geen voorbeluisteren van carts. |
+| Bibliotheek | De Cue-uitgang van de bibliotheek, met een eigen **Cue testen**: waar het [voorbeluisteren](library.md#pre-listening) van het bibliotheekvenster (op een telefoon dat van het tabblad Bibliotheek) te horen is. Zonder die uitgang is Play van de voorbeluisterbalk gedimd. Op Android luidt de lege keuze *Systeemstandaard* in plaats van *Geen*: het voorbeluisteren en **Cue testen** spelen dan op de standaarduitgang (zie [Android → Bibliotheek](android.md#library)). Een Bibliotheek-uitgang op een on-air uitgang werkt zoals de Cue van een speler: een opmerking eronder zegt dat zijn voorbeluistering on air te horen is en vraagt eerst om bevestiging terwijl daar iets speelt. Hij staat in de weergaven Basis en Geavanceerd, ook op een telefoon |
+| Cartwall | De Main- en Cue-uitgangen van de cartwall. Main staat standaard op de systeemuitgang. Zonder Cue is er geen voorbeluisteren van carts; een Cue op een on-air uitgang werkt zoals bij spelers. |
 | Samplefrequentie: *apparaat* (Geavanceerd) | **Globaal (...)** gebruikt de samplefrequentie hierboven; een waarde geeft dit apparaat een eigen frequentie. Alleen de frequenties die het apparaat meldt worden aangeboden; een opgeslagen frequentie die het niet meer meldt, blijft in de lijst met een opmerking dat hij misschien niet opent (het apparaat valt dan terug op de globale frequentie). De eigen waarden gelden alleen voor apparaten die een uitgang noemt, niet voor de systeemstandaarduitgang tenzij een uitgang hem noemt. |
-| Buffergrootte: *apparaat* (Geavanceerd) | **Globaal (...)** gebruikt de buffergrootte hierboven; een waarde geeft dit apparaat een eigen, met zijn latentie eronder. Een apparaat dat geen eigen buffergrootte aanneemt, valt terug op de globale, en ook op de globale frequentie wanneer het geen eigen frequentie aanneemt. |
-| Bit-perfect: *apparaat* (Geavanceerd) | Een bit-perfect apparaat wordt met exclusieve toegang geopend en volgt de samplefrequentie van elk bestand zolang er niets op speelt. De schakelaar is uitgeschakeld waar het apparaat geen exclusieve toegang kan geven. Zie [Bit-perfect uitgang](bit-perfect.md). |
+| Buffergrootte: *apparaat* (Geavanceerd) | **Globaal (...)** gebruikt de buffergrootte hierboven (met het minste dat een gedeelde uitgang vraagt, zoals hierboven); een waarde geeft dit apparaat een eigen, zoals hij is gebruikt, met zijn latentie eronder. Een apparaat dat geen eigen buffergrootte aanneemt, valt terug op de globale, en ook op de globale frequentie wanneer het geen eigen frequentie aanneemt. |
+| Bit-perfect: *apparaat* (Geavanceerd) | Standaard uit. Een speciale modus voor audiofiele weergave, niet voor gemixte programma’s: het apparaat wordt met exclusieve toegang geopend en volgt de samplefrequentie van elk nummer. De spelers waarvan de Main-uitgang erop staat crossfaden of mixen nooit, een frequentiewijziging laat een korte stilte tussen twee nummers, en hun volume wordt op 100 % gehouden. De schakelaar is uitgeschakeld waar het apparaat geen exclusieve toegang kan geven. Zie [Wat het kost](bit-perfect.md#what-it-costs). |
 | DSD: *apparaat* (Geavanceerd) | **Naar PCM omzetten** (de standaard), **DoP** of, op Linux, **Natieve DSD**. Elk apparaat toont het; alleen de modi die het apparaat aankan worden aangeboden, en een regel eronder zegt waarom de andere niet. Zie [DSD](bit-perfect.md#dsd). |
 | Als een andere bron een DSD-uitgang nodig heeft (Geavanceerd) | **Het DSD-nummer als PCM voortzetten** (de standaard), of **DSD behouden en de andere bronnen dempen**. Zie [DSD](bit-perfect.md#dsd). |
 | DSD-stilte (Geavanceerd) | Stilte die wordt verzonden voordat een DSD-stream begint, nadat hij eindigt en bij een overgang naar PCM, zodat de converter zonder klik vergrendelt; standaard 200 ms, 0 tot 2000. |
 
-Een Cue-uitgang valt nooit terug op de uitgang die Main gebruikt, zodat
-voorbeluisteren nooit on air gaat. Een Cue die een apparaat noemt op een
-audiosysteem dat deze computer niet heeft, of dezelfde uitgang (apparaat en
-kanalen) als Main, betekent “geen cue”. Wanneer een Cue-uitgang dezelfde is als
-zijn Main-uitgang, zegt een waarschuwing eronder dat. Een speler zonder
-Cue-uitgang, of met zijn Cue op zijn Main-uitgang, heeft zijn knop **CUE**
-gedimd; de muisaanwijzer erboven zegt dat je hier een Cue-uitgang moet kiezen.
-Hetzelfde geldt voor **Voorbeluisteren op CUE** van de cartwall.
+Een Cue-uitgang valt nooit terug op de uitgang die Main gebruikt. Een Cue die een
+apparaat noemt op een audiosysteem dat deze computer niet heeft, betekent “geen
+cue”. Een Cue op een on-air uitgang (hetzelfde apparaat en dezelfde kanalen als
+een Main, of overlappend) is toegestaan: een opmerking eronder zegt dat zijn
+voorbeluistering on air te horen is en dat er eerst om bevestiging wordt
+gevraagd terwijl daar iets speelt. Een speler zonder Cue-uitgang heeft zijn
+knop **CUE** gedimd; de muisaanwijzer erboven zegt dat je hier een Cue-uitgang
+moet kiezen. Hetzelfde geldt voor **Voorbeluisteren op CUE** van de cartwall.
 
 Verdwijnt een apparaat tijdens het afspelen, dan behouden de spelers hun
 tijdlijnen, en wordt het apparaat heropend wanneer het terugkomt (zie
@@ -101,12 +115,17 @@ tijdlijnen, en wordt het apparaat heropend wanneer het terugkomt (zie
 | Instelling | Standaard | Betekenis |
 |---|---|---|
 | Taal | Systeem | Interfacetaal |
-| Aantal spelers | 4 | Kolommen op het hoofdscherm (een speler die on air is, kan niet worden verwijderd) |
+| Aantal spelers | 4 | Kolommen op het hoofdscherm (een speler die on air is, kan niet worden verwijderd). Het aantal werkt wanneer je de schuifregelaar loslaat; een getal dat je in het vak typt werkt wanneer je op Enter drukt of het vak verlaat, en Escape annuleert het |
 | Standaardmodus | CONT | De modus waarin spelers starten |
-| Fadetijd | 1000 ms | Gebruikt door Play terwijl on air en door Uitfaden |
-| Automatisch mixen op het MIX-punt | Aan | Nummers laten overlappen in doorlopende modus |
+| Fadetijd | 1000 ms | Gebruikt door Play terwijl on air en door Uitfaden. Op een speler waarvan de Main-uitgang bit-perfect is, alleen door Uitfaden |
+| Automatisch mixen op het MIX-punt | Aan | Nummers laten overlappen in doorlopende modus. Geldt niet voor een speler waarvan de Main-uitgang bit-perfect is |
 | Cue-in en cue-out gebruiken | Aan | Uit: spelers spelen elk nummer van het begin tot het einde van het bestand; de markers blijven bewaard en carts gebruiken de hunne nog steeds. Duur en playlisttotalen volgen hetzelfde bereik |
 | Waarschuwing einde nummer | 10 s | Wanneer de aftelling rood begint te knipperen |
+
+Terwijl de Main-uitgang van een speler bit-perfect is, zegt een opmerking onder
+**Automatisch mixen op het MIX-punt** dat zulke spelers nooit mixen of
+crossfaden. Beide instellingen blijven bewerkbaar: ze gelden nog voor de andere
+spelers. Zie [Wat het kost](bit-perfect.md#what-it-costs).
 
 ## Meters {#meters}
 
@@ -155,9 +174,16 @@ de kanalen:
 
 ![Instellingen, Analyse: de drempels van de automatische markers](../../images/guide/settings-analysis.png)
 
-De drempels beschreven in [Markers en mixen](markers-and-mixing.md). **Alle
-nummers opnieuw analyseren** voert de analyse opnieuw uit voor de hele
-bibliotheek; handmatige markers blijven bewaard.
+De drempels beschreven in [Markers en mixen](markers-and-mixing.md); elke rij
+heeft onder zijn naam een hint van één regel die zegt wat de waarde doet.
+**Alle nummers opnieuw analyseren** voert de analyse opnieuw uit voor de hele
+bibliotheek, waarbij elk bestand opnieuw wordt gelezen; handmatige markers
+blijven bewaard. Terwijl het loopt, is de knop gedimd en toont hij hoever het is
+(**Analyseren… 120 van 340**), zodat er opnieuw op drukken niet opnieuw begint;
+de tooltip van **N nummers worden geanalyseerd** in de statusbalk geeft
+dezelfde voortgang. Een drempel hier wijzigen analyseert de bibliotheek ook
+opnieuw, en herstart een lopende run zodat geen enkel nummer markers van de
+oude waarden behoudt.
 
 Na een update waarvan de analyse is veranderd, behouden nummers die de vorige
 versie heeft geanalyseerd hun markers en golfvormen, die nog steeds werken.
@@ -168,6 +194,39 @@ zoals ze worden getoond, en dat geldt ook voor de nummers van carts die geen
 vastgelegd formaat hebben (een cart speelt alleen bit-perfect wanneer zijn
 formaat bekend is). Nummers waarvan het bestand ontbreekt, worden niet geteld
 totdat het bestand terug is.
+
+De analyse meet ook de loudness van elk bestand voor
+[loudness-normalisatie](loudness.md). Bestanden die zijn geanalyseerd voordat
+loudness werd gemeten, worden op de achtergrond gemeten, wanneer de analyse
+niets anders te doen heeft, of normalisatie nu aan of uit staat; hun markers
+worden niet aangeraakt. **Opnieuw analyseren** (in het playlistmenu) en **Alle
+nummers opnieuw analyseren** meten opnieuw.
+
+## Loudness {#loudness}
+
+![Instellingen, Loudness: normalisatie aan, met het doel, het true-peakplafond, de maximale versterking en de maximale trim op hun standaardwaarden](../../images/guide/settings-loudness.png)
+
+Speelt elk nummer en elke cart af op dezelfde loudness, met een vaste
+versterking per nummer. [Loudness-normalisatie](loudness.md) legt uit hoe de
+gain wordt berekend, de badge in de spelerkop en de instellingen per nummer.
+
+| Instelling | Standaard | Bereik | Betekenis |
+|---|---|---|---|
+| Loudness normaliseren | Aan | | Normalisatie aan of uit |
+| Doel | −16 LUFS | −36 … −6 LUFS, stappen van 0,5 | De geïntegreerde loudness waarop elk nummer wordt gebracht |
+| True-peakplafond | −1 dBTP | −12 … 0 dBTP, stappen van 0,1 | Een versterking brengt de true peak van het nummer nooit boven dit. Verlagingen zijn niet begrensd |
+| Maximale versterking | 12 dB | 0 … 24 dB | De grootste gain die een zacht nummer kan krijgen. Verlagingen zijn niet begrensd |
+| Maximale trim | 12 dB | 0 … 24 dB | Hoe ver de eigen handmatige trim van elk nummer kan gaan, omhoog of omlaag |
+
+Wijzigingen gelden voor nummers die daarna worden geladen: wat speelt, behoudt
+zijn gain, en het volgende nummer dat op elke speler wacht, wordt opnieuw
+voorbereid met de nieuwe. Een opmerking onder de instellingen zegt hoeveel
+nummers nog op hun meting wachten; ze spelen ongewijzigd totdat die klaar is.
+Een speler of cart op een bit-perfect uitgang wordt nooit genormaliseerd.
+**Standaardwaarden herstellen** zet alleen deze sectie terug (normalisatie
+aan). Normalisatie staat aan voor nieuwe installaties; een bestaande
+configuratie behoudt haar huidige instelling (elke opgeslagen configuratie
+bewaart de waarde al).
 
 ## Playlists {#playlists}
 
@@ -192,10 +251,9 @@ schakelt meteen. Een systeemtaal zonder eigen vertaling gebruikt de dichtstbijzi
 anders Engels. Een taal in het instellingenbestand die de interface niet heeft,
 wordt als **Systeem** getoond en volgt het besturingssysteem.
 
-Engels en Spaans zijn met de hand geschreven. De andere vertalingen zijn met AI
-gemaakt en kunnen fouten bevatten; wanneer een ervan in gebruik is, zegt
-**Over Fauste Player** dat. Correcties van moedertaalsprekers zijn welkom als
-issue of pull request.
+De interface in elke taal, ook Engels en Spaans, is met AI gemaakt en kan fouten
+bevatten. **Over Fauste Player** bevat een algemene disclaimer die ze allemaal
+dekt. Correcties zijn welkom als issue of pull request.
 
 ## Cartwall {#cartwall}
 
@@ -203,6 +261,14 @@ issue of pull request.
 
 Pagina’s, rastergrootte, de cart-editor, en het importeren en exporteren van
 cartpagina’s. Zie [Cartwall](cartwall.md).
+
+## Bibliotheek {#library}
+
+De categorieën die je nummers groeperen aanmaken, hernoemen, een andere kleur
+geven, van soort veranderen, verplaatsen (door te slepen) en verwijderen, een
+map met een categorie bewaken en de ontbrekende nummers ervan verwijderen,
+zonder het bibliotheekvenster te openen. Zie [Bibliotheek](library.md#categories)
+en [Bewaakte mappen](library.md#watched-folders).
 
 ## Sneltoetsen {#keyboard-shortcuts}
 
@@ -214,8 +280,9 @@ Zie [Toetsenbord](keyboard.md).
 
 ![Instellingen, MIDI, met MIDI-besturing uit](../../images/guide/settings-midi.png)
 
-Zet MIDI-bedieningspanelen aan, bekijk de invoerpoorten en leer een
-bedieningselement voor elke spelersactie. Zie
+Zet MIDI-bedieningspanelen aan, bekijk de invoerpoorten (**Poorten opnieuw verbinden**
+opent ze opnieuw, alsof je de bedieningspanelen loskoppelt en weer aansluit) en
+leer een bedieningselement voor elke spelersactie. Zie
 [MIDI-bedieningspanelen](midi.md).
 
 ## Op afstand {#remote}

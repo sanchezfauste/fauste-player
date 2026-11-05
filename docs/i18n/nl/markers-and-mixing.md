@@ -15,15 +15,18 @@ vervangt ze nooit.
 
 ## Markers bewerken {#editing-markers}
 
-Op de golfvorm van een speler, of op de golfvorm van het CUE-venster ervan
-(hetzelfde menu en dezelfde handvatten; een wijziging is in beide meteen
-zichtbaar):
+Op de golfvorm van een speler, op de golfvorm van het CUE-venster ervan of
+op de [voorbeluisterbalk van het bibliotheekvenster](library.md#pre-listening)
+(hetzelfde menu en dezelfde handvatten; een wijziging is overal waar het
+nummer staat meteen zichtbaar):
 
 - **Klik met de rechtermuisknop** waar je een marker wilt en kies **Cue-in hier
   zetten**, **Einde intro hier zetten**, **Begin outro hier zetten**,
   **MIX-punt hier zetten** of **Cue-out hier zetten**. **Markers terugzetten op
   automatisch** verwijdert de markers die je hebt geplaatst, en het nummer
-  wordt opnieuw geanalyseerd.
+  wordt opnieuw geanalyseerd. **Loudness…** opent de instellingen voor
+  [loudness-normalisatie](loudness.md#per-track-exclude-and-trim) van het
+  nummer: sluit het uit, of stel zijn versterking bij.
 - **Houd Alt ingedrukt** (Option op macOS): er verschijnen handvatten op de
   markers. Sleep er een om hem te verplaatsen; de tijd wordt getoond tijdens
   het slepen. Slepen verplaatst de afspeelkop nooit.
@@ -85,6 +88,10 @@ gewijzigd, worden de nummers automatisch opnieuw geanalyseerd.
 - **SINGLE-modus**, of **Stop na**: de speler stopt op de cue-out.
 - **Op Play drukken terwijl er iets on air is:** het volgende nummer begint
   meteen en het huidige fadet uit gedurende de *fadetijd* (standaard 1 s).
+- **Een speler waarvan de hoofduitgang bit-perfect is** negeert het MIX-punt
+  en automatisch mixen: elk nummer speelt tot zijn cue-out, daarna begint het
+  volgende, en Play terwijl er iets on air is schakelt meteen om, zonder fade.
+  Zie [Wat het kost](bit-perfect.md#what-it-costs).
 - **Cue-in en cue-out gebruiken uit** (Instellingen → Spelers): elke speler
   speelt elk nummer van 0 tot het einde van het bestand. Cue-in en cue-out,
   automatisch en handmatig, blijven bewaard, en de golfvorm tekent ze als
