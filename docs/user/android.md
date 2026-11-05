@@ -163,8 +163,8 @@ not offered. The ticks stay after the menu's action.
 **Pre-listen.** The 🎧 at a row's right plays its track from its cue-in
 on the library's pre-listen output; the 🎧 of another row switches to
 that track. A slim strip over the list shows the title, the time left,
-**Pause**/**Play** and **Stop** while it plays (or is paused), and a
-hint otherwise: it always keeps its place, so the rows do not move when a
+**Pause**/**Play** and **Stop** while it plays (or is paused), the
+dimmed title after **Stop**, and a hint before the first pre-listen: it always keeps its place, so the rows do not move when a
 pre-listen starts or stops. The 🎧
 is dimmed when the file is missing or cannot be played.
 

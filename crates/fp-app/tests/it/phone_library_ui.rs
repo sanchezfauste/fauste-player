@@ -1520,3 +1520,101 @@ fn lb57_the_headers_arrow_leaves_the_list_at_once() {
     tap(&mut h, BACK);
     assert!(on_selector(&h), "one tap on the arrow");
 }
+
+/// LB54: with a stopped track and the card closed, the strip names the
+/// track beside its caret, not the idle hint.
+#[test]
+fn lb54_a_stopped_track_shows_its_title_not_the_hint() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    fp_model::apply(&mut s, Command::StopLibraryCue).unwrap();
+    assert_eq!(s.library_cue.track, Some(a), "LB33 keeps the track");
+    let (h, _fake) = rock_list(s);
+    assert!(h.query_by_label(IDLE).is_none(), "no hint beside the caret");
+    let strip = h.get_by_label(OPEN_CARD).rect();
+    let named = h
+        .query_all_by_label("Alpha")
+        .any(|n| strip.contains(n.rect().center()));
+    assert!(named, "the strip names the track");
+}
+
+/// LB55: on a phone on its side the card takes the right half, beside the
+/// rows.
+#[test]
+fn lb55_sideways_the_card_sits_beside_the_rows() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let browser = MediaBrowser::default();
+    browser.set_files(files());
+    let side = vec2(PORTRAIT.y, PORTRAIT.x);
+    let (mut h, _fake) = harness_sized(s, side, move |ui| {
+        ui.with_touch().with_media_browser(browser)
+    });
+    h.run_steps(3);
+    tap(&mut h, "Library");
+    tap(&mut h, "Rock");
+    tap(&mut h, OPEN_CARD);
+    let row = h.get_by_label(&row("Alpha", "Band")).rect();
+    let wave = h.get_by_label(CARD_WAVE).rect();
+    assert!(wave.left() > row.right(), "{wave:?} beside {row:?}");
+    assert!(
+        wave.left() >= side.x / 2.0 - 1.0,
+        "the right half: {wave:?}"
+    );
+    assert!(wave.top() < row.bottom(), "side by side, not under");
+}
+
+/// LB56: a long press on the card's waveform edits a marker there.
+#[test]
+fn lb56_a_long_press_on_the_card_wave_sets_a_marker() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = card_open(s);
+    let wave = h.get_by_label(CARD_WAVE).rect();
+    long_press(&mut h, wave.center());
+    h.get_by_label("Set intro end here").click();
+    h.run_steps(2);
+    let set: Vec<_> = fake
+        .take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::SetMarker { track, kind, secs } => Some((track, kind, secs)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(set.len(), 1, "{set:?}");
+    assert_eq!(set[0].0, a);
+    assert_eq!(set[0].1, fp_model::MarkerKind::IntroEnd);
+    // Alpha is 205 s long: the middle is about 102 s.
+    assert!((set[0].2.unwrap() - 102.5).abs() < 8.0, "{set:?}");
+}
+
+/// A finger held still at `at` for a second, then lifted.
+fn long_press(h: &mut H, at: egui::Pos2) {
+    let touch = |phase| egui::Event::Touch {
+        device_id: egui::TouchDeviceId(0),
+        id: egui::TouchId(0),
+        phase,
+        pos: at,
+        force: None,
+    };
+    h.event(touch(egui::TouchPhase::Start));
+    h.event(egui::Event::PointerMoved(at));
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    for _ in 0..60 {
+        h.step();
+    }
+    h.event(touch(egui::TouchPhase::End));
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run_steps(3);
+}

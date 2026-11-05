@@ -688,10 +688,16 @@ fn preview_strip(ui: &mut Ui, scene: &Scene<'_>, card_open: &mut bool) {
                 )
                 .selectable(false),
             );
+            // LB54: a stopped track is named beside its caret; the hint
+            // is for an empty strip.
+            let (text, size) = match phone_prelisten::card_view(scene) {
+                Some(v) => (v.title, 15.0),
+                None => (scene.i18n.tr("phone-library-strip-idle"), 13.0),
+            };
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(scene.i18n.tr("phone-library-strip-idle"))
-                        .font(font(13.0))
+                    egui::RichText::new(text)
+                        .font(font(size))
                         .color(theme::NEUTRAL_500),
                 )
                 .selectable(false)

@@ -825,7 +825,9 @@ card below).
   opens or closes the **pre-listen card**, while the library CUE has a track
   (it keeps it after Stop, LB33). The strip shows a caret on its right
   then, pointing up while the card is closed and down while it is open;
-  with no track it shows the hint alone and a tap does nothing. While the
+  with no track it shows the hint alone and a tap does nothing. *(Plan 10:)*
+  with a stopped track and the card closed it shows the track's title,
+  dimmed, instead of the hint. While the
   card is open the strip shows the track even when stopped (title and
   **Play**). The card stays open across tracks, other tabs and the
   selector while the app runs, and closes when the library CUE loses its

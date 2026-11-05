@@ -128,6 +128,11 @@ fn shutdown_saves_the_session_with_positions() {
     let dir = tempfile::tempdir().unwrap();
     let a = wav(dir.path(), "a.wav", 5);
     let mut r = rig(&[a], dir);
+    // An analysis landing between two autosaves would rightly write the
+    // track's row (a slow runner): it finishes first.
+    r.run_until("analysis", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
     let p = r.handle.model.load().players[0].id;
     r.handle.send(Command::Play(p));
     r.run_until("playback", |r| {
@@ -165,6 +170,11 @@ fn while_playing_only_the_players_rows_are_written() {
     let dir = tempfile::tempdir().unwrap();
     let a = wav(dir.path(), "a.wav", 5);
     let mut r = rig(&[a], dir);
+    // An analysis landing between two autosaves would rightly write the
+    // track's row (a slow runner): it finishes first.
+    r.run_until("analysis", |r| {
+        r.handle.model.load().library.iter().all(|t| t.analyzed)
+    });
     let p = r.handle.model.load().players[0].id;
     r.handle.send(Command::Play(p));
     r.run_until("playback", |r| {
