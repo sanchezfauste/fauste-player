@@ -779,11 +779,13 @@ Decided with the maintainer on 2026-11-05, after trying plan 6.
   the rows never move when a preview starts or stops and a tap cannot land
   on the neighbouring row.
 - **LB50.** Device music shown as a page of the Library tab has a header
-  with a back button and its name: *Add to <category>* when opened from a
-  list's ＋ (maintainer), *Device music* when opened from the selector *(my
-  call, for the same reason)*. The button does what the system Back does
-  (PL2: Device music goes up a folder first). While it answers a pick
-  (PL19b) it keeps its *Cancel* and shows no header.
+  with a back button and its name, *Device music*: opened from a list's ＋
+  (maintainer) the button reads *Back to the list* and returns there,
+  opened from the selector *(my call, for the same reason)* it reads *Back
+  to the categories*. The button leaves the page at once (the folder
+  breadcrumb goes up a folder); the system Back keeps PL2 and goes up a
+  folder first. While it answers a pick (PL19b) it keeps its *Cancel* and
+  shows no header.
 - **LB51.** Opening a list from the selector clears the search text
   (maintainer), so a search left in one category cannot make another look
   empty. The *Whole library* scope is kept (LB40).

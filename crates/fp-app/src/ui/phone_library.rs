@@ -133,7 +133,41 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
     match view_state.phone_library.page {
         LibraryPage::Selector => selector(ui, scene, view_state),
         LibraryPage::Tracks => tracks_page(ui, scene, view_state),
-        LibraryPage::Device => music::screen(ui, scene, view_state),
+        LibraryPage::Device => {
+            // LB50: a page of the tab has its header; a pick keeps Cancel.
+            if view_state.music.pick.is_none()
+                && device_header(ui, scene, &view_state.phone_library)
+            {
+                view_state.phone_library.back();
+                return;
+            }
+            music::screen(ui, scene, view_state);
+        }
+    }
+}
+
+/// LB50: Device music's header: back to where it was opened from (its
+/// label says where) and the page's name. True when back is tapped.
+fn device_header(ui: &mut Ui, scene: &Scene<'_>, tab: &PhoneLibraryView) -> bool {
+    let t = scene.i18n;
+    let back = if tab.adding_to.is_some() {
+        t.tr("phone-library-back-to-list")
+    } else {
+        t.tr("phone-library-back")
+    };
+    let title = t.tr("phone-library-device-music");
+    header_bar(ui, &back, &title, None) == Some(HeaderTap::Back)
+}
+
+/// *Add to <category>*, or *Add to Uncategorised* (LB44).
+pub(crate) fn add_to_category_label(scene: &Scene<'_>, category: Option<CategoryId>) -> String {
+    let t = scene.i18n;
+    match category.and_then(|id| scene.state.categories.get(id)) {
+        Some(c) => t.tr_args(
+            "phone-library-add-to-category",
+            &[("category", c.name.clone().into())],
+        ),
+        None => t.tr("phone-library-add-to-uncategorised"),
     }
 }
 
@@ -167,16 +201,22 @@ fn selector(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
                 }
             }
         });
-    let tab = &mut view_state.phone_library;
-    match chosen {
-        Some(Row::All) => tab.open(scene, LibrarySelection::All),
-        Some(Row::Uncategorised) => tab.open(scene, LibrarySelection::Uncategorised),
-        Some(Row::Category { id, .. }) => tab.open(scene, LibrarySelection::Category(id)),
+    let opened = match chosen {
+        Some(Row::All) => Some(LibrarySelection::All),
+        Some(Row::Uncategorised) => Some(LibrarySelection::Uncategorised),
+        Some(Row::Category { id, .. }) => Some(LibrarySelection::Category(id)),
         Some(Row::Device) => {
+            let tab = &mut view_state.phone_library;
             tab.page = LibraryPage::Device;
             tab.adding_to = None;
+            None
         }
-        None => {}
+        None => None,
+    };
+    if let Some(selection) = opened {
+        view_state.phone_library.open(scene, selection);
+        // LB51: a search left in another list must not hide this one.
+        view_state.library.search.clear();
     }
 }
 
@@ -637,6 +677,17 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, selection: LibrarySelection) -> Option
             .map(|c| c.name.clone())
             .unwrap_or_default(),
     };
+    header_bar(
+        ui,
+        &t.tr("phone-library-back"),
+        &name,
+        Some(&t.tr("phone-library-add-from-device")),
+    )
+}
+
+/// A page's header: a back button labelled `back`, the `title`, and a ＋
+/// labelled `add` when given.
+fn header_bar(ui: &mut Ui, back: &str, title: &str, add: Option<&str>) -> Option<HeaderTap> {
     let mut tap = None;
     let style = TileStyle {
         border: Color32::TRANSPARENT,
@@ -650,15 +701,19 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, selection: LibrarySelection) -> Option
         touch::tapped(ui, &response)
     };
     ui.horizontal(|ui| {
-        if button(ui, &t.tr("phone-library-back"), icon::ARROW_LEFT) {
+        if button(ui, back, icon::ARROW_LEFT) {
             tap = Some(HeaderTap::Back);
         }
-        let room = touch::TARGET + ui.spacing().item_spacing.x;
+        let room = if add.is_some() {
+            touch::TARGET + ui.spacing().item_spacing.x
+        } else {
+            0.0
+        };
         let width = (ui.available_width() - room).max(0.0);
         ui.allocate_ui(vec2(width, touch::TARGET), |ui| {
             ui.add(
                 egui::Label::new(
-                    egui::RichText::new(name)
+                    egui::RichText::new(title)
                         .font(font_medium(18.0))
                         .color(theme::TEXT),
                 )
@@ -666,7 +721,9 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, selection: LibrarySelection) -> Option
                 .truncate(),
             );
         });
-        if button(ui, &t.tr("phone-library-add-from-device"), icon::PLUS) {
+        if let Some(add) = add
+            && button(ui, add, icon::PLUS)
+        {
             tap = Some(HeaderTap::Add);
         }
     });

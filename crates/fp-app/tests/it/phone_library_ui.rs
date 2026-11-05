@@ -1048,3 +1048,71 @@ fn lb49_the_rows_do_not_move_when_a_preview_starts() {
     assert!(h.query_by_label(IDLE).is_none());
     assert_eq!(h.get_by_label(&alpha).rect().top(), before);
 }
+
+const BACK_TO_LIST: &str = "Back to the list";
+
+/// LB50: Device music opened from ＋ has a back button to the list.
+#[test]
+fn lb50_device_music_from_plus_has_a_back_button() {
+    let (s, _a, _b, _gold) = with_gold();
+    let (mut h, _browser, _fake) = list_of(s, "Gold");
+    tap(&mut h, PLUS);
+    assert!(h.query_by_label("Folders").is_some(), "Device music");
+    let button = h.get_by_label(BACK_TO_LIST).rect();
+    assert!(button.height() >= 48.0, "{button:?}");
+    tap(&mut h, BACK_TO_LIST);
+    assert!(h.query_by_label("Folders").is_none());
+    assert!(h.query_by_label(PLUS).is_some(), "Gold's list");
+}
+
+/// LB50: opened from the selector, it goes back to the selector.
+#[test]
+fn lb50_device_music_from_the_selector_has_a_back_button() {
+    let (s, _rock) = with_categories();
+    let (mut h, _browser, _fake) = phone(s);
+    tap(&mut h, "Library");
+    tap(&mut h, DEVICE);
+    assert!(h.query_by_label("Folders").is_some());
+    assert!(h.query_by_label(BACK_TO_LIST).is_none());
+    tap(&mut h, BACK);
+    assert!(on_selector(&h));
+}
+
+/// LB50: a pick keeps its Cancel and shows no header.
+#[test]
+fn lb50_a_pick_shows_no_header() {
+    let (s, _rock) = with_categories();
+    let (mut h, browser, _fake) = phone(s);
+    let mode = BrowseMode::one_file(&["mp3"]).unwrap();
+    let asking = browser.clone();
+    let thread = std::thread::spawn(move || asking.browse(mode, None));
+    for _ in 0..200 {
+        h.run_steps(1);
+        if h.query_by_label("Cancel").is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(h.query_by_label("Cancel").is_some(), "the pick is shown");
+    assert!(h.query_by_label(BACK).is_none());
+    assert!(h.query_by_label(BACK_TO_LIST).is_none());
+    browser.cancel_pending();
+    h.run_steps(3);
+    thread.join().unwrap();
+}
+
+/// LB51: a list opened from the selector starts with an empty search; the
+/// *Whole library* scope stays.
+#[test]
+fn lb51_opening_another_category_clears_the_search() {
+    let (mut s, rock) = with_categories();
+    let jazz = s.categories.iter().find(|c| c.name == "Jazz").unwrap().id;
+    track(&mut s, "one", "Canción uno", "Band", Some(rock));
+    track(&mut s, "two", "Blue", "Band", Some(jazz));
+    let (mut h, _fake) = rock_list(s);
+    search(&mut h, "cancion");
+    tap(&mut h, BACK);
+    tap(&mut h, "Jazz");
+    assert!(h.query_by_label(&row("Blue", "Band")).is_some());
+    assert_eq!(h.get_by_label(SEARCH).value().as_deref(), Some(""));
+}
