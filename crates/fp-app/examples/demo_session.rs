@@ -178,10 +178,28 @@ fn library(state: &mut AppState, songs: &[PathBuf], carts: &[PathBuf]) {
             .find(|c| c.name == name && c.parent == parent)
             .map(|c| c.id)
     }
-    let music = category(state, None, "Music", Some(CartColor::Teal), TrackKind::Music);
+    let music = category(
+        state,
+        None,
+        "Music",
+        Some(CartColor::Teal),
+        TrackKind::Music,
+    );
     let pop = category(state, music, "Pop", None, TrackKind::Music);
-    let evening = category(state, music, "Evening", Some(CartColor::Violet), TrackKind::Music);
-    let jingles = category(state, None, "Jingles", Some(CartColor::Amber), TrackKind::Jingle);
+    let evening = category(
+        state,
+        music,
+        "Evening",
+        Some(CartColor::Violet),
+        TrackKind::Music,
+    );
+    let jingles = category(
+        state,
+        None,
+        "Jingles",
+        Some(CartColor::Amber),
+        TrackKind::Jingle,
+    );
     let (first, second) = songs.split_at(songs.len() / 2);
     let carts = carts.get(..6.min(carts.len())).unwrap_or_default();
     for (paths, category) in [(carts, jingles), (first, pop), (second, evening)] {
