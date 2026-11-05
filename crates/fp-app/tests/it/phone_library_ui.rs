@@ -1116,3 +1116,102 @@ fn lb51_opening_another_category_clears_the_search() {
     assert!(h.query_by_label(&row("Blue", "Band")).is_some());
     assert_eq!(h.get_by_label(SEARCH).value().as_deref(), Some(""));
 }
+
+fn media(path: &str) -> MediaFile {
+    MediaFile {
+        path: PathBuf::from(path),
+        title: None,
+        artist: None,
+        album: None,
+        duration_secs: None,
+    }
+}
+
+/// LB53: whole path components, in the list's order.
+#[test]
+fn lb53_folder_files_take_only_what_is_under_the_folder() {
+    use fp_app::ui::phone_library::folder_files;
+    let files = [
+        media("/sd/Rock/b.mp3"),
+        media("/sd/Rocks/c.mp3"),
+        media("/sd/Rock/live/a.mp3"),
+        media("/sd/Other/d.mp3"),
+    ];
+    assert_eq!(
+        folder_files(&files, std::path::Path::new("/sd/Rock")),
+        [
+            PathBuf::from("/sd/Rock/b.mp3"),
+            PathBuf::from("/sd/Rock/live/a.mp3")
+        ]
+    );
+    assert!(folder_files(&[], std::path::Path::new("/sd/Rock")).is_empty());
+}
+
+const REREAD: &str = "Re-read the device folder";
+
+/// Rock takes its files from `/sd/Rock`; the device lists two files there
+/// and one in `/sd/Rocks`. A phone on Rock's list.
+fn rock_with_folder(files: Vec<MediaFile>) -> (H, Arc<Fake>, CategoryId) {
+    let (mut s, rock) = with_categories();
+    fp_model::apply(
+        &mut s,
+        Command::SetWatchedFolder {
+            category: rock,
+            folder: Some(PathBuf::from("/sd/Rock")),
+        },
+    )
+    .unwrap();
+    let (mut h, browser, fake) = phone(s);
+    browser.set_files(files);
+    tap(&mut h, "Library");
+    tap(&mut h, "Rock");
+    fake.take_sent();
+    (h, fake, rock)
+}
+
+#[test]
+fn lb53_reread_adds_the_files_under_the_folder() {
+    let files = vec![
+        media("/sd/Rock/b.mp3"),
+        media("/sd/Rocks/c.mp3"),
+        media("/sd/Rock/a.mp3"),
+    ];
+    let (mut h, fake, rock) = rock_with_folder(files);
+    let button = h.get_by_label(REREAD).rect();
+    assert!(button.height() >= 48.0, "{button:?}");
+    tap(&mut h, REREAD);
+    assert_eq!(
+        added(&fake),
+        [(
+            vec![
+                PathBuf::from("/sd/Rock/b.mp3"),
+                PathBuf::from("/sd/Rock/a.mp3")
+            ],
+            Some(rock)
+        )]
+    );
+    assert!(
+        h.query_by_label_contains("Files read from /sd/Rock: 2")
+            .is_some()
+    );
+}
+
+#[test]
+fn lb53_reread_with_no_files_says_so() {
+    let (mut h, fake, _rock) = rock_with_folder(vec![media("/sd/Rocks/c.mp3")]);
+    tap(&mut h, REREAD);
+    assert!(added(&fake).is_empty());
+    assert!(
+        h.query_by_label_contains("No music files in /sd/Rock on this device")
+            .is_some()
+    );
+}
+
+#[test]
+fn lb53_a_category_without_a_folder_has_no_reread() {
+    let (s, _rock) = with_categories();
+    let (mut h, _browser, _fake) = phone(s);
+    tap(&mut h, "Library");
+    tap(&mut h, "Rock");
+    assert!(h.query_by_label(REREAD).is_none());
+}

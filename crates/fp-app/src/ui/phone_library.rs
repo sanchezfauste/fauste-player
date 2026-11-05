@@ -9,6 +9,7 @@
 //! category (LB44).
 
 use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 use egui::{
     Align, Align2, Color32, Layout, Rect, Role, Sense, Stroke, StrokeKind, Ui, UiBuilder,
@@ -24,6 +25,7 @@ use super::app::{Scene, ViewState};
 use super::glyphs::{self, TransportAction};
 use super::library::confirm::Removal;
 use super::library::menu::{MenuOutcome, MenuScope};
+use super::media_browser::{MediaBrowser, MediaFile};
 use super::player::paused_play_style;
 use super::widgets::{self, TileStyle, font, font_medium};
 use super::{format, library, music, theme, touch, track_cells, view};
@@ -156,7 +158,7 @@ fn device_header(ui: &mut Ui, scene: &Scene<'_>, tab: &PhoneLibraryView) -> bool
         t.tr("phone-library-back")
     };
     let title = t.tr("phone-library-device-music");
-    header_bar(ui, &back, &title, None) == Some(HeaderTap::Back)
+    header_bar(ui, &back, &title, None, None) == Some(HeaderTap::Back)
 }
 
 /// *Add to <category>*, or *Add to Uncategorised* (LB44).
@@ -402,10 +404,25 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         .phone_library
         .shown
         .unwrap_or(scene.state.library_view.selection);
-    match header(ui, scene, selection) {
+    // LB53: a category with a device folder re-reads it from the header.
+    let folder = match selection {
+        LibrarySelection::Category(id) if view_state.media.is_some() => scene
+            .state
+            .categories
+            .get(id)
+            .filter(|c| c.watched_folder.is_some())
+            .map(|c| c.id),
+        _ => None,
+    };
+    match header(ui, scene, selection, folder.is_some()) {
         Some(HeaderTap::Back) => {
             view_state.phone_library.back();
             return;
+        }
+        Some(HeaderTap::Reread) => {
+            if let Some(id) = folder {
+                reread_folder(scene, view_state, id);
+            }
         }
         // LB44: Device music adds to the list's category.
         Some(HeaderTap::Add) => {
@@ -651,6 +668,8 @@ enum HeaderTap {
     Back,
     /// ＋: Device music, to add to the list's category (LB44).
     Add,
+    /// ↻: re-read the category's device folder (LB53).
+    Reread,
 }
 
 /// What the menu of the row `held` acts on (LB43): the row alone while
@@ -664,8 +683,14 @@ fn menu_targets(ticked: &[TrackId], held: TrackId) -> Vec<TrackId> {
     targets
 }
 
-/// The list's header: the back button, the list's name and its ＋ (LB44).
-fn header(ui: &mut Ui, scene: &Scene<'_>, selection: LibrarySelection) -> Option<HeaderTap> {
+/// The list's header: the back button, the list's name, its ↻ when the
+/// category has a device folder (LB53) and its ＋ (LB44).
+fn header(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    selection: LibrarySelection,
+    reread: bool,
+) -> Option<HeaderTap> {
     let t = scene.i18n;
     let name = match selection {
         LibrarySelection::All => t.tr("library-tree-all"),
@@ -677,17 +702,25 @@ fn header(ui: &mut Ui, scene: &Scene<'_>, selection: LibrarySelection) -> Option
             .map(|c| c.name.clone())
             .unwrap_or_default(),
     };
+    let reread = reread.then(|| t.tr("phone-library-reread-folder"));
     header_bar(
         ui,
         &t.tr("phone-library-back"),
         &name,
+        reread.as_deref(),
         Some(&t.tr("phone-library-add-from-device")),
     )
 }
 
-/// A page's header: a back button labelled `back`, the `title`, and a ＋
-/// labelled `add` when given.
-fn header_bar(ui: &mut Ui, back: &str, title: &str, add: Option<&str>) -> Option<HeaderTap> {
+/// A page's header: a back button labelled `back`, the `title`, then a ↻
+/// labelled `reread` and a ＋ labelled `add` when given.
+fn header_bar(
+    ui: &mut Ui,
+    back: &str,
+    title: &str,
+    reread: Option<&str>,
+    add: Option<&str>,
+) -> Option<HeaderTap> {
     let mut tap = None;
     let style = TileStyle {
         border: Color32::TRANSPARENT,
@@ -704,11 +737,8 @@ fn header_bar(ui: &mut Ui, back: &str, title: &str, add: Option<&str>) -> Option
         if button(ui, back, icon::ARROW_LEFT) {
             tap = Some(HeaderTap::Back);
         }
-        let room = if add.is_some() {
-            touch::TARGET + ui.spacing().item_spacing.x
-        } else {
-            0.0
-        };
+        let buttons = usize::from(reread.is_some()) + usize::from(add.is_some());
+        let room = buttons as f32 * (touch::TARGET + ui.spacing().item_spacing.x);
         let width = (ui.available_width() - room).max(0.0);
         ui.allocate_ui(vec2(width, touch::TARGET), |ui| {
             ui.add(
@@ -721,6 +751,11 @@ fn header_bar(ui: &mut Ui, back: &str, title: &str, add: Option<&str>) -> Option
                 .truncate(),
             );
         });
+        if let Some(reread) = reread
+            && button(ui, reread, icon::ARROWS_CLOCKWISE)
+        {
+            tap = Some(HeaderTap::Reread);
+        }
         if let Some(add) = add
             && button(ui, add, icon::PLUS)
         {
@@ -728,6 +763,53 @@ fn header_bar(ui: &mut Ui, back: &str, title: &str, add: Option<&str>) -> Option
         }
     });
     tap
+}
+
+/// The device files under `folder` (and its subfolders), in the list's
+/// order: whole path components, so `/sd/Rock` does not take `/sd/Rocks`.
+pub fn folder_files(files: &[MediaFile], folder: &Path) -> Vec<PathBuf> {
+    files
+        .iter()
+        .filter(|f| f.path != folder && f.path.starts_with(folder))
+        .map(|f| f.path.clone())
+        .collect()
+}
+
+/// LB53: adds every device file under `category`'s device folder to it,
+/// with *Add to library*'s rules, and says how many there were (or that
+/// there were none: no permission, an emptied folder).
+pub(crate) fn reread_folder(scene: &Scene<'_>, view_state: &mut ViewState, category: CategoryId) {
+    let Some(folder) = scene
+        .state
+        .categories
+        .get(category)
+        .and_then(|c| c.watched_folder.clone())
+    else {
+        return;
+    };
+    let files = view_state
+        .media
+        .as_ref()
+        .map(MediaBrowser::files)
+        .unwrap_or_default();
+    let paths = folder_files(&files, &folder);
+    let shown = folder.display().to_string();
+    let t = scene.i18n;
+    let text = if paths.is_empty() {
+        t.tr_args("library-reread-none", &[("folder", shown.into())])
+    } else {
+        t.tr_args(
+            "library-reread-done",
+            &[("folder", shown.into()), ("count", paths.len().into())],
+        )
+    };
+    if !paths.is_empty() {
+        scene.ctl.send(Command::AddToLibrary {
+            paths,
+            category: Some(category),
+        });
+    }
+    view_state.set_notice(text, scene.time);
 }
 
 /// The search over the list (LB40), the library window's search text.
