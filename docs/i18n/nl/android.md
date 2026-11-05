@@ -45,6 +45,7 @@ toont de statusbalk onderaan zich alleen wanneer hij iets te melden heeft.
 <img src="../../images/android/2-carts.png" width="180" alt="Cartwall op een telefoon: de pagina General rechtop gedraaid, twee carts per rij">
 <img src="../../images/android/3-playlists.png" width="180" alt="Playlists op een telefoon: de chips P1 tot P4, de playlisttabbladen, de nummerlijst en de kaart van de speler onderaan">
 <img src="../../images/android/4-music.png" width="180" alt="Muziek op het apparaat op een telefoon: de map Demo met drie aangevinkte nummers en de balk om ze toe te voegen aan de playlist Morning van P1">
+<img src="../../images/android/5-library.png" width="180" alt="Het tabblad Bibliotheek op een telefoon: de nummers van de categorie Music, elk met een vakje om aan te vinken en een koptelefoon om voor te beluisteren, en daaronder de voorbeluisterkaart met de golfvorm van het nummer en zijn markers">
 </p>
 
 - *Live:* elke speler als kaart, en de cartwall. Elke kaart heeft, van boven naar
@@ -168,7 +169,32 @@ over naar dat nummer. Een slanke strook boven de lijst toont de titel, de
 resterende tijd, **Pauze**/**Play** en **Stop** terwijl het speelt (of gepauzeerd
 is), en anders een hint: hij behoudt altijd zijn plaats, zodat de rijen niet
 verspringen wanneer een voorbeluistering begint of stopt. De 🎧 is gedimd wanneer
-het bestand ontbreekt of niet kan worden afgespeeld. De voorbeluistering stopt
+het bestand ontbreekt of niet kan worden afgespeeld.
+
+**De voorbeluisterkaart.** Tik op de strook (naast zijn knoppen) om de
+kaart onder de lijst te openen, met de golfvorm van het nummer zoals op de
+kaart van een speler in Playlists; de pijl rechts op de strook toont of hij
+open is. Tik nog eens op de strook, of druk op Terug, om hem te sluiten; het
+voorbeluisteren gaat door. De pijl in de kop van de lijst gaat meteen terug
+naar de categorieën en laat de kaart open voor de volgende lijst. Op de
+kaart:
+
+- een tik op de golfvorm springt daarheen of legt, gestopt, vast waar
+  **Voorbeluisteren** begint;
+- ingedrukt houden zet op dat punt een marker (cue-in, einde intro, begin
+  outro, MIX, cue-out) of verwijdert er een die je zette. Markers horen bij
+  het nummer, dus de wijziging is zichtbaar in elke playlist en op de
+  desktop;
+- knijpen zoomt, slepen verschuift een ingezoomd beeld en **Volledig
+  beeld** toont weer het hele nummer;
+- onder de golfvorm staan de tijden, **Voorbeluisteren**, **Pauze**,
+  **Stop** en de meter.
+
+De lijst blijft boven de kaart (links met de telefoon gekanteld), zodat de
+🎧 van een andere rij de kaart nog steeds naar dat nummer schakelt. Het
+hangslot stopt de sprongen en markerwijzigingen van de golfvorm, zoals bij de
+spelers.
+De voorbeluistering stopt
 wanneer zijn nummer de bibliotheek verlaat en wanneer je het tabblad Bibliotheek
 verlaat (voor een ander tabblad, of met Terug); op de categorieën of op Muziek op
 het apparaat gaat hij door, maar zijn strook verschijnt alleen op de nummerlijst.
@@ -209,8 +235,9 @@ opnieuw inlezen** in haar menu). Elk bestand dat Muziek op het apparaat in de ma
 en haar submappen toont, wordt aan de categorie toegevoegd, met de regels
 hierboven (een bestand dat al in een andere categorie zit, behoudt die), en een
 melding zegt hoeveel bestanden zijn gelezen. Bestanden die de map hebben verlaten,
-blijven in de bibliotheek; **Opnieuw analyseren** markeert die waarvan het bestand
-weg is als ontbrekend. **Apparaatmap wijzigen…** en **Apparaatmap vergeten** staan
+blijven in de bibliotheek, gemarkeerd als ontbrekend, en worden weer normaal wanneer ze
+terugkomen (als Muziek op het apparaat niets toont, bijvoorbeeld zonder
+toestemming, wordt niets gemarkeerd). **Apparaatmap wijzigen…** en **Apparaatmap vergeten** staan
 in hetzelfde menu; één map hoort bij één categorie.
 
 ### Muziek op het apparaat {#device-music}

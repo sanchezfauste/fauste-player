@@ -9,6 +9,8 @@ de cartouches. C'est une fenêtre sur l'ordinateur et sur une tablette ; un
 téléphone montre la bibliothèque dans son onglet **Bibliothèque** à la place
 (voir [Sur un téléphone](#on-a-phone)).
 
+![La fenêtre de la bibliothèque : le bandeau de pré-écoute avec la forme d'onde de la piste sélectionnée, l'arbre des catégories avec Music (et ses sous-catégories Pop et Evening) sélectionnée, et le tableau de ses pistes avec leur catégorie et leur type](../../images/guide/library.png)
+
 ## Ouvrir la fenêtre {#opening-the-window}
 
 Cliquez sur la tuile **Bibliothèque** dans la barre supérieure. Elle est
@@ -77,6 +79,8 @@ La même arborescence se trouve dans **Paramètres → Bibliothèque**, pour cr�
 renommer, recolorer, changer le type, déplacer et supprimer des catégories
 sans ouvrir la fenêtre (elle n'a ni *Tous les titres*, ni *Sans catégorie*,
 ni sélection).
+
+![Paramètres, Bibliothèque : l'arbre des catégories avec Music, ses sous-catégories Pop et Evening, et Jingles, chacune avec son nombre de pistes](../../images/guide/settings-library.png)
 
 ## Dossiers surveillés {#watched-folders}
 

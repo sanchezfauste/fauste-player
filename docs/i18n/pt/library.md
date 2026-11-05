@@ -8,6 +8,8 @@ envia-as para as listas e para a cartucheira. É uma janela no computador e
 num tablet; um telemóvel mostra a biblioteca no seu separador **Biblioteca**
 (ver [Num telemóvel](#on-a-phone)).
 
+![A janela da biblioteca: a faixa de pré-escuta com a forma de onda da faixa selecionada, a árvore de categorias com Music (e as suas subcategorias Pop e Evening) selecionada, e a tabela das suas faixas com a categoria e o tipo](../../images/guide/library.png)
+
 ## Abrir a janela {#opening-the-window}
 
 Clique no mosaico **Biblioteca** na barra superior. Está aceso enquanto a
@@ -69,6 +71,8 @@ alguma estiver no ar; um aviso diz o que está a tocar.
 A mesma árvore está em **Definições → Biblioteca**, para criar, mudar o nome,
 recolorir, mudar o tipo, mover e eliminar categorias sem abrir a janela (não
 tem *Todas as faixas*, *Sem categoria* nem seleção).
+
+![Definições, Biblioteca: a árvore de categorias com Music, as suas subcategorias Pop e Evening, e Jingles, cada uma com o seu número de faixas](../../images/guide/settings-library.png)
 
 ## Pastas vigiadas {#watched-folders}
 

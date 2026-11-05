@@ -9,6 +9,8 @@ bidaltzen ditu. Mahaigainean eta tableta batean leiho bat da; telefono batek
 liburutegia bere **Liburutegia** fitxan erakusten du horren ordez (ikus
 [Telefono batean](#on-a-phone)).
 
+![Liburutegiaren leihoa: aurrez entzuteko zerrenda hautatutako pistaren uhin-formarekin, kategorien zuhaitza Music hautatuta (bere Pop eta Evening azpikategoriekin), eta bere pisten taula kategoria eta motarekin](../../images/guide/library.png)
+
 ## Leihoa irekitzea {#opening-the-window}
 
 Egin klik goiko barrako **Liburutegia** lauzan. Piztuta dago leihoa irekita
@@ -75,6 +77,8 @@ haietako bat airean dagoen bitartean; ohar batek zer jotzen ari den esaten du.
 Zuhaitz bera **Ezarpenak → Liburutegia** atalean dago, kategoriak sortzeko,
 izenez aldatzeko, koloreztatzeko, mota aldatzeko, mugitzeko eta ezabatzeko
 leihoa ireki gabe (ez du *Pista guztiak*, *Kategoriarik gabe* edo hautapenik).
+
+![Ezarpenak, Liburutegia: kategorien zuhaitza Music, bere Pop eta Evening azpikategoriak, eta Jingles, bakoitza bere kopuruarekin](../../images/guide/settings-library.png)
 
 ## Zaindutako karpetak {#watched-folders}
 

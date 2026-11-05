@@ -48,6 +48,7 @@ cando ten algo que dicir.
 <img src="../../images/android/2-carts.png" width="180" alt="Cartucheira nun teléfono: a páxina General en vertical, dous cartuchos por fila">
 <img src="../../images/android/3-playlists.png" width="180" alt="Listas nun teléfono: os chips de P1 a P4, as lapelas das listas, a lista de pistas e a tarxeta do reprodutor na parte de abaixo">
 <img src="../../images/android/4-music.png" width="180" alt="Música do dispositivo nun teléfono: o cartafol Demo con tres cancións marcadas e a barra para engadilas á lista Morning de P1">
+<img src="../../images/android/5-library.png" width="180" alt="A lapela Biblioteca nun teléfono: as pistas da categoría Music, cada unha cunha caixa para marcar e uns auriculares para preescoitar, e debaixo a tarxeta de preescoita coa forma de onda da pista e os seus marcadores">
 </p>
 
 - *Directo:* cada reprodutor como unha tarxeta, e a cartucheira. Cada tarxeta
@@ -169,7 +170,29 @@ pista. Unha franxa fina sobre a lista mostra o título, o tempo que queda,
 **Pausa**/**Play** e **Stop** mentres soa (ou está en pausa), e unha pista
 noutro caso: sempre conserva o seu sitio, así que as filas non se moven cando
 unha preescoita comeza ou remata. Os 🎧 aparecen atenuados cando o ficheiro
-falta ou non se pode reproducir. A vista previa para cando a súa pista sae da
+falta ou non se pode reproducir.
+
+**A tarxeta de preescoita.** Toca a franxa (fóra dos seus botóns) para
+abrir a tarxeta baixo a lista, coa forma de onda da pista como na tarxeta
+dun reprodutor en Listas; a frecha á dereita da franxa indica se está
+aberta. Toca a franxa outra vez, ou preme Atrás, para pechala; a preescoita
+continúa. A frecha da cabeceira da lista volve ás categorías de inmediato e
+deixa a tarxeta aberta para a seguinte lista. Na tarxeta:
+
+- un toque na forma de onda salta a ese punto ou, coa preescoita detida,
+  fixa onde comeza **Preescoitar**;
+- unha pulsación longa pon un marcador nese punto (cue-in, fin da intro,
+  inicio do outro, MIX, cue-out) ou quita un que puxeches. Os marcadores
+  son da pista, así que o cambio vese en todas as listas e no escritorio;
+- un belisco amplía, un arrastre move unha vista ampliada e **Vista
+  completa** volve mostrar toda a pista;
+- baixo a forma de onda están os tempos, **Preescoitar**, **Pausa**,
+  **Deter** e o medidor.
+
+A lista queda enriba da tarxeta (á esquerda co teléfono deitado), así que os
+🎧 doutra fila seguen cambiando a tarxeta a esa pista. O cadeado detén os
+saltos e os cambios de marcadores da forma de onda, como nos reprodutores.
+A vista previa para cando a súa pista sae da
 biblioteca e cando saes da lapela Biblioteca (por outra lapela, ou con Atrás);
 nas categorías ou en Música do dispositivo continúa, pero a súa franxa só se
 mostra na lista de pistas.
@@ -209,8 +232,9 @@ de pistas da categoría (ou **Reler o cartafol do dispositivo** no seu menú).
 Cada ficheiro que Música do dispositivo lista no cartafol e nos seus
 subcartafoles engádese á categoría, coas regras de arriba (un ficheiro que xa
 está noutra categoría conserva a que ten), e un aviso di cantos ficheiros se
-leron. Os ficheiros que saíron do cartafol quedan na biblioteca; **Volver
-analizar** marca como ausentes aqueles cuxo ficheiro desapareceu. **Cambiar o
+leron. Os ficheiros que saíron do cartafol quedan na biblioteca, marcados como ausentes, e volven á normalidade cando
+regresan a el (cando Música do dispositivo non lista nada, por exemplo sen
+permiso, non se marca nada). **Cambiar o
 cartafol do dispositivo…** e **Esquecer o cartafol do dispositivo** están no
 mesmo menú; un cartafol pertence a unha soa categoría.
 

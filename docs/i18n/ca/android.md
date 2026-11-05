@@ -47,6 +47,7 @@ cosa per dir.
 <img src="../../images/android/2-carts.png" width="180" alt="Cartutxera en un mòbil: la pàgina General girada en vertical, dos cartutxos per fila">
 <img src="../../images/android/3-playlists.png" width="180" alt="Llistes en un mòbil: els xips de P1 a P4, les pestanyes de llista, la llista de pistes i la targeta del reproductor a baix">
 <img src="../../images/android/4-music.png" width="180" alt="Música del dispositiu en un mòbil: la carpeta Demo amb tres cançons marcades i la barra per afegir-les a la llista Morning de P1">
+<img src="../../images/android/5-library.png" width="180" alt="La pestanya Biblioteca en un mòbil: les pistes de la categoria Music, cadascuna amb una casella per marcar i uns auriculars per preescoltar, i a sota la targeta de preescolta amb la forma d'ona de la pista i els seus marcadors">
 </p>
 
 - *Directe:* cada reproductor com a targeta, i la cartutxera. Cada targeta té,
@@ -171,7 +172,32 @@ fila canvia a aquella pista. Una franja prima sobre la llista mostra el
 títol, el temps restant, **Pausa**/**Reproduir** i **Stop** mentre sona (o és
 en pausa), i una indicació altrament: sempre manté el seu lloc, de manera que
 les files no es mouen quan una preescolta comença o s'atura. El 🎧 és atenuat
-quan el fitxer és absent o no es pot reproduir. La preescolta s'atura quan la
+quan el fitxer és absent o no es pot reproduir.
+
+**La targeta de preescolta.** Toca la franja (fora dels seus botons) per
+obrir la targeta sota la llista, amb la forma d'ona de la pista com a la
+targeta d'un reproductor a Llistes; la fletxa a la dreta de la franja indica
+si és oberta. Toca la franja una altra vegada, o prem Enrere, per tancar-la;
+la preescolta continua. La fletxa de la capçalera de la llista torna a les
+categories de seguida i deixa la targeta oberta per a la llista següent. A
+la targeta:
+
+- un toc a la forma d'ona salta a aquell punt o, amb la preescolta aturada,
+  fixa on comença **Preescolta**;
+- una pulsació llarga posa un marcador en aquell punt (cue-in, final de la
+  intro, inici de l'outro, MIX, cue-out) o en treu un que has posat. Els
+  marcadors són de la pista, de manera que el canvi es veu a totes les
+  llistes i a l'escriptori;
+- un pinçament amplia, un arrossegament mou una vista ampliada i **Vista
+  completa** torna a mostrar tota la pista;
+- sota la forma d'ona hi ha els temps, **Preescolta**, **Pausa**,
+  **Atura** i el mesurador.
+
+La llista queda per sobre de la targeta (a l'esquerra amb el mòbil de
+costat), de manera que el 🎧 d'una altra fila encara canvia la targeta a
+aquella pista. El cadenat atura els salts i els canvis de marcadors de la
+forma d'ona, com als reproductors.
+La preescolta s'atura quan la
 seva pista surt de la biblioteca i quan deixes la pestanya Biblioteca (per una
 altra pestanya, o amb Enrere); a les categories o a Música del dispositiu
 continua, però la seva franja només es mostra a la llista de pistes.
@@ -212,8 +238,9 @@ seu menú). Cada fitxer que Música del dispositiu llista a la carpeta i a les
 seves subcarpetes s'afegeix a la categoria, amb les regles anteriors (un fitxer
 que ja és en una altra categoria la conserva), i un avís diu quants fitxers
 s'han llegit. Els fitxers que han sortit de la carpeta es queden a la
-biblioteca; **Tornar a analitzar** marca com a absents els que han perdut el
-fitxer. **Canvia la carpeta del dispositiu…** i **Oblida la carpeta del
+biblioteca, marcats com a absents, i tornen a la normalitat quan hi
+tornen (quan Música del dispositiu no llista res, per exemple sense permís,
+no es marca res). **Canvia la carpeta del dispositiu…** i **Oblida la carpeta del
 dispositiu** són al mateix menú; una carpeta pertany a una categoria.
 
 ### Música del dispositiu {#device-music}

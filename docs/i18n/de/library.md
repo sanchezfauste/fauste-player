@@ -9,6 +9,8 @@ auf einem Tablet ist sie ein Fenster; ein Telefon zeigt die Bibliothek
 stattdessen in seinem Tab **Bibliothek** (siehe [Auf einem
 Telefon](#on-a-phone)).
 
+![Das Bibliotheksfenster: der Vorhör-Streifen mit der Wellenform des gewählten Tracks, der Kategoriebaum mit Music (mit den Unterkategorien Pop und Evening) ausgewählt und die Tabelle ihrer Tracks mit Kategorie und Art](../../images/guide/library.png)
+
 ## Das Fenster öffnen {#opening-the-window}
 
 Klicke auf die Kachel **Bibliothek** in der oberen Leiste. Sie leuchtet,
@@ -76,6 +78,8 @@ Derselbe Baum steht unter **Einstellungen → Bibliothek**, um Kategorien
 anzulegen, umzubenennen, umzufärben, ihre Art zu ändern, sie zu verschieben und
 zu löschen, ohne das Fenster zu öffnen (er hat weder *Alle Titel* noch *Ohne
 Kategorie* noch eine Auswahl).
+
+![Einstellungen, Bibliothek: der Kategoriebaum mit Music, seinen Unterkategorien Pop und Evening, und Jingles, jede mit ihrer Anzahl](../../images/guide/settings-library.png)
 
 ## Überwachte Ordner {#watched-folders}
 

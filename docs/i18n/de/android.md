@@ -47,6 +47,7 @@ etwas zu sagen hat.
 <img src="../../images/android/2-carts.png" width="180" alt="Carts auf einem Telefon: die Seite General hochkant gedreht, zwei Carts pro Zeile">
 <img src="../../images/android/3-playlists.png" width="180" alt="Playlists auf einem Telefon: die Chips P1 bis P4, die Playlist-Tabs, die Track-Liste und unten die Karte des Players">
 <img src="../../images/android/4-music.png" width="180" alt="Musik auf dem Gerät auf einem Telefon: der Ordner Demo mit drei angehakten Songs und die Leiste, um sie zur Playlist Morning von P1 hinzuzufügen">
+<img src="../../images/android/5-library.png" width="180" alt="Der Tab Bibliothek auf einem Telefon: die Tracks der Kategorie Music, jeder mit einem Kästchen zum Anhaken und einem Kopfhörer zum Vorhören, und darunter die Vorhör-Karte mit der Wellenform des Tracks und seinen Markern">
 </p>
 
 - *Live:* jeder Player als Karte, und die Cartwall. Jede Karte hat von oben nach
@@ -177,7 +178,32 @@ diesem Track. Ein schlanker Streifen über der Liste zeigt den Titel, die
 Restzeit, **Pause**/**Abspielen** und **Stopp**, solange er spielt (oder
 pausiert ist), und sonst einen Hinweis: Er behält immer seinen Platz, sodass
 sich die Zeilen nicht bewegen, wenn ein Vorhören startet oder stoppt. Das 🎧 ist
-abgeblendet, wenn die Datei fehlt oder nicht gespielt werden kann. Die Vorschau
+abgeblendet, wenn die Datei fehlt oder nicht gespielt werden kann.
+
+**Die Vorhör-Karte.** Tippe auf den Streifen (neben seinen Schaltflächen),
+um die Karte unter der Liste zu öffnen, mit der Wellenform des Tracks wie auf
+der Karte eines Players in Playlists; der Pfeil rechts am Streifen zeigt, ob
+sie offen ist. Tippe noch einmal auf den Streifen oder drücke Zurück, um sie
+zu schließen; das Vorhören geht weiter. Der Pfeil in der Kopfzeile der Liste
+geht sofort zu den Kategorien zurück und lässt die Karte für die nächste
+Liste offen. Auf der Karte:
+
+- ein Tipp auf die Wellenform springt dorthin oder legt, wenn gestoppt,
+  fest, wo **Vorhören** beginnt;
+- langes Drücken setzt an dieser Stelle einen Marker (Cue-in, Intro-Ende,
+  Outro-Anfang, MIX, Cue-out) oder entfernt einen, den du gesetzt hast.
+  Marker gehören zum Track, die Änderung zeigt sich also in jeder Playlist
+  und auf dem Desktop;
+- ein Zusammenziehen zoomt, ein Ziehen verschiebt eine gezoomte Ansicht und
+  **Gesamtansicht** zeigt wieder den ganzen Track;
+- unter der Wellenform stehen die Zeiten, **Vorhören**, **Pause**,
+  **Stopp** und das Meter.
+
+Die Liste bleibt über der Karte (links, wenn das Telefon quer liegt), sodass
+das 🎧 einer anderen Zeile die Karte weiterhin auf diesen Track wechselt. Das
+Vorhängeschloss stoppt die Sprünge und Markeränderungen der Wellenform, wie
+bei den Playern.
+Die Vorschau
 stoppt, wenn ihr Track die Bibliothek verlässt und wenn du den Tab Bibliothek
 verlässt (für einen anderen Tab oder mit Zurück); in den Kategorien oder in
 Musik auf dem Gerät geht sie weiter, aber ihr Streifen erscheint nur in der
@@ -219,8 +245,9 @@ kopiert, tippe auf das **↻** im Kopf der Track-Liste der Kategorie (oder auf
 Gerät im Ordner und seinen Unterordnern auflistet, wird der Kategorie mit den
 obigen Regeln hinzugefügt (eine Datei, die schon in einer anderen Kategorie ist,
 behält sie), und ein Hinweis sagt, wie viele Dateien gelesen wurden. Dateien, die
-den Ordner verlassen haben, bleiben in der Bibliothek; **Neu analysieren**
-markiert die, deren Datei weg ist, als fehlend. **Geräteordner ändern…** und
+den Ordner verlassen haben, bleiben in der Bibliothek, als fehlend markiert, und werden wieder normal, wenn sie
+zurückkehren (listet Musik auf dem Gerät nichts auf, etwa ohne
+Berechtigung, wird nichts markiert). **Geräteordner ändern…** und
 **Geräteordner vergessen** stehen im selben Menü; ein Ordner gehört zu einer
 Kategorie.
 

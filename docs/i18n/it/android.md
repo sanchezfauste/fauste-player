@@ -47,6 +47,7 @@ ha qualcosa da dire.
 <img src="../../images/android/2-carts.png" width="180" alt="Cartwall su un telefono: la pagina General in verticale, due cart per riga">
 <img src="../../images/android/3-playlists.png" width="180" alt="Playlist su un telefono: le etichette da P1 a P4, le schede della playlist, l'elenco dei brani e la scheda del lettore in basso">
 <img src="../../images/android/4-music.png" width="180" alt="La musica del dispositivo su un telefono: la cartella Demo con tre brani spuntati e la barra per aggiungerli alla playlist Morning di P1">
+<img src="../../images/android/5-library.png" width="180" alt="La scheda Libreria su un telefono: i brani della categoria Music, ciascuno con una casella da spuntare e le cuffie per il preascolto, e sotto la scheda di preascolto con la forma d'onda del brano e i suoi marker">
 </p>
 
 - *Diretta:* ogni lettore come una scheda, e la cartwall. Ogni scheda ha,
@@ -177,7 +178,32 @@ il tempo rimanente, **Metti in pausa il preascolto**/**Preascolto** e **Ferma
 il preascolto** mentre suona (o è in pausa), e un suggerimento altrimenti:
 mantiene sempre il suo posto, così le righe non si spostano quando un
 preascolto parte o si ferma. Le 🎧 sono attenuate quando il file manca o non
-si può riprodurre. L'anteprima si ferma quando il suo brano lascia la
+si può riprodurre.
+
+**La scheda di preascolto.** Tocca la striscia (fuori dai suoi pulsanti)
+per aprire la scheda sotto l'elenco, con la forma d'onda del brano come
+sulla scheda di un lettore in Playlist; la freccia a destra della striscia
+indica se è aperta. Tocca di nuovo la striscia, o premi Indietro, per
+chiuderla; il preascolto continua. La freccia nell'intestazione dell'elenco
+torna subito alle categorie e lascia la scheda aperta per l'elenco
+successivo. Sulla scheda:
+
+- un tocco sulla forma d'onda salta in quel punto o, da fermo, imposta da
+  dove parte **Preascolto**;
+- una pressione prolungata imposta un marker in quel punto (cue-in, fine
+  dell'intro, inizio dell'outro, MIX, cue-out) o ne rimuove uno che hai
+  impostato. I marker appartengono al brano, quindi la modifica si vede in
+  tutte le playlist e sul desktop;
+- un pizzico ingrandisce, un trascinamento sposta una vista ingrandita e
+  **Vista completa** mostra di nuovo tutto il brano;
+- sotto la forma d'onda ci sono i tempi, **Preascolto**, **Pausa**,
+  **Ferma** e il misuratore.
+
+L'elenco resta sopra la scheda (a sinistra con il telefono in orizzontale),
+così le 🎧 di un'altra riga passano ancora la scheda a quel brano. Il
+lucchetto ferma i salti e le modifiche ai marker della forma d'onda, come
+sui lettori.
+L'anteprima si ferma quando il suo brano lascia la
 libreria e quando lasci la scheda Libreria (per un'altra scheda, o con
 Indietro); sulle categorie o su Musica del dispositivo continua, ma la sua
 striscia compare solo sull'elenco dei brani.
@@ -218,8 +244,9 @@ tocca la **↻** nell'intestazione dell'elenco dei brani della categoria (o
 del dispositivo elenca nella cartella e nelle sue sottocartelle viene aggiunto
 alla categoria, con le regole qui sopra (un file già in un'altra categoria la
 mantiene), e un avviso dice quanti file sono stati letti. I file che hanno
-lasciato la cartella restano nella libreria; **Rianalizza** segna come
-mancanti quelli il cui file è sparito. **Cambia cartella del dispositivo…** e
+lasciato la cartella restano nella libreria, segnati come mancanti, e tornano normali quando vi rientrano
+(quando Musica del dispositivo non elenca nulla, per esempio senza
+permesso, non viene segnato nulla). **Cambia cartella del dispositivo…** e
 **Dimentica la cartella del dispositivo** sono nello stesso menu; una cartella
 appartiene a una sola categoria.
 
