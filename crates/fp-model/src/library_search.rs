@@ -308,17 +308,30 @@ pub fn category_counts(library: &Library, categories: &Categories) -> CategoryCo
             None => uncategorised += 1,
         }
     }
-    let by_category = categories
-        .iter()
-        .map(|c| {
-            let n = categories
-                .subtree(c.id)
-                .iter()
-                .map(|s| own.get(s).copied().unwrap_or(0))
-                .sum();
-            (c.id, n)
-        })
-        .collect();
+    // Each category's own tracks count for it and for every category above
+    // it: one walk up per category that holds tracks. A category met twice
+    // on a walk (a cycle in data not yet repaired) counts once.
+    let parents: HashMap<CategoryId, Option<CategoryId>> =
+        categories.iter().map(|c| (c.id, c.parent)).collect();
+    let mut by_category: HashMap<CategoryId, usize> =
+        categories.iter().map(|c| (c.id, 0)).collect();
+    let mut walked = HashSet::new();
+    for (&category, &n) in &own {
+        walked.clear();
+        let mut at = Some(category);
+        while let Some(id) = at {
+            let Some(&parent) = parents.get(&id) else {
+                break;
+            };
+            if !walked.insert(id) {
+                break;
+            }
+            if let Some(count) = by_category.get_mut(&id) {
+                *count += n;
+            }
+            at = parent;
+        }
+    }
     CategoryCounts {
         all: library.len(),
         uncategorised,

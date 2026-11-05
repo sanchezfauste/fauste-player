@@ -204,6 +204,37 @@ fn counts_include_subcategories() {
     assert_eq!(counts.by_category.get(&CategoryId(102)), Some(&1));
 }
 
+/// A chain of 2 000 categories, a track on each, plus a cycle a hand edit
+/// left (counted once) and a track whose category is unknown: counted in
+/// one pass, not a subtree walk per category.
+#[test]
+fn counts_of_a_deep_chain_are_quick_and_right() {
+    let n = 2_000u64;
+    let mut cats: Vec<Category> = (0..n)
+        .map(|i| cat(i + 1, (i > 0).then_some(i), "C"))
+        .collect();
+    cats.push(cat(9_001, Some(9_002), "Loop A"));
+    cats.push(cat(9_002, Some(9_001), "Loop B"));
+    let cats = Categories::from(cats);
+    let mut tracks: Vec<Track> = (1..=n)
+        .map(|i| track(i, &format!("/m/{i}.wav"), "T", "", Some(i)))
+        .collect();
+    tracks.push(track(9_001, "/m/loop.wav", "L", "", Some(9_001)));
+    tracks.push(track(9_999, "/m/lost.wav", "X", "", Some(77_777)));
+    let started = Instant::now();
+    let counts = category_counts(&library(tracks), &cats);
+    assert!(
+        started.elapsed().as_secs_f64() < 1.0,
+        "{:?}",
+        started.elapsed()
+    );
+    assert_eq!(counts.by_category.get(&CategoryId(1)), Some(&2_000));
+    assert_eq!(counts.by_category.get(&CategoryId(2_000)), Some(&1));
+    assert_eq!(counts.by_category.get(&CategoryId(9_001)), Some(&1));
+    assert_eq!(counts.by_category.get(&CategoryId(9_002)), Some(&1));
+    assert_eq!(counts.by_category.get(&CategoryId(77_777)), None);
+}
+
 fn sorted(lib: &Library, cats: &Categories, column: LibraryColumn, ascending: bool) -> Vec<u64> {
     let mut ids = lib.ids();
     sort_rows(&mut ids, lib, cats, LibrarySort { column, ascending });
