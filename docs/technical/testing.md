@@ -145,3 +145,4 @@ and Dependabot, which get no `SONAR_TOKEN`, skip it. Locally:
 rustup component add llvm-tools-preview && cargo install cargo-llvm-cov --locked
 cargo llvm-cov --workspace --html   # target/llvm-cov/html/index.html
 ```
+
