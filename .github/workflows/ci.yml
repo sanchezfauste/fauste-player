@@ -25,7 +25,7 @@ jobs:
     # report as skipped, which the required checks accept, and the pages
     # workflow still checks the guide and the site. No Rust code reads these
     # paths. Pushes to master run everything, and so does a pull request
-    # when the filter fails.
+    # when the filter or this job fails (the jobs below test for 'false').
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -52,7 +52,12 @@ jobs:
   test:
     name: test (${{ matrix.os }})
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    # A matrix job skipped as a whole reports one check named after the
+    # unexpanded matrix, never the three required ones: on a docs-only pull
+    # request the job runs on every system and skips its steps instead.
+    if: ${{ !cancelled() }}
+    env:
+      CODE: ${{ needs.changes.outputs.code != 'false' }}
     strategy:
       fail-fast: false
       matrix:
@@ -61,14 +66,16 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        if: env.CODE == 'true'
       - name: Install Linux system packages
-        if: runner.os == 'Linux'
+        if: env.CODE == 'true' && runner.os == 'Linux'
         uses: ./.github/actions/apt-install
         with:
           packages: >
             pkg-config libasound2-dev libdbus-1-dev
             libpipewire-0.3-dev libspa-0.2-dev libjack-jackd2-dev clang
       - name: Choose the audio systems to build
+        if: env.CODE == 'true'
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
@@ -77,19 +84,26 @@ jobs:
             echo "FEATURES=fp-backends/jack" >> "$GITHUB_ENV"
           fi
       - name: Install the pinned toolchain
+        if: env.CODE == 'true'
         run: rustup show active-toolchain || rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+        if: env.CODE == 'true'
       - run: cargo fmt --all --check
+        if: env.CODE == 'true'
       - run: cargo clippy --workspace --all-targets --locked --features "$FEATURES" -- -D warnings
+        if: env.CODE == 'true'
         shell: bash
       # The suite runs once, instrumented for test coverage (cargo-llvm-cov),
       # and the report goes to the `sonarqube` job. cargo-nextest runs the
       # tests of every binary at once (.config/nextest.toml, profile `ci`).
       - run: rustup component add llvm-tools-preview
+        if: env.CODE == 'true'
       - uses: taiki-e/install-action@v2
+        if: env.CODE == 'true'
         with:
           tool: cargo-llvm-cov,cargo-nextest
       - run: cargo llvm-cov nextest --no-report --workspace --locked --features "$FEATURES"
+        if: env.CODE == 'true'
         shell: bash
         env:
           NEXTEST_PROFILE: ci
@@ -99,7 +113,7 @@ jobs:
       # largest 32-bit integer, the most SonarQube reads (a hot DSP loop runs
       # billions of times).
       - name: Write the coverage report
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.CODE == 'true' }}
         continue-on-error: true
         shell: bash
         run: |
@@ -109,7 +123,7 @@ jobs:
              s{^(?:DA:\d+,|FNDA:|BRDA:[^,]+,[^,]+,[^,]+,)\K(\d+)}{$1 > 2147483647 ? 2147483647 : $1}e' \
             "lcov-$RUNNER_OS.info"
       - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.CODE == 'true' }}
         continue-on-error: true
         with:
           name: lcov-${{ runner.os }}
@@ -119,14 +133,14 @@ jobs:
       # The packaging check for the Windows GUI subsystem, on the shells
       # that run it (Git Bash on the Windows release runner).
       - name: Self-test the Windows GUI subsystem check
-        if: runner.os != 'macOS'
+        if: env.CODE == 'true' && runner.os != 'macOS'
         run: scripts/check-windows-gui.sh --self-test
         shell: bash
 
   android:
     name: android (debug APK)
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     # Mobile spec §7: the Android app builds on every change, and the
     # `unsafe` exception stays inside fp-mobile (spec §8).
     runs-on: ubuntu-latest
@@ -167,7 +181,7 @@ jobs:
     # Informative only: the analysis never blocks a pull request. Pull
     # requests from forks and Dependabot get no secrets, so they skip it.
     needs: [changes, test]
-    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     continue-on-error: true
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -194,7 +208,7 @@ jobs:
   release-baseline:
     name: release build and Linux packages on the release image
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     # The Linux archives and packages are built on ubuntu-22.04 (the oldest
     # glibc they support). This builds them all as a release would, which
     # catches a dependency that needs newer system packages, a library the
@@ -235,7 +249,7 @@ jobs:
   release-config:
     name: release bump keeps --locked builds working
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -250,7 +264,7 @@ jobs:
   fuzz-build:
     name: fuzz targets build
     needs: changes
-    if: needs.changes.outputs.code == 'true'
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
