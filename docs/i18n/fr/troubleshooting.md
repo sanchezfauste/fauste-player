@@ -6,8 +6,9 @@
    le lecteur. Si vous entendez la tonalité, vérifiez le fader de volume du
    lecteur.
 2. Si vous n'entendez rien, choisissez un autre périphérique ou une autre
-   paire de canaux. Les changements de sorties prennent effet après un
-   redémarrage : appuyez sur **Redémarrer maintenant** dans les Paramètres.
+   paire de canaux. Un changement des sorties s'applique dès que plus rien ne
+   joue dessus ; **Appliquer maintenant** dans les Paramètres l'applique
+   aussitôt.
 3. Sous Linux, préférez **PipeWire** ou **PulseAudio** dans Paramètres →
    Sorties audio → Système audio. Ils partagent la carte son avec d'autres
    programmes. **ALSA** parle directement à la carte et peut la trouver
@@ -25,12 +26,25 @@
 ## Bit-perfect {#bit-perfect}
 
 - **Le badge BP reste éteint.** Vérifiez chaque condition dans
-  [Sortie bit-perfect](bit-perfect.md#the-bp-badge) : volume à 100 %, aucun
-  fondu, rien d'autre sur les mêmes sorties, un fichier sans perte qui a été
-  analysé, et un périphérique tournant à la fréquence du fichier.
+  [Sortie bit-perfect](bit-perfect.md#the-bp-badge) : aucun fondu, rien
+  d'autre sur les mêmes sorties, un fichier sans perte qui a été analysé, et
+  un périphérique tournant à la fréquence du fichier.
 - **Un court silence avant une piste.** Le périphérique bit-perfect a été
-  rouvert à la fréquence d'échantillonnage de la piste. Gardez la
-  bibliothèque à une seule fréquence pour l'éviter.
+  rouvert à la fréquence d'échantillonnage de la piste. Cela n'arrive que
+  lorsque la fréquence change : les pistes à la même fréquence s'enchaînent
+  sans interruption. Gardez la bibliothèque à une seule fréquence pour
+  l'éviter. Voir [Ce que cela coûte](bit-perfect.md#what-it-costs).
+- **Les pistes ne se mixent pas, et PLAY ne fait pas de fondu.** Sur un
+  lecteur dont la sortie Main est bit-perfect, chaque piste est lue jusqu'à sa
+  fin puis la suivante démarre, et PLAY / SUIV. et Précédente basculent
+  aussitôt : il n'y a ni fondus enchaînés ni segues sur un tel lecteur.
+  Désactivez le bit-perfect pour le périphérique, ou déplacez le lecteur sur
+  une autre sortie, pour mixer de nouveau. Voir
+  [Ce que cela coûte](bit-perfect.md#what-it-costs).
+- **Le fader de volume ne bouge pas.** La sortie Main du lecteur est
+  bit-perfect, ce qui maintient le volume à 100 % ; l'infobulle du fader le
+  dit. Les faders MIDI et l'API à distance ne peuvent pas le bouger non plus.
+  Voir [Ce que cela coûte](bit-perfect.md#what-it-costs).
 - **Une piste est lue rééchantillonnée, et le journal indique que le
   périphérique est occupé (Linux).** Pour changer de fréquence, l'application
   ferme le périphérique puis le rouvre. À ce moment, le serveur de son
@@ -125,6 +139,52 @@ exemple quand une copie se termine. Pour le vérifier tout de suite, utilisez
 **Réanalyser** dans le menu de sa ligne, ou **Paramètres → Analyse →
 Réanalyser toutes les pistes** pour toute la bibliothèque.
 
+Un WAV ou un FLAC qui apparaît comme illisible, ou qui jouerait comme un
+bruit fort, peut être un rip de CD DTS : le fichier contient un flux DTS au
+lieu d'audio. L'application le refuse (le journal dit « encoded bitstream
+stored as PCM ») et ne décode pas le DTS. Convertissez-le d'abord en PCM
+ordinaire avec un autre outil.
+
+## Un dossier surveillé affiche un avertissement {#a-watched-folder-shows-a-warning}
+
+Une catégorie qui surveille un dossier affiche ⟳, d'une autre couleur quand le
+dossier n'est pas suivi ; survolez-le pour la raison. Voir [Dossiers
+surveillés](library.md#watched-folders).
+
+- **Introuvable ou illisible** : le disque ou le partage n'est pas monté ou
+  n'est pas joignable. Un dossier vide qui devrait contenir des pistes de la
+  bibliothèque compte aussi comme introuvable, car un partage non monté
+  ressemble souvent à cela. Rien n'est marqué ni retiré ; le dossier est
+  recherché de nouveau toutes les 30 secondes et analysé quand il apparaît. Si
+  vous avez vidé le dossier exprès, supprimez ses pistes en les sélectionnant
+  dans le tableau de la bibliothèque et en choisissant **Retirer de la
+  bibliothèque…**, ou en choisissant **Réanalyser** sur elles, ce qui marque
+  comme manquantes celles dont le fichier a disparu, afin que **Retirer les
+  pistes manquantes…** puisse les retirer.
+- **Les changements ne sont pas suivis** : le système n'a pas voulu le
+  surveiller, en général un dossier avec un très grand nombre de
+  sous-dossiers. Le dossier est quand même analysé à chaque démarrage et à
+  chaque nouvelle tentative, si bien que les nouveaux fichiers apparaissent
+  alors, et non aussitôt. Sous Linux, une arborescence plus grande que la
+  limite de surveillances par utilisateur demande un
+  `fs.inotify.max_user_watches` plus élevé (par exemple `sudo sysctl
+  fs.inotify.max_user_watches=524288` ; rendez-le permanent dans
+  `/etc/sysctl.d/`).
+- **Pas un chemin complet** : le dossier enregistré a été modifié à la main en
+  un chemin qui n'est pas complet. Choisissez **Changer le dossier
+  surveillé…** pour le choisir de nouveau.
+- **Un partage réseau n'affiche aucun avertissement, mais les fichiers
+  ajoutés depuis un autre ordinateur n'apparaissent pas** : sur un partage
+  réseau (SMB/CIFS, NFS), le système accepte en général la surveillance mais
+  ne signale que les changements faits depuis cet ordinateur. Les changements
+  faits ailleurs sont vus au prochain démarrage, pas pendant que l'application
+  tourne.
+- **Un dossier avec des milliers de fichiers** met un moment à être analysé au
+  démarrage ; la progression de l'analyse le montre.
+- Les pistes dont le fichier a quitté un dossier surveillé restent dans la
+  bibliothèque, marquées comme manquantes. Retirez-les avec **Retirer les
+  pistes manquantes…** dans le menu de la catégorie.
+
 ## Coupures audio {#audio-dropouts}
 
 La barre d'état avertit pendant 5 secondes après chaque coupure que
@@ -137,12 +197,63 @@ avec le nombre survenu. Tous les systèmes audio ne signalent pas les xruns
 (PulseAudio non ; le mode exclusif de Windows non).
 
 
-- Augmentez la **taille du tampon** dans les Paramètres (et appuyez sur
-  **Redémarrer maintenant**).
+- Augmentez la **taille du tampon** dans les Paramètres (elle s'applique dès
+  que plus rien ne joue sur ce périphérique, ou aussitôt avec **Appliquer
+  maintenant**).
+- Via un serveur de son (PulseAudio, le périphérique ALSA `default`), chaque
+  sortie demande déjà au moins 50 ms quelle que soit la taille du tampon, afin
+  qu'un ordinateur occupé ne s'entende pas ; les Paramètres l'indiquent à côté
+  de la latence. Sur un ordinateur ancien ou très chargé, augmentez
+  `shared_buffer_ms` dans la section `outputs` du fichier de configuration
+  (par exemple à 100). Le système garde environ deux de ces blocs en file, si
+  bien que les boutons des cartouches et de lecture réagissent alors environ
+  deux fois plus tard que l'augmentation. Pour la sortie d'antenne, l'entrée
+  matérielle propre au périphérique (`hw:` sous Linux) évite tout à fait le
+  serveur de son.
 - Sous Linux, autorisez l'ordonnancement temps réel. L'application le demande
-  au système via rtkit (D-Bus). L'appartenance au groupe `audio` avec une
-  limite `rtprio` fonctionne aussi.
+  au système via rtkit (D-Bus), et le journal enregistre un refus. Beaucoup de
+  bureaux le refusent aux applications.
 - Évitez les disques réseau pour la musique diffusée à l'antenne.
+
+## L'interface est lente sur un ordinateur ancien {#the-interface-is-slow-on-an-old-computer}
+
+Pendant qu'un son joue, l'interface dessine au plus 30 images par seconde
+(`max_fps` dans la section `ui` du fichier de configuration), et les clics et
+les touches reçoivent une réponse immédiate. Sur un ordinateur ancien ou
+occupé, abaissez-le (par exemple à 20) pour laisser plus de processeur à
+l'audio ; 0 dessine chaque image que l'écran montre. Les vumètres mesurent la
+même chose quelle que soit la cadence ; ils sont seulement dessinés moins
+souvent.
+
+## Les fichiers ne peuvent pas être déposés sous Linux {#files-cannot-be-dropped-on-linux}
+
+La fenêtre n'accepte les fichiers glissés depuis un gestionnaire de fichiers
+que lorsqu'elle s'exécute sous X11. Par défaut, c'est le cas, y compris sur un
+bureau Wayland (via XWayland, que tous les bureaux ont). Si
+`ui.window_system` dans `config.json` vaut `"Wayland"`, la fenêtre est une
+fenêtre Wayland native, qui peut paraître plus nette avec une mise à l'échelle
+fractionnaire de l'affichage, mais on ne peut pas y déposer de fichiers :
+utilisez plutôt **+ Ajouter**. Remettez-le sur `"Auto"` (la valeur par défaut)
+ou `"X11"` et redémarrez Fauste Player.
+
+## Un contrôleur MIDI ne répond pas {#a-midi-controller-does-not-respond}
+
+Si **Paramètres → MIDI** montre le contrôleur comme connecté mais que ses
+boutons et ses faders ne font rien, appuyez sur **Reconnecter les ports** à cet
+endroit : le programme ferme les ports MIDI et les rouvre, comme si vous
+débranchiez puis rebranchiez le contrôleur. Si cela n'aide pas, débranchez le
+contrôleur et rebranchez-le.
+
+Dans les deux cas, le journal dit ce qui s'est passé. Il liste les ports MIDI
+chaque fois qu'ils changent, chaque port ouvert et fermé (avec la raison), un
+port qui ne peut pas être ouvert (une fois, jusqu'à ce qu'il s'ouvre ou
+disparaisse), le premier message reçu sur chaque connexion, le premier message
+ignoré sur chaque connexion avec la raison (aucune association, un fader qui
+n'a pas encore atteint le volume, une action qui ne peut pas agir pour
+l'instant) et le premier message de voyant qui a échoué. Un contrôleur
+connecté qui n'enregistre jamais de premier message n'envoie rien que le
+programme reçoive. Pour chaque message ignoré et chaque nouvelle tentative
+échouée, démarrez le programme avec `RUST_LOG=info,fp_control=debug`.
 
 ## « L'interface a rencontré une erreur » {#the-interface-hit-an-error}
 
@@ -152,7 +263,23 @@ sur **Redémarrer l'interface**. Merci de la signaler avec les journaux.
 ## Journaux et rapports de plantage {#logs-and-crash-reports}
 
 Voir [Données et sauvegardes](data-and-backups.md) pour le dossier des
-journaux. Il y a un fichier journal par jour, et les 14 derniers sont
-conservés. Les rapports de plantage sont enregistrés sous le nom
-`crash-<time>.txt`. Définissez `RUST_LOG=debug` dans l'environnement pour
-plus de détails. Joignez les deux fichiers quand vous signalez un bogue.
+journaux. Il y a un fichier journal par jour. Les lignes identiques qui se
+répètent l'une après l'autre sont écrites une seule fois, suivies d'une ligne
+telle que `previous message repeated 12 times` (pendant une longue série de
+répétitions, cette ligne est écrite chaque minute). Les lignes qui diffèrent,
+par exemple parce qu'elles portent un compteur, ne sont pas regroupées. Les
+messages de connexion courants du client PulseAudio sont omis par défaut.
+Définissez `RUST_LOG=debug` dans l'environnement pour plus de détails (il
+remplace le filtre par défaut, `info,pulseaudio=warn`).
+
+Le journal est borné : le fichier d'un jour cesse de grossir à 10 Mio (sa
+dernière ligne le dit ; le reste de ce jour n'est pas journalisé, ce
+qu'entraîne un déluge de lignes différentes) et les 14 derniers fichiers sont
+conservés. Modifiez-les dans le fichier de configuration avec
+`limits.max_log_file_mb` (de 1 à 1024), `limits.max_log_files` (de 2 à 365) et
+`limits.log_repeat_summary_secs` (de 1 à 3600, 60 par défaut, la fréquence à
+laquelle une longue série de répétitions est signalée) ; ils s'appliquent au
+prochain démarrage. Les rapports de plantage sont enregistrés sous le nom
+`crash-<time>.txt` dans le même dossier et sont limités séparément
+(`limits.max_crash_reports` par exécution). Joignez les deux fichiers quand
+vous signalez un bogue.

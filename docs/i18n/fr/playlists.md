@@ -18,11 +18,28 @@ Changer d'onglet ne modifie jamais ce qui est à l'antenne ni ce qui est
 suivant. Quand une piste se termine, le lecteur continue dans la playlist qui
 contient cette piste.
 
-Les playlists se créent, se renomment et se suppriment dans les
+Le **+** à l'extrémité droite de la rangée crée une nouvelle playlist :
+saisissez un nom et appuyez sur Entrée ou sur **Créer** (Échap ou un clic à
+l'extérieur annule). La nouvelle playlist apparaît aussitôt dans les onglets
+de ce lecteur et le lecteur l'affiche. Les playlists peuvent aussi être
+créées, et se renomment et se suppriment, dans les
 [Paramètres](settings.md). La dernière playlist, et une playlist dont une
 piste est à l'antenne, ne peuvent pas être supprimées.
 
 ## Le tableau des pistes {#the-track-table}
+
+Chaque fichier que vous ajoutez à une playlist, à une cartouche ou en
+important un fichier M3U ou PLS devient une *piste* de la bibliothèque, et il
+y reste quand vous retirez son entrée, videz la cartouche ou supprimez la
+playlist : ses marqueurs, ses réglages de loudness et ses tags sont conservés
+pour la prochaine fois que vous ajoutez le fichier. Un même fichier est
+toujours une seule piste : l'ajouter deux fois, ou à une playlist et à une
+cartouche, partage partout ses marqueurs et ses réglages de loudness. Sur
+l'ordinateur, un fichier ajouté à partir de cette version est la même piste
+quel que soit le chemin qui y mène (un lien symbolique ou un `..` dans le
+chemin ne crée pas une deuxième piste). La seule exception : une piste sans
+catégorie, dont le fichier a disparu et que plus rien n'utilise, quitte la
+bibliothèque d'elle-même, avec une ligne dans le journal.
 
 ![Une playlist : pistes jouées grisées, piste à l'antenne en rouge, piste suivante en vert, et le pied de page avec le temps restant](../../images/guide/playlist.png)
 
@@ -37,6 +54,7 @@ piste est à l'antenne, ne peuvent pas être supprimées.
 | Durée | Durée de lecture, du cue-in au cue-out (le fichier entier avec **Utiliser le cue-in et le cue-out** désactivé) |
 | Intro | Durée de l'intro, de l'endroit où la piste commence à jouer jusqu'à son marqueur d'intro ; vide quand la piste n'a pas de marqueur d'intro |
 | Fichier | Le nom du fichier, avec son extension |
+| Commentaire | Le tag de commentaire, sur une seule ligne |
 
 Une nouvelle installation affiche `#`, Titre, Artiste et Durée. Les autres
 colonnes sont facultatives ; voir **Choisir les colonnes** plus bas. Une piste
@@ -106,10 +124,12 @@ Couleurs des lignes :
 | Grisée | Déjà jouée sur ce lecteur |
 | Fichier avec une croix / une icône d'avertissement | Fichier introuvable / illisible (il est ignoré) ; survolez la ligne : la bulle commence par la raison, en ambre, puis les champs habituels. Un fichier introuvable est recherché de nouveau toutes les 30 s (`tuning.missing_recheck_ms`). |
 | Flèches de rechargement à droite du titre | Analysée par une version antérieure ; elle joue quand même avec cette analyse. **Paramètres → Analyse → Analyser les pistes obsolètes** la met à jour (les pistes sur un lecteur sont mises à jour de toute façon) |
-| Sablier à droite du titre | La piste attend son analyse (survolez le sablier : *Analyse en attente*). Elle joue quand même, et le sablier disparaît à la fin de l'analyse |
+| Sablier à droite du titre | La piste attend son analyse : *En attente d’analyse* quand elle est dans la file, *Analyse en attente* quand elle n'y a pas encore été mise. Elle joue quand même, et le sablier disparaît à la fin de l'analyse. Une piste analysée remise dans la file (par **Réanalyser toutes les pistes**) l'affiche aussi |
+| Icône de forme d'onde à droite du titre | La piste est en cours d'analyse (*En cours d’analyse*) |
+| Contour lavande | La ligne sélectionnée (cliquez dessus, ou déplacez-vous avec Up et Down). Il apparaît aussi sur les lignes rouge et verte |
 | Violette | Sélectionnée |
 
-**Infobulle d'une piste.** Survolez une ligne un instant pour voir son titre, son artiste, son album, sa date, son genre, sa durée, son format (type, fréquence d'échantillonnage et profondeur en bits quand elles sont connues) et le chemin de son fichier. Un champ que le fichier n'a pas est omis. La bulle est la seule information au survol d'une ligne, et elle ne bouge jamais tant qu'elle est affichée. Pour un fichier introuvable ou illisible, elle commence par la raison.
+**Infobulle d'une piste.** Survolez une ligne un instant pour voir son titre, son artiste, son album, sa date, son genre, sa durée, son format (type, fréquence d'échantillonnage, profondeur en bits et débit moyen, par exemple 320 kbps, quand ils sont connus) et le chemin de son fichier. Un champ que le fichier n'a pas est omis. La bulle est la seule information au survol d'une ligne, et elle ne bouge jamais tant qu'elle est affichée. Pour un fichier introuvable ou illisible, elle commence par la raison.
 
 ## Souris {#mouse}
 
@@ -124,15 +144,18 @@ Couleurs des lignes :
 |---|---|
 | Lire maintenant | Démarrer cette piste aussitôt (en mixant si le lecteur est à l'antenne) |
 | Définir comme suivante | Comme le double-clic. Sur la piste à l'antenne, elle est rejouée, depuis son début, quand le passage en cours se termine (en mixant comme Répéter, sans interruption), puis le lecteur continue. Il n'agit qu'une fois. Stop à la fin, le mode SINGLE et une marque Arrêt après arrêtent quand même d'abord le lecteur. Pendant qu'un CUE tourne, il passe à la nouvelle suivante |
-| Pré-écouter sur le CUE | La jouer sur la sortie CUE (cela ouvre la fenêtre CUE). Grisé quand le lecteur n'a pas de sortie Cue distincte de sa sortie Main |
+| Pré-écouter sur le CUE | La jouer sur la sortie CUE (cela ouvre la fenêtre CUE). Grisé quand le lecteur n'a pas de sortie Cue. Sur la sortie d'antenne, elle demande d'abord tant que quelque chose y joue (voir [CUE](players.md#cue-pre-listen)) |
 | Modifier les tags… | Ouvrir l'éditeur de tags pour cette piste. **Enregistrer** écrit les modifications dans le fichier audio ; **Annuler** (ou Esc, quand aucun enregistrement n'est en cours) ferme sans écrire. L'élément est grisé, avec la raison au survol, tant que la piste est à l'antenne, sur le CUE ou sur une cartouche en lecture, tant que ses tags n'ont pas été lus, quand le fichier est introuvable, et pour les formats dont les tags ne peuvent pas être écrits (par exemple le DSD) |
-| Réanalyser | Analyser cette piste de nouveau maintenant, quel que soit son état. Un fichier corrigé qui était illisible est aussi repris tout seul (voir [Dépannage](troubleshooting.md)). Les marqueurs manuels sont conservés |
+| Réanalyser | Analyser cette piste de nouveau maintenant, quel que soit son état, en relisant le fichier (un fichier que vous avez modifié est donc mesuré de nouveau même si sa taille et sa date n'ont pas changé). Un fichier corrigé qui était illisible est aussi repris tout seul (voir [Dépannage](troubleshooting.md)). Les marqueurs manuels sont conservés |
+| Loudness… | Ouvrir la fenêtre de loudness de cette piste (ajustement et exclusion ; voir [Loudness](loudness.md)) |
+| Afficher dans la bibliothèque | Ouvrir la [fenêtre de la bibliothèque](library.md) sur la catégorie de cette piste, sa ligne étant sélectionnée. Ordinateur seulement |
+| Déplacer vers la catégorie ▸ | Classer la piste dans une catégorie, ou Sans catégorie, sans ouvrir la bibliothèque. Ordinateur seulement |
 | Ajouter des pistes en dessous… | Choisir des fichiers à insérer après cette piste |
 | Dupliquer | Insérer une copie non jouée en dessous (avec ses marques de répétition et d'arrêt après) |
 | Répéter cette piste | Cochez pour la rejouer encore et encore, sans interruption, jusqu'à ce que vous appuyiez sur PLAY (suivante), Précédente, Stop ou Stop en fondu, ou activiez Stop à la fin. Pause la maintient en répétition. Une icône de répétition s'affiche avant le titre |
 | Arrêter après cette piste | Cochez pour arrêter le lecteur quand cette piste se termine, à chaque fois qu'elle est lue (dans n'importe quel mode). Contrairement au bouton **Stop à la fin** du lecteur, la marque reste avec la piste et est enregistrée avec la playlist. L'icône d'arrêt après s'affiche avant le titre. Elle l'emporte sur Répéter |
 | Déplacer vers ▸ | La déplacer à la fin d'une autre playlist |
-| Retirer de la playlist | La retirer ; impossible tant qu'elle est à l'antenne |
+| Retirer de la playlist | La retirer de cette playlist ; impossible tant qu'elle est à l'antenne. La piste reste dans la bibliothèque (ses marqueurs et ses réglages de loudness sont conservés) |
 
 ## Modifier les tags {#editing-tags}
 
@@ -236,7 +259,13 @@ fenêtre de l'application sont ignorés.
   une liste pour les insérer à la position du dépôt. Au-dessus de l'en-tête,
   d'un bord de colonne, de la barre de défilement ou d'une fenêtre qui
   recouvre la liste, rien n'est inséré. Si le système ne signale pas la
-  position, ils vont à la fin de la liste affichée.
+  position, ils vont à la fin de la liste affichée par le dernier lecteur que
+  vous avez utilisé, ou par le premier lecteur affiché ; avec tous les
+  lecteurs masqués, rien n'est inséré et la barre d'état le dit (voir
+  [Disposition](layout.md#show-and-hide-panels)).
+  Sous Linux, déposer des fichiers demande que la fenêtre s'exécute sous X11,
+  ce qu'elle fait par défaut, y compris sur un bureau Wayland (voir
+  [Dépannage](troubleshooting.md#files-cannot-be-dropped-on-linux)).
 
 ## Pied de page {#footer}
 

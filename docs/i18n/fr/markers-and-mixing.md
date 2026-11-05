@@ -15,15 +15,19 @@ les remplace jamais.
 
 ## Modifier les marqueurs {#editing-markers}
 
-Sur la forme d'onde d'un lecteur, ou sur celle de sa fenêtre CUE (le même
-menu et les mêmes poignées ; un changement apparaît dans les deux en même
-temps) :
+Sur la forme d'onde d'un lecteur, sur celle de sa fenêtre CUE ou sur la
+[barre de pré-écoute de la fenêtre de la bibliothèque](library.md#pre-listening)
+(le même menu et les mêmes poignées ; un changement apparaît partout où la
+piste est affichée, en même temps) :
 
 - **Faites un clic droit** à l'endroit où vous voulez un marqueur et
   choisissez **Placer le cue-in ici**, **Placer la fin de l'intro ici**,
   **Placer le début de l'outro ici**, **Placer le point MIX ici** ou **Placer
   le cue-out ici**. **Rétablir les marqueurs automatiques** supprime les
   marqueurs que vous avez placés, et la piste est analysée de nouveau.
+  **Loudness…** ouvre les réglages de
+  [normalisation du loudness](loudness.md#per-track-exclude-and-trim) de la
+  piste : l'exclure, ou ajuster son gain.
 - **Maintenez Alt** (Option sous macOS) : des poignées apparaissent sur les
   marqueurs. Faites-en glisser une pour la déplacer ; le temps s'affiche
   pendant le glissement. Un glissement ne déplace jamais la tête de lecture.
@@ -89,6 +93,10 @@ modifiées, les pistes sont analysées de nouveau automatiquement.
 - **Appuyer sur PLAY pendant l'antenne :** la piste suivante démarre aussitôt
   et la piste en cours s'estompe pendant la *durée du fondu* (1 s par
   défaut).
+- **Un lecteur dont la sortie Main est bit-perfect** ignore le point MIX
+  et le mixage automatique : chaque piste est lue jusqu'à son cue-out, puis la
+  suivante démarre, et PLAY pendant l'antenne bascule aussitôt, sans fondu.
+  Voir [Ce que cela coûte](bit-perfect.md#what-it-costs).
 - **Utiliser le cue-in et le cue-out désactivé** (Paramètres → Lecteurs) :
   chaque lecteur joue chaque piste de 0 à la fin du fichier. Le cue-in et le
   cue-out, automatiques et manuels, sont conservés, et la forme d'onde les
