@@ -18,8 +18,41 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    name: changes
+    # A pull request that changes only documentation (the guide, the site,
+    # Markdown files, the Play listing) skips the Rust jobs below: they
+    # report as skipped, which the required checks accept, and the pages
+    # workflow still checks the guide and the site. No Rust code reads these
+    # paths. Pushes to master run everything, and so does a pull request
+    # when the filter fails.
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name != 'pull_request' || steps.filter.outcome != 'success' || steps.filter.outputs.code == 'true' }}
+    steps:
+      - uses: dorny/paths-filter@v4
+        id: filter
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+              - '!site/**'
+              - '!scripts/site/**'
+              - '!packaging/android/play/**'
+
   test:
     name: test (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -91,6 +124,8 @@ jobs:
 
   android:
     name: android (debug APK)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # Mobile spec §7: the Android app builds on every change, and the
     # `unsafe` exception stays inside fp-mobile (spec §8).
     runs-on: ubuntu-latest
@@ -129,8 +164,8 @@ jobs:
     name: SonarQube
     # Informative only: the analysis never blocks a pull request. Pull
     # requests from forks and Dependabot get no secrets, so they skip it.
-    needs: test
-    if: ${{ !cancelled() }}
+    needs: [changes, test]
+    if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     continue-on-error: true
     runs-on: ubuntu-latest
     env:
@@ -155,6 +190,8 @@ jobs:
 
   release-baseline:
     name: release build and Linux packages on the release image
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     # The Linux archives and packages are built on ubuntu-22.04 (the oldest
     # glibc they support). This builds them all as a release would, which
     # catches a dependency that needs newer system packages, a library the
@@ -192,6 +229,8 @@ jobs:
 
   release-config:
     name: release bump keeps --locked builds working
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -204,6 +243,8 @@ jobs:
 
   fuzz-build:
     name: fuzz targets build
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

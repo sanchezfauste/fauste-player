@@ -115,7 +115,18 @@ cargo deny check          # licences, advisories, sources
 
 fmt, clippy and tests run on Linux, Windows and macOS for pushes to `master`
 and for every pull request; `cargo deny` and the release-bump check run on
-Linux.
+Linux. A pull request that changes only documentation (`docs/`, Markdown
+files, `site/`, `scripts/site/`, the Google Play listing in
+`packaging/android/play`) skips every job but `deny`: the `changes` job
+decides, the skipped jobs count as passed for the required checks, and the
+pages workflow still checks the guide and the site. Pushes to `master` run
+everything.
+
+Every job has a timeout (`timeout-minutes`, about three times its usual
+length), so a stalled mirror, emulator or server fails it in minutes. The
+Ubuntu packages come through `.github/actions/apt-install`, which keeps the
+downloaded archives in the Actions cache: the runners' Ubuntu mirror is
+sometimes very slow (49 MB in 42 minutes once).
 
 The tests run once, instrumented by `cargo-llvm-cov` and run by
 cargo-nextest with its `ci` profile (every failure reported, no retries), so

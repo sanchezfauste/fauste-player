@@ -25,7 +25,9 @@ on:
       - scripts/package-release.sh
       - scripts/package/**
       - .github/workflows/release-build.yml
-      # Store-only files: the stores workflow tests them.
+      # Store-only files: the stores workflow tests them, and the Play
+      # listing's texts and screenshots are no part of any package.
+      - '!packaging/android/play/**'
       - '!packaging/windows/msix/**'
       - '!packaging/aur/**'
       - '!scripts/package/msix.sh'

@@ -413,6 +413,9 @@ the PE Subsystem field is not 2 (GUI); CI runs that script's `--self-test`
 **Dry run:** a pull request that touches `packaging/`, `scripts/package*`
 or `release-build.yml` runs `release-build` as a dry run: it builds every
 package, including the MSI, the dmg and the Flatpak, and uploads nothing.
+The store-only files (the MSIX, the AUR recipe, the Flathub manifest
+script) and the Google Play listing (`packaging/android/play`) do not
+start it.
 The same run can be started by hand with `dry_run` checked and any ref as
 `tag`.
 
