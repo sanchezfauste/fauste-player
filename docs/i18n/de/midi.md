@@ -19,6 +19,9 @@ eigenen Ports ab. Controller können eingesteckt oder abgezogen werden, während
 das Programm läuft: Alle paar Sekunden werden die Ports neu gesucht, und ein
 Controller, der zurückkehrt, wird anhand seines Namens verbunden, mit neu
 gesetzten Lichtern.
+**Ports neu verbinden** schließt jeden Port und öffnet ihn erneut, ohne das Kabel
+anzufassen (siehe
+[Fehlerbehebung](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 Unter Linux läuft MIDI über ALSA: Dein Benutzer muss den Sequencer
 (`/dev/snd/seq`) öffnen dürfen, meist durch die Mitgliedschaft in der Gruppe
@@ -47,13 +50,23 @@ dieser. `Esc` oder ein erneuter Klick auf den Button bricht das Lernen ab.
 - Eine Taste wirkt, wenn sie gedrückt wird (eine Taste oder ein Pad geht nach
   unten, oder ein Control Change geht durch die Mitte seines Bereichs nach
   oben), genau wie der Button des Players auf dem Bildschirm. Ein Button, der auf
-  dem Bildschirm abgeblendet ist, bewirkt nichts.
-- Ein Fader bewegt die Lautstärke auf derselben Skala wie der Fader auf dem
+  dem Bildschirm abgeblendet ist, bewirkt nichts. Eine Taste **CUE** bewirkt
+  außerdem nichts, wenn ihr Vorhören auf Sendung zu hören wäre, solange dort
+  etwas spielt: MIDI kann die Frage nicht beantworten, die der Bildschirm
+  stellt. Ein Vorhören zu stoppen funktioniert immer.
+- Ein Fader bewegt die Lautstärke auf derselben Skala (demselben Mischpult-Gesetz) wie der Fader auf dem
   Bildschirm. Um Sprünge zu vermeiden, übernimmt er erst, wenn er die aktuelle
   Lautstärke erreicht oder überschreitet (Soft Takeover); wird die Lautstärke
   auf dem Bildschirm geändert, muss der Fader sie erneut einholen. Nichts ändert
   sich, bis du ein Bedienelement bewegst: Der Start des Programms sendet nie
   etwas on Air.
+- Eine Lautstärke-Bindung eines Players, dessen Main-Ausgang
+  [bit-perfect](bit-perfect.md#what-it-costs) ist, bewirkt nichts: Seine
+  Lautstärke ist auf 100 % festgehalten. Ist der Ausgang nicht mehr
+  bit-perfect, bewege das Bedienelement ganz nach oben, um die Lautstärke wieder
+  aufzunehmen.
+- Play/Weiter und Zurück an einem solchen Player wechseln sofort, ohne
+  Überblendung. Ihre Lichter funktionieren wie gewohnt.
 - Ist **Tasten beleuchten (LED-Feedback)** eingeschaltet, leuchten gebundene
   Tasten: Play, solange der Player on Air ist, Pause blinkend, solange
   pausiert ist, CUE beim Vorhören sowie Stopp, Ausblenden, Neustart und Zurück,

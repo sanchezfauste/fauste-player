@@ -14,15 +14,18 @@ Von Hand gesetzte Marker gewinnen immer: Eine neue Analyse ersetzt sie nie.
 
 ## Marker bearbeiten {#editing-markers}
 
-In der Wellenform eines Players oder in der Wellenform seines CUE-Fensters
-(dasselbe Menü und dieselben Griffe; eine Änderung erscheint in beiden
+In der Wellenform eines Players, in der Wellenform seines CUE-Fensters oder in
+der [Vorhörleiste des Bibliotheksfensters](library.md#pre-listening) (dasselbe
+Menü und dieselben Griffe; eine Änderung erscheint überall, wo der Track ist,
 gleichzeitig):
 
 - **Rechtsklick** dorthin, wo ein Marker hin soll, und **Cue-in hier setzen**,
   **Intro-Ende hier setzen**, **Outro-Anfang hier setzen**, **MIX-Punkt hier
   setzen** oder **Cue-out hier setzen** wählen. **Marker auf automatisch
   zurücksetzen** entfernt die von dir gesetzten Marker, und der Track wird neu
-  analysiert.
+  analysiert. **Lautheit…** öffnet die Einstellungen der
+  [Lautheitsnormalisierung](loudness.md#per-track-exclude-and-trim) des Tracks:
+  ihn ausnehmen oder seine Verstärkung anpassen (Trim).
 - **Alt halten** (Option unter macOS): An den Markern erscheinen Griffe. Ziehe
   einen, um ihn zu verschieben; beim Ziehen wird die Zeit angezeigt. Ein Ziehen
   bewegt nie die Abspielposition.
@@ -84,6 +87,10 @@ werden die Tracks automatisch neu analysiert.
 - **SINGLE-Modus** oder **Stopp danach**: Der Player stoppt am Cue-out.
 - **Play drücken, während on Air:** Der nächste Track startet sofort, und der
   aktuelle wird über die *Blendzeit* (standardmäßig 1 s) ausgeblendet.
+- **Ein Player, dessen Main-Ausgang bit-perfect ist,** ignoriert den MIX-Punkt
+  und den automatischen Mix: Jeder Track spielt bis zu seinem Cue-out, dann
+  startet der nächste, und Play on Air wechselt sofort, ohne Blende. Siehe [Was
+  es kostet](bit-perfect.md#what-it-costs).
 - **Cue-in und Cue-out verwenden ausgeschaltet** (Einstellungen → Player): Jeder
   Player spielt jeden Track von 0 bis zum Ende der Datei. Cue-in und Cue-out,
   automatisch und manuell, bleiben erhalten, und die Wellenform zeichnet sie als

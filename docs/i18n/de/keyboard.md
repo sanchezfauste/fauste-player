@@ -5,7 +5,9 @@
 | `1` … `9` | Play auf den Playern 1–9 (wie ihr Play-Button) |
 | `F1` … `F12` | Carts 1–12 der angezeigten Cart-Seite starten |
 | `Ctrl+Space` | Jedes Cart und das Cart-CUE stoppen (der Button **Alle stoppen** der Cartwall) |
-| `Delete` / `Backspace` | Den ausgewählten Track aus der angezeigten Playlist entfernen (nicht, solange er on Air ist) |
+| `Up` / `Down` | Die Auswahl durch die Playlist bewegen, die der zuletzt verwendete Player zeigt (beim Start der erste sichtbare Player), wobei die Zeile in den sichtbaren Bereich scrollt. Ist nichts ausgewählt, wählt der erste Druck den nächsten Track des Players oder den ersten Track |
+| `Enter` | Den ausgewählten Track als nächsten Track des Players setzen. Drücke `Enter` ein zweites Mal auf demselben Track innerhalb der Zeit eines Doppelklicks (die Doppelklick-Verzögerung des Systems), um ihn abzuspielen, wie das Play-Kürzel des Players. Eine andere Taste, ein Klick oder ein Wechsel der Auswahl dazwischen oder ein längeres Warten machen daraus wieder ein erstes `Enter` |
+| `Delete` / `Backspace` | Den ausgewählten Track aus der angezeigten Playlist entfernen (nicht, solange er on Air ist). Das Ausblenden eines Players hebt seine Auswahl auf |
 | `Esc` | Menüs und Einstellungen schließen; den Dialog „Audio ist on Air“ abbrechen; die Auswahl aufheben |
 
 - Eine gehaltene Taste wiederholt sich nicht: Eine gehaltene `1` drückt Play
@@ -38,4 +40,4 @@ obige Tabelle wieder her. Verfügbare Aktionen, für jeden Player und jedes Cart
 - die Cartwall ein- oder ausblenden;
 - nächste oder vorherige Cart-Seite.
 
-`Delete`, `Backspace` und `Esc` lassen sich nicht ändern.
+`Delete`, `Backspace` und `Esc` lassen sich nicht ändern. `Up`, `Down` und `Enter` in der Playlist wirken nur, wenn kein Kürzel sie verwendet und kein Button und kein Schieberegler den Tastaturfokus hat.

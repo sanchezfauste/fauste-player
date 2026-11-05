@@ -18,11 +18,26 @@ Das Wechseln der Tabs ändert nie, was on Air ist oder was als Nächstes kommt.
 Endet ein Track, macht der Player in der Playlist weiter, die diesen Track
 enthält.
 
-Playlists werden in den [Einstellungen](settings.md) erstellt, umbenannt und
-gelöscht. Die letzte Playlist und eine Playlist mit einem Track on Air lassen
-sich nicht löschen.
+Das **+** am rechten Ende der Reihe legt eine neue Playlist an: Tippe einen Namen
+und drücke Enter oder **Erstellen** (Esc oder ein Klick außerhalb bricht ab). Die
+neue Playlist erscheint sofort in den Tabs dieses Players, und der Player zeigt
+sie an. Playlists können auch in den [Einstellungen](settings.md) erstellt,
+umbenannt und gelöscht werden. Die letzte Playlist und eine Playlist mit einem
+Track on Air lassen sich nicht löschen.
 
 ## Die Track-Tabelle {#the-track-table}
+
+Jede Datei, die du zu einer Playlist, einem Cart oder durch den Import einer
+M3U- oder PLS-Datei hinzufügst, wird ein *Track* der Bibliothek und bleibt dort, wenn
+du ihren Eintrag entfernst, das Cart leerst oder die Playlist löschst: Ihre
+Marker, Lautheitseinstellungen und Tags bleiben für das nächste Mal erhalten,
+wenn du die Datei hinzufügst. Dieselbe Datei ist immer ein Track: Wird sie
+zweimal oder zu einer Playlist und zu einem Cart hinzugefügt, teilt sie ihre
+Marker und Lautheitseinstellungen überall. Auf dem Desktop ist eine Datei, die ab
+dieser Version hinzugefügt wird, derselbe Track, egal über welchen Pfad man sie
+erreicht (ein Symlink oder `..` im Pfad ergibt keinen zweiten Track). Die einzige
+Ausnahme: Ein Track ohne Kategorie, dessen Datei fehlt und den nichts mehr
+verwendet, verlässt die Bibliothek von selbst, mit einer Zeile im Log.
 
 ![Eine Playlist: gespielte Tracks abgeblendet, der Track on Air rot, der nächste Track grün, und die Fußzeile mit der Restzeit](../../images/guide/playlist.png)
 
@@ -37,6 +52,7 @@ sich nicht löschen.
 | Dauer | Spieldauer, vom Cue-in bis zum Cue-out (die ganze Datei, wenn **Cue-in und Cue-out verwenden** ausgeschaltet ist) |
 | Intro | Wie lange das Intro dauert, von der Stelle, an der der Track zu spielen beginnt, bis zu seinem Intro-Marker; leer, wenn der Track keinen Intro-Marker hat |
 | Dateiname | Der Name der Datei, mit ihrer Endung |
+| Kommentar | Das Kommentar-Tag, in einer Zeile |
 
 Eine Neuinstallation zeigt `#`, Titel, Interpret und Dauer. Die anderen Spalten
 sind optional; siehe **Die Spalten wählen** weiter unten. Fehlt einem Track ein
@@ -104,12 +120,14 @@ Zeilenfarben:
 | Rotes **P2** (oder eine andere Nummer) in der Nummernspalte | On Air auf jenem Player |
 | **Grün**, mit einem Pfeil | Der nächste Track dieses Players |
 | Abgeblendet | Auf diesem Player bereits gespielt |
+| Lavendelfarbener Rahmen | Die ausgewählte Zeile (klicke sie an oder bewege dich mit Up und Down). Er erscheint auch an den roten und grünen Zeilen |
 | Datei mit Kreuz / Warnsymbol | Datei fehlt / ist unlesbar (sie wird übersprungen); fahre mit der Maus über die Zeile: Das Popup beginnt mit dem Grund, in Bernstein, dann folgen die üblichen Felder. Eine fehlende Datei wird alle 30 s erneut gesucht (`tuning.missing_recheck_ms`). |
 | Neu-laden-Pfeile rechts vom Titel | Von einer älteren Version analysiert; er spielt weiterhin mit dieser Analyse. **Einstellungen → Analyse → Veraltete Tracks analysieren** bringt ihn auf den neuesten Stand (Tracks auf einem Player werden ohnehin aktualisiert) |
-| Sanduhr rechts vom Titel | Der Track wartet auf seine Analyse (fahre mit der Maus über die Sanduhr: *Analyse ausstehend*). Er spielt trotzdem, und die Sanduhr verschwindet, wenn die Analyse fertig ist |
+| Sanduhr rechts vom Titel | Der Track wartet auf seine Analyse: *Wartet auf Analyse*, wenn er in der Warteschlange ist, *Analyse ausstehend*, wenn er noch nicht eingereiht wurde. Er spielt trotzdem, und die Sanduhr verschwindet, wenn die Analyse fertig ist. Ein analysierter Track, der erneut eingereiht wurde (durch **Alle Tracks neu analysieren**), zeigt sie ebenfalls |
+| Wellenform-Symbol rechts vom Titel | Der Track wird gerade analysiert (*Wird jetzt analysiert*) |
 | Violett | Ausgewählt |
 
-**Track-Tooltip.** Verweile einen Moment mit der Maus auf einer Zeile, um Titel, Interpret, Album, Datum, Genre, Länge, Format (Typ, Abtastrate und Bittiefe, wenn bekannt) und den Pfad ihrer Datei zu sehen. Ein Feld, das die Datei nicht hat, wird weggelassen. Das Popup ist die einzige Hover-Information an einer Zeile, und es bewegt sich nie, solange es angezeigt wird. Bei einer fehlenden oder unlesbaren Datei beginnt es mit dem Grund.
+**Track-Tooltip.** Verweile einen Moment mit der Maus auf einer Zeile, um Titel, Interpret, Album, Datum, Genre, Länge, Format (Typ, Abtastrate, Bittiefe und durchschnittliche Bitrate, zum Beispiel 320 kbps, wenn bekannt) und den Pfad ihrer Datei zu sehen. Ein Feld, das die Datei nicht hat, wird weggelassen. Das Popup ist die einzige Hover-Information an einer Zeile, und es bewegt sich nie, solange es angezeigt wird. Bei einer fehlenden oder unlesbaren Datei beginnt es mit dem Grund.
 
 ## Maus {#mouse}
 
@@ -124,15 +142,18 @@ Zeilenfarben:
 |---|---|
 | Jetzt abspielen | Diesen Track sofort starten (mit Mix, wenn der Player on Air ist) |
 | Als nächsten setzen | Wie Doppelklick. Beim Track, der on Air ist, spielt er ab seinem Anfang noch einmal, wenn der aktuelle Durchlauf endet (mit Mix wie bei Wiederholen, ohne Lücke), dann geht der Player weiter. Es wirkt einmalig. Stopp danach, der SINGLE-Modus und eine Stopp-danach-Markierung beenden den Player dennoch zuerst. Läuft ein CUE, wechselt es zum neuen nächsten Track |
-| Auf CUE vorhören | Auf dem CUE-Ausgang abspielen (es öffnet das CUE-Fenster). Abgeblendet, wenn der Player neben seinem Main-Ausgang keinen Cue-Ausgang hat |
+| Auf CUE vorhören | Auf dem CUE-Ausgang abspielen (es öffnet das CUE-Fenster). Abgeblendet, wenn der Player keinen Cue-Ausgang hat. Auf dem Sendeausgang wird zuerst gefragt, solange dort etwas spielt (siehe [CUE](players.md#cue-pre-listen)) |
 | Tags bearbeiten… | Den Tag-Editor für diesen Track öffnen. **Speichern** schreibt die Änderungen in die Audiodatei; **Abbrechen** (oder Esc, wenn kein Speichern läuft) schließt ohne zu schreiben. Der Eintrag ist abgeblendet, mit dem Grund beim Darüberfahren, solange der Track on Air ist, auf CUE oder auf einem laufenden Cart, solange seine Tags noch nicht gelesen wurden, wenn die Datei fehlt und bei Formaten, deren Tags sich nicht schreiben lassen (zum Beispiel DSD) |
-| Neu analysieren | Diesen Track jetzt noch einmal analysieren, egal in welchem Zustand. Eine reparierte Datei, die zuvor unlesbar war, wird auch von selbst erkannt (siehe [Fehlerbehebung](troubleshooting.md)). Manuelle Marker bleiben erhalten |
+| Neu analysieren | Diesen Track jetzt noch einmal analysieren, egal in welchem Zustand, wobei die Datei erneut gelesen wird (eine Datei, die du bearbeitet hast, wird also auch dann neu gemessen, wenn sich ihre Größe und ihr Datum nicht geändert haben). Eine reparierte Datei, die zuvor unlesbar war, wird auch von selbst erkannt (siehe [Fehlerbehebung](troubleshooting.md)). Manuelle Marker bleiben erhalten. Abgeblendet, mit dem Grund beim Darüberfahren, solange der Track bereits auf seine Analyse wartet oder analysiert wird |
+| Lautheit… | Das Lautheits-Popup dieses Tracks öffnen (Trim und Ausnahme; siehe [Lautheit](loudness.md)) |
+| In der Bibliothek anzeigen | Das [Bibliotheksfenster](library.md) bei der Kategorie dieses Tracks öffnen, mit seiner ausgewählten Zeile. Nur Desktop |
+| In Kategorie verschieben ▸ | Den Track in eine Kategorie oder Ohne Kategorie ablegen, ohne die Bibliothek zu öffnen. Nur Desktop |
 | Tracks darunter hinzufügen… | Dateien wählen, die nach diesem Track eingefügt werden |
 | Duplizieren | Eine ungespielte Kopie darunter einfügen (mit ihren Wiederholen- und Stopp-danach-Markierungen) |
 | Diesen Track wiederholen | Haken setzen, um ihn immer wieder ohne Lücke zu spielen, bis du Play (Weiter), Zurück, Stopp oder Ausblenden drückst oder Stopp danach einschaltest. Pause lässt ihn weiter wiederholen. Vor dem Titel erscheint ein Wiederholen-Symbol |
 | Nach diesem Track stoppen | Haken setzen, um den Player zu stoppen, wenn dieser Track endet, jedes Mal, wenn er gespielt wird (in jedem Modus). Anders als der Button **Nach dem aktuellen Track stoppen** des Players bleibt die Markierung am Track und wird mit der Playlist gespeichert. Vor dem Titel erscheint das Stopp-danach-Symbol. Es gewinnt gegenüber Wiederholen |
 | Verschieben nach ▸ | Ans Ende einer anderen Playlist verschieben |
-| Aus der Playlist entfernen | Entfernen; nicht möglich, solange er on Air ist |
+| Aus der Playlist entfernen | Aus dieser Playlist entfernen; nicht möglich, solange er on Air ist. Der Track bleibt in der Bibliothek (seine Marker und Lautheitseinstellungen bleiben erhalten) |
 
 ## Tags bearbeiten {#editing-tags}
 
@@ -230,7 +251,12 @@ ignoriert.
   der Ablageposition einzufügen. Über der Kopfzeile, einem Spaltenrand, der
   Bildlaufleiste oder einem Fenster, das die Liste verdeckt, wird nichts
   eingefügt. Meldet das System die Position nicht, landen sie am Ende der
-  angezeigten Liste.
+  Liste, die der zuletzt verwendete Player oder der erste sichtbare Player
+  anzeigt; sind alle Player ausgeblendet, wird nichts eingefügt, und die
+  Statusleiste sagt es (siehe [Layout](layout.md#show-and-hide-panels)).
+  Unter Linux braucht das Ablegen von Dateien, dass das Fenster unter X11 läuft,
+  was standardmäßig der Fall ist, auch auf einem Wayland-Desktop (siehe
+  [Fehlerbehebung](troubleshooting.md#files-cannot-be-dropped-on-linux)).
 
 ## Fußzeile {#footer}
 

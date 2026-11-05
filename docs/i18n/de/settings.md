@@ -8,50 +8,63 @@ Das Fenster hat unabhängig vom Abschnitt eine feste Größe (900 × 640, auf ei
 kleinen Bildschirm kleiner), und der Abschnitt scrollt darin. In jedem Abschnitt
 sind die Beschriftungen in einer Spalte ausgerichtet.
 
-Die Abschnitte Player, Pegelmesser, Analyse und Tastenkürzel haben in ihrer
+Die Abschnitte Player, Pegelmesser, Analyse, Lautheit und Tastenkürzel haben in ihrer
 Kopfzeile einen Button **Standardwerte wiederherstellen**. Er fragt nach einer
 Bestätigung und setzt dann nur diesen Abschnitt zurück (Player behält die Anzahl
 der Player und die Sprache; Tastenkürzel hat keinen weiteren Zurücksetzen-Button).
-Audioausgänge, Playlists, Cartwall, MIDI und Fernsteuerung haben keinen.
+Audioausgänge, Playlists, Cartwall, Bibliothek, MIDI und Fernsteuerung haben keinen.
 
-## Neustart ausstehend {#restart-pending}
+## Einstellungen ausstehend {#settings-pending}
 
-Einige Änderungen werden erst wirksam, wenn die Anwendung neu startet: das
-Audiosystem, die Abtastrate, die Puffergröße (auch die eines einzelnen Geräts),
-die Main- und Cue-Ausgänge (Player und Cartwall), die Bit-perfect-Geräte und die
-DSD-Einstellungen. Die Anzahl der Player gehört nicht dazu: Sie gilt sofort.
+Jede Einstellung gilt, während die Anwendung läuft. Das Audiosystem, die
+Abtastrate, die Puffergröße (auch die eines einzelnen Geräts), die Main- und
+Cue-Ausgänge (Player und Cartwall), die Bit-perfect-Geräte und die
+DSD-Einstellungen ändern, wie ein Ausgabegerät geöffnet wird, daher gelten sie,
+sobald das sicher ist:
+
+- Die Einstellungen eines Geräts gelten, wenn nichts auf diesem Gerät spielt:
+  Kein darauf geroutetes Player spielt, blendet aus oder hört vor (CUE, auch
+  angehalten), und kein Cart spielt darauf. Ein pausierter Player oder einer mit
+  nur geladenem Track hält ein Gerät nicht fest: Sein Track bleibt pausiert, wo
+  er war.
+- Der Ausgang eines Players oder der Cartwall wechselt, wenn dieser Player (oder
+  die Cartwall) nicht spielt; andere Player auf denselben Geräten werden nicht
+  unterbrochen.
+- Ein neues Audiosystem gilt, wenn nirgends etwas spielt.
+
+Eine wartende Änderung läuft im ersten Moment, in dem nichts spielt, was sie
+betrifft. Das kann die Lücke zwischen dem Ende eines Tracks und dem Start des
+nächsten sein: Der nächste Track startet dann um die Zeit später, die das Gerät
+zum erneuten Öffnen braucht. **Jetzt anwenden** (unten) erzwingt die Änderung
+stattdessen sofort.
 
 Eine Rate oder ein Puffer, die einem Gerät gegeben werden, zählen nur, wenn sie
 ändern, womit das Gerät geöffnet wird: Einem Gerät denselben Wert wie den
-globalen zu geben oder einen solchen Wert zu leeren, ist nicht ausstehend.
+globalen zu geben oder einen solchen Wert zu leeren, ändert nichts.
 
-Die Grenzwerte und die Engine-Feinabstimmung gelten ebenfalls ab dem nächsten
-Start, werden aber bei geschlossener Anwendung in der Konfigurationsdatei
-bearbeitet (siehe [Daten und Backups](data-and-backups.md)), sodass sie nie als
-ausstehend erscheinen.
+Bis dahin zeigt die obere Leiste **Einstellungen ausstehend**. Fahre mit der Maus
+darüber, um zu sehen, was worauf wartet; klicke darauf für die Liste, die auch
+jede Änderung zeigt, die ein Gerät oder ein Ausgang abgelehnt hat (das Gerät
+behält seine aktuellen Einstellungen; die Änderung wird erneut versucht, wenn du
+sie änderst oder **Jetzt anwenden** drückst). Die Fußzeile der Einstellungen
+sagt „Einige Änderungen warten, bis die betroffenen Ausgänge frei sind.“ und
+bietet **Jetzt anwenden** an; eine kurze Meldung (zum Beispiel, dass eine
+Einstellung gespeichert wurde) kann für einen Moment diesen Text ersetzen.
 
-Solange eine dieser Änderungen wartet, steht in der Fußzeile der Einstellungen
-„Einige Änderungen werden erst nach einem Neustart wirksam.“ mit dem Button
-**Jetzt neu starten**, und die obere Leiste zeigt eine Pille **Neustart
-ausstehend**. Fahre mit der Maus über die Pille, um zu sehen, was wartet. Eine
-kurze Meldung (zum Beispiel, dass eine Einstellung gespeichert wurde) kann für
-einen Moment den Text der Fußzeile ersetzen; **Jetzt neu starten** bleibt. Beide
-tun dasselbe:
+**Jetzt anwenden** wendet jede wartende Ausgangsänderung sofort an. Würde das
+etwas unterbrechen, listet es zuerst die Geräte und was darauf spielt auf;
+**Unterbrechen und anwenden** unterbricht dann kurz das Audio auf diesen Geräten:
+Was spielte, läuft nach einer kurzen Lücke dort weiter, wo es war, und nichts
+Pausiertes oder Gestopptes startet. **Abbrechen** (oder `Esc`) wartet weiter.
 
-- Ist nichts on Air, startet **Jetzt neu starten** (oder die Pille) sofort neu.
-- Ist etwas on Air, erscheint das Fenster, das auflistet, was gerade klingt, mit
-  **Stoppen und neu starten** oder **Abbrechen**.
-
-Zuerst wird die Session gespeichert, und das Audio und die MIDI-Steuerung
-stoppen; dann startet die Anwendung mit demselben Datenordner (`FAUSTE_HOME`)
-neu, und danach geht nichts von selbst on Air. Kann die Anwendung nicht neu
-starten (bei einem Flatpak auch, wenn die neue nicht rechtzeitig startet),
-meldet sie es; starte sie dann über dein Anwendungsmenü.
+Die Grenzwerte und die Engine-Feinabstimmung werden bei geschlossener Anwendung
+in der Konfigurationsdatei bearbeitet (siehe [Daten und
+Backups](data-and-backups.md)).
 
 ## Audioausgänge {#audio-outputs}
 
-Änderungen in diesem Abschnitt warten auf einen Neustart: siehe
-[Neustart ausstehend](#restart-pending).
+Änderungen in diesem Abschnitt gelten, während die Anwendung läuft, sobald nichts
+spielt, was sie betrifft: siehe [Einstellungen ausstehend](#settings-pending).
 
 ![Einstellungen, Audioausgänge, Ansicht Einfach: die Auswahl, das Audiosystem, die Abtastrate, die Puffergröße und die Main- und Cue-Ausgänge jedes Players (hier das stumme System)](../../images/guide/settings-outputs.png)
 
@@ -72,25 +85,26 @@ Tausch zweier Geräte).
 |---|---|
 | Audiosystem | Die letzte Wahl, **Keine Ausgabe (stumm)**, spielt nichts ab: Die Zeitachsen laufen in Echtzeit ohne Soundkarte (für eine Maschine ohne eine oder zum Proben). Linux: PipeWire (in Builds, die es enthalten), PulseAudio, JACK oder ALSA. Windows: WASAPI, ASIO (in Builds, die es enthalten) oder JACK. macOS: Core Audio oder JACK. Systeme, die auf diesem Computer fehlen oder kein Ausgabegerät haben (ein JACK-Server, der nicht läuft), werden als nicht verfügbar angezeigt. „Systemstandard“ verwendet in dieser Reihenfolge das erste verfügbare. |
 | Abtastrate | Die Rate, mit der jeder Ausgang läuft, sofern ein Gerät keine eigene hat (Erweitert); Dateien werden mit hochwertigem Resampling in sie umgewandelt. Bit-perfect-Geräte starten mit ihrer Rate und folgen dann den Dateien. |
-| Puffergröße | Frames pro Audioblock, sofern ein Gerät keine eigene hat; die resultierende Latenz steht darunter |
-| Ausgänge pro Player | Für jeden Player ein **Main**-Gerät (On Air) und ein **Cue**-Gerät (Vorhören), jeweils mit einem Kanalpaar. Eine Soundkarte, die mehrere Ausgabeprofile anbietet (ALSA listet Front, Surround, direkte Hardware…), zeigt jedes als *Karte — Profil*; zwei Einträge, die dennoch gleich lauten würden, erhalten ihre Geräte-ID in Klammern. Mehrkanal-Interfaces können mehrere Player auf verschiedenen Paaren tragen. |
+| Puffergröße | Frames pro Audioblock, sofern ein Gerät keine eigene hat; die resultierende Latenz steht darunter. Ausgänge über einen Soundserver oder einen System-Mixer (PulseAudio, das ALSA-Gerät `default`) verlangen mindestens 50 ms, egal welche Größe hier steht, oder so viel, wie das Gerät annimmt, damit ein ausgelasteter Computer nicht zu hören ist; die Latenz sagt es dann (`shared_buffer_ms` in der Konfigurationsdatei) |
+| Ausgänge pro Player | Für jeden Player ein **Main**-Gerät (On Air) und ein **Cue**-Gerät (Vorhören), jeweils mit einem Kanalpaar. Eine Soundkarte, die mehrere Ausgabeprofile anbietet (ALSA listet Front, Surround, direkte Hardware…), zeigt jedes als *Karte — Profil*; zwei Einträge, die dennoch gleich lauten würden, erhalten ihre Geräte-ID in Klammern. Mehrkanal-Interfaces können mehrere Player auf verschiedenen Paaren tragen. Ein Cue-Ausgang, der einen Sendeausgang teilt (den Main eines Players oder den der Cartwall), ist erlaubt: Ein Hinweis darunter sagt, dass sein Vorhören auf Sendung zu hören ist und dass zuerst gefragt wird, solange dort etwas spielt. |
 | Main testen / Cue testen | Spielt einen kurzen Ton (1 kHz auf Main, 440 Hz auf Cue, 1,5 s, −18 dBFS) auf dem gewählten Ausgang ab, damit du die Verkabelung prüfen kannst, bevor du auf Sendung gehst |
-| Cartwall | Die Main- und Cue-Ausgänge der Cartwall. Main ist standardmäßig der Systemausgang. Ohne Cue gibt es kein Cart-Vorhören. |
+| Bibliothek | Der Cue-Ausgang der Bibliothek, mit eigenem **Cue testen**: wo das [Vorhören](library.md#pre-listening) des Bibliotheksfensters (auf einem Telefon das des Tabs Bibliothek) zu hören ist. Ohne ihn ist Vorhören in der Vorhörleiste abgeblendet. Unter Android lautet seine leere Auswahl *Systemstandard* statt *Keiner*: Das Vorhören und **Cue testen** spielen dann auf dem Standardausgang (siehe [Android → Bibliothek](android.md#library)). Ein Ausgang Bibliothek auf einem Sendeausgang funktioniert wie der Cue eines Players: Ein Hinweis darunter sagt, dass sein Vorhören auf Sendung zu hören ist und dass zuerst gefragt wird, solange dort etwas spielt. Er steht in der Ansicht Einfach und Erweitert, auch auf einem Telefon |
+| Cartwall | Die Main- und Cue-Ausgänge der Cartwall. Main ist standardmäßig der Systemausgang. Ohne Cue gibt es kein Cart-Vorhören; ein Cue auf einem Sendeausgang funktioniert wie bei den Playern. |
 | Abtastrate: *Gerät* (Erweitert) | **Global (...)** verwendet die obige Abtastrate; ein Wert gibt diesem Gerät seine eigene Rate. Es werden nur die Raten angeboten, die das Gerät meldet; eine gespeicherte Rate, die es nicht mehr meldet, bleibt mit dem Hinweis gelistet, dass es sich eventuell nicht öffnen lässt (das Gerät fällt dann auf die globale Rate zurück). Die eigenen Werte gelten nur für Geräte, die ein Ausgang benennt, nicht für den Systemstandardausgang, außer wenn einer es tut. |
-| Puffergröße: *Gerät* (Erweitert) | **Global (...)** verwendet die obige Puffergröße; ein Wert gibt diesem Gerät seine eigene, mit ihrer Latenz darunter. Ein Gerät, das keine eigene Puffergröße annimmt, fällt auf die globale zurück, und auch auf die globale Rate, wenn es keine eigene Rate annimmt. |
-| Bit-perfect: *Gerät* (Erweitert) | Ein Bit-perfect-Gerät wird mit exklusivem Zugriff geöffnet und folgt der Abtastrate jeder Datei, solange nichts darauf spielt. Der Schalter ist deaktiviert, wo das Gerät keinen exklusiven Zugriff geben kann. Siehe [Bit-perfect-Ausgabe](bit-perfect.md). |
+| Puffergröße: *Gerät* (Erweitert) | **Global (...)** verwendet die obige Puffergröße (mit dem Mindestwert, den ein gemeinsam genutzter Ausgang verlangt, wie oben); ein Wert gibt diesem Gerät seine eigene, unverändert verwendet, mit ihrer Latenz darunter. Ein Gerät, das keine eigene Puffergröße annimmt, fällt auf die globale zurück, und auch auf die globale Rate, wenn es keine eigene Rate annimmt. |
+| Bit-perfect: *Gerät* (Erweitert) | Standardmäßig aus. Ein Sondermodus für audiophile Wiedergabe, nicht für gemischte Programme: Das Gerät wird mit exklusivem Zugriff geöffnet und folgt der Abtastrate jedes Tracks. Die Player, deren Main-Ausgang darauf liegt, überblenden oder mischen nie, ein Ratenwechsel hinterlässt eine kurze Stille zwischen zwei Tracks, und ihre Lautstärke ist auf 100 % festgehalten. Der Schalter ist deaktiviert, wo das Gerät keinen exklusiven Zugriff geben kann. Siehe [Was es kostet](bit-perfect.md#what-it-costs). |
 | DSD: *Gerät* (Erweitert) | **In PCM umwandeln** (Standard), **DoP** oder, unter Linux, **Natives DSD**. Jedes Gerät zeigt es; angeboten werden nur die Modi, die das Gerät annehmen kann, und eine Zeile darunter sagt, warum die anderen nicht. Siehe [DSD](bit-perfect.md#dsd). |
 | Wenn eine andere Quelle einen DSD-Ausgang braucht (Erweitert) | **DSD-Track als PCM fortsetzen** (Standard) oder **DSD behalten und andere Quellen stummschalten**. Siehe [DSD](bit-perfect.md#dsd). |
 | DSD-Stille (Erweitert) | Stille, die vor dem Start eines DSD-Streams, nach seinem Ende und beim Wechsel zu PCM gesendet wird, damit der Wandler ohne Knacken einrastet; standardmäßig 200 ms, 0 bis 2000. |
 
-Ein Cue-Ausgang fällt nie auf den Ausgang zurück, den Main verwendet, sodass das
-Vorhören nie on Air geht. Ein Cue, der ein Gerät an einem Audiosystem nennt, das
-dieser Computer nicht hat, oder denselben Ausgang (Gerät und Kanäle) wie Main,
-bedeutet „kein Cue“. Ist ein Cue-Ausgang derselbe wie sein Main-Ausgang, sagt
-das eine Warnung darunter. Bei einem Player ohne Cue-Ausgang oder mit seinem Cue
-auf seinem Main-Ausgang ist der **CUE**-Button abgeblendet; beim Darüberfahren
-steht, dass du hier einen Cue-Ausgang wählen sollst. Dasselbe gilt für **Auf CUE
-vorhören** der Cartwall.
+Ein Cue-Ausgang fällt nie auf den Ausgang zurück, den Main verwendet. Ein Cue,
+der ein Gerät an einem Audiosystem nennt, das dieser Computer nicht hat,
+bedeutet „kein Cue“. Ein Cue auf einem Sendeausgang (dasselbe Gerät und dieselben
+Kanäle wie ein Main, oder sich mit ihnen überschneidend) ist erlaubt: Ein Hinweis
+darunter sagt, dass sein Vorhören auf Sendung zu hören ist und dass zuerst
+gefragt wird, solange dort etwas spielt. Bei einem Player ohne Cue-Ausgang ist
+der **CUE**-Button abgeblendet; beim Darüberfahren steht, dass du hier einen
+Cue-Ausgang wählen sollst. Dasselbe gilt für **Auf CUE vorhören** der Cartwall.
 
 Verschwindet ein Gerät während der Wiedergabe, behalten die Player ihre
 Zeitachsen, und das Gerät wird wieder geöffnet, wenn es zurückkommt (siehe
@@ -103,12 +117,17 @@ Zeitachsen, und das Gerät wird wieder geöffnet, wenn es zurückkommt (siehe
 | Einstellung | Standard | Bedeutung |
 |---|---|---|
 | Sprache | System | Sprache der Oberfläche |
-| Anzahl der Player | 4 | Spalten im Hauptfenster (ein Player on Air kann nicht entfernt werden) |
+| Anzahl der Player | 4 | Spalten im Hauptfenster (ein Player on Air kann nicht entfernt werden). Die Zahl gilt, wenn du den Schieberegler loslässt; eine in das Feld getippte Zahl gilt, wenn du Enter drückst oder das Feld verlässt, und Esc bricht ab |
 | Standardmodus | CONT | Der Modus, mit dem die Player starten |
-| Blendzeit | 1000 ms | Wird von Play während on Air und von Ausblenden verwendet |
-| Automatischer Mix am MIX-Punkt | An | Tracks im CONT-Modus überlappen |
+| Blendzeit | 1000 ms | Wird von Play während on Air und von Ausblenden verwendet. Bei einem Player, dessen Main-Ausgang bit-perfect ist, nur von Ausblenden |
+| Automatischer Mix am MIX-Punkt | An | Tracks im CONT-Modus überlappen. Gilt nicht für einen Player, dessen Main-Ausgang bit-perfect ist |
 | Cue-in und Cue-out verwenden | An | Aus: Die Player spielen jeden Track vom Anfang bis zum Ende der Datei; die Marker bleiben erhalten, und Carts verwenden weiterhin ihre eigenen. Dauern und Playlist-Summen folgen demselben Bereich |
 | Warnung vor Track-Ende | 10 s | Wann der Countdown rot zu blinken beginnt |
+
+Solange der Main-Ausgang eines Players bit-perfect ist, sagt ein Hinweis unter
+**Automatischer Mix am MIX-Punkt**, dass solche Player nie mischen oder
+überblenden. Beide Einstellungen bleiben bearbeitbar: Sie gelten weiterhin für
+die anderen Player. Siehe [Was es kostet](bit-perfect.md#what-it-costs).
 
 ## Pegelmesser {#meters}
 
@@ -157,9 +176,16 @@ Jeder Messer verwendet die Skala seiner Norm, mit den Marken zwischen den Kanäl
 
 ![Einstellungen, Analyse: die Schwellen der automatischen Marker](../../images/guide/settings-analysis.png)
 
-Die Schwellen sind in [Marker und Mixen](markers-and-mixing.md) beschrieben.
+Die Schwellen sind in [Marker und Mixen](markers-and-mixing.md) beschrieben;
+jede Zeile hat unter ihrem Namen einen einzeiligen Hinweis, was der Wert bewirkt.
 **Alle Tracks neu analysieren** führt die Analyse für die ganze Bibliothek
-erneut aus; manuelle Marker bleiben erhalten.
+erneut aus und liest dabei jede Datei erneut; manuelle Marker bleiben erhalten.
+Solange sie läuft, ist der Button abgeblendet und zeigt, wie weit sie ist
+(**Analysiere… 120 von 340**), sodass ein erneutes Drücken nicht von vorn
+beginnt; der Tooltip von **Analysiere N Titel** in der Statusleiste nennt
+denselben Fortschritt. Auch das Ändern einer Schwelle hier analysiert die
+Bibliothek erneut und startet einen bereits laufenden Durchlauf neu, damit kein
+Track Marker der alten Werte behält.
 
 Nach einem Update, bei dem sich die Analyse geändert hat, behalten Tracks, die
 von der früheren Version analysiert wurden, ihre Marker und Wellenformen, die
@@ -170,6 +196,40 @@ den neuesten Stand gebracht, sobald sie angezeigt werden, ebenso die Tracks von
 Carts, für die kein Format erfasst ist (ein Cart spielt nur bit-perfect, wenn
 sein Format bekannt ist). Tracks, deren Datei fehlt, werden nicht gezählt, bis
 die Datei wieder da ist.
+
+Die Analyse misst außerdem die Lautheit jeder Datei für die
+[Lautheitsnormalisierung](loudness.md). Dateien, die analysiert wurden, bevor die
+Lautheit gemessen wurde, werden im Hintergrund gemessen, wenn die Analyse nichts
+anderes zu tun hat, ob die Normalisierung an oder aus ist; ihre Marker werden
+nicht angetastet. **Neu analysieren** (im Playlist-Menü) und **Alle Tracks neu
+analysieren** messen erneut.
+
+## Lautheit {#loudness}
+
+![Einstellungen, Lautheit: Normalisierung an, mit Ziel, True-Peak-Obergrenze, maximaler Anhebung und maximalem Trim auf ihren Standardwerten](../../images/guide/settings-loudness.png)
+
+Spielt jeden Track und jedes Cart mit derselben Lautheit, mit einer festen
+Verstärkung pro Track. Die [Lautheitsnormalisierung](loudness.md) erklärt, wie die
+Verstärkung berechnet wird, das Badge in der Player-Kopfzeile und die Einstellungen
+pro Track.
+
+| Einstellung | Standard | Bereich | Bedeutung |
+|---|---|---|---|
+| Lautheit normalisieren | An | | Normalisierung an oder aus |
+| Ziel | −16 LUFS | −36 … −6 LUFS, Schritte von 0,5 | Die integrierte Lautheit, auf die jeder Track gebracht wird |
+| True-Peak-Obergrenze | −1 dBTP | −12 … 0 dBTP, Schritte von 0,1 | Eine Anhebung bringt den True Peak des Tracks nie über diesen Wert. Absenkungen sind nicht begrenzt |
+| Maximale Anhebung | 12 dB | 0 … 24 dB | Die größte Verstärkung, die ein leiser Track erhalten kann. Absenkungen sind nicht begrenzt |
+| Maximaler Trim | 12 dB | 0 … 24 dB | Wie weit der eigene Trim jedes Tracks gehen kann, nach oben oder unten |
+
+Änderungen gelten für Tracks, die danach geladen werden: Was spielt, behält seine
+Verstärkung, und der nächste Track, der auf jedem Player wartet, wird mit der
+neuen neu vorbereitet. Ein Hinweis unter den Einstellungen sagt, wie viele Tracks
+noch auf ihre Messung warten; sie spielen unverändert, bis sie fertig ist. Ein
+Player oder Cart an einem Bit-perfect-Ausgang wird nie normalisiert.
+**Standardwerte wiederherstellen** setzt nur diesen Abschnitt zurück
+(Normalisierung an). Die Normalisierung ist bei neuen Installationen an; eine
+bestehende Konfiguration behält ihre aktuelle Einstellung (jede gespeicherte
+Konfiguration enthält den Wert bereits).
 
 ## Playlists {#playlists}
 
@@ -195,10 +255,10 @@ Portugiesisch verwendet Portugiesisch), sonst Englisch. Eine Sprache in der
 Einstellungsdatei, die die Oberfläche nicht hat, wird als **System** angezeigt
 und folgt dem Betriebssystem.
 
-Englisch und Spanisch sind von Hand geschrieben. Die anderen Übersetzungen wurden
-mit KI erstellt und können Fehler enthalten; wird eine davon verwendet, sagt
-das Fenster „Über Fauste Player“ es. Korrekturen von Muttersprachlern sind als
-Issues oder Pull Requests willkommen.
+Die Oberfläche in allen Sprachen, auch Englisch und Spanisch, wurde mit KI
+erstellt und kann Fehler enthalten. Das Fenster „Über Fauste Player“ trägt einen
+allgemeinen Haftungsausschluss, der alle abdeckt. Korrekturen sind als Issues
+oder Pull Requests willkommen.
 
 ## Cartwall {#cartwall}
 
@@ -206,6 +266,14 @@ Issues oder Pull Requests willkommen.
 
 Seiten, Rastergröße, der Cart-Editor sowie Import und Export von Cart-Seiten.
 Siehe [Cartwall](cartwall.md).
+
+## Bibliothek {#library}
+
+Lege die Kategorien an, die deine Tracks gruppieren, benenne sie um, ändere ihre
+Farbe und Art, verschiebe sie (durch Ziehen) und lösche sie, überwache einen
+Ordner mit einer Kategorie und entferne ihre fehlenden Tracks, ohne das
+Bibliotheksfenster zu öffnen. Siehe [Bibliothek](library.md#categories) und
+[Überwachte Ordner](library.md#watched-folders).
 
 ## Tastenkürzel {#keyboard-shortcuts}
 
@@ -217,8 +285,9 @@ Siehe [Tastatur](keyboard.md).
 
 ![Einstellungen, MIDI, bei ausgeschalteter MIDI-Steuerung](../../images/guide/settings-midi.png)
 
-MIDI-Controller einschalten, die Eingangsports sehen und für jede Player-Aktion
-ein Bedienelement lernen. Siehe [MIDI-Controller](midi.md).
+MIDI-Controller einschalten, die Eingangsports sehen (**Ports neu verbinden**
+öffnet sie erneut, als würden die Controller aus- und wieder eingesteckt) und für
+jede Player-Aktion ein Bedienelement lernen. Siehe [MIDI-Controller](midi.md).
 
 ## Fernsteuerung {#remote}
 
