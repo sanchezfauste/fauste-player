@@ -211,10 +211,12 @@ fn second_finger_tap(ui: &Ui, rect: Rect, layer: egui::LayerId) -> bool {
             })
             .unwrap_or_default()
     });
-    // No layer there (a widget's reach past its area at the screen's edge)
-    // means nothing is on top of it either.
+    // A widget's reach can pass the screen's edge, where no layer is: the
+    // end is asked for at the nearest point on the screen, so a modal's
+    // backdrop there still covers it.
+    let screen = ui.ctx().content_rect();
     ends.iter()
-        .any(|end| ui.ctx().layer_id_at(*end).is_none_or(|top| top == layer))
+        .any(|end| ui.ctx().layer_id_at(screen.clamp(*end)) == Some(layer))
 }
 
 /// How far from a widget a finger still hits it: the desktop's tiles are
