@@ -1027,3 +1027,24 @@ fn lb43_a_held_finger_opens_the_menu_without_a_tick() {
     assert!(h.query_by_label(MOVE).is_some(), "the menu is open");
     assert!(!is_ticked(&h, &row("Alpha", "Band")));
 }
+
+const IDLE: &str = "Tap a track’s headphones to pre-listen it";
+
+/// LB49: the strip's room is kept, so the rows stay where they are when a
+/// preview starts.
+#[test]
+fn lb49_the_rows_do_not_move_when_a_preview_starts() {
+    let (s, a, _b) = with_tracks();
+    let (mut h, fake) = rock_list(s);
+    let alpha = row("Alpha", "Band");
+    let before = h.get_by_label(&alpha).rect().top();
+    assert!(h.query_by_label(IDLE).is_some(), "the idle hint");
+    // The list's own state (its open category), now pre-listening.
+    let mut s = (**fake.state.load()).clone();
+    previewing(&mut s, a);
+    fake.state.store(Arc::new(s));
+    h.run_steps(3);
+    assert!(h.query_by_label(STOP).is_some());
+    assert!(h.query_by_label(IDLE).is_none());
+    assert_eq!(h.get_by_label(&alpha).rect().top(), before);
+}

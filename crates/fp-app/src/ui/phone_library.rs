@@ -495,13 +495,53 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
     }
 }
 
-/// LB45: the slim strip over the list while the library CUE runs or is
-/// held: Pause/Play, Stop, the remaining time and the title. No waveform.
+/// LB45, LB49: the slim strip over the list. Its room is always kept, so
+/// the rows never move: while the library CUE runs or is held it holds
+/// Pause/Play, Stop, the remaining time and the title (no waveform), and
+/// otherwise a dim hint.
 fn preview_strip(ui: &mut Ui, scene: &Scene<'_>) {
+    // Exactly this room, whatever the strip holds.
+    let (rect, _) =
+        ui.allocate_exact_size(vec2(ui.available_width(), touch::TARGET), Sense::hover());
+    let mut strip = ui.new_child(
+        UiBuilder::new()
+            .max_rect(rect)
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    strip.set_clip_rect(rect.intersect(ui.clip_rect()));
+    {
+        let ui = &mut strip;
+        ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
+        if !strip_controls(ui, scene) {
+            ui.add_space(8.0);
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(icon::HEADPHONES)
+                        .font(font(16.0))
+                        .color(theme::NEUTRAL_500),
+                )
+                .selectable(false),
+            );
+            ui.add(
+                egui::Label::new(
+                    egui::RichText::new(scene.i18n.tr("phone-library-strip-idle"))
+                        .font(font(13.0))
+                        .color(theme::NEUTRAL_500),
+                )
+                .selectable(false)
+                .truncate(),
+            );
+        }
+    }
+}
+
+/// The strip's controls while the library CUE runs or is held; false
+/// (nothing drawn) while it is stopped.
+fn strip_controls(ui: &mut Ui, scene: &Scene<'_>) -> bool {
     let t = scene.i18n;
     let cue = &scene.state.library_cue;
     if cue.transport == Transport::Stopped {
-        return;
+        return false;
     }
     // The engine's position only while it is the strip's track.
     let position = scene
@@ -510,13 +550,12 @@ fn preview_strip(ui: &mut Ui, scene: &Scene<'_>) {
         .filter(|tel| Some(tel.track) == cue.track)
         .map(|tel| tel.position_secs);
     let Some(v) = view::library_cue_view(scene.state, position) else {
-        return;
+        return false;
     };
     let paused = v.transport == Transport::Paused;
     let blink = widgets::blink(scene.time);
     let size = vec2(touch::TARGET, touch::TARGET);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
+    {
         let (label, action, style) = if paused {
             (
                 t.tr("library-preview-play"),
@@ -562,7 +601,8 @@ fn preview_strip(ui: &mut Ui, scene: &Scene<'_>) {
             .selectable(false)
             .truncate(),
         );
-    });
+    }
+    true
 }
 
 /// What a tap on the list's header asked for.
