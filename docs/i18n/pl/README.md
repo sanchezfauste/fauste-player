@@ -8,6 +8,11 @@ ma własne playlisty i własny transport. Odtwarzacze potrafią łączyć utwory
 miksami z nakładaniem, odsłuchiwać wstępnie na osobnym wyjściu **CUE** i
 przetrwać awarie, nie wypuszczając niczego na antenę samodzielnie.
 
+> **Stworzone z pomocą AI, udostępniane w stanie, w jakim jest.** Fauste
+> Player, ten podręcznik i jego tłumaczenia powstały przy znacznej pomocy
+> narzędzi AI. Program nie ma żadnej gwarancji, a używasz go na własne
+> ryzyko: zobacz [Zastrzeżenie](https://github.com/sanchezfauste/fauste-player#disclaimer).
+
 ![Ekran główny](../../images/main-screen.png)
 
 | Podręcznik | Czego dotyczy |
@@ -18,7 +23,8 @@ przetrwać awarie, nie wypuszczając niczego na antenę samodzielnie.
 | [Cartwall](cartwall.md) | Carty natychmiastowe: odpalanie, strony, pętle, carty wyłączne, konfiguracja |
 | [Markery i miksowanie](markers-and-mixing.md) | Cue-in/cue-out, punkt MIX, intro i outro, automatyczna analiza |
 | [Ustawienia](settings.md) | Wyjścia audio, odtwarzacze, analiza, playlisty, MIDI, zdalne sterowanie |
-| [Wyjście bit-perfect](bit-perfect.md) | Urządzenia na wyłączność dostosowujące się do częstotliwości każdego pliku, wskaźnik BP, wyjście DSD, sprawdzanie toru |
+| [Normalizacja głośności](loudness.md) | Każdy utwór i cart z tą samą głośnością przy stałym wzmocnieniu dla każdego utworu: znaczek wzmocnienia, wyłączanie i korekta utworu, wyjścia bit-perfect |
+| [Wyjście bit-perfect](bit-perfect.md) | Specjalny tryb: bez przenikania, głośność na 100 %. Urządzenia na wyłączność dostosowujące się do częstotliwości każdego pliku, wskaźnik BP, wyjście DSD, sprawdzanie toru |
 | [Klawiatura](keyboard.md) | Skróty |
 | [Powierzchnie sterujące MIDI](midi.md) | Przyciski, suwaki i diody w kontrolerach MIDI |
 | [Zdalne sterowanie](remote-control.md) | Obsługa Fauste Player przez sieć: API HTTP, bezpieczeństwo |
@@ -28,13 +34,12 @@ przetrwać awarie, nie wypuszczając niczego na antenę samodzielnie.
 Interfejs jest dostępny po angielsku, hiszpańsku, katalońsku, niderlandzku,
 francusku, galicyjsku, niemiecku, włosku, baskijsku, polsku i portugalsku.
 Podąża za językiem systemu operacyjnego, chyba że wybierzesz inny w
-Ustawieniach. Angielska i hiszpańska wersja zostały napisane ręcznie; pozostałe
-dziewięć wygenerowano za pomocą AI i mogą zawierać błędy. Jeśli znasz któryś z
-tych języków, poprawki są mile widziane jako zgłoszenia (issues) lub pull
-requesty.
+Ustawieniach. Interfejs w każdym języku, także angielskim i hiszpańskim, został
+wykonany za pomocą AI i może zawierać błędy. Poprawki są mile widziane jako
+zgłoszenia (issues) lub pull requesty.
 
-Podręcznik jest też dostępny w innych językach, przetłumaczony za pomocą
-AI z angielskiego podręcznika: w [podręczniku online](https://sanchezfauste.com/fauste-player/guide/)
+Podręcznik jest też dostępny w innych językach, przetłumaczony za pomocą AI z
+tego angielskiego podręcznika: w [podręczniku online](https://sanchezfauste.com/fauste-player/guide/)
 wybierz język przyciskiem z globusem na górnym pasku.
 Przetłumaczona strona informuje o tym u góry i odsyła do strony
 angielskiej, która jest wiążąca, gdy obie wersje się różnią.

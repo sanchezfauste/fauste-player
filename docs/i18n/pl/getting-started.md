@@ -2,7 +2,10 @@
 
 ## Instalacja {#install}
 
-Pobierz pakiet dla swojego systemu ze strony **Releases** projektu. Obok
+W Windows Fauste Player jest w **Microsoft Store**
+(<https://apps.microsoft.com/detail/9NH4KCL73463>), a w Linuksie w
+**Snap Store** (<https://snapcraft.io/fauste-player>). Możesz też pobrać pakiet
+dla swojego systemu ze strony **Releases** projektu. Obok
 każdego pliku leży plik `.sha256`. Aby sprawdzić pobrany plik, uruchom
 `sha256sum -c <file>.sha256` w Linuksie lub `shasum -a 256 -c <file>.sha256`
 w macOS.
@@ -11,10 +14,11 @@ w macOS.
 
 | Pakiet | Instalacja | Aktualizacja | Usunięcie |
 |---|---|---|---|
+| Snap (Snap Store) | `sudo snap install fauste-player` | automatyczna (`sudo snap refresh fauste-player`, aby zaktualizować teraz) | `sudo snap remove fauste-player` |
 | `.deb` (Debian, Ubuntu) | `sudo apt install ./fauste-player_<version>_amd64.deb` | zainstaluj nowszy `.deb` w ten sam sposób | `sudo apt remove fauste-player` |
 | `.rpm` (Fedora, openSUSE) | `sudo dnf install ./fauste-player-<version>-1.x86_64.rpm` | zainstaluj nowszy `.rpm` | `sudo dnf remove fauste-player` |
 | AppImage (dowolna dystrybucja) | `chmod +x fauste-player-<version>-x86_64.AppImage`, a następnie uruchom plik | zastąp plik | usuń plik |
-| Pakiet Flatpak | `flatpak install --user fauste-player-<version>-x86_64.flatpak` | zainstaluj nowszy pakiet | `flatpak uninstall org.fauste.FaustePlayer` |
+| Pakiet Flatpak | `flatpak install --user fauste-player-<version>-x86_64.flatpak` | zainstaluj nowszy pakiet | `flatpak uninstall com.sanchezfauste.FaustePlayer` |
 | Archiwum | rozpakuj je i uruchom `fauste-player` | rozpakuj nowsze | usuń folder |
 
 - **Integracja z pulpitem:** pakiety dodają **Fauste Player** do menu
@@ -25,6 +29,22 @@ w macOS.
   zainstalowany, i nigdy nie jest wymagany.
 - **AppImage:** jeśli nie uruchamia się z powodu braku FUSE, uruchom go z
   opcją `--appimage-extract-and-run`.
+- **Snap:** snap działa w piaskownicy. Od razu czyta Twój folder domowy (z
+  wyjątkiem ukrytych plików i folderów), gra przez PulseAudio lub PipeWire i
+  może używać sieci na potrzeby API zdalnego sterowania i OSC (oba wyłączone,
+  dopóki ich nie włączysz). Dwie funkcje wymagają uprawnienia, które nadajesz
+  raz, z terminala:
+  - Wyjście bit-perfect na urządzeniach ALSA `hw:` oraz powierzchnie
+    sterujące MIDI: `sudo snap connect fauste-player:alsa`.
+  - Muzyka na dyskach USB i innych dyskach (`/media`, `/run/media`, `/mnt`):
+    `sudo snap connect fauste-player:removable-media`.
+
+  `snap connections fauste-player` pokazuje, co jest podłączone. Po
+  podłączeniu uruchom Fauste Player ponownie. Muzyka w innych miejscach (poza
+  folderem domowym i tymi trzema) nie może być odczytana przez snap: użyj do
+  niej innego pakietu. JACK nie jest dostępny w snapie. Jego ustawienia i
+  playlisty są trzymane w `~/snap/fauste-player/` (zob. [Dane i kopie
+  zapasowe](data-and-backups.md)).
 - **Flatpak:**
   - Pakiet wymaga środowiska uruchomieniowego freedesktop z Flathub. Jeśli
     zdalne repozytorium Flathub nie jest skonfigurowane, najpierw uruchom
@@ -33,6 +53,15 @@ w macOS.
     gdzie leży).
   - Gra przez PulseAudio, a w przypadku urządzeń bit-perfect bezpośrednio
     przez ALSA.
+  - Może używać sieci na potrzeby API zdalnego sterowania i OSC (oba
+    wyłączone, dopóki ich nie włączysz).
+  - Pakiety do wersji 0.10 były instalowane jako `org.fauste.FaustePlayer`, a
+    nowsze instalują się jako `com.sanchezfauste.FaustePlayer`, osobna
+    aplikacja. Aby zachować ustawienia, playlisty i carty, zamknij
+    aplikację i uruchom
+    `mv ~/.var/app/org.fauste.FaustePlayer ~/.var/app/com.sanchezfauste.FaustePlayer`
+    przed uruchomieniem nowej, a potem
+    `flatpak uninstall org.fauste.FaustePlayer`.
 - **Biblioteki pulpitu:** okno korzysta z libxkbcommon oraz EGL lub OpenGL,
   z Waylandem lub X11. Mają je wszystkie środowiska graficzne, a pakiety
   `.deb` i `.rpm` je deklarują. W bardzo minimalnym systemie zainstaluj je
@@ -40,7 +69,11 @@ w macOS.
 
 ### Windows {#windows}
 
-Uruchom `fauste-player-<version>-x86_64-pc-windows-msvc.msi`. Instaluje się
+Najłatwiej przez **Microsoft Store**: wyszukaj *Fauste Player* albo otwórz
+<https://apps.microsoft.com/detail/9NH4KCL73463> i wybierz **Pobierz**. Sklep
+dba o aktualność aplikacji, a **Ustawienia → Aplikacje** ją usuwa.
+
+Albo uruchom `fauste-player-<version>-x86_64-pc-windows-msvc.msi`. Instaluje się
 dla wszystkich użytkowników w *Program Files* i dodaje wpis w menu Start.
 - **Aktualizacja:** uruchom nowszy instalator. Zastąpi zainstalowaną wersję.
 - **Usunięcie:** użyj **Ustawienia → Aplikacje**.
@@ -85,12 +118,12 @@ pomocą `FAUSTE_HOME`.
 
 `fauste-player --version` wypisuje wersję. Pasek tytułu okna pokazuje nazwę
 i wersję, a przycisk **O programie** (ikona informacji, na lewo od
-**Ustawień**) otwiera okno **O programie** z informacją o prawach autorskich
-i licencjach (**Licencje stron trzecich** otwiera plik z informacjami
-instalowany z pakietami wydań). W języku przetłumaczonym za pomocą AI okno
-to mówi też, że tłumaczenie może zawierać błędy. Zamkniesz je przyciskiem
-**Zamknij** lub klawiszem `Esc`. `fauste-player --help` wyświetla listę
-opcji. Pliki playlist podane jako argumenty są importowane jako nowe
+**Ustawień**) otwiera okno **O programie** z autorem, prawami autorskimi,
+licencją (GNU GPL w wersji 3 lub nowszej; **Przeczytaj licencję online**
+otwiera jej tekst), krótkim zastrzeżeniem i informacjami o licencjach
+(**Licencje stron trzecich** otwiera plik z informacjami instalowany z
+pakietami wydań). Zamkniesz je przyciskiem **Zamknij** lub klawiszem `Esc`.
+`fauste-player --help` wyświetla listę opcji. Pliki playlist podane jako argumenty są importowane jako nowe
 playlisty.
 
 ![Okno O programie: wersja, prawa autorskie i licencje dołączonych komponentów](../../images/guide/about.png)
@@ -98,9 +131,9 @@ playlisty.
 W Windows program wydania nie otwiera okna konsoli: `--version`, `--help` i
 błędy uruchamiania pojawiają się zamiast tego w oknie komunikatu.
 
-Gdy ustawienie wymaga ponownego uruchomienia, na górnym pasku pojawia się
-plakietka **Wymagany restart**: naciśnij ją, aby uruchomić program ponownie
-(zob. [Ustawienia](settings.md#restart-pending)).
+Gdy zmiana wyjść czeka na coś, co jest na antenie, na górnym pasku pojawia
+się plakietka **Oczekujące ustawienia**; mówi ona, na co się czeka (zob.
+[Ustawienia](settings.md#settings-pending)).
 
 ### Zamykanie, gdy dźwięk jest na antenie {#closing-while-audio-is-on-air}
 
@@ -137,12 +170,29 @@ DoP lub natywne DSD na urządzeniu bit-perfect ustawionym w ten sposób (zob.
 [Wyjście bit-perfect](bit-perfect.md#dsd)). Opus zawsze gra z częstotliwością
 48 kHz. Pliki WavPack muszą być bezstratne, mono lub stereo; hybrydowe i
 wielokanałowe pliki WavPack są pokazywane jako nieczytelne, podobnie jak
-pliki DFF skompresowane DST.
+pliki DFF skompresowane DST. Plik WAV lub FLAC zawierający strumień bitowy
+DTS (lub inny zakodowany dźwięk przestrzenny) zamiast dźwięku, jak w
+niektórych zgraniach płyt DTS-CD, też jest pokazywany jako nieczytelny (log
+mówi dlaczego): najpierw przekonwertuj go na zwykłe PCM.
+
+Pliki przestrzenne (quad, 5.1, 6.1, 7.1 i inne układy do ośmiu kanałów) grają
+zmiksowane do stereo według położenia każdego kanału: przedni lewy i prawy
+zostają po swojej stronie, środkowy i tylny środkowy trafiają na obie strony,
+kanały boczne i tylne trafiają na swoją stronę, a kanał LFE (subwoofer) jest
+pomijany. Wielokanałowe pliki Opus i AAC nie mogą być odczytane i są
+pokazywane jako nieczytelne.
 
 Każdy plik jest analizowany w tle. Analiza odczytuje tytuł, wykonawcę, album
 i okładkę, rysuje przebieg oraz wyznacza, gdzie dźwięk się zaczyna i kończy
 oraz gdzie wejść miksem w następny utwór. Utwór możesz odtworzyć, zanim jego
-analiza się zakończy.
+analiza się zakończy. Gdy pliki są analizowane, prawa strona paska stanu
+mówi, ile ich jest (**Analiza 12 utworów**); najedź na nią, aby zobaczyć
+pliki analizowane teraz, ile czeka i, podczas **Analizuj ponownie wszystkie
+utwory**, jak daleko to zaszło. Legenda kolorów jest na prawo od niej; gdy okno
+jest wąskie, najpierw ukrywane są pozycje legendy, potem ta pozycja, aby
+ostrzeżenie po lewej stronie paska stanu pozostało czytelne. Gdy działają
+tylko pomiary głośności (zob. [Głośność](loudness.md)), pasek mówi **Pomiar
+głośności 5 utworów**.
 
 ## Odtwarzanie {#play}
 

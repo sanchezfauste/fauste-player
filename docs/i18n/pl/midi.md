@@ -17,6 +17,8 @@ kontrolkę; program nigdy nie nasłuchuje własnych portów. Kontrolery można
 podłączać i odłączać podczas pracy programu: co kilka sekund porty są
 szukane od nowa, a kontroler, który wraca, jest łączony według nazwy, a jego
 diody są ustawiane na nowo.
+**Połącz porty ponownie** zamyka każdy port i otwiera go od nowa, bez ruszania
+kabla (zobacz [Rozwiązywanie problemów](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 W Linuksie MIDI idzie przez ALSA: Twój użytkownik musi mieć prawo otwierania
 sekwencera (`/dev/snd/seq`, zwykle przez członkostwo w grupie `audio`).
@@ -44,13 +46,22 @@ przypisanie.
 - Przycisk działa, gdy jest naciśnięty (klawisz lub pad w dół albo control
   change przechodzący w górę przez środek swojego zakresu), dokładnie jak
   przycisk odtwarzacza na ekranie. Przycisk przyciemniony na ekranie nic nie
-  robi.
-- Suwak zmienia głośność w tej samej skali co suwak na ekranie. Aby uniknąć
+  robi. Przycisk **CUE** też nic nie robi, gdy jego odsłuch wstępny byłby
+  słyszalny na antenie, podczas gdy coś tam gra: MIDI nie potrafi odpowiedzieć
+  na pytanie, które zadaje ekran. Zatrzymanie odsłuchu wstępnego działa
+  zawsze.
+- Suwak zmienia głośność w tej samej skali (według tej samej krzywej, co w mikserze) co suwak na ekranie. Aby uniknąć
   skoków, przejmuje kontrolę dopiero wtedy, gdy dotrze do bieżącej
   głośności lub ją minie (soft takeover); jeśli głośność zmieni się na
   ekranie, suwak musi ją ponownie dogonić. Nic się nie zmienia, dopóki nie
   poruszysz kontrolki: uruchomienie programu nigdy niczego nie wysyła na
   antenę.
+- Przypisanie głośności odtwarzacza, którego wyjście Main jest
+  [bit-perfect](bit-perfect.md#what-it-costs), nic nie robi: jego głośność
+  jest utrzymywana na 100 %. Gdy wyjście przestanie być bit-perfect, przesuń
+  kontrolkę na górę, aby ponownie przejąć głośność.
+- Play/Następny i Poprzedni w takim odtwarzaczu przełączają od razu, bez
+  przenikania. Ich diody działają jak zwykle.
 - Przy włączonym **Podświetlaj przyciski (LED)** przypisane przyciski się
   świecą: Play, gdy odtwarzacz jest na antenie, Pauza miga podczas
   wstrzymania, CUE podczas odsłuchu wstępnego, a Stop, Stop z wyciszeniem,

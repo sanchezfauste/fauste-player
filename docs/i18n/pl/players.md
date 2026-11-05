@@ -3,20 +3,28 @@
 Każda kolumna to jeden odtwarzacz. Odtwarzacze są niezależne: każdy ma własne
 karty playlist, transport, głośność i wyjścia.
 
-![Odtwarzacz 1 na antenie: nagłówek, okładka, tytuł, następny utwór, transport, odliczanie, miernik, suwak i przebieg](../../images/guide/player.png)
+![Odtwarzacz 1 na antenie: nagłówek ze wzmocnieniem głośności, okładka, tytuł, następny utwór, transport, odliczanie, miernik, suwak i przebieg](../../images/guide/player.png)
 
 ## Nagłówek {#header}
 
 | Element | Znaczenie |
 |---|---|
 | `P1` … `Pn` | Numer odtwarzacza (klawisz numeryczny, który go uruchamia) |
+| Przyciski **Ukryj** i **Maksymalizuj** / **Przywróć** | Dwa małe przyciski na prawym końcu nagłówka: ukrywają odtwarzacz albo na chwilę go maksymalizują (**Przywróć**, gdy jest zmaksymalizowany). Przyciemnione, gdy układ jest zablokowany, **Ukryj** na ostatnim pokazywanym panelu, a **Maksymalizuj** przy jednym pokazywanym panelu (zob. [Układ](layout.md#maximize-a-panel)) |
 | Kropka i etykieta stanu | **Na antenie** (czerwona), **Wstrzymany** (bursztynowa), **Zatrzymany** (szara) |
-| Plakietka **Miks** / **Wyciszanie** | Trwa przenikanie do następnego utworu albo zatrzymanie z wyciszeniem |
+| Wąskie kolumny | Gdy kolumna jest za wąska na wszystkie plakietki, nagłówek porzuca najpierw te najmniej ważne (tekst stanu, potem **Inne wyciszone**, informację o pozycji, **Stop po**, **Miks** / **Wyciszanie**, kropkę stanu), więc nic się nigdy nie nakłada. Numer odtwarzacza, **CUE**, tryb, **BP**, plakietka wzmocnienia oraz przyciski **Ukryj** i **Maksymalizuj** zostają zawsze. Poszerz kolumnę, aby zobaczyć wszystkie |
+| Plakietka **Miks** / **Wyciszanie** | Trwa przenikanie do następnego utworu albo zatrzymanie z wyciszeniem. **Miks** nigdy nie świeci w odtwarzaczu, którego wyjście Main jest bit-perfect: on nie przenika (zob. [Jakie są koszty](bit-perfect.md#what-it-costs)) |
 | Plakietka **Stop po** | Odtwarzacz zatrzyma się, gdy skończy się bieżący utwór |
 | Plakietka **Powtarzaj** / **Stop po utworze** | Bieżący utwór się powtarza albo zatrzymuje odtwarzacz po zakończeniu, z powodu własnego oznaczenia w menu playlisty. Najedź kursorem, aby zobaczyć pełne zdanie. Własny przycisk **Stop po** odtwarzacza ma pierwszeństwo: gdy jest włączony, widać tylko jego plakietkę |
-| **BP** / **DSD** | **BP** świeci, gdy bieżący utwór dociera do urządzenia Main bez zmian. **DSD** zastępuje go, gdy utwór DSD wychodzi jako DSD, bez zmian (zob. [Wyjście bit-perfect](bit-perfect.md)). Obok pojawia się **Inne wyciszone**, gdy ten strumień DSD trzyma inne źródła z dala od wyjścia |
+| Plakietka wzmocnienia | Przy włączonej [normalizacji głośności](loudness.md#the-gain-in-the-player-header) wzmocnienie, z jakim gra utwór na antenie (**+4.0 dB**), albo bursztynowe **0.0 dB**, gdy utwór gra bez zmian (brak jeszcze pomiaru, wyjście bit-perfect lub utwór wyłączony z normalizacji). Najedź kursorem, aby zobaczyć przyczynę. Widoczna, gdy odtwarzacz gra lub jest wstrzymany |
+| **BP** / **DSD** | Plakietka pojawia się tylko w odtwarzaczu, którego urządzenie Main pracuje w trybie bit-perfect; **BP** świeci, gdy bieżący utwór dociera do tego urządzenia bez zmian. **DSD** zastępuje go, gdy utwór DSD wychodzi jako DSD, bez zmian (zob. [Wyjście bit-perfect](bit-perfect.md)). Obok pojawia się **Inne wyciszone**, gdy ten strumień DSD trzyma inne źródła z dala od wyjścia |
 | **SINGLE** \| **CONT** | Tryb odtwarzania (zob. niżej): jeden połączony przełącznik, podświetlona połowa to aktywny tryb |
 | **CUE** | Odsłuch wstępny następnego utworu na wyjściu CUE |
+
+Dwa małe przyciski na prawym końcu nagłówka, **Ukryj** i **Maksymalizuj**
+(albo **Przywróć**), ukrywają odtwarzacz lub na chwilę go maksymalizują; te
+same dwie pozycje są w menu prawego kliknięcia na tle nagłówka (nie na jednym
+z jego przycisków) (zob. [Układ](layout.md#maximize-a-panel)).
 
 ## Wiersz informacji {#info-row}
 
@@ -86,9 +94,30 @@ karty playlist, transport, głośność i wyjścia.
       całkowitoliczbowe obcina sygnał na pełnej skali; urządzenie
       zmiennoprzecinkowe otrzymuje poziom bez zmian, a obcina go system
       dźwiękowy lub sterownik.
-- **Suwak głośności** (na prawo od miernika, równy mu wysokością):
-  przeciągaj go lub użyj kółka myszy, jeden krok na ząbek. Podpowiedź
-  pokazuje poziom w dB; góra to 0 dB, a dół to cisza.
+- **Suwak głośności** (na prawo od miernika, równy mu wysokością). Podąża za
+  krzywą miksera: przy górze jest drobny, a ku dołowi stromszy, więc małe
+  obniżenie obniża poziom o niewiele (90 % skoku to około −2,5 dB, 50 % około
+  −15,9 dB, 10 % około −48 dB). Góra to 0 dB, a dół to cisza. Podziałki na
+  suwaku oznaczają 0, −2, −4, −6, −8, −10, −12, −15, −20, −25, −30, −40, −50 i
+  −∞ dB, z poziomem zapisanym po ich prawej stronie.
+  - Przeciągnij go: suwak porusza się o tyle, o ile wskaźnik, od miejsca, w
+    którym jest, więc chwycenie go nigdy nie powoduje skoku; kliknięcie bez
+    ruchu nic nie zmienia. Wyciągnięcie poza górę lub dół i powrót zostawia
+    gałkę na końcu, dopóki wskaźnik nie wróci tam, gdzie ją dotarł, więc gałka
+    nigdy nie ucieka od wskaźnika.
+  - Użyj kółka myszy: jeden krok na ząbek (około 0,6 dB przy 0 dB).
+  - Przytrzymaj **Ctrl** lub **Shift** podczas przeciągania albo używania
+    kółka, aby poruszać nim dziesięć razy drobniej.
+  - Kliknij gałkę dwukrotnie, aby wrócić do 0 dB (dwuklik gdzie indziej na
+    suwaku nic nie robi).
+
+  Poziom w dB (jedno miejsce po przecinku albo −∞ dla ciszy) jest zapisany pod
+  suwakiem, w tym samym wierszu co linia głośności miernika, i pokazuje go też
+  podpowiedź. Sesja zapisana przed tą krzywą zachowuje poziom każdego
+  odtwarzacza; zmienia się tylko położenie suwaka.
+  W odtwarzaczu, którego wyjście Main jest bit-perfect, suwak jest zablokowany
+  na 100 % i wyszarzony, pokazuje przyciemnione 0.0, a jego podpowiedź mówi
+  dlaczego (zob. [Jakie są koszty](bit-perfect.md#what-it-costs)).
 - **Tytuł, wykonawca** i wiersz **następny** z zielonym kwadratem. Gdy CUE
   jest włączone, pozycja odsłuchu wstępnego jest pokazana na niebiesko.
 
@@ -96,13 +125,17 @@ karty playlist, transport, głośność i wyjścia.
 
 | Przycisk | Działanie |
 |---|---|
-| **Play / Następny** (duży) | Zatrzymany: uruchamia następny utwór. Na antenie: przechodzi płynnie do następnego utworu (czas wyciszania ustawia się w [Ustawieniach](settings.md)). Wstrzymany: wznawia. Gdy utwór na antenie jest ustawiony jako następny, Play uruchamia go od nowa ze zwykłym wyciszeniem. |
+| **Play / Następny** (duży) | Zatrzymany: uruchamia następny utwór. Na antenie: przechodzi płynnie do następnego utworu (czas wyciszania ustawia się w [Ustawieniach](settings.md)); gdy trwa wyciszanie przy przenikaniu rozpoczętym przez Następny lub przez segue, zielony pas opróżnia się na przycisku przez czas wyciszania, a jego krawędź przesuwa się od lewej do prawej, jak w carcie (przenikanie rozpoczęte przez Poprzedni opróżnia się na przycisku Poprzedni). Wstrzymany: wznawia. Gdy utwór na antenie jest ustawiony jako następny, Play uruchamia go od nowa ze zwykłym wyciszeniem. Na wyjściu bit-perfect przełącza od razu, bez wyciszania, co mówi jego podpowiedź (zob. [Jakie są koszty](bit-perfect.md#what-it-costs)). |
 | **Stop** | Zatrzymuje od razu (z krótką rampą eliminującą trzask) |
-| **Stop z wyciszeniem** | Wycisza i zatrzymuje |
+| **Stop z wyciszeniem** | Wycisza i zatrzymuje. Gdy trwa stop z wyciszeniem, pas opróżnia się na przycisku przez czas wyciszania, a jego krawędź przesuwa się od lewej do prawej |
 | **Pauza** | Wstrzymuje lub wznawia; miga na bursztynowo, gdy jest wstrzymane |
 | **Stop po** (trójkąt odtwarzania, potem kwadrat) | Zatrzymuje po zakończeniu bieżącego utworu, jednorazowo. W trybie SINGLE jest dostępny tylko wtedy, gdy bieżący utwór się powtarza: kończy powtarzanie, gdy skończy się grany właśnie przebieg. Aby zatrzymywać się po utworze za każdym razem, gdy jest grany, lub aby powtarzać utwór, użyj jego menu na playliście (zob. [Playlisty](playlists.md)) |
-| **Poprzedni** (kreska i dwa trójkąty) | Na antenie: płynnie wraca do utworu, który ten odtwarzacz grał wcześniej, tak jak robi to Następny. Naciśnij ponownie, aby cofać się dalej. Utwór, który opuszczasz, staje się następnym. |
+| **Poprzedni** (kreska i dwa trójkąty) | Na antenie: płynnie wraca do utworu, który ten odtwarzacz grał wcześniej, tak jak robi to Następny. Naciśnij ponownie, aby cofać się dalej. Utwór, który opuszczasz, staje się następnym. Na wyjściu bit-perfect przełącza od razu, bez wyciszania (zob. [Jakie są koszty](bit-perfect.md#what-it-costs)). |
 | **Od początku** (kreska i jeden trójkąt) | Wraca na początek bieżącego utworu (do jego cue-in). Wstrzymany odtwarzacz pozostaje wstrzymany. |
+
+Z klawiatury `Up` i `Down` przesuwają zaznaczenie po playliście, `Enter`
+ustawia zaznaczony utwór jako następny, a drugi `Enter` na nim w czasie
+dwukliku go odtwarza. Zob. [Klawiatura](keyboard.md).
 
 Przyciski, które w danej chwili nie mogą działać, są przyciemnione: Stop i
 Od początku, gdy nic nie jest wczytane, Pauza i Stop z wyciszeniem w stanie
@@ -130,7 +163,9 @@ ustawiane w Ustawieniach) odliczanie miga na czerwono.
 ## Przebieg {#waveform}
 
 - Część już odtworzona jest narysowana kolorem przebiegu; reszta jest
-  przyciemniona.
+  przyciemniona. Przy fioletowym kolorze przebiegu fioletowa linia MIX
+  gorzej się wyróżnia; wybierz inny kolor przebiegu, jeśli chcesz je
+  odróżnić.
 - Obrys pokazuje szczyty, słabo; pełne wypełnienie w jego wnętrzu to
   poziom średni (RMS). W głośnym utworze szczyty wypełniają całą wysokość,
   a wypełnienie nadal pokazuje, gdzie utwór jest cichszy lub głośniejszy.
@@ -138,9 +173,11 @@ ustawiane w Ustawieniach) odliczanie miga na czerwono.
   odlicza jego czas. Intro jest widoczne tylko wtedy, gdy zostało ustawione.
 - Pomarańczowe zacieniowane pole na końcu oznacza **outro**, z własnym
   odliczaniem.
-- Przerywana bursztynowa linia z etykietą **MIX** oznacza miejsce, w którym
-  w trybie ciągłym zaczyna się następny utwór. W trybie single jest
-  przyciemniona.
+- Przerywana fioletowa linia (w kolorze plakietki **Miks**, by nie pomylić jej
+  z pomarańczowym outro) z etykietą **MIX** oznacza miejsce, w którym w trybie
+  ciągłym zaczyna się następny utwór. Jest przyciemniona w trybie single oraz
+  w odtwarzaczu, którego wyjście Main jest bit-perfect i nie miksuje (zob.
+  [Jakie są koszty](bit-perfect.md#what-it-costs)).
 - Rysowany jest cały plik. Ciche początek i koniec, które odtwarzanie
   pomija (przed cue-in i po cue-out), są narysowane ciemniej, z cienką
   linią w miejscu, gdzie odtwarzanie się zaczyna i kończy. Przy wyłączonej
@@ -173,12 +210,28 @@ ustawiane w Ustawieniach) odliczanie miga na czerwono.
 ## CUE (odsłuch wstępny) {#cue-pre-listen}
 
 Naciśnięcie **CUE** (albo **Odsłuchaj na CUE** w menu utworu) odtwarza utwór
-na wyjściu CUE odtwarzacza, na przykład w słuchawkach, bez dotykania wyjścia
-na antenie, i otwiera małe **okno CUE** tego odtwarzacza. Można mieć
+na wyjściu CUE odtwarzacza, na przykład w słuchawkach, i otwiera małe **okno
+CUE** tego odtwarzacza. Można mieć
 otwartych kilka okien, po jednym na odtwarzacz. Zob. [Ustawienia](settings.md),
-aby wybrać urządzenie CUE. Odtwarzacz potrzebuje wyjścia Cue, które nie jest
-jego wyjściem Main: bez niego **CUE** i **Odsłuchaj na CUE** są
-przyciemnione, a po najechaniu kursorem pojawia się wyjaśnienie.
+aby wybrać urządzenie CUE. Odtwarzacz potrzebuje wyjścia Cue: bez niego
+**CUE** i **Odsłuchaj na CUE** są przyciemnione, a po najechaniu kursorem
+pojawia się wyjaśnienie.
+
+Przy jednej karcie dźwiękowej wyjście Cue może być samym wyjściem
+antenowym (lub dzielić je z innym odtwarzaczem albo cartwallem). Odsłuch
+wstępny tam jest słyszalny na antenie, więc:
+
+- gdy nic nie gra na tym wyjściu, CUE startuje od razu;
+- gdy coś tam gra (odtwarzacz gra lub jest wstrzymany, cart, inny odsłuch
+  wstępny, odsłuch wstępny biblioteki), CUE najpierw pyta: **Odsłuchaj mimo
+  to** albo **Anuluj** (Anuluj jest domyślne: Esc i Enter anulują). To samo
+  pytanie pochodzi z menu utworu, okna CUE, cartwalla i okna biblioteki;
+- gdy coś startuje na tym wyjściu, podczas gdy gra tam odsłuch wstępny,
+  którego nie potwierdziłeś, odsłuch zatrzymuje się, a pasek stanu mówi
+  dlaczego. Odsłuch wstępny, który potwierdziłeś, gra dalej.
+
+Podpowiedź przycisku CUE mówi, kiedy jego odsłuch wstępny wychodzi na
+wyjściu antenowym.
 
 ![Okno CUE odtwarzacza 4, odsłuchującego wstępnie swój następny utwór](../../images/guide/cue-window.png)
 

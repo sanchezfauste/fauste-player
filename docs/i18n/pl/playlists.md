@@ -18,10 +18,26 @@ Przełączanie kart nigdy nie zmienia tego, co jest na antenie ani co jest
 następne. Gdy utwór się kończy, odtwarzacz kontynuuje w playliście, która
 ten utwór zawiera.
 
-Playlisty tworzy się, zmienia im nazwy i usuwa w [Ustawieniach](settings.md).
-Nie można usunąć ostatniej playlisty ani playlisty z utworem na antenie.
+Przycisk **+** na prawym końcu rzędu tworzy nową playlistę: wpisz nazwę i
+naciśnij Enter lub **Utwórz** (Escape albo kliknięcie poza polem anuluje).
+Nowa playlista od razu pojawia się w kartach tego odtwarzacza, a odtwarzacz ją
+pokazuje. Playlisty można też tworzyć, a także zmieniać im nazwy i usuwać w
+[Ustawieniach](settings.md). Nie można usunąć ostatniej playlisty ani
+playlisty z utworem na antenie.
 
 ## Tabela utworów {#the-track-table}
+
+Każdy plik, który dodasz do playlisty, carta lub przez import pliku M3U albo
+PLS, staje się *utworem* biblioteki i zostaje w niej, gdy usuniesz jego
+pozycję, wyczyścisz cart lub skasujesz playlistę: jego markery, ustawienia
+głośności i tagi są zachowywane na następny raz, gdy dodasz plik. Ten sam plik
+to zawsze jeden utwór: dodanie go dwa razy albo do playlisty i do carta
+sprawia, że jego markery i ustawienia głośności są wspólne wszędzie. Na
+komputerze plik dodany od tej wersji jest tym samym utworem niezależnie od
+ścieżki, którą do niego dotarto (dowiązanie symboliczne ani `..` w ścieżce nie
+tworzą drugiego utworu). Jedyny wyjątek: utwór bez kategorii, którego plik
+zniknął i którego nic już nie używa, sam opuszcza bibliotekę, z wierszem w
+logu.
 
 ![Playlista: odtworzone utwory przyciemnione, utwór na antenie na czerwono, następny utwór na zielono oraz stopka z pozostałym czasem](../../images/guide/playlist.png)
 
@@ -36,6 +52,7 @@ Nie można usunąć ostatniej playlisty ani playlisty z utworem na antenie.
 | Czas | Długość odtwarzania, od cue-in do cue-out (cały plik, gdy **Używaj cue-in i cue-out** jest wyłączone) |
 | Intro | Jak długo trwa intro, od miejsca, w którym utwór zaczyna grać, do jego markera intro; puste, gdy utwór nie ma markera intro |
 | Nazwa pliku | Nazwa pliku z rozszerzeniem |
+| Komentarz | Tag komentarza, w jednym wierszu |
 
 Nowa instalacja pokazuje `#`, Tytuł, Wykonawcę i Czas. Pozostałe kolumny są
 opcjonalne; zob. **Wybór kolumn** niżej. Utwór bez wartości pokazuje pustą
@@ -101,12 +118,14 @@ Kolory wierszy:
 | Czerwone **P2** (lub inny numer) w kolumnie numeru | Na antenie w tamtym odtwarzaczu |
 | **Zielony**, ze strzałką | Następny utwór tego odtwarzacza |
 | Przyciemniony | Już odtworzony w tym odtwarzaczu |
+| Liliowy kontur | Zaznaczony wiersz (kliknij go albo poruszaj się klawiszami Up i Down). Widać go także na czerwonym i zielonym wierszu |
 | Plik z krzyżykiem / ikona ostrzeżenia | Plik brakuje / jest nieczytelny (jest pomijany); najedź na wiersz: okienko zaczyna się od przyczyny, na bursztynowo, a potem zwykłe pola. Brakującego pliku szuka się ponownie co 30 s (`tuning.missing_recheck_ms`). |
 | Strzałki odświeżania po prawej stronie tytułu | Przeanalizowany przez wcześniejszą wersję; nadal gra z tą analizą. **Ustawienia → Analiza → Analizuj nieaktualne utwory** aktualizuje go (utwory w odtwarzaczu i tak są aktualizowane) |
-| Klepsydra po prawej stronie tytułu | Utwór czeka na analizę (najedź na klepsydrę: *Analiza oczekuje*). Mimo to gra, a klepsydra znika po zakończeniu analizy |
+| Klepsydra po prawej stronie tytułu | Utwór czeka na analizę: *Czeka na analizę*, gdy jest w kolejce, *Analiza oczekuje*, gdy nie został jeszcze umieszczony w kolejce. Mimo to gra, a klepsydra znika po zakończeniu analizy. Pokazuje ją też przeanalizowany utwór ponownie umieszczony w kolejce (przez **Analizuj ponownie wszystkie utwory**) |
+| Ikona przebiegu po prawej stronie tytułu | Utwór jest teraz analizowany (*Teraz analizowany*) |
 | Fioletowy | Zaznaczony |
 
-**Podpowiedź utworu.** Najedź na chwilę na wiersz, aby zobaczyć tytuł, wykonawcę, album, datę, gatunek, długość, format (typ, częstotliwość próbkowania i głębię bitową, gdy są znane) oraz ścieżkę pliku. Pole, którego plik nie ma, jest pomijane. Okienko to jedyna informacja po najechaniu na wiersz i nigdy się nie przesuwa, gdy jest pokazane. Dla brakującego lub nieczytelnego pliku zaczyna się od przyczyny.
+**Podpowiedź utworu.** Najedź na chwilę na wiersz, aby zobaczyć tytuł, wykonawcę, album, datę, gatunek, długość, format (typ, częstotliwość próbkowania, głębię bitową i średnią przepływność, na przykład 320 kbps, gdy są znane) oraz ścieżkę pliku. Pole, którego plik nie ma, jest pomijane. Okienko to jedyna informacja po najechaniu na wiersz i nigdy się nie przesuwa, gdy jest pokazane. Dla brakującego lub nieczytelnego pliku zaczyna się od przyczyny.
 
 ## Mysz {#mouse}
 
@@ -121,15 +140,18 @@ Kolory wierszy:
 |---|---|
 | Odtwórz teraz | Uruchamia ten utwór od razu (z miksem, jeśli odtwarzacz jest na antenie) |
 | Ustaw jako następny | To samo co dwuklik. Na utworze na antenie zagra jeszcze raz, od początku, po zakończeniu bieżącego przebiegu (miksując jak Powtarzaj, bez przerwy), po czym odtwarzacz idzie dalej. Działa jednorazowo. Stop po, tryb SINGLE i oznaczenie Stop po nadal najpierw kończą pracę odtwarzacza. Gdy działa CUE, przechodzi na nowy następny utwór |
-| Odsłuchaj na CUE | Odtwarza go na wyjściu CUE (otwiera okno CUE). Przyciemnione, gdy odtwarzacz nie ma wyjścia Cue innego niż Main |
+| Odsłuchaj na CUE | Odtwarza go na wyjściu CUE (otwiera okno CUE). Przyciemnione, gdy odtwarzacz nie ma wyjścia Cue. Na wyjściu antenowym najpierw pyta, gdy coś tam gra (zob. [CUE](players.md#cue-pre-listen)) |
 | Edytuj tagi… | Otwiera edytor tagów dla tego utworu. **Zapisz** zapisuje zmiany w pliku audio; **Anuluj** (lub Esc, gdy nie trwa zapis) zamyka bez zapisywania. Pozycja jest przyciemniona, z przyczyną po najechaniu, gdy utwór jest na antenie, na CUE lub w grającym carcie, gdy jego tagi nie zostały jeszcze odczytane, gdy brakuje pliku oraz dla formatów, których tagów nie da się zapisać (na przykład DSD) |
-| Analizuj ponownie | Analizuje ten utwór od nowa, bez względu na jego stan. Naprawiony plik, który był nieczytelny, jest też podejmowany samoczynnie (zob. [Rozwiązywanie problemów](troubleshooting.md)). Markery ręczne są zachowywane |
+| Analizuj ponownie | Analizuje ten utwór od nowa, bez względu na jego stan, czytając plik jeszcze raz (więc edytowany plik jest mierzony ponownie, nawet jeśli jego rozmiar i data się nie zmieniły). Naprawiony plik, który był nieczytelny, jest też podejmowany samoczynnie (zob. [Rozwiązywanie problemów](troubleshooting.md)). Markery ręczne są zachowywane. Przyciemnione, z przyczyną po najechaniu, gdy utwór już czeka na analizę lub jest analizowany |
+| Głośność… | Otwiera okienko głośności tego utworu (korekta i wyłączenie z normalizacji; zob. [Głośność](loudness.md)) |
+| Pokaż w bibliotece | Otwiera [okno biblioteki](library.md) na kategorii tego utworu z zaznaczonym jego wierszem. Tylko na komputerze |
+| Przenieś do kategorii ▸ | Przypisuje utwór do kategorii albo do „Bez kategorii”, bez otwierania biblioteki. Tylko na komputerze |
 | Dodaj utwory poniżej… | Wybierz pliki do wstawienia po tym utworze |
 | Duplikuj | Wstawia poniżej nieodtworzoną kopię (z jej oznaczeniami powtarzania i stopu po) |
 | Powtarzaj ten utwór | Zaznacz, aby grać go w kółko, bez przerwy, dopóki nie naciśniesz Play (następny), Poprzedni, Stop lub Stop z wyciszeniem albo nie włączysz Stop po. Pauza zachowuje powtarzanie. Ikona powtarzania pojawia się przed tytułem |
 | Stop po tym utworze | Zaznacz, aby zatrzymać odtwarzacz po zakończeniu tego utworu, za każdym razem, gdy jest grany (w dowolnym trybie). W odróżnieniu od przycisku **Stop po** odtwarzacza oznaczenie zostaje przy utworze i jest zapisywane z playlistą. Ikona stopu po pojawia się przed tytułem. Ma pierwszeństwo przed Powtarzaj |
 | Przenieś do ▸ | Przenosi go na koniec innej playlisty |
-| Usuń z playlisty | Usuwa go; niemożliwe, gdy jest na antenie |
+| Usuń z playlisty | Usuwa go z tej playlisty; niemożliwe, gdy jest na antenie. Utwór zostaje w bibliotece (jego markery i ustawienia głośności są zachowywane) |
 
 ## Edycja tagów {#editing-tags}
 
@@ -225,7 +247,13 @@ ignorowane.
 - Upuść pliki lub foldery z menedżera plików na listę, aby wstawić je w
   miejscu upuszczenia. Nad nagłówkiem, krawędzią kolumny, paskiem przewijania
   lub oknem zasłaniającym listę nic nie jest wstawiane. Jeśli system nie
-  podaje pozycji, trafiają na koniec pokazywanej listy.
+  podaje pozycji, trafiają na koniec listy pokazywanej przez ostatnio używany
+  odtwarzacz albo przez pierwszy pokazywany odtwarzacz; gdy każdy odtwarzacz
+  jest ukryty, nic nie jest wstawiane, a pasek stanu o tym informuje (zob.
+  [Układ](layout.md#show-and-hide-panels)).
+  W Linuksie upuszczanie plików wymaga, aby okno działało w X11, co jest
+  domyślne, także na pulpicie Wayland (zob.
+  [Rozwiązywanie problemów](troubleshooting.md#files-cannot-be-dropped-on-linux)).
 
 ## Stopka {#footer}
 
