@@ -193,7 +193,9 @@ pub(crate) struct RowsCache {
     pub whole_library: bool,
     pub query: String,
     pub sort: Option<LibrarySort>,
-    pub index: SearchIndex,
+    /// The folded text of every track, built when a search first needs it
+    /// (a large library's first fold takes tens of milliseconds).
+    pub index: Option<SearchIndex>,
     /// The folded keys of the sort column, for every track of `library`.
     pub sort_keys: Option<SortKeys>,
     pub rows: Vec<TrackId>,
@@ -231,14 +233,16 @@ impl LibraryUi {
             let column = view.sort.map(|sort| sort.column);
             // The index and the sort keys follow the library's changes:
             // only the tracks a change touched are folded again.
-            let (index, sort_keys) = match self.rows.take() {
+            let (mut index, sort_keys) = match self.rows.take() {
                 Some(RowsCache {
                     library,
                     mut index,
                     sort_keys,
                     ..
                 }) => {
-                    index.update(&library, &state.library);
+                    if let Some(index) = index.as_mut() {
+                        index.update(&library, &state.library);
+                    }
                     let sort_keys = match (sort_keys, column) {
                         (Some(mut keys), Some(column)) if keys.column() == column => {
                             keys.update(&library, &state.library, &state.categories);
@@ -251,14 +255,19 @@ impl LibraryUi {
                     (index, sort_keys)
                 }
                 None => (
-                    SearchIndex::build(&state.library),
+                    None,
                     column.map(|c| SortKeys::build(&state.library, &state.categories, c)),
                 ),
             };
+            // No words, no index needed: every track matches.
+            if index.is_none() && !fp_model::library_search::query_words(&self.search).is_empty() {
+                index = Some(SearchIndex::build(&state.library));
+            }
+            let empty = SearchIndex::default();
             let mut rows = library_rows(
                 &state.library,
                 &state.categories,
-                &index,
+                index.as_ref().unwrap_or(&empty),
                 view.selection,
                 view.whole_library,
                 &self.search,
@@ -554,6 +563,22 @@ mod tests {
         s.library
             .track_at(&PathBuf::from(format!("/lib/{name}.mp3")))
             .unwrap()
+    }
+
+    /// The search index is folded only once a search needs it: opening the
+    /// window on a large library costs no index build.
+    #[test]
+    fn the_search_index_is_built_when_a_search_needs_it() {
+        let s = state_with(&["Alpha", "Beta"]);
+        let mut library = LibraryUi::default();
+        assert_eq!(library.rows(&s).len(), 2);
+        assert!(library.rows.as_ref().unwrap().index.is_none(), "no search");
+        library.search = "beta".into();
+        assert_eq!(library.rows(&s), [id(&s, "Beta")]);
+        assert!(library.rows.as_ref().unwrap().index.is_some());
+        library.search.clear();
+        assert_eq!(library.rows(&s).len(), 2);
+        assert!(library.rows.as_ref().unwrap().index.is_some(), "kept");
     }
 
     #[test]
