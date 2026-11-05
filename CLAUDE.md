@@ -64,7 +64,6 @@ Windows, macOS), with an Android app in development on the same core
 cargo fmt --all
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace                        # ~1 min; no audio device or display needed
-cargo nextest run --workspace                 # the same tests, faster (cargo-nextest; CI runs it, .config/nextest.toml)
 cargo test -p <crate> --test it <file>::<name>  # focused run (one binary per crate; see docs/technical/testing.md)
 cargo deny check                              # after dependency changes
 cargo llvm-cov --workspace --html             # test coverage (CI sends it to SonarQube Cloud; see docs/technical/testing.md)

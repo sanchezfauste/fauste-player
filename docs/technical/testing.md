@@ -1,11 +1,7 @@
 # Testing
 
 Run everything with `cargo test --workspace`. It takes about a minute on a
-laptop and needs no sound card and no display. With
-[cargo-nextest](https://nexte.st) installed, `cargo nextest run --workspace`
-runs the same tests faster: every test of every binary at once, each in its
-own process (`.config/nextest.toml`; a test still running after ten minutes
-is killed and named). It does not run doctests; the workspace has none.
+laptop and needs no sound card and no display.
 
 | Layer | Where | How |
 |---|---|---|
@@ -109,7 +105,7 @@ Windows packaging verifies it with the PE subsystem check
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
-NEXTEST_PROFILE=ci cargo llvm-cov nextest --no-report --workspace --locked   # the tests, measuring coverage
+cargo llvm-cov --no-report --workspace --locked   # the tests, measuring coverage
 cargo deny check          # licences, advisories, sources
 ```
 
@@ -131,9 +127,7 @@ Ubuntu packages come through `.github/actions/apt-install`, which keeps the
 downloaded archives in the Actions cache: the runners' Ubuntu mirror is
 sometimes very slow (49 MB in 42 minutes once).
 
-The tests run once, instrumented by `cargo-llvm-cov` and run by
-cargo-nextest with its `ci` profile (every failure reported, no retries), so
-the test binaries run at the same time instead of one after another. Each system writes an
+The tests run once, instrumented by `cargo-llvm-cov`. Each system writes an
 LCOV report with paths relative to the repository root and hit counts capped
 at 2147483647 (SonarQube reads them as 32-bit integers, and the true-peak
 loop runs billions of times), and the `sonarqube` job hands the three to SonarQube Cloud (`sonar-project.properties`), which
