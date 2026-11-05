@@ -3,20 +3,28 @@
 Cada columna és un reproductor. Els reproductors són independents: cadascun
 té les seves pròpies pestanyes de llistes, transport, volum i sortides.
 
-![El reproductor 1 en antena: capçalera, caràtula, títol, pista següent, transport, compte enrere, vúmetre, fader i forma d'ona](../../images/guide/player.png)
+![El reproductor 1 en antena: capçalera amb el guany de sonoritat, caràtula, títol, pista següent, transport, compte enrere, vúmetre, fader i forma d'ona](../../images/guide/player.png)
 
 ## Capçalera {#header}
 
 | Element | Significat |
 |---|---|
 | `P1` … `Pn` | Número del reproductor (la tecla numèrica que el reprodueix) |
+| Botons **Amagar** i **Maximitzar** / **Restaurar** | Els dos botons petits a l'extrem dret de la capçalera: amaguen el reproductor, o el maximitzen per un moment (**Restaurar** mentre és maximitzat). Atenuats mentre la disposició és bloquejada, **Amagar** a l'últim panell mostrat i **Maximitzar** amb un sol panell mostrat (vegeu [Disposició](layout.md#maximize-a-panel)) |
 | Punt d'estat i etiqueta | **En antena** (vermell), **En pausa** (ambre), **Aturat** (gris) |
-| Distintiu **Mescla** / **Fos** | Hi ha en marxa un fos encadenat cap a la pista següent, o un stop amb fos |
+| Columnes estretes | Quan la columna és massa estreta per a tots els distintius, la capçalera deixa caure primer el menys important (el text d'estat, després **Altres silenciades**, l'avís d'entrada, **Stop al final**, **Mescla** / **Fos**, el punt d'estat), de manera que res no se superposa mai. El número del reproductor, **CUE**, el mode, **BP**, el distintiu de guany i els botons **Amagar** i **Maximitzar** sempre es queden. Amplia la columna per veure'ls tots |
+| Distintiu **Mescla** / **Fos** | Hi ha en marxa un fos encadenat cap a la pista següent, o un stop amb fos. **Mescla** no s'encén mai en un reproductor la sortida Main del qual és bit perfect: no fa fos encadenat (vegeu [Què costa](bit-perfect.md#what-it-costs)) |
 | Distintiu **Stop al final** | El reproductor s'atura quan acaba la pista actual |
 | Distintiu **Repetir** / **Aturar després** | La pista actual es repeteix, o atura el reproductor quan acaba, per la seva pròpia marca al menú de la llista. Posa-hi el ratolí a sobre per veure la frase sencera. El botó **Stop al final** del reproductor té prioritat: mentre és activat, només se'n mostra el distintiu |
-| **BP** / **DSD** | **BP** és encès mentre la pista actual arriba sense canvis al seu dispositiu Main. **DSD** el substitueix mentre una pista DSD surt com a DSD, sense canvis (vegeu [Sortida bit perfect](bit-perfect.md)). **Altres silenciades** apareix al costat quan aquest flux DSD manté altres fonts fora de la sortida |
+| Distintiu de guany | Amb la [normalització de la sonoritat](loudness.md#the-gain-in-the-player-header) activada, el guany amb què sona la pista en antena (**+4.0 dB**), o un **0.0 dB** ambre quan la pista sona sense canvis (encara sense mesura, una sortida bit perfect, o una pista exclosa de la normalització). Passa-hi el cursor per veure'n el motiu. Es mostra mentre el reproductor sona o és en pausa |
+| **BP** / **DSD** | El distintiu només es mostra en un reproductor el dispositiu Main del qual funciona en bit perfect; **BP** és encès mentre la pista actual arriba sense canvis a aquest dispositiu. **DSD** el substitueix mentre una pista DSD surt com a DSD, sense canvis (vegeu [Sortida bit perfect](bit-perfect.md)). **Altres silenciades** apareix al costat quan aquest flux DSD manté altres fonts fora de la sortida |
 | **SINGLE** \| **CONT** | Mode de reproducció (vegeu més avall): un sol control unit, la meitat encesa és el mode actiu |
 | **CUE** | Preescolta de la pista següent a la sortida CUE |
+
+Els dos botons petits a l'extrem dret de la capçalera, **Amagar** i
+**Maximitzar** (o **Restaurar**), amaguen el reproductor o el maximitzen per
+un moment; els mateixos dos són al menú d'un clic dret al fons de la capçalera
+(no en un dels seus botons) (vegeu [Disposició](layout.md#maximize-a-panel)).
 
 ## Fila d'informació {#info-row}
 
@@ -92,9 +100,32 @@ té les seves pròpies pestanyes de llistes, transport, volum i sortides.
     - Res al reproductor afegeix guany per sobre del 100 %. Un dispositiu
       d'enters satura al fons d'escala; un dispositiu de coma flotant rep el
       nivell tal com és i el sistema de so o el controlador el satura.
-- **Fader de volum** (a la dreta del mesurador, tan alt com ell): arrossega'l
-  o usa la roda del ratolí, un pas per cada clic de la roda. La informació
-  emergent mostra el nivell en dB; a dalt és 0 dB i a baix és silenci.
+- **Fader de volum** (a la dreta del mesurador, tan alt com ell). Segueix una
+  llei de taula de mescles: és fi prop de dalt i més abrupte cap a baix, de
+  manera que baixar-lo una mica baixa una mica el nivell (el 90 % del recorregut
+  és uns −2,5 dB, el 50 % uns −15,9 dB, el 10 % uns −48 dB). A dalt és 0 dB i a
+  baix és silenci. Unes marques al llarg del fader assenyalen 0, −2, −4, −6, −8,
+  −10, −12, −15, −20, −25, −30, −40, −50 i −∞ dB, amb el nivell escrit a la
+  seva dreta.
+  - Arrossega'l: el fader es mou tant com el punter, des d'on és, de manera que
+    agafar-lo mai no el fa saltar; un clic sense moure no canvia res. Estirar
+    més enllà de dalt o de baix i tornar deixa el pom al capdavall fins que el
+    punter torna on l'havia assolit, de manera que el pom mai no queda lluny
+    del punter.
+  - Usa la roda del ratolí: un pas per cada clic de la roda (uns 0,6 dB prop de
+    0 dB).
+  - Mantén **Ctrl** o **Shift** mentre arrossegues o uses la roda per moure'l
+    deu vegades més fi.
+  - Fes doble clic al pom per tornar a 0 dB (un doble clic en un altre lloc del
+    fader no fa res).
+
+  El nivell en dB (un decimal, o −∞ per al silenci) s'escriu sota el fader, a
+  la mateixa fila que la línia de sonoritat del mesurador, i la informació
+  emergent també el mostra. Una sessió desada abans d'aquesta llei conserva el
+  nivell de cada reproductor; només canvia la posició del fader. En un
+  reproductor la sortida Main del qual és bit perfect el fader es bloqueja al
+  100 % i es posa gris, llegeix un 0.0 atenuat, i la seva informació emergent
+  en diu el motiu (vegeu [Què costa](bit-perfect.md#what-it-costs)).
 - **Títol, artista** i la línia **següent**, amb un quadrat verd. Mentre el
   CUE és actiu, la posició de preescolta es mostra en blau.
 
@@ -102,13 +133,17 @@ té les seves pròpies pestanyes de llistes, transport, volum i sortides.
 
 | Botó | Acció |
 |---|---|
-| **Play / Següent** (gran) | Aturat: inicia la pista següent. En antena: fos cap a la pista següent (el temps del fos es defineix a [Configuració](settings.md)). En pausa: reprèn. Amb la pista en antena com a següent, Play reinicia aquesta pista amb el fos habitual. |
+| **Play / Següent** (gran) | Aturat: inicia la pista següent. En antena: fos cap a la pista següent (el temps del fos es defineix a [Configuració](settings.md)); mentre fa un fos per a un fos encadenat iniciat per Següent o per un segue, una banda verda es buida a través del botó durant la durada del fos, amb la vora movent-se d'esquerra a dreta com la d'un cartutx (un fos encadenat iniciat per Anterior es buida al botó Anterior). En pausa: reprèn. Amb la pista en antena com a següent, Play reinicia aquesta pista amb el fos habitual. En una sortida bit perfect canvia a l'instant, sense fos, i la seva informació emergent ho diu (vegeu [Què costa](bit-perfect.md#what-it-costs)). |
 | **Stop** | Atura a l'instant (amb una breu rampa antiespetec) |
-| **Stop amb fos** | Fa un fos de sortida i atura |
+| **Stop amb fos** | Fa un fos de sortida i atura. Mentre un stop amb fos és en marxa, una banda es buida a través del botó durant la durada del fos, amb la vora movent-se d'esquerra a dreta |
 | **Pausa** | Posa en pausa o reprèn; parpelleja en ambre mentre és en pausa |
 | **Stop al final** (un triangle de reproducció i després un quadrat) | Atura quan acaba la pista actual, una sola vegada. En mode SINGLE només està disponible mentre la pista actual es repeteix: acaba la repetició quan acaba la passada que està sonant. Per aturar després d'una pista cada vegada que es reprodueix, o per repetir una pista, usa el seu menú a la llista (vegeu [Llistes de reproducció](playlists.md)) |
-| **Pista anterior** (una barra i dos triangles) | En antena: fos de tornada cap a la pista que aquest reproductor va reproduir abans, com ho fa Següent. Prem de nou per continuar enrere. La pista que has deixat passa a ser la següent. |
+| **Pista anterior** (una barra i dos triangles) | En antena: fos de tornada cap a la pista que aquest reproductor va reproduir abans, com ho fa Següent. Prem de nou per continuar enrere. La pista que has deixat passa a ser la següent. En una sortida bit perfect canvia a l'instant, sense fos (vegeu [Què costa](bit-perfect.md#what-it-costs)). |
 | **Reiniciar la pista** (una barra i un triangle) | Torna a l'inici de la pista actual (el seu cue-in). Un reproductor en pausa continua en pausa. |
+
+Des del teclat, `Up` i `Down` mouen la selecció per la llista, `Enter`
+estableix la pista seleccionada com a següent, i un segon `Enter` sobre ella
+dins del temps d'un doble clic la reprodueix. Vegeu [Teclat](keyboard.md).
 
 Els botons que ara no poden actuar apareixen atenuats: Stop i Reiniciar sense
 res carregat, Pausa i Stop amb fos mentre està aturat, Anterior sense cap
@@ -136,7 +171,8 @@ vermell.
 ## Forma d'ona {#waveform}
 
 - La part ja reproduïda es dibuixa amb el color de la forma d'ona; la resta és
-  més fosca.
+  més fosca. Amb un color de forma d'ona violeta, la línia MIX violeta destaca
+  menys; tria un altre color de forma d'ona si necessites distingir-los.
 - El contorn mostra els pics, tènuement; el cos massís de dins és el nivell
   mitjà (RMS). En una pista forta els pics omplen l'alçada, i el cos continua
   mostrant on la pista és més fluixa o més forta.
@@ -144,8 +180,11 @@ vermell.
   el compte enrere. La intro només es mostra quan s'ha definit.
 - Una àrea taronja ombrejada al final marca l'**outro**, amb el seu propi
   compte enrere.
-- Una línia ambre discontínua amb una etiqueta **MIX** marca on comença la
-  pista següent en mode continu. Apareix atenuada en mode single.
+- Una línia violeta discontínua (el color del distintiu **Mescla**, perquè no es
+  confongui amb l'outro taronja) amb una etiqueta **MIX** marca on comença la
+  pista següent en mode continu. Apareix atenuada en mode single, i en un
+  reproductor la sortida Main del qual és bit perfect, que no mescla (vegeu
+  [Què costa](bit-perfect.md#what-it-costs)).
 - Es dibuixa tot el fitxer. L'inici i el final en silenci que la reproducció
   omet (abans del cue-in i després del cue-out) es dibuixen més foscos, amb
   una línia fina allà on la reproducció comença i acaba. Amb **Usar cue-in i
@@ -177,13 +216,29 @@ vermell.
 ## CUE (preescolta) {#cue-pre-listen}
 
 Prémer **CUE** (o **Preescoltar al CUE** al menú d'una pista) reprodueix la
-pista a la sortida CUE del reproductor, per exemple uns auriculars, sense
-tocar la sortida en antena, i obre una petita **finestra de CUE** per a aquest
-reproductor. Poden haver-hi diverses finestres obertes, una per reproductor.
-Vegeu [Configuració](settings.md) per triar el dispositiu CUE. Un reproductor
-necessita una sortida Cue que no sigui la seva sortida Main: sense una,
+pista a la sortida CUE del reproductor, per exemple uns auriculars, i obre una
+petita **finestra de CUE** per a aquest reproductor. Poden haver-hi diverses
+finestres obertes, una per reproductor. Vegeu [Configuració](settings.md) per
+triar el dispositiu CUE. Un reproductor necessita una sortida Cue: sense una,
 **CUE** i **Preescoltar al CUE** apareixen atenuats, i en posar-hi el ratolí
 a sobre ho diuen.
+
+Amb una sola targeta de so, la sortida Cue pot ser la mateixa sortida
+d'antena (o compartir-la amb un altre reproductor o amb la cartutxera). Una
+preescolta allà se sent a l'antena, de manera que:
+
+- mentre no sona res en aquella sortida, el CUE comença a l'instant;
+- mentre hi sona alguna cosa (un reproductor sonant o en pausa, un cartutx,
+  una altra preescolta, la preescolta de la biblioteca), el CUE pregunta
+  primer: **Preescoltar igualment** o **Cancel·lar** (Cancel·lar és el valor per
+  defecte: Esc i Enter cancel·len). La mateixa pregunta ve del menú de pista,
+  de la finestra de CUE, de la cartutxera i de la finestra de la biblioteca;
+- quan alguna cosa comença en aquella sortida mentre hi sona una preescolta que
+  no has confirmat, la preescolta s'atura i la barra d'estat en diu el motiu.
+  Una preescolta que has confirmat continua sonant.
+
+La informació emergent del botó CUE diu quan la seva preescolta surt per la
+sortida d'antena.
 
 ![La finestra de CUE del reproductor 4, preescoltant la seva pista següent](../../images/guide/cue-window.png)
 

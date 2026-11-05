@@ -9,6 +9,11 @@ transport. Els reproductors poden encadenar pistes amb mescles superposades,
 preescoltar en una sortida **CUE** a part i sobreviure a les fallades sense
 posar res en antena per si sols.
 
+> **Desenvolupat amb ajuda d'IA i oferit tal qual.** Fauste Player, aquesta
+> guia i les seves traduccions s'han desenvolupat amb ajuda substancial
+> d'eines d'IA. S'ofereix sense cap garantia i l'utilitzes sota el teu propi
+> risc: consulta l'[avís legal](https://github.com/sanchezfauste/fauste-player#disclaimer).
+
 ![Pantalla principal](../../images/main-screen.png)
 
 | Guia | Què tracta |
@@ -19,7 +24,8 @@ posar res en antena per si sols.
 | [Cartutxera](cartwall.md) | Cartutxos instantanis: disparar, pàgines, bucles, cartutxos exclusius, configuració |
 | [Marcadors i mescla](markers-and-mixing.md) | Cue-in/cue-out, el punt MIX, intro i outro, anàlisi automàtica |
 | [Configuració](settings.md) | Sortides d'àudio, reproductors, anàlisi, llistes, MIDI, control remot |
-| [Sortida bit perfect](bit-perfect.md) | Dispositius exclusius que segueixen la freqüència de cada fitxer, el distintiu BP, sortida DSD, comprovar una cadena |
+| [Normalització de la sonoritat](loudness.md) | Totes les pistes i cartutxos amb la mateixa sonoritat mitjançant un guany fix per pista: la insígnia de guany, excloure i ajustar una pista, sortides bit perfect |
+| [Sortida bit perfect](bit-perfect.md) | Un mode especial: sense fosos encadenats, volum al 100 %. Dispositius exclusius que segueixen la freqüència de cada fitxer, el distintiu BP, sortida DSD, comprovar una cadena |
 | [Teclat](keyboard.md) | Dreceres |
 | [Superfícies de control MIDI](midi.md) | Botons, faders i llums en controladors MIDI |
 | [Control remot](remote-control.md) | Manejar Fauste Player per la xarxa: API HTTP, seguretat |
@@ -28,10 +34,10 @@ posar res en antena per si sols.
 
 La interfície està disponible en anglès, castellà, català, neerlandès,
 francès, gallec, alemany, italià, basc, polonès i portuguès. Segueix l'idioma
-del sistema operatiu tret que en triïs un a Configuració. L'anglès i el
-castellà estan escrits a mà; els altres nou s'han generat amb IA i poden
-contenir errors. Si parles algun d'aquests idiomes, les correccions són
-benvingudes com a issues o pull requests.
+del sistema operatiu tret que en triïs un a Configuració. La interfície
+en tots els idiomes, l'anglès i el castellà inclosos, s'ha produït amb IA i
+pot contenir errors. Les correccions són benvingudes com a issues o pull
+requests.
 
 La guia també està disponible en altres idiomes, traduïda amb IA a partir
 de la guia en anglès: a la [guia en línia](https://sanchezfauste.com/fauste-player/guide/),

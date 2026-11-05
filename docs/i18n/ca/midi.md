@@ -17,7 +17,9 @@ les entrades mentre aprens un control; el programa mai no escolta els seus
 propis ports. Els controladors es poden connectar i desconnectar mentre el
 programa s'executa: cada un parell de segons es tornen a cercar els ports, i
 un controlador que torna es connecta pel seu nom, amb les llums tornades a
-ajustar.
+ajustar. **Reconnecta els ports** tanca tots els ports i els torna a obrir
+sense tocar el cable (vegeu [Resolució de
+problemes](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 A Linux, el MIDI passa per ALSA: el teu usuari ha de poder obrir el
 seqüenciador (`/dev/snd/seq`, normalment per ser al grup `audio`).
@@ -45,11 +47,21 @@ assignació.
 - Un botó actua quan es prem (una tecla o un pad que baixa, o un canvi de
   control que puja pel mig del seu interval), exactament com el botó del
   reproductor a la pantalla. Un botó atenuat a la pantalla no fa res.
-- Un fader mou el volum a la mateixa escala que el fader de la pantalla. Per
+  Un botó **CUE** tampoc no fa res quan la seva preescolta se sentiria a
+  l'antena mentre hi sona alguna cosa: el MIDI no pot respondre la pregunta que
+  fa la pantalla. Aturar una preescolta sempre funciona.
+- Un fader mou el volum a la mateixa escala (la mateixa llei de taula de
+  mescles) que el fader de la pantalla. Per
   evitar salts, només n'assumeix el control quan arriba al volum actual o el
   passa (soft takeover); si el volum es canvia a la pantalla, el fader l'ha de
   tornar a atrapar. No canvia res fins que mous un control: iniciar el
   programa mai no posa res en antena.
+- Una assignació de volum d'un reproductor la sortida Main del qual és [bit
+  perfect](bit-perfect.md#what-it-costs) no fa res: el seu volum es manté al
+  100 %. Quan la sortida ja no és bit perfect, mou el control fins dalt per
+  tornar a agafar el volum.
+- Play / Següent i Anterior en aquest reproductor canvien a l'instant, sense
+  fos encadenat. Les seves llums funcionen com sempre.
 - Amb **Encendre els botons (LED)** activat, els botons assignats
   s'il·luminen: Play mentre el reproductor és en antena, Pausa parpellejant
   mentre és en pausa, CUE mentre preescoltes, i Stop, Stop amb fos,

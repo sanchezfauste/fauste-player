@@ -8,51 +8,63 @@ La finestra té una sola mida (900 × 640, més petita en una pantalla petita)
 sigui quina sigui la secció, i la secció es desplaça dins seu. Cada secció
 alinea les seves etiquetes en una sola columna.
 
-Les seccions Reproductors, Vúmetres, Anàlisi i Dreceres de teclat tenen un
+Les seccions Reproductors, Vúmetres, Anàlisi, Sonoritat i Dreceres de teclat tenen un
 botó **Restaurar els valors per defecte** a la capçalera. Demana confirmació
 i després restableix només aquella secció (Reproductors conserva el nombre de
 reproductors i l'idioma; Dreceres no té cap altre botó de restabliment).
-Sortides d'àudio, Llistes, Cartutxera, MIDI i Remot no en tenen.
+Sortides d'àudio, Llistes, Cartutxera, Biblioteca, MIDI i Remot no en tenen.
 
-## Reinici pendent {#restart-pending}
+## Ajustos pendents {#settings-pending}
 
-Alguns canvis només tenen efecte quan l'aplicació torna a iniciar-se: el
-sistema d'àudio, la freqüència de mostreig, la mida del búfer (també la
-pròpia d'un dispositiu), les sortides Main i Cue (reproductors i cartutxera),
-els dispositius bit perfect i els ajustos DSD. El nombre de reproductors no
-n'és un: s'aplica a l'instant.
+Tots els ajustos s'apliquen mentre l'aplicació s'executa. El sistema d'àudio,
+la freqüència de mostreig, la mida del búfer (també la pròpia d'un
+dispositiu), les sortides Main i Cue (reproductors i cartutxera), els
+dispositius bit perfect i els ajustos DSD canvien com s'obre un dispositiu de
+sortida, de manera que s'apliquen tan bon punt és segur:
+
+- Els ajustos d'un dispositiu s'apliquen quan no hi sona res: cap reproductor
+  dirigit a ell no està sonant, fent un fos ni preescoltant (CUE, també quan
+  és retingut), i cap cartutx hi sona. Un reproductor en pausa, o amb una pista
+  només carregada, no reté un dispositiu: la seva pista es queda en pausa on
+  era.
+- La sortida d'un reproductor o de la cartutxera es mou quan aquell
+  reproductor (o la cartutxera) no sona; els altres reproductors als mateixos
+  dispositius no s'interrompen.
+- Un sistema d'àudio nou s'aplica quan no sona res enlloc.
+
+Un canvi en espera s'executa en el primer moment en què no sona res del que
+afecta. Pot ser l'interval entre el final d'una pista i el començament de la
+següent: la pista següent llavors comença més tard pel temps que triga el
+dispositiu a tornar-se a obrir. **Aplicar ara** (més avall) força el canvi a
+l'instant.
 
 Una freqüència o un búfer donats a un dispositiu només compten quan canvien
 amb què el dispositiu s'obre: donar a un dispositiu el mateix valor que el
-global, o esborrar un valor així, no queda pendent.
+global, o esborrar un valor així, no canvia res.
 
-Els límits i els ajustos del motor també s'apliquen a l'inici següent, però
-s'editen al fitxer de configuració amb l'aplicació tancada (vegeu
-[Dades i còpies de seguretat](data-and-backups.md)), de manera que mai no
-apareixen com a pendents.
+Fins aleshores la barra superior mostra **Ajustos pendents**. Posa-hi el
+ratolí a sobre per veure què espera i per què; fes-hi clic per veure la llista,
+que també mostra qualsevol canvi que un dispositiu o una sortida hagi refusat
+(el dispositiu conserva els seus ajustos actuals; el canvi es torna a provar
+quan el canvies o prems **Aplicar ara**). El peu de Configuració diu «Alguns
+canvis esperen que les sortides que afecten quedin lliures.» i ofereix
+**Aplicar ara**; un avís breu (per exemple, que s'ha desat un ajust) pot
+ocupar un moment el lloc d'aquest text.
 
-Mentre un d'aquests està en espera, el peu de Configuració diu «Alguns canvis
-s'apliquen després de reiniciar.» i ofereix **Reiniciar ara**, i la barra
-superior mostra una píndola **Reinici pendent**. Posa-hi el ratolí a sobre
-per veure què està esperant. Un avís breu (per exemple, que s'ha desat un
-ajust) pot ocupar un moment el lloc del text del peu; **Reiniciar ara** es
-queda. Tots dos fan el mateix:
+**Aplicar ara** aplica a l'instant tots els canvis de sortida en espera.
+Quan això interrompria alguna cosa, primer llista els dispositius i el que hi
+sona; **Interrompre i aplicar** interromp llavors breument l'àudio d'aquests
+dispositius: el que sonava continua d'on era després d'un breu buit, i no
+comença res del que era en pausa o aturat. **Cancel·lar** (o `Esc`) continua
+esperant.
 
-- Quan no hi ha res en antena, **Reiniciar ara** (o la píndola) reinicia a
-  l'instant.
-- Quan hi ha alguna cosa en antena, apareix la finestra que llista el que
-  sona, amb **Aturar i reiniciar** o **Cancel·lar**.
-
-Primer es desa la sessió i s'aturen l'àudio i el control MIDI, després
-l'aplicació torna a iniciar-se amb la mateixa carpeta de dades
-(`FAUSTE_HOME`), i després no es posa res en antena per si sol. Si
-l'aplicació no es pot tornar a iniciar (en un Flatpak, també quan la nova no
-s'inicia a temps), ho diu; inicia-la des del menú d'aplicacions.
+Els límits i els ajustos del motor s'editen al fitxer de configuració amb
+l'aplicació tancada (vegeu [Dades i còpies de seguretat](data-and-backups.md)).
 
 ## Sortides d'àudio {#audio-outputs}
 
-Els canvis d'aquesta secció esperen un reinici: vegeu
-[Reinici pendent](#restart-pending).
+Els canvis d'aquesta secció s'apliquen mentre l'aplicació s'executa, tan bon
+punt no hi sona res del que afecten: vegeu [Ajustos pendents](#settings-pending).
 
 ![Configuració, Sortides d'àudio, vista Bàsic: el selector, el sistema d'àudio, la freqüència de mostreig, la mida del búfer i les sortides Main i Cue de cada reproductor (aquí el sistema silenciós)](../../images/guide/settings-outputs.png)
 
@@ -72,25 +84,26 @@ nou (per exemple després d'intercanviar dos dispositius) els conserva.
 |---|---|
 | Sistema d'àudio | L'última opció, **Sense sortida (silenci)**, no reprodueix res: les línies de temps avancen al ritme del temps real sense targeta de so (per a una màquina que no en té, o per assajar). Linux: PipeWire (a les compilacions que l'inclouen), PulseAudio, JACK o ALSA. Windows: WASAPI, ASIO (a les compilacions que l'inclouen) o JACK. macOS: Core Audio o JACK. Els sistemes que falten en aquest ordinador, o sense dispositiu de sortida (un servidor JACK que no s'està executant), es mostren com a no disponibles. «Predeterminat del sistema» usa el primer disponible en aquest ordre. |
 | Freqüència de mostreig | La freqüència a la qual funciona cada sortida tret que un dispositiu en tingui una de pròpia (Avançat); els fitxers s'hi converteixen amb un remostreig d'alta qualitat. Els dispositius bit perfect comencen a la seva freqüència i després segueixen els fitxers. |
-| Mida del búfer | Fotogrames per bloc d'àudio, tret que un dispositiu en tingui una de pròpia; la latència resultant es mostra a sota |
-| Sortides per reproductor | Per a cada reproductor, un dispositiu **Main** (en antena) i un dispositiu **Cue** (preescolta), cadascun amb un parell de canals. Una targeta de so que ofereix diversos perfils de sortida (ALSA llista frontal, surround, maquinari directe…) mostra cadascun com a *targeta — perfil*; dues entrades que encara es llegirien igual reben l'identificador del dispositiu entre parèntesis. Les interfícies multicanal poden portar diversos reproductors en parells diferents. |
+| Mida del búfer | Fotogrames per bloc d'àudio, tret que un dispositiu en tingui una de pròpia; la latència resultant es mostra a sota. Les sortides a través d'un servidor de so o d'un mesclador del sistema (PulseAudio, el dispositiu `default` d'ALSA) demanen almenys 50 ms sigui quina sigui aquesta mida, o tant com accepti el dispositiu, perquè no se senti un ordinador ocupat; la latència llavors ho diu (`shared_buffer_ms` al fitxer de configuració) |
+| Sortides per reproductor | Per a cada reproductor, un dispositiu **Main** (en antena) i un dispositiu **Cue** (preescolta), cadascun amb un parell de canals. Una targeta de so que ofereix diversos perfils de sortida (ALSA llista frontal, surround, maquinari directe…) mostra cadascun com a *targeta — perfil*; dues entrades que encara es llegirien igual reben l'identificador del dispositiu entre parèntesis. Les interfícies multicanal poden portar diversos reproductors en parells diferents. Es permet una sortida Cue que comparteix una sortida d'antena (el Main de qualsevol reproductor o el de la cartutxera): una nota a sota diu que la seva preescolta se sent a l'antena i que pregunta primer mentre hi sona alguna cosa. |
 | Provar Main / Provar Cue | Reprodueix un to breu (1 kHz a Main, 440 Hz a Cue, 1,5 s, −18 dBFS) a la sortida triada, de manera que puguis comprovar el cablejat abans de sortir en antena |
-| Cartutxera | Les sortides Main i Cue de la cartutxera. Main per defecte és la sortida del sistema. Sense Cue no hi ha preescolta dels cartutxos. |
+| Biblioteca | La sortida Cue de la biblioteca, amb el seu propi **Provar Cue**: on se sent la [preescolta](library.md#pre-listening) de la finestra de la biblioteca (en un mòbil, la de la pestanya Biblioteca). Sense ella, Preescolta de la barra de previsualització és atenuat. A Android la seva elecció buida diu *Predeterminat del sistema* en lloc de *Cap*: la preescolta i **Provar Cue** sonen llavors per la sortida predeterminada (vegeu [Android → Biblioteca](android.md#library)). Una sortida Biblioteca en una sortida d'antena funciona com el Cue d'un reproductor: una nota a sota diu que la seva preescolta se sent a l'antena i que pregunta primer mentre hi sona alguna cosa. És a les vistes Bàsic i Avançat, també en un mòbil |
+| Cartutxera | Les sortides Main i Cue de la cartutxera. Main per defecte és la sortida del sistema. Sense Cue no hi ha preescolta dels cartutxos; un Cue en una sortida d'antena funciona com als reproductors. |
 | Freqüència de mostreig: *dispositiu* (Avançat) | **Global (...)** usa la freqüència de mostreig de dalt; un valor dona a aquest dispositiu la seva pròpia freqüència. Només s'ofereixen les freqüències que el dispositiu indica; una freqüència desada que ja no indica continua llistada amb una nota que potser no s'obrirà (el dispositiu torna aleshores a la freqüència global). Els valors propis només s'apliquen als dispositius que nomena una sortida, no a la sortida predeterminada del sistema tret que n'hi hagi una que ho faci. |
-| Mida del búfer: *dispositiu* (Avançat) | **Global (...)** usa la mida del búfer de dalt; un valor dona a aquest dispositiu la seva pròpia, amb la latència a sota. Un dispositiu que no accepta una mida de búfer pròpia torna a la global, i també a la freqüència global quan tampoc no accepta una freqüència pròpia. |
-| Bit perfect: *dispositiu* (Avançat) | Un dispositiu bit perfect s'obre amb accés exclusiu i segueix la freqüència de mostreig de cada fitxer mentre no hi sona res. L'interruptor és desactivat allà on el dispositiu no pot donar accés exclusiu. Vegeu [Sortida bit perfect](bit-perfect.md). |
+| Mida del búfer: *dispositiu* (Avançat) | **Global (...)** usa la mida del búfer de dalt; (amb el mínim que demana una sortida compartida, com més amunt); un valor dona a aquest dispositiu la seva pròpia, usada tal com és, amb la latència a sota. Un dispositiu que no accepta una mida de búfer pròpia torna a la global, i també a la freqüència global quan tampoc no accepta una freqüència pròpia. |
+| Bit perfect: *dispositiu* (Avançat) | Desactivat per defecte. Un mode especial per a l'escolta audiòfila, no per a programes mesclats: el dispositiu s'obre amb accés exclusiu i segueix la freqüència de mostreig de cada pista. Els reproductors la sortida Main dels quals hi és mai no fan fos encadenat ni mesclen, un canvi de freqüència deixa un breu silenci entre dues pistes, i el seu volum es manté al 100 %. L'interruptor és desactivat allà on el dispositiu no pot donar accés exclusiu. Vegeu [Què costa](bit-perfect.md#what-it-costs). |
 | DSD: *dispositiu* (Avançat) | **Convertir a PCM** (per defecte), **DoP** o, a Linux, **DSD natiu**. Tots els dispositius ho mostren; només s'ofereixen els modes que el dispositiu pot acceptar, i una línia a sota diu per què no els altres. Vegeu [DSD](bit-perfect.md#dsd). |
 | Quan una altra font necessita una sortida DSD (Avançat) | **Continuar la pista DSD en PCM** (per defecte), o **Mantenir el DSD i silenciar les altres fonts**. Vegeu [DSD](bit-perfect.md#dsd). |
 | Silenci DSD (Avançat) | Silenci enviat abans que comenci un flux DSD, quan acaba i en passar a PCM, perquè el convertidor s'enganxi sense espetec; 200 ms per defecte, de 0 a 2000. |
 
-Una sortida Cue mai no torna a la sortida que usa Main, de manera que la
-preescolta mai no surt en antena. Un Cue que anomena un dispositiu d'un
-sistema d'àudio que aquest ordinador no té, o la mateixa sortida (dispositiu
-i canals) que Main, vol dir «sense cue». Quan una sortida Cue és la mateixa
-que la seva sortida Main, un avís a sota ho diu. Un reproductor sense sortida
-Cue, o amb el Cue a la seva sortida Main, té el botó **CUE** atenuat; en
-posar-hi el ratolí a sobre et diu que triïs aquí una sortida Cue. El mateix
-val per a **Preescoltar al CUE** de la cartutxera.
+Una sortida Cue mai no torna a la sortida que usa Main. Un Cue que anomena un
+dispositiu d'un sistema d'àudio que aquest ordinador no té vol dir «sense
+cue». Es permet un Cue en una sortida d'antena (el mateix dispositiu i canals
+que un Main, o que se superposin): una nota a sota diu que la seva preescolta
+se sent a l'antena i que pregunta primer mentre hi sona alguna cosa. Un
+reproductor sense sortida Cue té el botó **CUE** atenuat; en posar-hi el
+ratolí a sobre et diu que triïs aquí una sortida Cue. El mateix val per a
+**Preescoltar al CUE** de la cartutxera.
 
 Si un dispositiu desapareix mentre sona, els reproductors conserven les seves
 línies de temps, i el dispositiu es torna a obrir quan torna (vegeu
@@ -103,12 +116,17 @@ línies de temps, i el dispositiu es torna a obrir quan torna (vegeu
 | Ajust | Per defecte | Significat |
 |---|---|---|
 | Idioma | Sistema | Idioma de la interfície |
-| Nombre de reproductors | 4 | Columnes de la pantalla principal (no es pot treure un reproductor en antena) |
+| Nombre de reproductors | 4 | Columnes de la pantalla principal (no es pot treure un reproductor en antena). El nombre s'aplica quan deixes anar el control lliscant; un nombre escrit al quadre s'aplica quan prems Enter o surts del quadre, i Escape el cancel·la |
 | Mode per defecte | CONT | El mode amb què comencen els reproductors |
-| Durada del fos | 1000 ms | Usat per Play en antena i per Stop amb fos |
-| Mescla automàtica al punt MIX | Activada | Superposa les pistes en mode continu |
+| Durada del fos | 1000 ms | Usat per Play en antena i per Stop amb fos. En un reproductor la sortida Main del qual és bit perfect, només per Stop amb fos |
+| Mescla automàtica al punt MIX | Activada | Superposa les pistes en mode continu. No s'aplica a un reproductor la sortida Main del qual és bit perfect |
 | Usar cue-in i cue-out | Activat | Desactivat: els reproductors reprodueixen cada pista de l'inici al final del fitxer; els marcadors es conserven i els cartutxos continuen usant els seus. Les durades i els totals de les llistes segueixen el mateix interval |
 | Avís de final de pista | 10 s | Quan el compte enrere comença a parpellejar en vermell |
+
+Mentre la sortida Main d'un reproductor és bit perfect, una nota sota **Mescla
+automàtica al punt MIX** diu que aquests reproductors mai no mesclen ni fan fos
+encadenat. Tots dos ajustos continuen editables: encara s'apliquen als altres
+reproductors. Vegeu [Què costa](bit-perfect.md#what-it-costs).
 
 ## Vúmetres {#meters}
 
@@ -157,9 +175,16 @@ canals:
 
 ![Configuració, Anàlisi: els llindars dels marcadors automàtics](../../images/guide/settings-analysis.png)
 
-Els llindars descrits a [Marcadors i mescla](markers-and-mixing.md).
+Els llindars descrits a [Marcadors i mescla](markers-and-mixing.md); cada fila
+té sota el seu nom una indicació d'una línia que diu què fa el valor.
 **Tornar a analitzar totes les pistes** executa de nou l'anàlisi per a tota
-la biblioteca; els marcadors manuals es conserven.
+la biblioteca, llegint cada fitxer de nou; els marcadors manuals es conserven.
+Mentre s'executa, el botó és atenuat i mostra fins on ha arribat
+(**Analitzant… 120 de 340**), de manera que prémer-lo de nou no comença de nou;
+la informació emergent de **Analitzant N pistes** de la barra d'estat dona el
+mateix progrés. Canviar-hi un llindar també analitza de nou la biblioteca, i
+reinicia una execució ja en marxa perquè cap pista conservi marcadors dels
+valors antics.
 
 Després d'una actualització en què ha canviat l'anàlisi, les pistes
 analitzades per la versió anterior conserven els marcadors i les formes
@@ -170,6 +195,40 @@ dels reproductors s'actualitzen igualment, a mesura que es mostren, i també
 les pistes dels cartutxos que no tenen format registrat (un cartutx només es
 reprodueix bit perfect quan se'n coneix el format). Les pistes el fitxer de
 les quals falta no es compten fins que el fitxer torna.
+
+L'anàlisi també mesura la sonoritat de cada fitxer per a la [normalització de
+la sonoritat](loudness.md). Els fitxers analitzats abans que es mesurés la
+sonoritat es mesuren en segon pla, quan l'anàlisi no té res més a fer, tant si
+la normalització és activada com desactivada; els seus marcadors no es toquen.
+**Tornar a analitzar** (al menú de la llista) i **Tornar a analitzar totes les
+pistes** tornen a mesurar.
+
+## Sonoritat {#loudness}
+
+![Configuració, Sonoritat: normalització activada, amb l'objectiu, el sostre de true peak, el guany màxim i l'ajust màxim als seus valors per defecte](../../images/guide/settings-loudness.png)
+
+Reprodueix cada pista i cada cartutx amb la mateixa sonoritat, amb un guany fix
+per pista. La [normalització de la sonoritat](loudness.md) explica com es
+calcula el guany, el distintiu de la capçalera del reproductor i els ajustos
+per pista.
+
+| Ajust | Per defecte | Interval | Significat |
+|---|---|---|---|
+| Normalitzar la sonoritat | Activada | | Normalització activada o desactivada |
+| Objectiu | −16 LUFS | −36 … −6 LUFS, passos de 0,5 | La sonoritat integrada a la qual es porta cada pista |
+| Sostre de true peak | −1 dBTP | −12 … 0 dBTP, passos de 0,1 | Una pujada mai porta el true peak de la pista per sobre d'això. Les baixades no es limiten |
+| Guany màxim | 12 dB | 0 … 24 dB | El guany més gran que pot rebre una pista fluixa. Les baixades no es limiten |
+| Ajust màxim | 12 dB | 0 … 24 dB | Fins on pot arribar l'ajust manual de cada pista, amunt o avall |
+
+Els canvis s'apliquen a les pistes que es carreguin després: el que sona
+conserva el seu guany, i la pista següent que espera a cada reproductor es torna
+a preparar amb el nou. Una nota sota els ajustos diu quantes pistes encara
+esperen la seva mesura; sonen sense canvis fins que s'acabi. Un reproductor o un
+cartutx en una sortida bit perfect no es normalitza mai. **Restaurar els valors
+per defecte** restableix només aquesta secció (normalització activada). La
+normalització és activada per a les instal·lacions noves; una configuració
+existent conserva el seu ajust actual (cada configuració desada ja en guarda el
+valor).
 
 ## Llistes {#playlists}
 
@@ -195,9 +254,9 @@ francès, el portuguès del Brasil usa el portuguès), i l'anglès en cas
 contrari. Un idioma del fitxer de configuració que la interfície no té
 apareix com a **Sistema** i segueix el sistema operatiu.
 
-L'anglès i el castellà estan escrits a mà. Les altres traduccions s'han
-generat amb IA i poden contenir errors; quan se n'usa una, **Quant a Fauste
-Player** ho diu. Les correccions de parlants nadius són benvingudes com a
+La interfície en tots els idiomes, l'anglès i el castellà inclosos, s'ha
+produït amb IA i pot contenir errors. **Quant a Fauste Player** porta un avís
+legal general que els cobreix tots. Les correccions són benvingudes com a
 issues o pull requests.
 
 ## Cartutxera {#cartwall}
@@ -206,6 +265,14 @@ issues o pull requests.
 
 Pàgines, mida de la graella, l'editor de cartutxos, i importació i exportació
 de pàgines de cartutxos. Vegeu [Cartutxera](cartwall.md).
+
+## Biblioteca {#library}
+
+Crea, canvia el nom, el color i el tipus, mou (arrossegant) i elimina les
+categories que agrupen les teves pistes, vigila una carpeta amb una categoria i
+treu-ne les pistes que falten, sense obrir la finestra de la biblioteca. Vegeu
+[Biblioteca](library.md#categories) i
+[Carpetes vigilades](library.md#watched-folders).
 
 ## Dreceres de teclat {#keyboard-shortcuts}
 
@@ -217,8 +284,9 @@ Vegeu [Teclat](keyboard.md).
 
 ![Configuració, MIDI, amb el control MIDI desactivat](../../images/guide/settings-midi.png)
 
-Activa les superfícies de control MIDI, mira els ports d'entrada i aprèn un
-control per a cada acció dels reproductors. Vegeu
+Activa les superfícies de control MIDI, mira els ports d'entrada (**Reconnecta
+els ports** els torna a obrir, com si tornessis a connectar els controladors) i
+aprèn un control per a cada acció dels reproductors. Vegeu
 [Superfícies de control MIDI](midi.md).
 
 ## Remot {#remote}

@@ -15,14 +15,18 @@ els substitueix.
 
 ## Editar marcadors {#editing-markers}
 
-A la forma d'ona d'un reproductor, o a la de la seva finestra de CUE (el
-mateix menú i les mateixes nanses; un canvi es veu a tots dos alhora):
+A la forma d'ona d'un reproductor, a la de la seva finestra de CUE o a la
+[barra de preescolta de la finestra de la biblioteca](library.md#pre-listening)
+(el mateix menú i les mateixes nanses; un canvi es veu alhora a tot arreu on
+és la pista):
 
 - **Clic dret** allà on vulguis un marcador i tria **Posar el cue-in aquí**,
   **Posar el final de la intro aquí**, **Posar l'inici de l'outro aquí**,
   **Posar el punt MIX aquí** o **Posar el cue-out aquí**. **Tornar als
   marcadors automàtics** treu els marcadors que has col·locat, i la pista
-  s'analitza de nou.
+  s'analitza de nou. **Sonoritat…** obre els ajustos de [normalització de la
+  sonoritat](loudness.md#per-track-exclude-and-trim) de la pista: excloure-la,
+  o ajustar-ne el guany.
 - **Mantén Alt** (Option a macOS): apareixen nanses als marcadors. Arrossega'n
   una per moure'l; el temps es mostra mentre arrossegues. Un arrossegament
   mai no mou el cap de reproducció.
@@ -86,6 +90,10 @@ les pistes s'analitzen de nou automàticament.
 - **Mode single**, o **Stop al final**: el reproductor s'atura al cue-out.
 - **Prémer Play en antena:** la pista següent comença a l'instant i l'actual
   fa un fos de sortida durant la *durada del fos* (1 s per defecte).
+- **Un reproductor la sortida Main del qual és bit perfect** ignora el punt
+  MIX i la mescla automàtica: cada pista es reprodueix fins al seu cue-out, i
+  després comença la següent, i Play en antena canvia a l'instant, sense fos.
+  Vegeu [Què costa](bit-perfect.md#what-it-costs).
 - **Usar cue-in i cue-out desactivat** (Configuració → Reproductors): cada
   reproductor reprodueix cada pista de 0 al final del fitxer. El cue-in i el
   cue-out, automàtics i manuals, es conserven, i la forma d'ona els dibuixa
