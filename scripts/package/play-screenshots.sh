@@ -337,13 +337,25 @@ tap() { shell input tap "$1" "$2"; sleep "${3:-1}"; }
 ROW_MUSIC=470
 ROW_DEVICE=1100
 
-# Music's track list: its songs and those of its subcategories.
+# Music's track list: its songs and those of its subcategories, with the
+# pre-listen card open on the first song (LB54), stopped, so nothing in it
+# moves: its 🎧 picks it, and the question about the on-air output (the
+# paused players hold it) is answered by a tap beside it (the list's title),
+# which cancels it; the strip opens the card and a tap on its waveform sets
+# where Play would start.
 library_scene() {
     tap 300 "$ROW_MUSIC" 1.5
+    tap 996 908 1.5 # the first song's 🎧
+    tap 300 360 1 # beside the question
+    tap 700 756 1.5 # the strip
+    tap 441 1650 1 # the card's waveform, at 40 %
 }
 
 # Device music: the Demo folder, three songs chosen.
 music_scene() {
+    # Back closes the card, then leaves the list for the selector.
+    shell input keyevent KEYCODE_BACK
+    sleep 1
     shell input keyevent KEYCODE_BACK
     sleep 1
     tap 300 "$ROW_DEVICE" 1.5 # Device music
@@ -371,6 +383,9 @@ path, lang = sys.argv[1:]
 with open(path) as f:
     doc = json.load(f)
 doc["config"].setdefault("ui", {})["language"] = lang
+# As on a phone (LB46): the library's pre-listen plays on the default
+# output, which the host's demo state turns off.
+doc["config"].setdefault("outputs", {}).setdefault("library", {})["default_output"] = True
 with open(path, "w") as f:
     json.dump(doc, f, indent=2)
 EOF2

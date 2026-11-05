@@ -1367,3 +1367,156 @@ fn the_header_buttons_sit_at_the_right() {
     let plus = h.get_by_label(PLUS).rect();
     assert!(plus.right() >= PORTRAIT.x - 24.0, "{plus:?}");
 }
+
+// Plan 9: the pre-listen card (LB54–LB57).
+
+const OPEN_CARD: &str = "Show the pre-listen card";
+const CLOSE_CARD: &str = "Hide the pre-listen card";
+const CARD_WAVE: &str = "Library CUE waveform: click to seek";
+
+fn seeks(fake: &Fake) -> Vec<f64> {
+    fake.take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::SeekLibraryCue(secs) => Some(secs),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Rock's list with Alpha pre-listening and the card open.
+fn card_open(s: AppState) -> (H, Arc<Fake>) {
+    let (mut h, fake) = rock_list(s);
+    tap(&mut h, OPEN_CARD);
+    assert!(h.query_by_label(CARD_WAVE).is_some(), "the card's waveform");
+    fake.take_sent();
+    (h, fake)
+}
+
+#[test]
+fn lb54_a_tap_on_the_strip_opens_the_card() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, _fake) = rock_list(s);
+    assert!(h.query_by_label(CARD_WAVE).is_none(), "closed at first");
+    tap(&mut h, OPEN_CARD);
+    assert!(h.query_by_label(CARD_WAVE).is_some());
+    tap(&mut h, CLOSE_CARD);
+    assert!(h.query_by_label(CARD_WAVE).is_none());
+    assert!(h.query_by_label(OPEN_CARD).is_some());
+}
+
+#[test]
+fn lb54_no_track_no_card() {
+    let (s, _a, _b) = with_tracks();
+    let (h, _fake) = rock_list(s);
+    assert!(h.query_by_label(OPEN_CARD).is_none());
+    assert!(h.query_by_label(CARD_WAVE).is_none());
+}
+
+#[test]
+fn lb54_a_tap_on_stop_leaves_the_card_as_it_was() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = card_open(s);
+    // The strip's Stop comes first; the card has its own.
+    h.get_all_by_label(STOP).next().unwrap().click();
+    h.run_steps(3);
+    assert_eq!(cue_commands(&fake), [Command::StopLibraryCue]);
+    assert!(h.query_by_label(CARD_WAVE).is_some(), "still open");
+    // Stopped with the card open, the strip offers Play.
+    assert!(h.query_by_label(CLOSE_CARD).is_some());
+    h.get_all_by_label("Pre-listen").next().unwrap().click();
+    h.run_steps(3);
+    assert_eq!(cue_commands(&fake), [Command::PlayLibraryCue]);
+}
+
+#[test]
+fn lb57_back_closes_the_card_first() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = card_open(s);
+    assert!(back(&mut h));
+    assert!(h.query_by_label(CARD_WAVE).is_none(), "the card closed");
+    assert!(!on_selector(&h), "still on the list");
+    assert!(cue_commands(&fake).is_empty(), "the preview goes on");
+    assert!(back(&mut h));
+    assert!(on_selector(&h));
+}
+
+#[test]
+fn lb56_a_tap_on_the_card_wave_seeks() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = card_open(s);
+    let wave = h.get_by_label(CARD_WAVE).rect();
+    click_at(
+        &mut h,
+        egui::pos2(wave.center().x, wave.center().y),
+        egui::PointerButton::Primary,
+    );
+    let sent = seeks(&fake);
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    // Alpha is 205 s long: the middle is about 102 s.
+    assert!((sent[0] - 102.5).abs() < 8.0, "{sent:?}");
+}
+
+#[test]
+fn lb56_locked_the_card_wave_does_not_seek() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    s.layout.touch_locked = true;
+    let (mut h, fake) = card_open(s);
+    let wave = h.get_by_label(CARD_WAVE).rect();
+    click_at(&mut h, wave.center(), egui::PointerButton::Primary);
+    assert!(seeks(&fake).is_empty());
+}
+
+#[test]
+fn lb54_the_card_closes_when_its_track_leaves_the_library() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = card_open(s.clone());
+    fp_model::apply(&mut s, Command::RemoveTracks(vec![a])).unwrap();
+    assert_eq!(s.library_cue.track, None);
+    fake.state.store(Arc::new(s));
+    h.run_steps(3);
+    assert!(h.query_by_label(CARD_WAVE).is_none());
+    assert!(h.query_by_label(OPEN_CARD).is_none());
+}
+
+#[test]
+fn lb55_the_rows_stay_put_when_the_card_opens() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, _fake) = rock_list(s);
+    let before = h.get_by_label(&row("Alpha", "Band")).rect();
+    tap(&mut h, OPEN_CARD);
+    let after = h.get_by_label(&row("Alpha", "Band")).rect();
+    assert_eq!(before, after);
+    let wave = h.get_by_label(CARD_WAVE).rect();
+    assert!(wave.top() > after.bottom(), "the card is under the rows");
+}
+
+#[test]
+fn lb54_a_tap_on_the_dimmed_stop_leaves_the_card_open() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, fake) = card_open(s);
+    h.get_all_by_label(STOP).next().unwrap().click();
+    h.run_steps(3);
+    assert_eq!(cue_commands(&fake), [Command::StopLibraryCue]);
+    // Stopped: the strip's Stop is dimmed; a tap on it is no tap on the strip.
+    let stop = h.get_all_by_label(STOP).next().unwrap().rect();
+    click_at(&mut h, stop.center(), egui::PointerButton::Primary);
+    assert!(h.query_by_label(CARD_WAVE).is_some(), "still open");
+}
+
+#[test]
+fn lb57_the_headers_arrow_leaves_the_list_at_once() {
+    let (mut s, a, _b) = with_tracks();
+    previewing(&mut s, a);
+    let (mut h, _fake) = card_open(s);
+    tap(&mut h, BACK);
+    assert!(on_selector(&h), "one tap on the arrow");
+}
