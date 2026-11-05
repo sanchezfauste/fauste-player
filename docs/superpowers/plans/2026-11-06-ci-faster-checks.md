@@ -44,7 +44,10 @@ Compilation is about 1.5 min with the Rust cache, so it is not the target.
    the install the folder's `lock` and `partial/` are removed and it is
    handed to the runner user, so the cache can save it. Packages come in
    through an environment variable, never interpolated into the script.
-   Every workflow that runs `apt-get install` uses it.
+   Every workflow that runs `apt-get install` uses it, except the release
+   build and the Flathub lint: they check out the tag they build, and a
+   rebuild of a tag older than the action would not find it (their package
+   lists are short and they run once per release).
 2. **cargo-nextest in the test job**: `cargo llvm-cov nextest --no-report`
    with the `ci` profile of `.config/nextest.toml`. All tests of all
    binaries run at once, each in its own process; the LCOV reports, the

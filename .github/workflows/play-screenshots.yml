@@ -69,6 +69,7 @@ env:
 jobs:
   shots:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     outputs:
       changed: ${{ steps.compare.outputs.changed }}
     steps:
@@ -142,6 +143,7 @@ jobs:
     needs: shots
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
       pull-requests: write
