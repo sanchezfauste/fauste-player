@@ -2,7 +2,9 @@
 //! (track library spec §7): the search text, the selected rows, the rows
 //! cache and a move, resize or split drag in progress.
 
+use std::cell::RefCell;
 use std::collections::HashSet;
+use std::rc::Rc;
 
 use egui::{Pos2, Rect};
 use fp_model::library_search::{CategoryCounts, SearchIndex, SortKeys, library_rows, sort_rows_by};
@@ -19,7 +21,7 @@ pub(crate) struct LibraryUi {
     /// The search field's text (not saved, plan 3 rulings).
     pub search: String,
     /// The selected rows, in the order they were selected.
-    pub selected: Vec<TrackId>,
+    pub selected: Selection,
     /// The row a Shift+click extends the selection from.
     pub anchor: Option<TrackId>,
     /// The rows the table lists, kept until what they depend on changes.
@@ -57,6 +59,104 @@ pub(crate) struct LibraryUi {
     /// The selected track last reported to the preview with
     /// `SelectLibraryCue` (LB34); `None` until the open window reports one.
     pub(crate) preview_sent: Option<Option<TrackId>>,
+    /// How many times the rows were computed: a [`RowsCache`]'s
+    /// `revision`.
+    rows_built: u64,
+    /// The selection in the table's order, kept until the rows or the
+    /// selection change (an open row menu asks for it every frame).
+    ordered: RefCell<Option<Ordered>>,
+}
+
+/// The selection in the table's order, and what it was computed from.
+struct Ordered {
+    rows: u64,
+    selection: u64,
+    tracks: Rc<[TrackId]>,
+}
+
+/// The selected rows: in the order they were selected, with a set so a
+/// row asks whether it is selected in constant time.
+#[derive(Debug, Default)]
+pub(crate) struct Selection {
+    order: Vec<TrackId>,
+    set: HashSet<TrackId>,
+    /// Bumped by every change.
+    revision: u64,
+}
+
+impl Selection {
+    pub(crate) fn contains(&self, track: &TrackId) -> bool {
+        self.set.contains(track)
+    }
+
+    /// In the order they were selected.
+    #[cfg(test)]
+    pub(crate) fn ids(&self) -> &[TrackId] {
+        &self.order
+    }
+
+    pub(crate) fn last(&self) -> Option<&TrackId> {
+        self.order.last()
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.order.is_empty()
+    }
+
+    #[cfg(test)]
+    pub(crate) fn len(&self) -> usize {
+        self.order.len()
+    }
+
+    pub(crate) fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    pub(crate) fn clear(&mut self) {
+        if !self.order.is_empty() {
+            self.order.clear();
+            self.set.clear();
+            self.revision += 1;
+        }
+    }
+
+    /// `track` alone.
+    pub(crate) fn set_one(&mut self, track: TrackId) {
+        self.clear();
+        self.push(track);
+    }
+
+    /// Adds `track` at the end unless it is selected already.
+    pub(crate) fn push(&mut self, track: TrackId) {
+        if self.set.insert(track) {
+            self.order.push(track);
+            self.revision += 1;
+        }
+    }
+
+    /// Removes `track`; the others keep their order.
+    pub(crate) fn remove(&mut self, track: TrackId) {
+        if self.set.remove(&track) {
+            self.order.retain(|t| *t != track);
+            self.revision += 1;
+        }
+    }
+
+    /// Keeps the tracks `keep` accepts, in their order.
+    pub(crate) fn retain(&mut self, mut keep: impl FnMut(&TrackId) -> bool) {
+        let before = self.order.len();
+        self.order.retain(|t| keep(t));
+        if self.order.len() != before {
+            self.set = self.order.iter().copied().collect();
+            self.revision += 1;
+        }
+    }
+}
+
+impl PartialEq<Vec<TrackId>> for Selection {
+    fn eq(&self, other: &Vec<TrackId>) -> bool {
+        self.order == *other
+    }
 }
 
 /// A *Show in library* waiting for the snapshot (track library spec §9).
@@ -93,6 +193,8 @@ pub(crate) struct RowsCache {
     /// The folded keys of the sort column, for every track of `library`.
     pub sort_keys: Option<SortKeys>,
     pub rows: Vec<TrackId>,
+    /// Which computation of the rows this is (`LibraryUi::rows_built`).
+    pub revision: u64,
 }
 
 impl RowsCache {
@@ -172,6 +274,7 @@ impl LibraryUi {
             } else if self.anchor.is_some_and(|a| !rows.contains(&a)) {
                 self.anchor = None;
             }
+            self.rows_built += 1;
             self.rows = Some(RowsCache {
                 library: state.library.clone(),
                 categories: state.categories.clone(),
@@ -182,6 +285,7 @@ impl LibraryUi {
                 index,
                 sort_keys,
                 rows,
+                revision: self.rows_built,
             });
         }
         self.rows.as_ref().map_or(&[], |c| c.rows.as_slice())
@@ -217,23 +321,43 @@ impl LibraryUi {
             .as_ref()
             .and_then(|c| c.rows.iter().position(|r| *r == track))?;
         self.reveal = None;
-        self.selected = vec![track];
+        self.selected.set_one(track);
         self.anchor = Some(track);
         Some(at)
     }
 
-    /// The selected tracks in the table's order.
-    pub(crate) fn selected_in_order(&self) -> Vec<TrackId> {
-        let rows = self.rows.as_ref().map_or(&[][..], |c| c.rows.as_slice());
-        selected_among(rows, &self.selected)
+    /// Which computation of the rows the table shows (0: none yet).
+    pub(crate) fn rows_revision(&self) -> u64 {
+        self.rows.as_ref().map_or(0, |c| c.revision)
+    }
+
+    /// The selected tracks in the table's order; computed again only when
+    /// the rows or the selection changed.
+    pub(crate) fn selected_in_order(&self) -> Rc<[TrackId]> {
+        let (rows, selection) = (self.rows_revision(), self.selected.revision());
+        let mut ordered = self.ordered.borrow_mut();
+        if let Some(o) = ordered.as_ref()
+            && o.rows == rows
+            && o.selection == selection
+        {
+            return o.tracks.clone();
+        }
+        let listed = self.rows.as_ref().map_or(&[][..], |c| c.rows.as_slice());
+        let tracks: Rc<[TrackId]> = selected_among(listed, &self.selected).into();
+        *ordered = Some(Ordered {
+            rows,
+            selection,
+            tracks: tracks.clone(),
+        });
+        tracks
     }
 
     /// What a right-click or a drag on the row of `track` acts on: the
     /// selection when the row is in it; else the row alone, which becomes
     /// the selection.
-    pub(crate) fn take_row(&mut self, track: TrackId) -> Vec<TrackId> {
+    pub(crate) fn take_row(&mut self, track: TrackId) -> Rc<[TrackId]> {
         if !self.selected.contains(&track) {
-            self.selected = vec![track];
+            self.selected.set_one(track);
             self.anchor = Some(track);
         }
         self.selected_in_order()
@@ -257,32 +381,28 @@ impl LibraryUi {
                 self.selected.clear();
             }
             for id in span {
-                if !self.selected.contains(id) {
-                    self.selected.push(*id);
-                }
+                self.selected.push(*id);
             }
             return;
         }
         if modifiers.command {
-            match self.selected.iter().position(|s| *s == track) {
-                Some(at) => {
-                    self.selected.remove(at);
-                }
-                None => self.selected.push(track),
+            if self.selected.contains(&track) {
+                self.selected.remove(track);
+            } else {
+                self.selected.push(track);
             }
         } else {
-            self.selected = vec![track];
+            self.selected.set_one(track);
         }
         self.anchor = Some(track);
     }
 }
 
 /// The tracks of `rows` that are in `selected`, in the order of `rows`.
-pub(crate) fn selected_among(rows: &[TrackId], selected: &[TrackId]) -> Vec<TrackId> {
+pub(crate) fn selected_among(rows: &[TrackId], selected: &Selection) -> Vec<TrackId> {
     if selected.is_empty() {
         return Vec::new();
     }
-    let selected: HashSet<TrackId> = selected.iter().copied().collect();
     rows.iter()
         .copied()
         .filter(|r| selected.contains(r))
@@ -306,7 +426,7 @@ pub(crate) struct LiveColumns {
 }
 
 /// The tree's counts and what they were computed from
-/// (`category_counts` walks every category's subtree: not every frame).
+/// (`category_counts` walks the whole library: not every frame).
 pub(crate) struct CountsCache {
     pub library: Library,
     pub categories: Categories,
