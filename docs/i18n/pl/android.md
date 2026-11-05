@@ -183,7 +183,7 @@ potwierdziłeś, zatrzymuje się, gdy coś tam startuje, tak jak CUE odtwarzacza
 
 **Dodawanie muzyki urządzenia do kategorii.** **＋** w nagłówku listy utworów
 otwiera Muzykę na urządzeniu dla tej kategorii. Jej pasek ma wtedy tylko
-**Dodaj do <kategoria>** (**Dodaj do „Bez kategorii”** z *Wszystkie utwory* lub
+**Dodaj do &lt;kategoria&gt;** (**Dodaj do „Bez kategorii”** z *Wszystkie utwory* lub
 *Bez kategorii*), co dodaje zaznaczone pliki do biblioteki w tej kategorii i
 wraca do listy; plik, który już jest w bibliotece, dołącza do niej, jeśli nie
 ma kategorii, a w przeciwnym razie zachowuje tę, którą ma, jak na komputerze.

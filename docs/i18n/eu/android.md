@@ -208,7 +208,7 @@ entzutea)](players.md#cue-pre-listen)).
 
 **Gailuko musika kategoria batera gehitzea.** Pista-zerrenda baten goiburuko
 **＋** botoiak Gailuko musika irekitzen du kategoria horretarako. Bere barrak
-orduan **Gehitu hona: <kategoria>** bakarrik du (**Gehitu hona: Kategoriarik
+orduan **Gehitu hona: &lt;kategoria&gt;** bakarrik du (**Gehitu hona: Kategoriarik
 gabe** *Pista guztiak* edo *Kategoriarik gabe* ataletik), markatutako
 fitxategiak kategoria horretan liburutegira gehitzen dituena eta zerrendara
 itzultzen dena; liburutegian dagoeneko dagoen fitxategi bat kategoriarik

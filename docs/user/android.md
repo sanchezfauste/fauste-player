@@ -183,7 +183,7 @@ confirm stops when something starts there, as a player's CUE does (see
 
 **Adding device music to a category.** The **＋** in a track list's
 header opens Device music for that category. Its bar then has only **Add
-to <category>** (**Add to Uncategorised** from *All tracks* or
+to &lt;category&gt;** (**Add to Uncategorised** from *All tracks* or
 *Uncategorised*), which adds the ticked files to the library in that
 category and returns to the list; a file already in the library joins it
 if it has no category and keeps the one it has otherwise, as on the

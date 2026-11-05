@@ -195,7 +195,7 @@ come il CUE di un lettore (vedi [CUE (preascolto)](players.md#cue-pre-listen)).
 
 **Aggiungere la musica del dispositivo a una categoria.** Il **＋**
 nell'intestazione dell'elenco dei brani apre Musica del dispositivo per quella
-categoria. La sua barra ha allora solo **Aggiungi a <categoria>** (**Aggiungi
+categoria. La sua barra ha allora solo **Aggiungi a &lt;categoria&gt;** (**Aggiungi
 a Senza categoria** da *Tutti i brani* o *Senza categoria*), che aggiunge i
 file spuntati alla libreria in quella categoria e torna all'elenco; un file
 già nella libreria vi entra se non ha una categoria e mantiene quella che ha

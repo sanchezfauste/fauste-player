@@ -189,7 +189,7 @@ leitor (ver [CUE (pré-escuta)](players.md#cue-pre-listen)).
 
 **Adicionar música do dispositivo a uma categoria.** O **＋** no cabeçalho da
 lista de faixas abre a Música do dispositivo para essa categoria. A sua barra
-tem então apenas **Adicionar a <categoria>** (**Adicionar a Sem categoria** a
+tem então apenas **Adicionar a &lt;categoria&gt;** (**Adicionar a Sem categoria** a
 partir de *Todas as faixas* ou *Sem categoria*), que adiciona os ficheiros
 assinalados à biblioteca nessa categoria e volta à lista; um ficheiro que já
 está na biblioteca junta-se a ela se não tem categoria e mantém a que tem

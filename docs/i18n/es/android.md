@@ -199,7 +199,7 @@ CUE de un player (véase [CUE (preescucha)](players.md#cue-pre-listen)).
 
 **Añadir música del dispositivo a una categoría.** El **＋** de la cabecera
 de una lista de pistas abre Música del dispositivo para esa categoría. Su
-barra tiene entonces solo **Añadir a <categoría>** (**Añadir a Sin
+barra tiene entonces solo **Añadir a &lt;categoría&gt;** (**Añadir a Sin
 categoría** desde *Todas las pistas* o *Sin categoría*), que añade los
 archivos marcados a la biblioteca en esa categoría y vuelve a la lista; un
 archivo que ya está en la biblioteca entra en ella si no tiene categoría y

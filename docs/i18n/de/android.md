@@ -197,7 +197,7 @@ dort etwas startet, wie das CUE eines Players (siehe [CUE
 
 **Musik des Geräts zu einer Kategorie hinzufügen.** Das **＋** im Kopf einer
 Track-Liste öffnet Musik auf dem Gerät für diese Kategorie. Ihre Leiste hat dann
-nur **Zu <Kategorie> hinzufügen** (**Zu „Ohne Kategorie“ hinzufügen** von
+nur **Zu &lt;Kategorie&gt; hinzufügen** (**Zu „Ohne Kategorie“ hinzufügen** von
 *Alle Titel* oder *Ohne Kategorie* aus), das die angehakten Dateien in dieser
 Kategorie zur Bibliothek hinzufügt und zur Liste zurückkehrt; eine Datei, die
 schon in der Bibliothek ist, tritt ihr bei, wenn sie keine Kategorie hat, und

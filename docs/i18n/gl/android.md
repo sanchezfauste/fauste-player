@@ -188,7 +188,7 @@ cando algo comeza alí, como fai o CUE dun reprodutor (consulta [CUE
 
 **Engadir música do dispositivo a unha categoría.** O **＋** da cabeceira dunha
 lista de pistas abre Música do dispositivo para esa categoría. A súa barra
-só ten entón **Engadir a <categoría>** (**Engadir a Sen categoría** desde
+só ten entón **Engadir a &lt;categoría&gt;** (**Engadir a Sen categoría** desde
 *Todas as pistas* ou *Sen categoría*), que engade os ficheiros marcados á
 biblioteca nesa categoría e volve á lista; un ficheiro que xa está na
 biblioteca únese a ela se non ten categoría e conserva a que ten noutro caso,

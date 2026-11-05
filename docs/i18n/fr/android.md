@@ -205,7 +205,7 @@ lecteur (voir [CUE (pré-écoute)](players.md#cue-pre-listen)).
 
 **Ajouter de la musique de l'appareil à une catégorie.** Le **＋** dans
 l'en-tête d'une liste de pistes ouvre la musique de l'appareil pour cette
-catégorie. Sa barre n'a alors que **Ajouter à <catégorie>** (**Ajouter à Sans
+catégorie. Sa barre n'a alors que **Ajouter à &lt;catégorie&gt;** (**Ajouter à Sans
 catégorie** depuis *Tous les titres* ou *Sans catégorie*), qui ajoute les
 fichiers cochés à la bibliothèque dans cette catégorie et revient à la liste ;
 un fichier déjà dans la bibliothèque la rejoint s'il n'a pas de catégorie et

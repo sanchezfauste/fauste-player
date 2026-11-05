@@ -190,7 +190,7 @@ confirmat s'atura quan alguna cosa hi comença, com fa el CUE d'un reproductor
 
 **Afegir música del dispositiu a una categoria.** El **＋** de la capçalera
 d'una llista de pistes obre Música del dispositiu per a aquella categoria. La
-seva barra només té llavors **Afegeix a <categoria>** (**Afegeix a Sense
+seva barra només té llavors **Afegeix a &lt;categoria&gt;** (**Afegeix a Sense
 categoria** des de *Totes les pistes* o *Sense categoria*), que afegeix els
 fitxers marcats a la biblioteca en aquella categoria i torna a la llista; un
 fitxer que ja és a la biblioteca s'hi uneix si no té categoria i conserva la

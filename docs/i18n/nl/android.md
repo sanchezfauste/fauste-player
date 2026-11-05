@@ -187,7 +187,7 @@ er iets begint, zoals de CUE van een speler doet (zie [CUE
 
 **Muziek van het apparaat aan een categorie toevoegen.** De **＋** in de kop van
 een nummerlijst opent Muziek op het apparaat voor die categorie. Zijn balk heeft
-dan alleen **Toevoegen aan <categorie>** (**Toevoegen aan Zonder categorie**
+dan alleen **Toevoegen aan &lt;categorie&gt;** (**Toevoegen aan Zonder categorie**
 vanuit *Alle nummers* of *Zonder categorie*), dat de aangevinkte bestanden in die
 categorie aan de bibliotheek toevoegt en terugkeert naar de lijst; een bestand
 dat al in de bibliotheek staat, komt erin als het geen categorie heeft en
