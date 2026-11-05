@@ -19,11 +19,29 @@ Fitxaz aldatzeak ez du inoiz aldatzen airean dagoena edo hurrengoa dena.
 Pista bat amaitzean, erreproduzitzaileak pista hori duen zerrendan
 jarraitzen du.
 
-Zerrendak [Ezarpenak](settings.md) atalean sortzen, izenez aldatzen eta
-ezabatzen dira. Ezin dira ezabatu azken zerrenda eta airean pista bat duen
-zerrenda.
+Errenkadaren eskuineko muturreko **+** botoiak zerrenda berri bat sortzen du:
+idatzi izen bat eta sakatu Enter edo **Sortu** (Escape-k edo kanpoko klik
+batek bertan behera uzten du). Zerrenda berria berehala agertzen da
+erreproduzitzaile horren fitxetan, eta erreproduzitzaileak erakusten du.
+Zerrendak [Ezarpenak](settings.md) atalean ere sor daitezke, eta bertan
+aldatzen zaie izena eta ezabatzen dira. Ezin dira ezabatu azken zerrenda eta
+airean pista bat duen zerrenda.
 
 ## Pisten taula {#the-track-table}
+
+Zerrenda batera, kartutxo batera edo M3U edo PLS fitxategi bat inportatuz
+gehitzen duzun fitxategi bakoitza liburutegiko *pista* bat bihurtzen da, eta
+han geratzen da sarrera kentzen duzunean, kartutxoa hustu edo zerrenda
+ezabatzen duzunean: bere markatzaileak, ozentasun-ezarpenak eta etiketak
+fitxategia hurrengoan gehitzen duzunerako gordetzen dira. Fitxategi bera
+beti pista bakarra da: birritan gehitzeak, edo zerrenda batera eta kartutxo
+batera gehitzeak, bere markatzaileak eta ozentasun-ezarpenak leku guztietan
+partekatzen ditu. Mahaigainean, bertsio honetatik aurrera gehitutako
+fitxategi bat pista bera da hari iristen zaion bide-izena edozein dela ere
+(bide-izen bateko esteka sinbolikoak edo `..`-k ez dute bigarren pistarik
+sortzen). Salbuespen bakarra: kategoriarik ez duen pista batek, bere
+fitxategia falta bada eta ezerk erabiltzen ez badu, berez uzten du
+liburutegia, erregistroan lerro batekin.
 
 ![Zerrenda bat: jotako pistak ilunduta, airean dagoena gorriz, hurrengoa berdez, eta oina falta den denborarekin](../../images/guide/playlist.png)
 
@@ -38,6 +56,7 @@ zerrenda.
 | Iraup. | Erreprodukzio-iraupena, cue-in puntutik cue-out puntura (fitxategi osoa **Erabili cue-in eta cue-out** desaktibatuta dagoenean) |
 | Intro | Introak zenbat irauten duen, pista jotzen hasten den lekutik bere intro-markatzaileraino; hutsik pistak intro-markatzailerik ez duenean |
 | Fitxategia | Fitxategiaren izena, bere luzapenarekin |
+| Iruzkina | Iruzkin-etiketa, lerro batean |
 
 Instalazio berri batek `#`, Izenburua, Artista eta Iraup. erakusten ditu.
 Beste zutabeak aukerakoak dira; ikus behean **Zutabeak aukeratzea**. Balio
@@ -108,14 +127,16 @@ Errenkaden koloreak:
 | **P2** gorria (edo beste zenbaki bat) zenbaki-zutabean | Airean erreproduzitzaile horretan |
 | **Berdea**, gezi batekin | Erreproduzitzaile honen hurrengo pista |
 | Ilunduta | Jada jota erreproduzitzaile honetan |
+| Lavanda-koloreko ertza | Hautatutako errenkada (egin klik, edo mugitu Up eta Down teklekin). Errenkada gorri eta berdeetan ere agertzen da |
 | Gurutze / abisu-ikonoa duen fitxategia | Fitxategia falta da / irakurtezina da (saltatu egiten da); pasatu sagua errenkadaren gainetik: leiho txikia arrazoiarekin hasten da, anbarrez, eta ondoren ohiko eremuak. Falta den fitxategi bat berriro bilatzen da 30 s-ro (`tuning.missing_recheck_ms`). |
 | Birkargatze-geziak izenburuaren eskuinean | Aurreko bertsio batek aztertua; analisi horrekin jotzen da oraindik. **Ezarpenak → Analisia → Aztertu zaharkitutako pistak** aukerak eguneratzen du (erreproduzitzaile batean dauden pistak eguneratzen dira hala ere) |
-| Harea-erlojua izenburuaren eskuinean | Pista bere analisiaren zain dago (pasatu sagua harea-erlojuaren gainetik: *Analisia egiteke*). Hala ere jotzen da, eta harea-erlojua desagertu egiten da analisia amaitzean |
+| Harea-erlojua izenburuaren eskuinean | Pista bere analisiaren zain dago: *Analisiaren zain* ilaran dagoenean, *Analisia egiteke* oraindik ilaran sartu ez denean. Hala ere jotzen da, eta harea-erlojua desagertu egiten da analisia amaitzean. Berriro ilaran jarritako pista aztertu batek (**Berriro aztertu pista guztiak** aukerak) ere erakusten du |
+| Uhin-forma ikonoa izenburuaren eskuinean | Pista orain aztertzen ari da (*Orain aztertzen*) |
 | Morea | Hautatuta |
 
 **Pistaren argibidea.** Pasatu sagua errenkada baten gainetik une batez
 haren izenburua, artista, albuma, data, generoa, iraupena, formatua (mota,
-lagintze-maiztasuna eta bit-sakonera, ezagutzen direnean) eta fitxategiaren
+lagintze-maiztasuna, bit-sakonera eta batez besteko bit-tasa, adibidez 320 kbps, ezagutzen direnean) eta fitxategiaren
 bide-izena ikusteko. Fitxategiak ez duen eremu bat ez da agertzen. Leiho
 txiki hori da errenkada bateko gainetik pasatzeko informazio bakarra, eta
 ez da inoiz mugitzen erakusten den bitartean. Falta den edo irakurtezina den
@@ -134,15 +155,18 @@ fitxategi batean, arrazoiarekin hasten da.
 |---|---|
 | Erreproduzitu orain | Pista hau berehala abiarazten du (nahastuz, erreproduzitzailea airean badago) |
 | Ezarri hurrengo gisa | Klik bikoitzaren berdina. Airean dagoen pistan, beste behin jotzen da, hasieratik, uneko itzulia amaitzean (Errepikatu bezala nahastuz, tarterik gabe), eta ondoren erreproduzitzaileak aurrera jarraitzen du. Behin bakarrik eragiten du. Gelditu uneko pistaren ondoren, SINGLE moduak eta Gelditu pistaren ondoren markak erreproduzitzailea amaitzen dute lehenik. CUE bat abian dagoen bitartean, hurrengo berrira mugitzen da |
-| Aurrez entzun CUEan | CUE irteeran jotzen du (CUE leihoa irekitzen du). Ilunduta, erreproduzitzaileak bere Main irteeraz bestelako Cue irteerarik ez duenean |
+| Aurrez entzun CUEan | CUE irteeran jotzen du (CUE leihoa irekitzen du). Ilunduta, erreproduzitzaileak Cue irteerarik ez duenean. Aireko irteeran, han zerbait jotzen ari den bitartean, lehenik galdetzen du (ikus [CUE](players.md#cue-pre-listen)) |
 | Editatu etiketak… | Pista honen etiketa-editorea irekitzen du. **Gorde** botoiak aldaketak audio-fitxategian idazten ditu; **Utzi** botoiak (edo Esc teklak, gordetzerik abian ez dagoenean) idatzi gabe ixten du. Elementua ilunduta dago, gainetik pasatzean arrazoia erakutsiz, pista airean, CUEan edo jotzen ari den kartutxo batean dagoen bitartean, bere etiketak oraindik irakurri ez diren bitartean, fitxategia falta denean, eta etiketak idatzi ezin zaizkien formatuetan (adibidez DSD) |
-| Berriro aztertu | Pista hau berriro aztertzen du orain, bere egoera edozein dela ere. Irakurtezina zen eta konpondu den fitxategi bat ere berez hartzen da (ikus [Arazoen konponbidea](troubleshooting.md)). Eskuzko markatzaileak gorde egiten dira |
+| Berriro aztertu | Pista hau berriro aztertzen du orain, bere egoera edozein dela ere, fitxategia berriro irakurriz (beraz, editatu duzun fitxategi bat berriro neurtzen da bere tamaina eta data aldatu ez badira ere). Irakurtezina zen eta konpondu den fitxategi bat ere berez hartzen da (ikus [Arazoen konponbidea](troubleshooting.md)). Eskuzko markatzaileak gorde egiten dira. Ilunduta, gainetik pasatzean arrazoia erakutsiz, pista analisiaren zain dagoen edo aztertzen ari den bitartean |
+| Ozentasuna… | Pista honen ozentasun-leiho txikia irekitzen du (doikuntza eta kanporatzea; ikus [Ozentasuna](loudness.md)) |
+| Erakutsi liburutegian | [Liburutegiaren leihoa](library.md) irekitzen du pista honen kategorian, bere errenkada hautatuta. Mahaigainean bakarrik |
+| Eraman kategoriara ▸ | Pista kategoria batean sailkatzen du, edo Kategoriarik gabe, liburutegia ireki gabe. Mahaigainean bakarrik |
 | Gehitu pistak azpian… | Pista honen ondoren txertatzeko fitxategiak aukeratzen ditu |
 | Bikoiztu | Jo gabeko kopia bat txertatzen du azpian (bere errepikapen- eta gelditze-markekin) |
 | Errepikatu pista hau | Markatu behin eta berriro jotzeko, tarterik gabe, Play (hurrengoa), Aurreko pista, Gelditu edo Itzaltzearekin gelditu sakatu arte, edo Gelditu uneko pistaren ondoren aktibatu arte. Pausatu sakatuta ere, errepikatzen jarraitzen du. Errepikapen-ikono bat agertzen da izenburuaren aurrean |
 | Gelditu pista honen ondoren | Markatu pista hau amaitzean erreproduzitzailea gelditzeko, jotzen den bakoitzean (edozein modutan). Erreproduzitzailearen **Gelditu uneko pistaren ondoren** botoiak ez bezala, marka pistarekin geratzen da eta zerrendarekin gordetzen da. Gelditze-ikonoa izenburuaren aurrean agertzen da. Errepikatu aukeraren gainetik dago |
 | Eraman hona ▸ | Beste zerrenda baten amaierara eramaten du |
-| Kendu zerrendatik | Kentzen du; ezin da airean dagoen bitartean |
+| Kendu zerrendatik | Zerrenda honetatik kentzen du; ezin da airean dagoen bitartean. Pista liburutegian geratzen da (bere markatzaileak eta ozentasun-ezarpenak gordetzen dira) |
 
 ## Etiketak editatzea {#editing-tags}
 
@@ -247,8 +271,14 @@ leihoan jaregindako fitxategiei ez zaie jaramonik egiten.
 - Jaregin fitxategiak edo karpetak fitxategi-kudeatzailetik zerrenda batean
   jaregite-posizioan txertatzeko. Goiburuaren, zutabe-ertz baten,
   korritze-barraren edo zerrenda estaltzen duen leiho baten gainean ez da
-  ezer txertatzen. Sistemak posizioa adierazten ez badu, erakutsitako
-  zerrendaren amaierara doaz.
+  ezer txertatzen. Sistemak posizioa adierazten ez badu, azkenekoz erabili
+  duzun erreproduzitzaileak edo ikusgai dagoen lehen erreproduzitzaileak
+  erakusten duen zerrendaren amaierara doaz; erreproduzitzaile guztiak
+  ezkutatuta daudenean ez da ezer txertatzen eta egoera-barrak hala dio (ikus
+  [Diseinua](layout.md#show-and-hide-panels)).
+  Linuxen, fitxategiak jaregiteko leihoak X11n exekutatu behar du, eta berez
+  hala egiten du, Wayland mahaigain batean ere (ikus
+  [Arazoen konponbidea](troubleshooting.md#files-cannot-be-dropped-on-linux)).
 
 ## Oina {#footer}
 

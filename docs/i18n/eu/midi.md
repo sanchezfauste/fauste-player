@@ -20,6 +20,9 @@ Kontrolagailuak konektatu edo deskonektatu daitezke programa abian dagoen
 bitartean: segundo pare batetik behin atakak berriro bilatzen dira, eta
 itzultzen den kontrolagailu bat bere izenaren bidez konektatzen da, bere
 argiak berriro ezarrita.
+**Konektatu berriro atakak** botoiak ataka guztiak itxi eta berriro irekitzen
+ditu kablea ukitu gabe (ikus
+[Arazoen konponbidea](troubleshooting.md#a-midi-controller-does-not-respond)).
 
 Linuxen, MIDIa ALSA bidez doa: zure erabiltzaileak sekuentziadorea
 irekitzeko baimena izan behar du (`/dev/snd/seq`, normalean `audio`
@@ -49,13 +52,23 @@ du. **Garbitu** botoiak lotura bat kentzen du.
 - Botoi batek sakatzean eragiten du (tekla edo pad bat behera joatean, edo
   control change bat bere tartearen erditik gora igarotzean), pantailako
   erreproduzitzailearen botoiak bezala. Pantailan ilunduta dagoen botoi
-  batek ez du ezer egiten.
-- Fader batek bolumena mugitzen du pantailako faderraren eskala berean.
+  batek ez du ezer egiten. **CUE** botoi batek ere ez du ezer egiten bere
+  aurrez entzutea airean entzungo litzatekeenean bertan zerbait jotzen ari
+  den bitartean: MIDIk ezin du pantailak egiten duen galdera erantzun.
+  Aurrez entzute bat gelditzeak beti funtzionatzen du.
+- Fader batek bolumena mugitzen du pantailako faderraren eskala berean
+  (mahai-nahasgailu baten lege berean).
   Jauziak saihesteko, uneko bolumenera iristen denean edo hura gainditzen
   duenean bakarrik hartzen du kontrola (soft takeover); bolumena pantailan
   aldatzen bada, faderrak berriro harrapatu behar du. Ez da ezer aldatzen
   kontrol bat mugitu arte: programa abiarazteak ez du inoiz ezer airera
   bidaltzen.
+- Main irteera [bit perfect](bit-perfect.md#what-it-costs) duen
+  erreproduzitzaile baten bolumen-lotura batek ez du ezer egiten: bere
+  bolumena % 100ean finkatuta dago. Irteera bit perfect izateari uztean,
+  eraman kontrola goraino bolumena berriro hartzeko.
+- Erreproduzitzaile horretako Play/Hurrengoa eta Aurrekoa berehala aldatzen
+  dira, gurutzaketarik gabe. Haien argiek ohi bezala funtzionatzen dute.
 - **Piztu botoiak (LED feedbacka)** aktibatuta dagoela, lotutako botoiak
   piztu egiten dira: Play erreproduzitzailea airean dagoen bitartean,
   Pausatu keinuka pausan dagoen bitartean, CUE aurrez entzuten ari den

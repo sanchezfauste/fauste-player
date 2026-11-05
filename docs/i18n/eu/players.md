@@ -4,20 +4,29 @@ Zutabe bakoitza erreproduzitzaile bat da. Erreproduzitzaileak independenteak
 dira: bakoitzak bere zerrenda-fitxak, garraio-kontrolak, bolumena eta
 irteerak ditu.
 
-![1. erreproduzitzailea airean: goiburua, azala, izenburua, hurrengo pista, garraioa, atzerako kontaketa, neurgailua, faderra eta uhin-forma](../../images/guide/player.png)
+![1. erreproduzitzailea airean: goiburua ozentasun-irabaziarekin, azala, izenburua, hurrengo pista, garraioa, atzerako kontaketa, neurgailua, faderra eta uhin-forma](../../images/guide/player.png)
 
 ## Goiburua {#header}
 
 | Elementua | Esanahia |
 |---|---|
 | `P1` … `Pn` | Erreproduzitzailearen zenbakia (hura erreproduzitzen duen zenbaki-tekla) |
+| **Ezkutatu** eta **Maximizatu** / **Leheneratu** botoiak | Goiburuaren eskuineko muturreko bi botoi txikiak: erreproduzitzailea ezkutatzen dute, edo une batez maximizatzen (**Leheneratu** maximizatuta dagoen bitartean). Ilunduta daude diseinua blokeatuta dagoenean, **Ezkutatu** ikusgai dagoen azken panelean eta **Maximizatu** panel bakar bat ikusgai dagoenean (ikus [Diseinua](layout.md#maximize-a-panel)) |
 | Egoera-puntua eta etiketa | **Airean** (gorria), **Pausan** (anbarra), **Geldituta** (grisa) |
-| **Nahasten** / **Itzaltzen** ikurra | Hurrengo pistarako nahasketa gurutzatu bat edo itzaltzearekin gelditze bat abian dago |
+| Zutabe estuak | Zutabea estuegia denean ikur guztientzat, goiburuak garrantzi gutxienekoa lehenik kentzen du (egoera-testua, gero **Besteak isilik**, sarrera-oharra, **Gelditu amaieran**, **Nahasten** / **Itzaltzen**, egoera-puntua), ezer inoiz gainjarri ez dadin. Erreproduzitzailearen zenbakia, **CUE**, modua, **BP**, irabazi-ikurra eta **Ezkutatu** eta **Maximizatu** botoiak beti geratzen dira. Zabaldu zutabea guztiak ikusteko |
+| **Nahasten** / **Itzaltzen** ikurra | Hurrengo pistarako nahasketa gurutzatu bat edo itzaltzearekin gelditze bat abian dago. **Nahasten** ez da inoiz pizten Main irteera bit perfect duen erreproduzitzaile batean: ez du gurutzaketarik egiten (ikus [Zer kostatzen den](bit-perfect.md#what-it-costs)) |
 | **Gelditu amaieran** ikurra | Erreproduzitzailea gelditu egingo da uneko pista amaitzean |
 | **Errepikatu** / **Gelditu pistaren ondoren** ikurra | Uneko pista errepikatu egiten da, edo erreproduzitzailea gelditzen du amaitzean, zerrendaren menuko bere markagatik. Pasatu sagua gainetik esaldi osoa ikusteko. Erreproduzitzailearen beraren **Gelditu amaieran** botoiak irabazten du: aktibo dagoen bitartean, haren ikurra bakarrik agertzen da |
-| **BP** / **DSD** | **BP** piztuta dago uneko pista bere Main gailura aldaketarik gabe iristen den bitartean. **DSD** agertzen da haren ordez DSD pista bat DSD gisa ateratzen den bitartean, aldaketarik gabe (ikus [Bit perfect irteera](bit-perfect.md)). **Besteak isilik** agertzen da ondoan DSD fluxu horrek beste iturriak irteeratik kanpo uzten dituenean |
+| Irabazi-ikurra | [Ozentasun-normalizazioa](loudness.md#the-gain-in-the-player-header) aktibo dagoenean, airean dagoen pistak jotzen duen irabazia (**+4.0 dB**), edo **0.0 dB** anbar bat pista aldatu gabe jotzen denean (neurketarik gabe oraindik, bit perfect irteera bat, edo normalizaziotik kanpo utzitako pista bat). Pasatu sagua gainetik arrazoia ikusteko. Erreproduzitzailea jotzen edo pausan dagoen bitartean erakusten da |
+| **BP** / **DSD** | Ikurra Main gailua bit perfect dabilen erreproduzitzaile batean bakarrik agertzen da; **BP** piztuta dago uneko pista bere Main gailura aldaketarik gabe iristen den bitartean. **DSD** agertzen da haren ordez DSD pista bat DSD gisa ateratzen den bitartean, aldaketarik gabe (ikus [Bit perfect irteera](bit-perfect.md)). **Besteak isilik** agertzen da ondoan DSD fluxu horrek beste iturriak irteeratik kanpo uzten dituenean |
 | **SINGLE** \| **CONT** | Erreprodukzio-modua (ikus behean): kontrol bateratu bat; piztutako erdia da modu aktiboa |
 | **CUE** | Aurrez entzun hurrengo pista CUE irteeran |
+
+Goiburuaren eskuineko muturreko bi botoi txikiek, **Ezkutatu** eta
+**Maximizatu** (edo **Leheneratu**), erreproduzitzailea ezkutatzen dute edo
+une batez maximizatzen; bi aukera horiek goiburuaren atzeko planoan (ez bere
+botoi batean) egindako eskuineko klikaren menuan ere badaude (ikus
+[Diseinua](layout.md#maximize-a-panel)).
 
 ## Informazio-errenkada {#info-row}
 
@@ -97,10 +106,33 @@ irteerak ditu.
       Osoko zenbakizko gailu batek eskala osoan mozten du; koma mugikorreko
       gailu batek maila dagoen bezala jasotzen du, eta soinu-sistemak edo
       kontrolatzaileak mozten du.
-- **Bolumen-faderra** (neurgailuaren eskuinean, bera bezain altua):
-  arrastatu edo erabili saguaren gurpila, urrats bat koska bakoitzeko.
-  Argibideak maila dB-tan erakusten du; goialdea 0 dB da eta behealdea
-  isiltasuna.
+- **Bolumen-faderra** (neurgailuaren eskuinean, bera bezain altua).
+  Mahai-nahasgailu baten legea jarraitzen du: goialdean fina da eta behera
+  aldapatsuagoa, beraz pixka bat jaisteak maila pixka bat jaisten du
+  (ibilbidearen % 90 gutxi gorabehera −2,5 dB da, % 50 −15,9 dB eta % 10
+  −48 dB). Goialdea 0 dB da eta behealdea isiltasuna. Faderrean zeharko
+  koskek 0, −2, −4, −6, −8, −10, −12, −15, −20, −25, −30, −40, −50 eta −∞ dB
+  markatzen dituzte, maila haien eskuinean idatzita dutela.
+  - Arrastatu: faderra erakusleak adina mugitzen da, dagoen tokitik, beraz
+    heltzeak ez du inoiz salto eragiten; mugitu gabeko klik batek ez du ezer
+    aldatzen. Goialdetik edo behealdetik pasatu eta atzera itzultzeak
+    erpina muturrean uzten du erakuslea iritsi zen lekura itzuli arte,
+    beraz erpina ez da inoiz erakuslearengandik urrun geratzen.
+  - Erabili saguaren gurpila: urrats bat koska bakoitzeko (0 dB inguruan
+    0,6 dB inguru).
+  - Eutsi **Ctrl** edo **Shift** teklari arrastatzean edo gurpila
+    erabiltzean hamar aldiz finago mugitzeko.
+  - Egin klik bikoitza erpinean 0 dB-ra itzultzeko (faderreko beste edozein
+    lekutan klik bikoitzak ez du ezer egiten).
+
+  Maila dB-tan (hamarren bat, edo −∞ isiltasunerako) faderraren azpian
+  idatzita dago, neurgailuaren ozentasun-lerroaren errenkada berean, eta
+  argibideak ere erakusten du. Lege hau baino lehen gordetako saio batek
+  erreproduzitzaile bakoitzaren maila mantentzen du; faderraren posizioa
+  bakarrik aldatzen da. Main irteera bit perfect duen erreproduzitzaile
+  batean faderra % 100ean blokeatuta eta grisez dago, 0.0 ilundu bat
+  irakurtzen du, eta bere argibideak zergatik dioen (ikus
+  [Zer kostatzen den](bit-perfect.md#what-it-costs)).
 - **Izenburua, artista** eta **hurrengo** lerroa, lauki berde batekin. CUEa
   aktibo dagoen bitartean, aurrez entzutearen posizioa urdinez agertzen da.
 
@@ -108,13 +140,18 @@ irteerak ditu.
 
 | Botoia | Ekintza |
 |---|---|
-| **Play / Hurrengoa** (handia) | Geldituta: hurrengo pista abiarazten du. Airean: hurrengo pistara pasatzen da itzaltzearekin (itzaltze-denbora [Ezarpenak](settings.md) atalean ezartzen da). Pausan: jarraitzen du. Airean dagoen pista hurrengo gisa dagoela, Play-k pista hori berriro hasten du ohiko itzaltzearekin. |
+| **Play / Hurrengoa** (handia) | Geldituta: hurrengo pista abiarazten du. Airean: hurrengo pistara pasatzen da itzaltzearekin (itzaltze-denbora [Ezarpenak](settings.md) atalean ezartzen da); nahasketa gurutzatu bat Hurrengoak edo segue batek abiarazten duenean, banda berde bat husten da botoian zehar itzaltzearen iraupenean, bere ertza ezkerretik eskuinera mugituz kartutxo batean bezala (Aurrekoak abiarazitako nahasketa gurutzatu bat Aurrekoa botoian husten da). Pausan: jarraitzen du. Airean dagoen pista hurrengo gisa dagoela, Play-k pista hori berriro hasten du ohiko itzaltzearekin. Bit perfect irteera batean berehala aldatzen da, itzaltzerik gabe, eta bere argibideak hala dio (ikus [Zer kostatzen den](bit-perfect.md#what-it-costs)). |
 | **Gelditu** | Berehala gelditzen da (klikak saihesteko arrapala labur batekin) |
-| **Itzaltzearekin gelditu** | Bolumena itzaltzen du eta gelditzen da |
+| **Itzaltzearekin gelditu** | Bolumena itzaltzen du eta gelditzen da. Itzaltzearekin gelditzea abian dagoen bitartean, banda bat husten da botoian zehar itzaltzearen iraupenean, bere ertza ezkerretik eskuinera mugituz |
 | **Pausatu** | Pausatu edo jarraitu; anbarrez keinuka pausan dagoen bitartean |
 | **Gelditu uneko pistaren ondoren** (play triangelu bat eta lauki bat) | Uneko pista amaitzean gelditzen da, behin. SINGLE moduan uneko pista errepikatzen den bitartean bakarrik dago erabilgarri: errepikapena amaitzen du jotzen ari den itzulia amaitzean. Pista bat jotzen den bakoitzean haren ondoren gelditzeko, edo pista bat errepikatzeko, erabili bere menua zerrendan (ikus [Zerrendak](playlists.md)) |
-| **Aurreko pista** (barra bat eta bi triangelu) | Airean dagoela: erreproduzitzaile honek lehenago jo zuen pistara itzultzen da itzaltzearekin, Hurrengoak egiten duen bezala. Sakatu berriro atzera egiten jarraitzeko. Utzi duzun pista hurrengoa bihurtzen da. |
+| **Aurreko pista** (barra bat eta bi triangelu) | Airean dagoela: erreproduzitzaile honek lehenago jo zuen pistara itzultzen da itzaltzearekin, Hurrengoak egiten duen bezala. Sakatu berriro atzera egiten jarraitzeko. Utzi duzun pista hurrengoa bihurtzen da. Bit perfect irteera batean berehala aldatzen da, itzaltzerik gabe (ikus [Zer kostatzen den](bit-perfect.md#what-it-costs)). |
 | **Berrabiarazi pista** (barra bat eta triangelu bat) | Uneko pistaren hasierara itzultzen da (bere cue-in puntura). Pausan dagoen erreproduzitzaile batek pausan jarraitzen du. |
+
+Teklatutik, `Up` eta `Down` teklek hautapena zerrendan zehar mugitzen dute,
+`Enter` teklak hautatutako pista hurrengo gisa ezartzen du, eta berari
+egindako bigarren `Enter` batek klik bikoitz baten denboran jotzen du. Ikus
+[Teklatua](keyboard.md).
 
 Une honetan ezer egin ezin duten botoiak ilunduta agertzen dira: Gelditu
 eta Berrabiarazi ezer kargatu gabe, Pausatu eta Itzaltzearekin gelditu
@@ -144,7 +181,9 @@ keinuka hasten da.
 ## Uhin-forma {#waveform}
 
 - Jada jo den zatia uhin-formaren kolorean marrazten da; gainerakoa
-  ilunagoa da.
+  ilunagoa da. Uhin-formaren kolorea morea denean, MIX marra moreak gutxiago
+  nabarmentzen da; aukeratu beste uhin-forma kolore bat bereizi behar
+  badituzu.
 - Ingeradak gailurrak erakusten ditu, ahul; barruko gorputz beteak batez
   besteko maila (RMS) erakusten du. Pista ozen batean gailurrek altuera
   osoa betetzen dute, eta gorputzak oraindik erakusten du pista non den
@@ -154,8 +193,11 @@ keinuka hasten da.
   agertzen da.
 - Amaierako eremu itzaldun laranja batek **outroa** markatzen du, bere
   atzerako kontaketarekin.
-- **MIX** etiketa duen marra eten anbar batek modu jarraituan hurrengo pista
-  non hasten den markatzen du. Ilunduta agertzen da modu bakarrean.
+- **MIX** etiketa duen marra eten more batek (**Nahasten** ikurraren kolorea,
+  outro laranjarekin nahas ez dadin) modu jarraituan hurrengo pista non hasten
+  den markatzen du. Ilunduta agertzen da modu bakarrean, eta Main irteera bit
+  perfect duen erreproduzitzaile batean, nahasten ez duenean (ikus
+  [Zer kostatzen den](bit-perfect.md#what-it-costs)).
 - Fitxategi osoa marrazten da. Erreprodukzioak saltatzen dituen hasiera eta
   amaiera isilak (cue-in aurretik eta cue-out ondoren) ilunago marrazten
   dira, erreprodukzioa hasten eta amaitzen den lekuan marra fin batekin.
@@ -192,13 +234,30 @@ keinuka hasten da.
 ## CUE (aurrez entzutea) {#cue-pre-listen}
 
 **CUE** sakatzeak (edo pista baten menuko **Aurrez entzun CUEan**) pista
-erreproduzitzailearen CUE irteeran jotzen du, adibidez entzungailuetan,
-airean dagoen irteera ukitu gabe, eta erreproduzitzaile horren **CUE leiho**
-txiki bat irekitzen du. Hainbat leiho egon daitezke irekita, bat
-erreproduzitzaile bakoitzeko. Ikus [Ezarpenak](settings.md) CUE gailua
-aukeratzeko. Erreproduzitzaile batek bere Main irteera ez den Cue irteera
-bat behar du: halakorik gabe, **CUE** eta **Aurrez entzun CUEan** ilunduta
-daude, eta sagua gainetik pasatzean hala adierazten da.
+erreproduzitzailearen CUE irteeran jotzen du, adibidez entzungailuetan, eta
+erreproduzitzaile horren **CUE leiho** txiki bat irekitzen du. Hainbat leiho
+egon daitezke irekita, bat erreproduzitzaile bakoitzeko. Ikus
+[Ezarpenak](settings.md) CUE gailua aukeratzeko. Erreproduzitzaile batek Cue
+irteera bat behar du: halakorik gabe, **CUE** eta **Aurrez entzun CUEan**
+ilunduta daude, eta sagua gainetik pasatzean hala adierazten da.
+
+Soinu-txartel bakarrarekin, Cue irteera aireko irteera bera izan daiteke
+(edo beste erreproduzitzaile batekin edo kartutxo-panelarekin partekatu).
+Hor egindako aurrez entzute bat airean entzuten da, beraz:
+
+- irteera horretan ezer jotzen ez den bitartean, CUE berehala hasten da;
+- han zerbait jotzen ari den bitartean (erreproduzitzaile bat jotzen edo
+  pausan, kartutxo bat, beste aurrez entzute bat, liburutegiaren aurrez
+  entzutea), CUE-k lehenik galdetzen du: **Aurrez entzun hala ere** edo
+  **Utzi** (Utzi da lehenetsia: Esc eta Enter teklek uzten dute). Galdera
+  bera dator pistaren menutik, CUE leihotik, kartutxo-panelatik eta
+  liburutegiaren leihotik;
+- zuk berretsi ez duzun aurrez entzute bat irteera horretan jotzen ari den
+  bitartean zerbait hasten denean, aurrez entzutea gelditzen da eta
+  egoera-barrak zergatik dioen. Zuk berretsitako aurrez entzute batek jotzen
+  jarraitzen du.
+
+CUE botoiaren argibideak dio noiz doan bere aurrez entzutea aireko irteeratik.
 
 ![4. erreproduzitzailearen CUE leihoa, bere hurrengo pista aurrez entzuten](../../images/guide/cue-window.png)
 

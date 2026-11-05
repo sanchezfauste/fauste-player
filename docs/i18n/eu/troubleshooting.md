@@ -6,8 +6,8 @@
    erreproduzitzailearentzat. Tonua entzuten baduzu, egiaztatu
    erreproduzitzailearen bolumen-faderra.
 2. Ezer entzuten ez baduzu, aukeratu beste gailu bat edo beste kanal-bikote
-   bat. Irteeren aldaketek berrabiarazi ondoren dute eragina: sakatu
-   **Berrabiarazi orain** Ezarpenetan.
+   bat. Irteeren aldaketa bat ezer jotzen ez denean aplikatzen da irteera
+   horietan; Ezarpenetako **Aplikatu orain** botoiak berehala aplikatzen du.
 3. Linuxen, hobetsi **PipeWire** edo **PulseAudio** Ezarpenak →
    Audio-irteerak → Audio-sistema atalean. Soinu-txartela beste programa
    batzuekin partekatzen dute. **ALSA**k zuzenean hitz egiten du
@@ -26,12 +26,25 @@
 
 - **BP ikurra itzalita geratzen da.** Egiaztatu
   [Bit perfect irteera](bit-perfect.md#the-bp-badge) ataleko baldintza
-  bakoitza: bolumena % 100ean, itzaltzerik ez, irteera berberetan beste
-  ezer ez, aztertuta dagoen galerarik gabeko fitxategi bat, eta
-  fitxategiaren maiztasunean dabilen gailu bat.
+  bakoitza: itzaltzerik ez, irteera berberetan beste ezer ez, aztertuta
+  dagoen galerarik gabeko fitxategi bat, eta fitxategiaren maiztasunean
+  dabilen gailu bat.
 - **Isiltasun labur bat pista baten aurretik.** Bit perfect gailua pistaren
-  lagintze-maiztasunean berriro ireki da. Saihesteko, mantendu liburutegia
-  maiztasun bakarrean.
+  lagintze-maiztasunean berriro ireki da. Maiztasuna aldatzen denean bakarrik
+  gertatzen da: maiztasun berean dauden pistak tarterik gabe doaz batetik
+  bestera. Saihesteko, mantendu liburutegia maiztasun bakarrean. Ikus
+  [Zer kostatzen den](bit-perfect.md#what-it-costs).
+- **Pistak ez dira nahasten, eta Play-k ez du itzaltzen.** Main irteera bit
+  perfect duen erreproduzitzaile batean, pista bakoitza amaierara arte jotzen
+  da eta gero hurrengoa hasten da, eta Play / Hurrengoa eta Aurrekoa
+  berehala aldatzen dira: erreproduzitzaile horretan ez dago gurutzaketarik
+  ez segue-rik. Desaktibatu bit perfect gailuarentzat, edo eraman
+  erreproduzitzailea beste irteera batera, berriro nahasteko. Ikus
+  [Zer kostatzen den](bit-perfect.md#what-it-costs).
+- **Bolumen-faderra ez da mugitzen.** Erreproduzitzailearen Main irteera bit
+  perfect da, eta horrek bolumena % 100ean finkatzen du; faderraren
+  argibideak hala dio. MIDI faderrek eta urruneko APIak ere ezin dute
+  mugitu. Ikus [Zer kostatzen den](bit-perfect.md#what-it-costs).
 - **Pista bat birlaginduta jotzen da, eta erregistroak gailua lanpetuta
   dagoela dio (Linux).** Maiztasuna aldatzeko, aplikazioak gailua itxi eta
   berriro irekitzen du. Une horretan soinu-zerbitzariak (PipeWire)
@@ -128,6 +141,50 @@ adibidez kopia bat amaitzen denean. Berehala egiaztatzeko, erabili
 **Berriro aztertu** bere errenkadaren menuan, edo **Ezarpenak → Analisia →
 Berriro aztertu pista guztiak** liburutegi osorako.
 
+Irakurtezin gisa agertzen den, edo zarata ozen gisa joko litzatekeen WAV edo
+FLAC bat DTS-CD ripping bat izan daiteke: fitxategiak audioaren ordez DTS
+bitstream bat dauka. Aplikazioak baztertu egiten du (erregistroak "encoded
+bitstream stored as PCM" dio) eta ez du DTS deskodetzen. Bihurtu lehenik PCM
+arrunt batera beste tresna batekin.
+
+## Zaindutako karpeta batek abisu bat erakusten du {#a-watched-folder-shows-a-warning}
+
+Karpeta bat zaintzen duen kategoria batek ⟳ erakusten du, beste kolore
+batean karpeta jarraitzen ez denean; pasatu sagua gainetik arrazoia ikusteko.
+Ikus [Zaindutako karpetak](library.md#watched-folders).
+
+- **Ez da aurkitu edo ezin da irakurri**: unitatea edo partekatutako
+  baliabidea ez dago muntatuta edo ez dago eskuragarri. Liburutegiko pistak
+  izan beharko lituzkeen karpeta huts bat ere ez aurkitutzat hartzen da,
+  muntatu gabeko partekatutako baliabide batek halakoa dirudielako. Ez da
+  ezer markatzen edo kentzen; karpeta 30 segundotik behin bilatzen da berriro
+  eta agertzen denean arakatzen da. Karpeta nahita hustu baduzu, garbitu
+  bere pistak liburutegiko taulan hautatuz eta **Kendu liburutegitik…**
+  aukeratuz, edo haien gainean **Berriro aztertu** aukeratuz; horrek
+  fitxategia galdu duten pistak falta gisa markatzen ditu, **Kendu falta
+  diren pistak…** aukerak kendu ahal ditzan.
+- **Aldaketak ez dira jarraitzen**: sistemak ez luke zainduko, normalean
+  azpikarpeta oso asko dituen karpeta bat delako. Karpeta abiarazte
+  bakoitzean eta saiakera bakoitzean arakatzen da, beraz fitxategi berriak
+  orduan agertzen dira, ez berehala. Linuxen, erabiltzaileko zaintza-mugak
+  gainditzen duen karpeta-zuhaitz batek `fs.inotify.max_user_watches` altuago
+  bat behar du (adibidez `sudo sysctl fs.inotify.max_user_watches=524288`;
+  egin iraunkor `/etc/sysctl.d/` karpetan).
+- **Ez da bide-izen osoa**: gordetako karpeta eskuz osatu gabeko bide-izen
+  batera editatu da. Aukeratu **Aldatu zaindutako karpeta…** berriro
+  aukeratzeko.
+- **Sareko partekatutako baliabide batek ez du abisurik erakusten, baina
+  beste ordenagailu batetik gehitutako fitxategiak ez dira agertzen**: sareko
+  partekatutako baliabide batean (SMB/CIFS, NFS) sistemak normalean
+  zaintza onartzen du, baina ordenagailu honetatik egindako aldaketak
+  bakarrik jakinarazten ditu. Beste nonbaitetik egindako aldaketak
+  hurrengo abiaraztean ikusten dira, ez aplikazioa abian dagoen bitartean.
+- **Milaka fitxategiko karpeta batek** denbora pixka bat behar du
+  abiaraztean arakatzeko; analisiaren aurrerapenak erakusten du.
+- Zaindutako karpeta batetik kanpo geratu den fitxategiaren pistak
+  liburutegian geratzen dira falta gisa markatuta. Kendu itzazu kategoriaren
+  menuko **Kendu falta diren pistak…** aukerarekin.
+
 ## Audio-etenak {#audio-dropouts}
 
 Egoera-barrak 5 segundoz ohartarazten du aplikazioak detektatzen duen
@@ -140,12 +197,60 @@ bakoitzeko, zenbat gertatu diren adieraziz. Audio-sistema guztiek ez dituzte
 xrunak adierazten (PulseAudiok ez; Windowsen modu esklusiboak ez).
 
 
-- Handitu **bufferraren tamaina** Ezarpenetan (eta sakatu **Berrabiarazi
-  orain**).
+- Handitu **bufferraren tamaina** Ezarpenetan (gailu horretan ezer jotzen ez
+  denean aplikatzen da, edo berehala **Aplikatu orain** botoiarekin).
+- Soinu-zerbitzari baten bidez (PulseAudio, ALSA `default` gailua), irteera
+  guztiek gutxienez 50 ms eskatzen dituzte bufferraren tamaina edozein dela
+  ere, ordenagailu lanpetu bat entzun ez dadin; Ezarpenek latentziaren ondoan
+  erakusten dute. Ordenagailu zahar edo oso kargatu batean, igo
+  `shared_buffer_ms` konfigurazio-fitxategiaren `outputs` atalean (adibidez
+  100era). Sistemak bloke horietako bi inguru ilaran mantentzen ditu, beraz
+  kartutxo eta play botoiek orduan igoeraren bikoitz inguru geroago
+  jotzen dute. Aireko irteerarako, gailuaren hardware-sarrera propioak
+  (`hw:` Linuxen) soinu-zerbitzaria saihesten du guztiz.
 - Linuxen, baimendu denbora errealeko planifikazioa. Aplikazioak sistemari
-  eskatzen dio rtkit (D-Bus) bidez. `audio` taldeko kide izateak `rtprio`
-  muga batekin ere funtzionatzen du.
+  eskatzen dio rtkit (D-Bus) bidez, eta erregistroak uko egitea jasotzen du.
+  Mahaigain askok uko egiten diete aplikazioei.
 - Saihestu sare-unitateak airean jotzen den musikarako.
+
+## Interfazea mantsoa da ordenagailu zahar batean {#the-interface-is-slow-on-an-old-computer}
+
+Zerbait jotzen ari den bitartean, interfazeak gehienez 30 frame segundoko
+marrazten ditu (`max_fps`, konfigurazio-fitxategiaren `ui` atalean), eta
+klikei eta teklei berehala erantzuten zaie. Ordenagailu zahar edo lanpetu
+batean jaitsi (adibidez 20ra) prozesadorearen zati handiagoa audiorako uzteko;
+0 balioak pantailak erakusten duen frame guztiak marrazten ditu. Neurgailuek
+berdin neurtzen dute edozein maiztasunetan; gutxiagotan marrazten dira soilik.
+
+## Fitxategiak ezin dira jaregin Linuxen {#files-cannot-be-dropped-on-linux}
+
+Leihoak fitxategi-kudeatzaile batetik arrastatutako fitxategiak X11n
+exekutatzen denean bakarrik hartzen ditu. Berez hala egiten du, Wayland
+mahaigain batean ere (XWayland bidez, mahaigain guztiek dutena). `config.json`
+fitxategiko `ui.window_system` `"Wayland"` balioan ezarrita badago, leihoa
+Wayland natibo bat da, eskalatze zatikatuarekin zorrotzagoa ager daitekeena,
+baina fitxategiak ezin dira bertan jaregin: erabili **+ Gehitu** horren
+ordez. Ezarri berriro `"Auto"` (lehenetsia) edo `"X11"` eta berrabiarazi
+Fauste Player.
+
+## MIDI kontrolagailu batek ez du erantzuten {#a-midi-controller-does-not-respond}
+
+**Ezarpenak → MIDI** atalak kontrolagailua konektatuta erakusten badu baina
+bere botoiek eta faderrek ez badute ezer egiten, sakatu han **Konektatu
+berriro atakak**: programak MIDI atakak itxi eta berriro irekitzen ditu,
+kontrolagailua deskonektatu eta berriro konektatuko bazenu bezala. Horrek
+laguntzen ez badu, deskonektatu kontrolagailua eta konektatu berriro.
+
+Edonola ere, erregistroak zer gertatu den dio. MIDI atakak zerrendatzen ditu
+aldatzen diren bakoitzean, irekitako eta itxitako ataka bakoitza (zergatiarekin),
+ireki ezin den ataka bat (behin, ireki arte edo desagertu arte), konexio
+bakoitzean jasotako lehen mezua, konexio bakoitzean ez ikusi egindako lehen
+mezua arrazoiarekin (loturarik ez, bolumenera oraindik iritsi ez den fader
+bat, orain eragin ezin duen ekintza bat) eta huts egin duen lehen LED mezua.
+Lehen mezurik inoiz erregistratzen ez duen kontrolagailu konektatu batek
+programak jasotzen ez duen ezer ez du bidaltzen. Ez ikusi egindako mezu
+bakoitzerako eta huts egindako berriro saiakera bakoitzerako, abiarazi
+programa `RUST_LOG=info,fp_control=debug` erabilita.
 
 ## "Interfazeak errore bat izan du" {#the-interface-hit-an-error}
 
@@ -155,7 +260,23 @@ Marrazketa-errore bat harrapatu da. Audioari ez dio eragiten. Sakatu
 ## Erregistroak eta hutsegite-txostenak {#logs-and-crash-reports}
 
 Ikus [Datuak eta babeskopiak](data-and-backups.md) erregistroen
-karpetarako. Egun bakoitzeko erregistro-fitxategi bat dago, eta azken 14ak
-gordetzen dira. Hutsegite-txostenak `crash-<time>.txt` gisa gordetzen dira.
-Ezarri `RUST_LOG=debug` ingurunean xehetasun gehiago lortzeko. Erantsi bi
-fitxategiak akats bat jakinaraztean.
+karpetarako. Egun bakoitzeko erregistro-fitxategi bat dago. Segidan errepikatzen
+diren lerro berdinak behin idazten dira, eta ondoren
+`previous message repeated 12 times` bezalako lerro bat (errepikapen-sail
+luze batean lerro hori minuturo idazten da). Desberdinak diren lerroak,
+adibidez kontagailu bat dutelako, ez dira biltzen. PulseAudio bezeroaren
+konexio-mezu arruntak lehenespenez kanpoan uzten dira. Ezarri
+`RUST_LOG=debug` ingurunean xehetasun gehiago lortzeko (lehenetsitako iragazkia
+ordezten du, `info,pulseaudio=warn`).
+
+Erregistroak mugak ditu: egun bateko fitxategia 10 MiB-tan uzten da hazteari
+(bere azken lerroak hala dio; egun horren gainerakoa ez da erregistratzen,
+hori da lerro desberdinen uholde batek eragiten duena) eta azken 14
+fitxategiak gordetzen dira. Aldatu itzazu konfigurazio-fitxategian
+`limits.max_log_file_mb` (1etik 1024ra), `limits.max_log_files` (2tik 365era)
+eta `limits.log_repeat_summary_secs` (1etik 3600ra, lehenetsia 60,
+errepikapen-sail luze bat zenbatero jakinarazten den) bidez; hurrengo
+abiaraztean aplikatzen dira. Hutsegite-txostenak `crash-<time>.txt` gisa
+gordetzen dira karpeta berean, eta bereizita mugatzen dira
+(`limits.max_crash_reports` exekuzio bakoitzeko). Erantsi bi fitxategiak akats
+bat jakinaraztean.
