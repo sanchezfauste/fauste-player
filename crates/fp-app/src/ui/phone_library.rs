@@ -740,7 +740,10 @@ fn header_bar(
         let buttons = usize::from(reread.is_some()) + usize::from(add.is_some());
         let room = buttons as f32 * (touch::TARGET + ui.spacing().item_spacing.x);
         let width = (ui.available_width() - room).max(0.0);
-        ui.allocate_ui(vec2(width, touch::TARGET), |ui| {
+        let row = Layout::left_to_right(Align::Center);
+        ui.allocate_ui_with_layout(vec2(width, touch::TARGET), row, |ui| {
+            // The whole width, so the buttons sit at the right edge.
+            ui.set_min_width(width);
             ui.add(
                 egui::Label::new(
                     egui::RichText::new(title)
