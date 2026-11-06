@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.13.1](https://github.com/sanchezfauste/fauste-player/compare/v0.13.0...v0.13.1) (2026-11-06)
+
+
+### Bug Fixes
+
+* **ci:** submit the MSIX to the Microsoft Store by its file path ([bca1732](https://github.com/sanchezfauste/fauste-player/commit/bca1732d59abcfddda48f1f6c8e191b1bc4c30d1))
+* **ci:** submit the MSIX to the Microsoft Store by its file path ([c5975d6](https://github.com/sanchezfauste/fauste-player/commit/c5975d6f3df044f30f4cd3d540469b39645c8ad2))
+* **mobile:** use the package name registered on Google Play ([e7d4104](https://github.com/sanchezfauste/fauste-player/commit/e7d410488e3ea1b2fd055a0a8bbb2755ed4c900e))
+* **mobile:** use the package name registered on Google Play ([72fdf59](https://github.com/sanchezfauste/fauste-player/commit/72fdf59fad49e8523b4628a9bdefe59422f673cd))
+
+
+### Reverts
+
+* run the tests with cargo-nextest ([5f7e7d7](https://github.com/sanchezfauste/fauste-player/commit/5f7e7d7a1635139cc7eb6d4aff73fab948af12ef))
+
+
+### Documentation
+
+* plan for faster CI and CD ([05f22ff](https://github.com/sanchezfauste/fauste-player/commit/05f22ff6b7cfb74894059f85a43702b5a8b495a0))
+
 ## [0.13.0](https://github.com/sanchezfauste/fauste-player/compare/v0.12.0...v0.13.0) (2026-11-05)
 
 
