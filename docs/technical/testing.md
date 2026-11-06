@@ -111,7 +111,26 @@ cargo deny check          # licences, advisories, sources
 
 fmt, clippy and tests run on Linux, Windows and macOS for pushes to `master`
 and for every pull request; `cargo deny` and the release-bump check run on
-Linux.
+Linux. A pull request that changes only documentation (`docs/`, `site/`,
+`scripts/site/`, the Google Play listing in `packaging/android/play`, and
+Markdown files outside `vendor/`) skips the Rust work. The `changes` job
+decides; the Rust jobs other than the test matrix are skipped, and the test
+matrix runs with its steps skipped (a matrix job skipped as a whole reports
+one check under its unexpanded name, never the three required ones).
+`deny` and the commit checks run as always. Skipped jobs count as passed
+for the required checks, and the pages workflow still checks the guide and
+the site. Pushes to `master` run everything, and so does a pull request
+when the filter fails or lists more than 2900 files.
+
+Every job has a timeout (`timeout-minutes`, about three times its usual
+length), so a stalled mirror, emulator or server fails it in minutes. The
+Ubuntu packages come through `.github/actions/apt-install`, which keeps the
+downloaded archives in the Actions cache: the runners' Ubuntu mirror is
+sometimes very slow (49 MB in 42 minutes once). The archives are saved as
+soon as the install ends, even if a later step fails. The first run on a
+new package list has none yet: on a slow day the site build (60 min) or the
+screenshot retake (45 min) can then hit its timeout during the install;
+re-run it.
 
 The tests run once, instrumented by `cargo-llvm-cov`. Each system writes an
 LCOV report with paths relative to the repository root and hit counts capped

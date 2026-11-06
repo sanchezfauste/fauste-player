@@ -22,6 +22,7 @@ jobs:
     # An edit of the description alone changes neither the title nor a commit.
     if: github.event.action != 'edited' || github.event.changes.title
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: amannn/action-semantic-pull-request@v6
         env:
@@ -30,6 +31,7 @@ jobs:
   commits:
     if: github.event.action != 'edited'
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
         with:

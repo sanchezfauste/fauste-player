@@ -69,6 +69,7 @@ env:
 jobs:
   shots:
     runs-on: ubuntu-latest
+    timeout-minutes: 75
     outputs:
       changed: ${{ steps.compare.outputs.changed }}
     steps:
@@ -76,10 +77,9 @@ jobs:
         with:
           persist-credentials: false
       - name: Install the screenshot tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libasound2-dev libdbus-1-dev imagemagick ffmpeg
+        uses: ./.github/actions/apt-install
+        with:
+          packages: pkg-config libasound2-dev libdbus-1-dev imagemagick ffmpeg
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -143,6 +143,7 @@ jobs:
     needs: shots
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: write
       pull-requests: write
@@ -166,9 +167,9 @@ jobs:
           fi
       - name: Install ImageMagick
         if: needs.shots.outputs.changed == 'true'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends imagemagick
+        uses: ./.github/actions/apt-install
+        with:
+          packages: imagemagick
       - name: Open or update the pull request
         if: needs.shots.outputs.changed == 'true'
         shell: bash

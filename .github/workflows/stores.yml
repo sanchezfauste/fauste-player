@@ -70,6 +70,7 @@ jobs:
   plan:
     name: What to publish
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     outputs:
       version: ${{ steps.plan.outputs.version }}
       prerelease: ${{ steps.plan.outputs.prerelease }}
@@ -113,6 +114,7 @@ jobs:
     name: Microsoft Store (MSIX)
     needs: plan
     runs-on: windows-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -222,6 +224,7 @@ jobs:
     name: Google Play
     needs: plan
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -310,6 +313,7 @@ jobs:
     name: Flathub
     needs: plan
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:
@@ -392,6 +396,7 @@ jobs:
     needs: plan
     if: needs.plan.outputs.winget == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       # Pinned by commit: the step holds a token with write access.
       - uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
@@ -406,6 +411,7 @@ jobs:
     name: AUR (fauste-player-bin)
     needs: plan
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
         with:

@@ -18,22 +18,69 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  changes:
+    name: changes
+    # A pull request that changes only documentation (the guide, the site,
+    # Markdown files, the Play listing) skips the Rust jobs below: they
+    # report as skipped, which the required checks accept, and the pages
+    # workflow still checks the guide and the site. No Rust code reads these
+    # paths. Pushes to master run everything, and so does a pull request
+    # when the filter or this job fails (the jobs below test for 'false')
+    # or when it changes more files than the API lists (3000).
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      code: ${{ github.event_name != 'pull_request' || github.event.pull_request.changed_files > 2900 || steps.filter.outcome != 'success' || steps.filter.outputs.code == 'true' }}
+    steps:
+      - uses: dorny/paths-filter@v4
+        id: filter
+        if: github.event_name == 'pull_request'
+        continue-on-error: true
+        with:
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              # Markdown outside vendor/: a vendored crate may compile its
+              # own (winit includes its changelog with include_str!).
+              - '!*.md'
+              - '!.github/**/*.md'
+              - '!crates/**/*.md'
+              - '!site/**'
+              - '!scripts/site/**'
+              - '!packaging/android/play/**'
+
   test:
     name: test (${{ matrix.os }})
+    needs: changes
+    # A matrix job skipped as a whole reports one check named after the
+    # unexpanded matrix, never the three required ones: on a docs-only pull
+    # request the job runs on every system and skips its steps instead.
+    if: ${{ !cancelled() }}
+    env:
+      CODE: ${{ needs.changes.outputs.code != 'false' }}
     strategy:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        if: env.CODE == 'true'
       - name: Install Linux system packages
-        if: runner.os == 'Linux'
-        run: >
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends
-          pkg-config libasound2-dev libdbus-1-dev
-          libpipewire-0.3-dev libspa-0.2-dev libjack-jackd2-dev clang
+        if: env.CODE == 'true' && runner.os == 'Linux'
+        uses: ./.github/actions/apt-install
+        with:
+          packages: >
+            pkg-config libasound2-dev libdbus-1-dev
+            libpipewire-0.3-dev libspa-0.2-dev libjack-jackd2-dev clang
       - name: Choose the audio systems to build
+        if: env.CODE == 'true'
         shell: bash
         run: |
           if [ "$RUNNER_OS" = Linux ]; then
@@ -42,18 +89,25 @@ jobs:
             echo "FEATURES=fp-backends/jack" >> "$GITHUB_ENV"
           fi
       - name: Install the pinned toolchain
+        if: env.CODE == 'true'
         run: rustup show active-toolchain || rustup toolchain install
       - uses: Swatinem/rust-cache@v2
+        if: env.CODE == 'true'
       - run: cargo fmt --all --check
+        if: env.CODE == 'true'
       - run: cargo clippy --workspace --all-targets --locked --features "$FEATURES" -- -D warnings
+        if: env.CODE == 'true'
         shell: bash
       # The suite runs once, instrumented for test coverage (cargo-llvm-cov),
       # and the report goes to the `sonarqube` job.
       - run: rustup component add llvm-tools-preview
+        if: env.CODE == 'true'
       - uses: taiki-e/install-action@v2
+        if: env.CODE == 'true'
         with:
           tool: cargo-llvm-cov
       - run: cargo llvm-cov --no-report --workspace --locked --no-fail-fast --features "$FEATURES"
+        if: env.CODE == 'true'
         shell: bash
       # Coverage is informative: a failing test still leaves a report. Its
       # paths are made relative to the repository root so the three systems'
@@ -61,7 +115,7 @@ jobs:
       # largest 32-bit integer, the most SonarQube reads (a hot DSP loop runs
       # billions of times).
       - name: Write the coverage report
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.CODE == 'true' }}
         continue-on-error: true
         shell: bash
         run: |
@@ -71,7 +125,7 @@ jobs:
              s{^(?:DA:\d+,|FNDA:|BRDA:[^,]+,[^,]+,[^,]+,)\K(\d+)}{$1 > 2147483647 ? 2147483647 : $1}e' \
             "lcov-$RUNNER_OS.info"
       - uses: actions/upload-artifact@v7
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && env.CODE == 'true' }}
         continue-on-error: true
         with:
           name: lcov-${{ runner.os }}
@@ -81,15 +135,18 @@ jobs:
       # The packaging check for the Windows GUI subsystem, on the shells
       # that run it (Git Bash on the Windows release runner).
       - name: Self-test the Windows GUI subsystem check
-        if: runner.os != 'macOS'
+        if: env.CODE == 'true' && runner.os != 'macOS'
         run: scripts/check-windows-gui.sh --self-test
         shell: bash
 
   android:
     name: android (debug APK)
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     # Mobile spec §7: the Android app builds on every change, and the
     # `unsafe` exception stays inside fp-mobile (spec §8).
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -125,10 +182,11 @@ jobs:
     name: SonarQube
     # Informative only: the analysis never blocks a pull request. Pull
     # requests from forks and Dependabot get no secrets, so they skip it.
-    needs: test
-    if: ${{ !cancelled() }}
+    needs: [changes, test]
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     continue-on-error: true
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
     steps:
@@ -151,17 +209,21 @@ jobs:
 
   release-baseline:
     name: release build and Linux packages on the release image
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     # The Linux archives and packages are built on ubuntu-22.04 (the oldest
     # glibc they support). This builds them all as a release would, which
     # catches a dependency that needs newer system packages, a library the
     # binary would need just to start, and broken package metadata.
     runs-on: ubuntu-22.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
-      - run: >
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends
-          pkg-config libasound2-dev libdbus-1-dev libjack-jackd2-dev
-          desktop-file-utils appstream
+      - uses: ./.github/actions/apt-install
+        with:
+          packages: >
+            pkg-config libasound2-dev libdbus-1-dev libjack-jackd2-dev
+            desktop-file-utils appstream
       - name: Install the pinned toolchain
         run: rustup show active-toolchain || rustup toolchain install
       - uses: Swatinem/rust-cache@v2
@@ -181,13 +243,17 @@ jobs:
 
   deny:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - uses: EmbarkStudios/cargo-deny-action@v2
 
   release-config:
     name: release bump keeps --locked builds working
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -199,7 +265,10 @@ jobs:
 
   fuzz-build:
     name: fuzz targets build
+    needs: changes
+    if: ${{ !cancelled() && needs.changes.outputs.code != 'false' }}
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
       - run: rustup toolchain install nightly --profile minimal
