@@ -296,8 +296,17 @@ jobs:
       # packaging/android/fastlane/Gemfile.lock and installed in a step
       # without the key; supply needs the release's track and versionCode
       # to find the release the listing goes with.
+      # The runner image has no Ruby: install one fastlane supports and the
+      # bundler that wrote the lock. This step and the next hold no key and
+      # also run in a dry run, so a broken install shows on the pull request.
+      - name: Set up Ruby
+        if: steps.listing.outputs.present == 'true'
+        uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # v1.329.0
+        with:
+          ruby-version: "3.3"
+          bundler: "2.4.19"
       - name: Install fastlane
-        if: needs.plan.outputs.googleplay == 'true' && steps.listing.outputs.present == 'true'
+        if: steps.listing.outputs.present == 'true'
         env:
           BUNDLE_GEMFILE: packaging/android/fastlane/Gemfile
           BUNDLE_DEPLOYMENT: "true"

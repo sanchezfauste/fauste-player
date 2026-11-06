@@ -479,8 +479,8 @@ packaging: the workflow refuses other tags, and tags made before it
   channel; the other stores skip them.
 - **Dry run:** a pull request that touches `snap/`, `packaging/`, the store
   scripts or `stores.yml` builds the MSIX and both snaps, lints the Flathub
-  manifest, checks the Google Play listing and the PKGBUILD, and publishes
-  nothing.
+  manifest, checks the Google Play listing (and installs the fastlane
+  that uploads it) and the PKGBUILD, and publishes nothing.
 - **Timeout:** a snap build stops after 45 minutes (it takes about 10):
   when the snap servers stall, snapcraft otherwise waits silently for
   hours. Re-run the job.
