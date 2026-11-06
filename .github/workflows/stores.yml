@@ -26,6 +26,9 @@ on:
       dry_run:
         type: boolean
         default: false
+      only:
+        type: string
+        default: ''
   pull_request:
     paths:
       - snap/**
@@ -53,6 +56,13 @@ on:
         description: Build and check without publishing anything
         type: boolean
         default: false
+      only:
+        description: >-
+          Publish to these stores only, comma-separated (msstore, snap,
+          googleplay, flathub, winget, aur); empty publishes to all. For
+          re-running one store after a failure.
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -75,12 +85,12 @@ jobs:
       version: ${{ steps.plan.outputs.version }}
       prerelease: ${{ steps.plan.outputs.prerelease }}
       publish: ${{ steps.plan.outputs.publish }}
-      msstore: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.MSSTORE_CLIENT_SECRET != '' && vars.MSSTORE_PRODUCT_ID != '' && vars.MSSTORE_IDENTITY_NAME != '' && vars.MSSTORE_PUBLISHER != '' }}
-      snap: ${{ steps.plan.outputs.publish == 'true' && secrets.SNAPCRAFT_STORE_CREDENTIALS != '' }}
-      googleplay: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' }}
-      flathub: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.FLATHUB_TOKEN != '' }}
-      winget: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.WINGET_TOKEN != '' }}
-      aur: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.AUR_SSH_PRIVATE_KEY != '' }}
+      msstore: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.MSSTORE_CLIENT_SECRET != '' && vars.MSSTORE_PRODUCT_ID != '' && vars.MSSTORE_IDENTITY_NAME != '' && vars.MSSTORE_PUBLISHER != '' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',msstore,')) }}
+      snap: ${{ steps.plan.outputs.publish == 'true' && secrets.SNAPCRAFT_STORE_CREDENTIALS != '' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',snap,')) }}
+      googleplay: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON != '' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',googleplay,')) }}
+      flathub: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.FLATHUB_TOKEN != '' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',flathub,')) }}
+      winget: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.WINGET_TOKEN != '' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',winget,')) }}
+      aur: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.AUR_SSH_PRIVATE_KEY != '' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',aur,')) }}
     steps:
       - id: plan
         env:
@@ -113,6 +123,7 @@ jobs:
   msstore:
     name: Microsoft Store (MSIX)
     needs: plan
+    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',msstore,')
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -158,11 +169,12 @@ jobs:
             --clientId "${CLIENT_ID}" --clientSecret "${CLIENT_SECRET}"
           # Uploads the package to a new submission and commits it for
           # certification; the listing stays as set in Partner Center.
-          # The CLI takes a directory and picks the package in it, so the
-          # MSIX goes alone into one.
+          # The CLI recognises a packaged app by its path argument, which
+          # must be the .msix file itself; it uploads the packages found in
+          # that file's directory, so the MSIX goes alone into one.
           mkdir -p msstore-upload
           cp "${MSIX}" msstore-upload/
-          msstore publish msstore-upload --inputDirectory msstore-upload --appId "${PRODUCT_ID}" --verbose
+          msstore publish "msstore-upload/$(basename "${MSIX}")" --appId "${PRODUCT_ID}" --verbose
         env:
           MSIX: ${{ steps.package.outputs.msix }}
           PRODUCT_ID: ${{ vars.MSSTORE_PRODUCT_ID }}
@@ -174,6 +186,7 @@ jobs:
   snap:
     name: Snap Store (${{ matrix.arch }})
     needs: plan
+    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',snap,')
     strategy:
       fail-fast: false
       matrix:
@@ -223,6 +236,7 @@ jobs:
   google-play:
     name: Google Play
     needs: plan
+    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',googleplay,')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -312,6 +326,7 @@ jobs:
   flathub:
     name: Flathub
     needs: plan
+    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',flathub,')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -410,6 +425,7 @@ jobs:
   aur:
     name: AUR (fauste-player-bin)
     needs: plan
+    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',aur,')
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
