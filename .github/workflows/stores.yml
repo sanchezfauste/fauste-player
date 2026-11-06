@@ -281,7 +281,7 @@ jobs:
         uses: r0adkll/upload-google-play@e738b9dd8f2476ea806d921b64aacd24f34515a5 # v1.1.5
         with:
           serviceAccountJsonPlainText: ${{ secrets.GOOGLE_PLAY_SERVICE_ACCOUNT_JSON }}
-          packageName: com.sanchezfauste.FaustePlayer
+          packageName: com.sanchezfauste.fausteplayer
           releaseFiles: play/fauste-player-${{ needs.plan.outputs.version }}-android.aab
           releaseName: ${{ needs.plan.outputs.version }}
           track: ${{ vars.GOOGLE_PLAY_TRACK || 'internal' }}
@@ -316,7 +316,7 @@ jobs:
         run: |
           code=$(scripts/package/android.sh --version-code "${VERSION}")
           bundle exec fastlane supply \
-            --package_name com.sanchezfauste.FaustePlayer \
+            --package_name com.sanchezfauste.fausteplayer \
             --metadata_path packaging/android/play \
             --track "${TRACK}" \
             --version_code "${code}" \

@@ -10,7 +10,7 @@ android {
     namespace = "com.sanchezfauste.fausteplayer"
     compileSdk = 36
     defaultConfig {
-        applicationId = "com.sanchezfauste.FaustePlayer"
+        applicationId = "com.sanchezfauste.fausteplayer"
         minSdk = 29
         targetSdk = 36
         // From the workspace version (scripts/package/android.sh).
