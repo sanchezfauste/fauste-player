@@ -13,6 +13,11 @@ allow your browser or file manager to install apps when Android asks.
 To update, install the newer APK the same way: your playlists and
 settings stay. The app is not in Google Play yet.
 
+Version 0.13.0 and older install as a different app, so a newer APK does
+not update them: it shows up as a second Fauste Player. Uninstall the old
+one once the new one is set up. Its playlists and settings do not carry
+over.
+
 ## First start
 
 - **Music access.** Allow access to music (and notifications, on Android

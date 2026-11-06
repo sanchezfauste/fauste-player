@@ -85,7 +85,7 @@ done
 [[ $(adb get-state 2>/dev/null) == device ]] \
     || die "no device, or several (set ANDROID_SERIAL): start an emulator first"
 
-package=com.sanchezfauste.FaustePlayer
+package=com.sanchezfauste.fausteplayer
 activity=$package/com.sanchezfauste.fausteplayer.MainActivity
 # Where the songs and carts go on the device.
 device_root=/storage/emulated/0/Music

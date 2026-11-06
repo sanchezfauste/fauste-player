@@ -391,7 +391,11 @@ or `~/Android/Sdk`) and an NDK r27, builds `libfp_mobile.so` for
 assembles the APK with Gradle (AGP 8.13.2, Kotlin 2.2.21, Gradle 9.3.1, a
 JDK 17 or newer). The APK is in
 `mobile/android/app/build/outputs/apk/<profile>/`. `minSdk` is 29,
-`targetSdk` 36, the application id `com.sanchezfauste.FaustePlayer`.
+`targetSdk` 36, the application id `com.sanchezfauste.fausteplayer` (the
+package name the app is registered with on Google Play, which never
+changes; the desktop packages keep `com.sanchezfauste.FaustePlayer`).
+Releases up to 0.13.0 used `com.sanchezfauste.FaustePlayer` on Android
+too, so Android installs those APKs as a separate app.
 
 A release build also makes the AAB a store needs. It is signed with the
 key the four `FAUSTE_ANDROID_KEYSTORE`, `FAUSTE_ANDROID_KEYSTORE_PASSWORD`,
