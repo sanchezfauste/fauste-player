@@ -460,7 +460,9 @@ repositories. release-please calls it in a `stores` job after `binaries`,
 because WinGet and the AUR read the release's assets (the MSI, the Linux
 archives). It can be run by hand (**Actions → stores → Run workflow**) with
 an existing release tag, with `dry_run` to build and check without
-publishing. Every job builds from the tag, so the tag must carry the store
+publishing, and with `only` (for example `msstore`, or `snap,aur`) to
+build and publish to those stores alone, to re-run one store after a
+failure without publishing the others again. Every job builds from the tag, so the tag must carry the store
 packaging: the workflow refuses other tags, and tags made before it
 (v0.10.0 and earlier).
 
