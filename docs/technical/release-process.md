@@ -468,7 +468,7 @@ packaging: the workflow refuses other tags, and tags made before it
 
 | Job | Store | What it does | Publishes when |
 |---|---|---|---|
-| `msstore` | Microsoft Store | builds an unsigned MSIX (`scripts/package/msix.sh`; the Store signs it) and submits it with the Microsoft Store CLI (`msstore publish`) | the `MSSTORE_*` secrets and variables are set |
+| `msstore` | Microsoft Store | builds an unsigned MSIX (`scripts/package/msix.sh`; the Store signs it) and submits it with the Microsoft Store CLI (`msstore publish`); when the secrets are missing or the submission fails, the job stays green with a warning, and the run's summary links the `msix` artefact to upload by hand | the `MSSTORE_*` secrets and variables are set |
 | `snap` | Snap Store | builds `snap/snapcraft.yaml` on amd64 and arm64 (`snapcore/action-build`), uploads and releases it (`snapcore/action-publish`), and on a release (not a pre-release) sends the amd64 snap's summary, description, title, licence and icon to the store listing (`snapcraft upload-metadata --force`) | `SNAPCRAFT_STORE_CREDENTIALS` is set |
 | `google-play` | Google Play | checks the listing in `packaging/android/play` (`scripts/package/play-listing.py check` and its tests), downloads the release's signed `fauste-player-<version>-android.aab` (checking its `.sha256`) and uploads it to one track with the release notes of `changelogs/default.txt` (`r0adkll/upload-google-play`), then updates the store listing from the same folder: texts, icon, feature graphic and phone screenshots (fastlane's `supply`, pinned with every gem it runs by `packaging/android/fastlane/Gemfile.lock` and installed without the key; it is given the release's track and `versionCode`, from `android.sh --version-code`, and sends only the images that changed) | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is set |
 | `flathub` | Flathub | writes the Flathub manifest (`scripts/package/flathub-manifest.py`: the in-tree manifest with the release's git tag and commit as its source) and `cargo-sources.json`, lints both with `flatpak-builder-lint`, and opens a pull request on `flathub/com.sanchezfauste.FaustePlayer` | `FLATHUB_TOKEN` is set |
@@ -512,8 +512,8 @@ credentials; variables hold public identifiers.
 
 | Name | Kind | Value |
 |---|---|---|
-| `MSSTORE_TENANT_ID`, `MSSTORE_CLIENT_ID`, `MSSTORE_CLIENT_SECRET` | secrets | the Microsoft Entra application linked to Partner Center (see below) |
-| `MSSTORE_SELLER_ID` | secret | Partner Center → Account settings → Legal info → Seller ID |
+| `MSSTORE_TENANT_ID`, `MSSTORE_CLIENT_ID`, `MSSTORE_CLIENT_SECRET` | secrets (optional) | the Microsoft Entra application linked to Partner Center (see below); without them the release is uploaded by hand |
+| `MSSTORE_SELLER_ID` | secret (optional) | Partner Center → Account settings → Legal info → Seller ID |
 | `MSSTORE_PRODUCT_ID` | variable | the Store ID of the app (`9N…`), Partner Center → Product identity |
 | `MSSTORE_IDENTITY_NAME`, `MSSTORE_PUBLISHER`, `MSSTORE_PUBLISHER_DISPLAY_NAME` | variables | Package/Identity/Name, Package/Identity/Publisher (`CN=…`) and Package/Properties/PublisherDisplayName from Product identity |
 | `SNAPCRAFT_STORE_CREDENTIALS` | secret | the output of `snapcraft export-login --snaps=fauste-player --acls=package_access,package_push,package_update,package_release -` (`package_update` also covers the listing update) |
@@ -536,7 +536,10 @@ credentials; variables hold public identifiers.
 2. Copy the Product identity values into the `MSSTORE_*` variables.
 3. Under Account settings → User management → Microsoft Entra applications,
    create (or add) an application with the *Manager* role and a key; its
-   tenant ID, client ID and key go into the `MSSTORE_*` secrets.
+   tenant ID, client ID and key go into the `MSSTORE_*` secrets. An
+   Individual account shows only the *Users* tab there, so it cannot add
+   one. The secrets stay set: the workflow tries the submission anyway and,
+   when it fails, falls back to a manual upload (step 6).
 4. Make the first submission by hand: once the variables are set, run the
    workflow with `dry_run` for the latest release (one that carries the
    store packaging), download the `msix` artefact, and upload it in Partner
@@ -550,6 +553,12 @@ credentials; variables hold public identifiers.
    replaces any pending draft with a new submission made from the last
    published one, so listing edits are made in Partner Center after a
    release's submission, not left in a draft before it.
+6. When the submission fails (the project's Individual account today) or
+   the secrets are unset, the job warns and the `stores` run's summary
+   links the `msix` artefact:
+   download and unzip it, then in Partner Center open the app → **Update**
+   → **Packages**, replace the package with the new `.msix` and **Submit
+   for certification**. The listing stays as it is.
 
 **Snap Store**
 1. Create an account on [snapcraft.io](https://snapcraft.io) and register

@@ -153,6 +153,7 @@ jobs:
           MSSTORE_PUBLISHER: ${{ vars.MSSTORE_PUBLISHER }}
           MSSTORE_PUBLISHER_DISPLAY_NAME: ${{ vars.MSSTORE_PUBLISHER_DISPLAY_NAME }}
       - uses: actions/upload-artifact@v7
+        id: artifact
         with:
           name: msix
           # A relative path: the script prints a Git Bash one.
@@ -161,8 +162,15 @@ jobs:
       - name: Install the Microsoft Store CLI
         if: needs.plan.outputs.msstore == 'true'
         uses: microsoft/microsoft-store-apppublisher@v1.4
+      # An Individual Partner Center account cannot give an Entra
+      # application the Manager role, and the API then answers "Could not
+      # retrieve your application": the submission is tried, and when it
+      # fails the next step points to the package for a manual upload
+      # instead of failing the release.
       - name: Submit to the Microsoft Store
+        id: submit
         if: needs.plan.outputs.msstore == 'true'
+        continue-on-error: true
         shell: bash
         run: |
           msstore reconfigure --tenantId "${TENANT_ID}" --sellerId "${SELLER_ID}" \
@@ -182,7 +190,28 @@ jobs:
           SELLER_ID: ${{ secrets.MSSTORE_SELLER_ID }}
           CLIENT_ID: ${{ secrets.MSSTORE_CLIENT_ID }}
           CLIENT_SECRET: ${{ secrets.MSSTORE_CLIENT_SECRET }}
-
+      - name: Point to the package for a manual upload
+        if: needs.plan.outputs.publish == 'true' && needs.plan.outputs.prerelease == 'false' && (needs.plan.outputs.msstore != 'true' || steps.submit.outcome == 'failure')
+        shell: bash
+        env:
+          VERSION: ${{ needs.plan.outputs.version }}
+          URL: ${{ steps.artifact.outputs.artifact-url }}
+          TRIED: ${{ steps.submit.outcome == 'failure' }}
+        run: |
+          if [ "${TRIED}" = true ]; then
+            why="The submission through the API failed (see the step above), so nothing was submitted."
+          else
+            why="The \`MSSTORE_*\` secrets are not set, so nothing was submitted."
+          fi
+          {
+            echo "### Microsoft Store: upload ${VERSION} by hand"
+            echo
+            echo "${why}"
+            echo "Download the [msix artefact](${URL}), unzip it and upload the"
+            echo "\`.msix\` in Partner Center: the app's page → **Update** (a new"
+            echo "submission) → **Packages**, then **Submit for certification**."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::warning title=Microsoft Store::nothing was submitted; upload the msix artefact of this run by hand (see the summary)"
   snap:
     name: Snap Store (${{ matrix.arch }})
     needs: plan
