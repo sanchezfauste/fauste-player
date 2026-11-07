@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.2](https://github.com/sanchezfauste/fauste-player/compare/v0.13.1...v0.13.2) (2026-11-07)
+
+
+### Bug Fixes
+
+* **ci:** install Ruby before fastlane in the Google Play job ([6e268c0](https://github.com/sanchezfauste/fauste-player/commit/6e268c0bc368689f970ba107e663a9afee1ad45d))
+* **ci:** install Ruby before fastlane in the Google Play job ([1e986d5](https://github.com/sanchezfauste/fauste-player/commit/1e986d5e1d5a635a5e95b7c82a2645eac4f95ef9))
+
 ## [0.13.1](https://github.com/sanchezfauste/fauste-player/compare/v0.13.0...v0.13.1) (2026-11-06)
 
 
