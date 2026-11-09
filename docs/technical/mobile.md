@@ -309,7 +309,7 @@ something moves (`view::animating`, or a meter whose level, average or
 peak hold still shows on its scale: `view::meter_moving`), four times a
 second while a paused player blinks, and otherwise, in touch mode, once a
 second just after the clock's second (`view::next_frame`,
-`view::idle_wait`; the desktop keeps ten frames a second). What
+`view::idle_wait`; the desktop does the same). What
 it used to poll for wakes it instead: the conductor calls the waker set
 through `Controller::set_waker` each time it publishes a new model (a
 command from the remote API or MIDI) or refuses a command (the waker asks

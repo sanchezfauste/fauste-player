@@ -1901,29 +1901,63 @@ fn the_interface_gives_its_waker() {
 }
 
 /// PL32: when the next frame comes. Something moving: at `max_fps`. A
-/// paused player blinks (2 Hz): four frames a second. Idle, a touch device
-/// waits for the clock's next second, a desktop draws ten frames a second
-/// as before.
+/// paused player blinks (2 Hz): four frames a second. Idle, the interface
+/// (a phone or a desktop) waits for the clock's next second.
 #[test]
 fn the_next_frame_follows_what_moves() {
     use fp_app::ui::view::next_frame;
     use std::time::Duration;
     let telemetry = fp_engine::conductor::Telemetry::default();
     let mut s = state(1, 3);
-    assert_eq!(
-        next_frame(&s, &telemetry, false, 250),
-        Duration::from_millis(100)
-    );
-    assert_eq!(
-        next_frame(&s, &telemetry, true, 250),
-        Duration::from_millis(760)
-    );
+    assert_eq!(next_frame(&s, &telemetry, 250), Duration::from_millis(760));
     let p = s.players[0].id;
     fp_model::apply(&mut s, fp_model::Command::Play(p)).unwrap();
-    assert!(next_frame(&s, &telemetry, true, 250) <= Duration::from_millis(34));
+    assert!(next_frame(&s, &telemetry, 250) <= Duration::from_millis(34));
     fp_model::apply(&mut s, fp_model::Command::Pause(p)).unwrap();
     assert_eq!(s.players[0].transport, fp_model::Transport::Paused);
-    assert!(next_frame(&s, &telemetry, true, 250) <= Duration::from_millis(250));
+    assert!(next_frame(&s, &telemetry, 250) <= Duration::from_millis(250));
+}
+
+/// The library CUE's preview moves on its own: while it plays, its position
+/// draws at `max_fps`, not once a second; held, its Play and Pause blink.
+#[test]
+fn a_playing_library_preview_draws_at_the_frame_rate() {
+    use fp_app::ui::view::next_frame;
+    use std::time::Duration;
+    let telemetry = fp_engine::conductor::Telemetry::default();
+    let mut s = state(1, 3);
+    s.library_cue.track = s.library.iter().next().map(|t| t.id);
+    s.library_cue.transport = fp_model::Transport::Playing;
+    assert!(next_frame(&s, &telemetry, 250) <= Duration::from_millis(34));
+    s.library_cue.transport = fp_model::Transport::Paused;
+    assert!(next_frame(&s, &telemetry, 250) <= Duration::from_millis(250));
+    s.library_cue.transport = fp_model::Transport::Stopped;
+    assert_eq!(next_frame(&s, &telemetry, 250), Duration::from_millis(760));
+}
+
+/// PL31 for the library CUE: a stopped preview's meter still falling is
+/// drawn falling.
+#[test]
+fn a_falling_library_preview_meter_draws_at_the_frame_rate() {
+    use fp_app::ui::view::next_frame;
+    use fp_engine::conductor::{LibraryCueTelemetry, Telemetry};
+    use fp_engine::meter::MeterReading;
+    use std::time::Duration;
+    let s = state(1, 3);
+    let track = s.library.iter().next().map(|t| t.id).unwrap();
+    let meter = MeterReading {
+        level_db: [-12.0, -12.0],
+        ..MeterReading::default()
+    };
+    let telemetry = Telemetry {
+        library_cue: Some(LibraryCueTelemetry {
+            track,
+            position_secs: 3.0,
+            meter,
+        }),
+        ..Telemetry::default()
+    };
+    assert!(next_frame(&s, &telemetry, 250) <= Duration::from_millis(34));
 }
 
 // --- Live after the polish (§16) ---

@@ -626,36 +626,38 @@ pub fn idle_wait(millis: u32) -> std::time::Duration {
 /// How often a paused player's blink is drawn: twice per phase of its
 /// 2 Hz blink.
 const BLINK_FRAME: std::time::Duration = std::time::Duration::from_millis(250);
-/// How soon an idle desktop draws again (it polls what changed elsewhere).
-const DESKTOP_IDLE: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// How soon the next frame is due: at `ui.max_fps` while something moves
-/// (`animating`, or a meter still falling, PL31), four times a second while
-/// a paused player blinks, and otherwise just after the clock's next second
-/// on a `touch` device (PL32; `millis` into the current second) or ten times
-/// a second on a desktop.
+/// (`animating`, or a player's or the library CUE's meter still falling,
+/// PL31), four times a second while a paused player or a held library
+/// preview blinks, and otherwise just after the clock's next second (PL32;
+/// `millis` into the current second), on a phone and on a desktop alike. What changes elsewhere wakes
+/// the interface itself (`Controller::set_waker`, the helper threads).
 pub fn next_frame(
     state: &AppState,
     telemetry: &fp_engine::conductor::Telemetry,
-    touch: bool,
     millis: u32,
 ) -> std::time::Duration {
+    let c = &state.config.meter;
     let meters = telemetry
         .players
         .iter()
-        .any(|(_, t)| meter_moving(&t.meter, &state.config.meter));
+        .any(|(_, t)| meter_moving(&t.meter, c))
+        || telemetry
+            .library_cue
+            .as_ref()
+            .is_some_and(|t| meter_moving(&t.meter, c));
     if animating(state) || meters {
         animation_period(state.config.ui.max_fps)
     } else if state
         .players
         .iter()
         .any(|p| p.transport == Transport::Paused)
+        || (state.library_cue.track.is_some() && state.library_cue.transport == Transport::Paused)
     {
         BLINK_FRAME
-    } else if touch {
-        idle_wait(millis)
     } else {
-        DESKTOP_IDLE
+        idle_wait(millis)
     }
 }
 
@@ -663,13 +665,15 @@ pub fn next_frame(
 const IDLE_PAST_SECOND_MS: u32 = 10;
 
 /// Something on screen moves on its own (a meter, a countdown, a blinking
-/// Pause button): the interface repaints every frame instead of at the idle
-/// rate. A paused CUE still has its `cue`, so its window keeps blinking.
+/// Pause button, the library CUE's position): the interface repaints every
+/// frame instead of at the idle rate. A paused CUE still has its `cue`, so
+/// its window keeps blinking.
 pub fn animating(state: &AppState) -> bool {
     state
         .players
         .iter()
         .any(|p| p.transport == Transport::Playing || p.fading || p.cue.is_some())
+        || (state.library_cue.track.is_some() && state.library_cue.transport == Transport::Playing)
 }
 
 /// The text a table cell shows for `column` (feedback 2 spec O24). The `#`

@@ -294,13 +294,16 @@ possible.
   Screenshots before/after go to the maintainer before it is final.
 - PL31. **Meters fall smoothly.** The interface keeps drawing at
   `ui.max_fps` while any meter still shows a level (a paused or stopped
-  player's meter falling), not only while something plays.
+  player's meter falling, or the library CUE's), not only while something
+  plays; a playing library preview moves too.
 - PL32. **Low battery use.** Nothing redraws when nothing moves: no fixed
   idle redraw; the clock redraws once a second (at the second), and work
   from other threads (pickers, analysis, tags, notices) wakes the
   interface when it delivers. Nothing draws while the app is in the
   background or the screen is off. Measured on the emulator with
-  `dumpsys gfxinfo` / `dumpsys batterystats` before and after.
+  `dumpsys gfxinfo` / `dumpsys batterystats` before and after. The
+  desktop follows the same idle rule: its former ten idle frames a second
+  took a large share of an old two-core computer drawing in software.
 - PL33. **Every screen fits.** Each Settings section, window and menu
   fits a phone in both orientations with no sideways scroll: the
   cartwall editor's cart grid wraps (or scales) to the width, its
