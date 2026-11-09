@@ -197,3 +197,36 @@ fn a_degenerate_cost_keeps_the_ceiling() {
     run(&mut rate, &ui, 0.0, 30, &mut now);
     assert_eq!(rate.fps(&ui), 30.0);
 }
+
+/// One player playing, drawn by a renderer that is software or not, every
+/// frame costing 6 ms of CPU and 24 ms of swap (measured with llvmpipe).
+fn period_after_slow_frames(software: bool) -> Duration {
+    use crate::support::{Fake, state};
+    use egui_kittest::Harness;
+    use fp_app::i18n::I18n;
+    use fp_app::services::MediaCache;
+    use fp_app::ui::app::AppUi;
+    let mut s = state(1, 3);
+    let p = s.players[0].id;
+    fp_model::apply(&mut s, fp_model::Command::Play(p)).unwrap();
+    let fake = Fake::new(s);
+    let app = AppUi::new(fake, I18n::new(Some("en-US")), MediaCache::default())
+        .with_software_renderer(software);
+    let mut h = Harness::builder()
+        .with_size(egui::vec2(1000.0, 700.0))
+        .with_step_dt(FRAME as f32)
+        .build_ui_state(|ui, app: &mut AppUi| app.ui(ui), app);
+    for _ in 0..60 {
+        h.state_mut().observe_frame(Some(0.006), Some(0.024));
+        h.step();
+    }
+    h.state().frame_period()
+}
+
+/// AF1, AF6: the same frames lower the animation rate only when the
+/// renderer draws in software.
+#[test]
+fn a_slow_software_renderer_lowers_the_animation_rate() {
+    assert!(period_after_slow_frames(true) >= Duration::from_secs_f64(1.0 / 14.0));
+    assert_eq!(period_after_slow_frames(false), Duration::from_secs(1) / 30);
+}

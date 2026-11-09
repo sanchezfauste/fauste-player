@@ -518,10 +518,7 @@ fn grid(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, available: f
                 let elapsed = if playing {
                     view.wave_range.map(|(start, span)| {
                         // Something moves: ask for the next frame.
-                        ui.ctx()
-                            .request_repaint_after(super::view::animation_period(
-                                scene.state.config.ui.max_fps,
-                            ));
+                        ui.ctx().request_repaint_after(scene.frame_period);
                         let reported = scene
                             .telemetry
                             .carts

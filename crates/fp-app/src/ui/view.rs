@@ -795,9 +795,8 @@ pub fn idle_wait(millis: u32) -> std::time::Duration {
 /// 2 Hz blink.
 const BLINK_FRAME: std::time::Duration = std::time::Duration::from_millis(250);
 
-/// How soon the next frame is due: at `ui.max_fps` while something moves
-/// (`animating`, or a player's or the library CUE's meter still falling,
-/// PL31), four times a second while a paused player or a held library
+/// How soon the next frame is due: `moving_period` (the adaptive rate,
+/// at most `ui.max_fps`) while something moves (`moving`), four times a second while a paused player or a held library
 /// preview blinks, and otherwise just after the clock's next second (PL32;
 /// `millis` into the current second), on a phone and on a desktop alike. What changes elsewhere wakes
 /// the interface itself (`Controller::set_waker`, the helper threads).
@@ -805,18 +804,10 @@ pub fn next_frame(
     state: &AppState,
     telemetry: &fp_engine::conductor::Telemetry,
     millis: u32,
+    moving_period: std::time::Duration,
 ) -> std::time::Duration {
-    let c = &state.config.meter;
-    let meters = telemetry
-        .players
-        .iter()
-        .any(|(_, t)| meter_moving(&t.meter, c))
-        || telemetry
-            .library_cue
-            .as_ref()
-            .is_some_and(|t| meter_moving(&t.meter, c));
-    if animating(state) || meters {
-        animation_period(state.config.ui.max_fps)
+    if moving(state, telemetry) {
+        moving_period
     } else if state
         .players
         .iter()
@@ -827,6 +818,21 @@ pub fn next_frame(
     } else {
         idle_wait(millis)
     }
+}
+
+/// Whether something on screen moves on its own: `animating`, or a
+/// player's or the library CUE's meter still falling (PL31).
+pub fn moving(state: &AppState, telemetry: &fp_engine::conductor::Telemetry) -> bool {
+    let c = &state.config.meter;
+    animating(state)
+        || telemetry
+            .players
+            .iter()
+            .any(|(_, t)| meter_moving(&t.meter, c))
+        || telemetry
+            .library_cue
+            .as_ref()
+            .is_some_and(|t| meter_moving(&t.meter, c))
 }
 
 /// How far past the second an idle frame lands.

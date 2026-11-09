@@ -154,7 +154,8 @@ fn run(
         options,
         Box::new(move |cc| {
             theme::apply(&cc.egui_ctx);
-            Ok(Box::new(Shell::new(app)))
+            let software = log_renderer(cc.integration_info.gl_renderer.as_ref());
+            Ok(Box::new(Shell::new(app.with_software_renderer(software))))
         }),
     );
     // Everything that can send commands stops first; then the final save
@@ -167,6 +168,30 @@ fn run(
     session.shutdown();
     result.map_err(|e| e.to_string())?;
     Ok(())
+}
+
+/// Logs what draws the interface (adaptive frame rate spec AF2); true when
+/// it draws in software.
+fn log_renderer(gl: Option<&eframe::GlRenderer>) -> bool {
+    let Some(gl) = gl else {
+        tracing::info!("no GL renderer reported");
+        return false;
+    };
+    let software = fp_app::ui::view::is_software_renderer(&gl.renderer);
+    tracing::info!(
+        renderer = %gl.renderer,
+        vendor = %gl.vendor,
+        version = %gl.version,
+        software,
+        "interface renderer"
+    );
+    if software {
+        tracing::warn!(
+            "the interface draws in software: frames cost CPU, and the frame rate \
+             adapts to ui.frame_budget_percent"
+        );
+    }
+    software
 }
 
 /// Opens the window on the window system the configuration asks for
