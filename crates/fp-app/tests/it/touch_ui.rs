@@ -1907,15 +1907,19 @@ fn the_interface_gives_its_waker() {
 fn the_next_frame_follows_what_moves() {
     use fp_app::ui::view::next_frame;
     use std::time::Duration;
+    const MOVING: Duration = Duration::from_millis(33);
     let telemetry = fp_engine::conductor::Telemetry::default();
     let mut s = state(1, 3);
-    assert_eq!(next_frame(&s, &telemetry, 250), Duration::from_millis(760));
+    assert_eq!(
+        next_frame(&s, &telemetry, 250, MOVING),
+        Duration::from_millis(760)
+    );
     let p = s.players[0].id;
     fp_model::apply(&mut s, fp_model::Command::Play(p)).unwrap();
-    assert!(next_frame(&s, &telemetry, 250) <= Duration::from_millis(34));
+    assert!(next_frame(&s, &telemetry, 250, MOVING) <= Duration::from_millis(34));
     fp_model::apply(&mut s, fp_model::Command::Pause(p)).unwrap();
     assert_eq!(s.players[0].transport, fp_model::Transport::Paused);
-    assert!(next_frame(&s, &telemetry, 250) <= Duration::from_millis(250));
+    assert!(next_frame(&s, &telemetry, 250, MOVING) <= Duration::from_millis(250));
 }
 
 /// The library CUE's preview moves on its own: while it plays, its position
@@ -1924,15 +1928,19 @@ fn the_next_frame_follows_what_moves() {
 fn a_playing_library_preview_draws_at_the_frame_rate() {
     use fp_app::ui::view::next_frame;
     use std::time::Duration;
+    const MOVING: Duration = Duration::from_millis(33);
     let telemetry = fp_engine::conductor::Telemetry::default();
     let mut s = state(1, 3);
     s.library_cue.track = s.library.iter().next().map(|t| t.id);
     s.library_cue.transport = fp_model::Transport::Playing;
-    assert!(next_frame(&s, &telemetry, 250) <= Duration::from_millis(34));
+    assert!(next_frame(&s, &telemetry, 250, MOVING) <= Duration::from_millis(34));
     s.library_cue.transport = fp_model::Transport::Paused;
-    assert!(next_frame(&s, &telemetry, 250) <= Duration::from_millis(250));
+    assert!(next_frame(&s, &telemetry, 250, MOVING) <= Duration::from_millis(250));
     s.library_cue.transport = fp_model::Transport::Stopped;
-    assert_eq!(next_frame(&s, &telemetry, 250), Duration::from_millis(760));
+    assert_eq!(
+        next_frame(&s, &telemetry, 250, MOVING),
+        Duration::from_millis(760)
+    );
 }
 
 /// PL31 for the library CUE: a stopped preview's meter still falling is
@@ -1943,6 +1951,7 @@ fn a_falling_library_preview_meter_draws_at_the_frame_rate() {
     use fp_engine::conductor::{LibraryCueTelemetry, Telemetry};
     use fp_engine::meter::MeterReading;
     use std::time::Duration;
+    const MOVING: Duration = Duration::from_millis(33);
     let s = state(1, 3);
     let track = s.library.iter().next().map(|t| t.id).unwrap();
     let meter = MeterReading {
@@ -1957,7 +1966,7 @@ fn a_falling_library_preview_meter_draws_at_the_frame_rate() {
         }),
         ..Telemetry::default()
     };
-    assert!(next_frame(&s, &telemetry, 250) <= Duration::from_millis(34));
+    assert!(next_frame(&s, &telemetry, 250, MOVING) <= Duration::from_millis(34));
 }
 
 // --- Live after the polish (§16) ---

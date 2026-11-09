@@ -90,6 +90,8 @@ impl AppRunner {
                 location: super::web_location(),
             },
             cpu_usage: None,
+            swap_usage: None,
+            gl_renderer: None,
         };
         let storage = LocalStorage::default();
 

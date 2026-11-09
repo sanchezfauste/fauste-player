@@ -606,6 +606,193 @@ pub fn animation_period(max_fps: u32) -> std::time::Duration {
     }
 }
 
+/// Names (lower case) that a software rasterizer's `GL_RENDERER` contains
+/// (adaptive frame rate spec AF2).
+const SOFTWARE_RENDERERS: [&str; 8] = [
+    "llvmpipe",
+    "softpipe",
+    "swrast",
+    "swiftshader",
+    "software rasterizer",
+    "apple software renderer",
+    "gdi generic",
+    "microsoft basic render",
+];
+
+/// Whether `renderer` (`GL_RENDERER`) draws in software (AF2).
+pub fn is_software_renderer(renderer: &str) -> bool {
+    let renderer = renderer.to_lowercase();
+    SOFTWARE_RENDERERS
+        .iter()
+        .any(|name| renderer.contains(name))
+}
+
+/// What a frame cost in seconds (AF1): eframe's CPU time, plus the swap when
+/// the renderer draws in software (with a GPU the swap only waits). `None`
+/// without eframe's measure.
+pub fn frame_cost(cpu: Option<f32>, swap: Option<f32>, software: bool) -> Option<f32> {
+    let swap = if software { swap.unwrap_or(0.0) } else { 0.0 };
+    cpu.map(|cpu| cpu + swap)
+}
+
+/// The weight of each new frame in the average cost (AF3).
+const COST_WEIGHT: f32 = 0.1;
+/// How fast a limited rate climbs back, in frames a second per second (AF5).
+const CLIMB_PER_SEC: f32 = 5.0;
+/// The frames that start a movement and do not count (AF3): the first
+/// layout of a track that starts, its waveform, its cover.
+const WARMUP_FRAMES: u32 = 10;
+/// A frame counts for at most this many times the average (AF3), so one
+/// slow frame barely moves it while a sustained cost still shows within a
+/// few frames.
+const SPIKE_FACTOR: f32 = 3.0;
+/// How far the rate moves before a new log line (AF7).
+const NOTE_STEP: f32 = 5.0;
+
+/// With `ui.max_fps` 0 (every display frame) the rate is limited only below
+/// this, the common display rate (AF4).
+const UNCAPPED_REFERENCE_FPS: f32 = 60.0;
+
+/// The highest rate: `ui.max_fps`, or none (infinity) with 0.
+fn ceiling_fps(ui: &fp_model::UiConfig) -> f32 {
+    if ui.max_fps == 0 {
+        f32::INFINITY
+    } else {
+        ui.max_fps as f32
+    }
+}
+
+/// The rate a frame cost of `cost_secs` allows (AF4): the budget's share of
+/// a second over the cost, held between `ui.min_fps` (never above the
+/// ceiling) and the ceiling. A cost that is not a positive number allows
+/// the ceiling; with no ceiling (`max_fps` 0), so does a target at or above
+/// `UNCAPPED_REFERENCE_FPS`.
+pub fn target_fps(cost_secs: f32, ui: &fp_model::UiConfig) -> f32 {
+    let ceiling = ceiling_fps(ui);
+    if !(cost_secs.is_finite() && cost_secs > 0.0) {
+        return ceiling;
+    }
+    let floor = (ui.min_fps as f32).min(ceiling);
+    let target = (ui.frame_budget_percent as f32 / 100.0 / cost_secs).clamp(floor, ceiling);
+    if ceiling.is_infinite() && target >= UNCAPPED_REFERENCE_FPS {
+        ceiling
+    } else {
+        target
+    }
+}
+
+/// What the adaptive rate has to say to the log (AF7).
+#[derive(Debug, Clone, PartialEq)]
+pub enum RateNote {
+    /// The rate went below the ceiling.
+    Limited { fps: f32, cost_ms: f32, budget: u32 },
+    /// A limited rate moved by `NOTE_STEP` or more since the last note.
+    Changed { fps: f32, cost_ms: f32, budget: u32 },
+    /// The rate is back at the ceiling.
+    Restored { fps: f32 },
+}
+
+/// The frame rate in use while something moves (AF3–AF5).
+#[derive(Debug, Clone, Default)]
+pub struct AdaptiveRate {
+    /// The average frame cost in seconds.
+    average: Option<f32>,
+    /// The rate below the ceiling; `None` at the ceiling.
+    limited: Option<f32>,
+    /// When the last counted frame was observed (seconds).
+    last: Option<f64>,
+    /// The rate the last note gave while limited.
+    noted: Option<f32>,
+    /// Frames drawn moving since the interface last stood still.
+    streak: u32,
+}
+
+impl AdaptiveRate {
+    /// Takes the cost of the previous frame, drawn `moving` (at the
+    /// animation rate) or not, at `now` seconds.
+    pub fn observe(
+        &mut self,
+        cost: Option<f32>,
+        moving: bool,
+        now: f64,
+        ui: &fp_model::UiConfig,
+    ) -> Option<RateNote> {
+        if !moving {
+            self.streak = 0;
+            self.last = None;
+            return None;
+        }
+        self.streak = self.streak.saturating_add(1);
+        let cost = cost.filter(|c| c.is_finite() && *c > 0.0);
+        let Some(cost) = cost.filter(|_| self.streak > WARMUP_FRAMES) else {
+            self.last = None;
+            return None;
+        };
+        let average = self
+            .average
+            .map_or(cost, |a| a + COST_WEIGHT * (cost.min(a * SPIKE_FACTOR) - a));
+        self.average = Some(average);
+        let dt = self
+            .last
+            .map_or(0.0, |last| (now - last).clamp(0.0, 1.0) as f32);
+        self.last = Some(now);
+        let ceiling = ceiling_fps(ui);
+        let target = target_fps(average, ui);
+        let current = self.limited.unwrap_or(ceiling).min(ceiling);
+        let next = if target < current {
+            target
+        } else {
+            target.min(current + CLIMB_PER_SEC * dt)
+        };
+        // With no ceiling, a rate at the display's is no limit (AF4).
+        let uncapped = ceiling.is_infinite() && next >= UNCAPPED_REFERENCE_FPS;
+        self.limited = (next < ceiling && !uncapped).then_some(next);
+        let cost_ms = average * 1000.0;
+        let budget = ui.frame_budget_percent;
+        match (self.noted, self.limited) {
+            (None, Some(fps)) => {
+                self.noted = Some(fps);
+                Some(RateNote::Limited {
+                    fps,
+                    cost_ms,
+                    budget,
+                })
+            }
+            (Some(_), None) => {
+                self.noted = None;
+                Some(RateNote::Restored { fps: ceiling })
+            }
+            (Some(noted), Some(fps)) if (fps - noted).abs() >= NOTE_STEP => {
+                self.noted = Some(fps);
+                Some(RateNote::Changed {
+                    fps,
+                    cost_ms,
+                    budget,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// The rate in use, frames a second (infinity: every display frame).
+    pub fn fps(&self, ui: &fp_model::UiConfig) -> f32 {
+        let ceiling = ceiling_fps(ui);
+        self.limited.map_or(ceiling, |fps| fps.min(ceiling))
+    }
+
+    /// How soon to draw the next frame of something that moves: at the
+    /// ceiling `animation_period(ui.max_fps)`, else one frame of the rate in
+    /// use.
+    pub fn period(&self, ui: &fp_model::UiConfig) -> std::time::Duration {
+        match self.limited {
+            Some(fps) if fps.is_finite() && fps > 0.0 && fps < ceiling_fps(ui) => {
+                std::time::Duration::from_secs_f64(1.0 / f64::from(fps))
+            }
+            _ => animation_period(ui.max_fps),
+        }
+    }
+}
+
 /// Whether `reading` still shows on meter `c`'s scale: a level, a peak hold
 /// or an average above its bottom. A stopped player's meter falls for a
 /// while; the interface draws it falling (phone layout spec PL31).
@@ -627,9 +814,8 @@ pub fn idle_wait(millis: u32) -> std::time::Duration {
 /// 2 Hz blink.
 const BLINK_FRAME: std::time::Duration = std::time::Duration::from_millis(250);
 
-/// How soon the next frame is due: at `ui.max_fps` while something moves
-/// (`animating`, or a player's or the library CUE's meter still falling,
-/// PL31), four times a second while a paused player or a held library
+/// How soon the next frame is due: `moving_period` (the adaptive rate,
+/// at most `ui.max_fps`) while something moves (`moving`), four times a second while a paused player or a held library
 /// preview blinks, and otherwise just after the clock's next second (PL32;
 /// `millis` into the current second), on a phone and on a desktop alike. What changes elsewhere wakes
 /// the interface itself (`Controller::set_waker`, the helper threads).
@@ -637,18 +823,10 @@ pub fn next_frame(
     state: &AppState,
     telemetry: &fp_engine::conductor::Telemetry,
     millis: u32,
+    moving_period: std::time::Duration,
 ) -> std::time::Duration {
-    let c = &state.config.meter;
-    let meters = telemetry
-        .players
-        .iter()
-        .any(|(_, t)| meter_moving(&t.meter, c))
-        || telemetry
-            .library_cue
-            .as_ref()
-            .is_some_and(|t| meter_moving(&t.meter, c));
-    if animating(state) || meters {
-        animation_period(state.config.ui.max_fps)
+    if moving(state, telemetry) {
+        moving_period
     } else if state
         .players
         .iter()
@@ -659,6 +837,21 @@ pub fn next_frame(
     } else {
         idle_wait(millis)
     }
+}
+
+/// Whether something on screen moves on its own: `animating`, or a
+/// player's or the library CUE's meter still falling (PL31).
+pub fn moving(state: &AppState, telemetry: &fp_engine::conductor::Telemetry) -> bool {
+    let c = &state.config.meter;
+    animating(state)
+        || telemetry
+            .players
+            .iter()
+            .any(|(_, t)| meter_moving(&t.meter, c))
+        || telemetry
+            .library_cue
+            .as_ref()
+            .is_some_and(|t| meter_moving(&t.meter, c))
 }
 
 /// How far past the second an idle frame lands.

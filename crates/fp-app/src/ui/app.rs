@@ -354,6 +354,9 @@ pub(crate) struct Scene<'a> {
     /// Seconds since start, for blinking.
     pub time: f64,
     pub ctx: egui::Context,
+    /// How soon a frame follows another while something moves (adaptive
+    /// frame rate spec AF6).
+    pub frame_period: std::time::Duration,
     picks: &'a Sender<Picked>,
     pub files: &'a Sender<FileOutcome>,
     pub services: Option<&'a Sender<ServiceRequest>>,
@@ -479,6 +482,15 @@ pub struct AppUi {
     files_tx: Sender<FileOutcome>,
     files_rx: Receiver<FileOutcome>,
     themed: bool,
+    /// The frame rate in use while something moves (adaptive frame rate
+    /// spec AF3-AF5).
+    rate: super::view::AdaptiveRate,
+    /// Whether the renderer draws in software (AF2).
+    software_renderer: bool,
+    /// The cost of the frame before this one, from eframe (AF1).
+    frame_cost: Option<f32>,
+    /// Whether the last frame was drawn at the animation rate (AF3).
+    last_moving: bool,
     #[cfg(feature = "test-hooks")]
     fail_next_frame: bool,
     settings: SettingsState,
@@ -558,6 +570,10 @@ impl AppUi {
             themed: false,
             #[cfg(feature = "test-hooks")]
             fail_next_frame: false,
+            rate: super::view::AdaptiveRate::default(),
+            software_renderer: false,
+            frame_cost: None,
+            last_moving: false,
             settings: SettingsState::default(),
             settings_shown: false,
             outdated_checked: false,
@@ -623,6 +639,24 @@ impl AppUi {
     pub fn with_notices(mut self, notices: Option<PathBuf>) -> Self {
         self.notices = notices;
         self
+    }
+
+    /// Whether the renderer draws in software, so that the swap counts in
+    /// a frame's cost (adaptive frame rate spec AF1, AF2).
+    pub fn with_software_renderer(mut self, software: bool) -> Self {
+        self.software_renderer = software;
+        self
+    }
+
+    /// The previous frame's CPU time and swap time, in seconds, as eframe
+    /// reports them (AF1); taken by the next `ui`.
+    pub fn observe_frame(&mut self, cpu: Option<f32>, swap: Option<f32>) {
+        self.frame_cost = super::view::frame_cost(cpu, swap, self.software_renderer);
+    }
+
+    /// How soon a frame follows another while something moves (AF6).
+    pub fn frame_period(&self) -> std::time::Duration {
+        self.rate.period(&self.ctl.model().config.ui)
     }
 
     /// The MIDI service, for Settings > MIDI.
@@ -915,6 +949,16 @@ impl AppUi {
         }
         let telemetry = self.ctl.telemetry();
         let time = ctx.input(|i| i.time);
+        let note = self.rate.observe(
+            self.frame_cost.take(),
+            self.last_moving,
+            time,
+            &state.config.ui,
+        );
+        if let Some(note) = note {
+            log_rate(&note);
+        }
+        let frame_period = self.rate.period(&state.config.ui);
         self.view.rows_built = 0;
         self.view.dropouts.observe(&telemetry, time);
         self.view.file_drop = None;
@@ -1010,6 +1054,7 @@ impl AppUi {
             telemetry: &telemetry,
             time,
             ctx: ctx.clone(),
+            frame_period,
             picks: &self.picks_tx,
             files: &self.files_tx,
             services: self.services.as_ref(),
@@ -1432,7 +1477,14 @@ impl AppUi {
             self.file_drops(&ctx, &state);
         }
         let millis = chrono::Local::now().timestamp_subsec_millis();
-        ctx.request_repaint_after(super::view::next_frame(&state, &telemetry, millis));
+        self.last_moving =
+            super::view::moving(&state, &telemetry) || !state.cartwall.playing.is_empty();
+        ctx.request_repaint_after(super::view::next_frame(
+            &state,
+            &telemetry,
+            millis,
+            frame_period,
+        ));
     }
 
     /// O23: opens the tag editor on `track` and asks the tag worker for its
@@ -2544,4 +2596,38 @@ fn status_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &ViewState, faults: u6
             );
         });
     });
+}
+
+/// One log line for a change of the frame rate (adaptive frame rate spec
+/// AF7).
+fn log_rate(note: &super::view::RateNote) {
+    use super::view::RateNote;
+    match note {
+        RateNote::Limited {
+            fps,
+            cost_ms,
+            budget,
+        } => tracing::info!(
+            fps = format_args!("{fps:.1}"),
+            frame_ms = format_args!("{cost_ms:.1}"),
+            budget_percent = budget,
+            "frame rate limited: frames cost more than the budget"
+        ),
+        RateNote::Changed {
+            fps,
+            cost_ms,
+            budget,
+        } => tracing::info!(
+            fps = format_args!("{fps:.1}"),
+            frame_ms = format_args!("{cost_ms:.1}"),
+            budget_percent = budget,
+            "frame rate changed"
+        ),
+        RateNote::Restored { fps } => {
+            tracing::info!(
+                fps = format_args!("{fps:.1}"),
+                "frame rate back to the maximum"
+            );
+        }
+    }
 }

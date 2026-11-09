@@ -228,16 +228,37 @@ Each frame, `AppUi::ui`:
    snapshot drops it, and `AppUi::keyboard` gives Esc and Enter to Cancel.
    CA5's notice (`AppState::cue_on_air.notice`) goes to the status bar once
    per id (`ViewState::cue_notice_seen`);
-5. requests a repaint: while anything plays, fades or cues
-   (`view::animating`, which includes a paused CUE so that its Pause blinks)
-   after `view::animation_period(ui.max_fps)` (1/30 s by default; zero, the
-   next display frame, with `max_fps` 0), the same while a meter still
-   falls or the library CUE plays, four times a second while a paused
+5. requests a repaint: while anything moves (`view::moving`: something
+   plays, fades or cues, `view::animating`, which includes a paused CUE so
+   that its Pause blinks; a meter still falling; the library CUE playing)
+   after the adaptive rate's period (`view::AdaptiveRate::period`: at most
+   `view::animation_period(ui.max_fps)`, 1/30 s by default; zero, the next
+   display frame, with `max_fps` 0), four times a second while a paused
    player or a held library preview blinks, and otherwise just after the
    clock's next second (`view::next_frame`, `view::idle_wait`; PL32, on
    the desktop as on a phone). What changes elsewhere wakes the interface
    (see "Drawing" in `mobile.md`). `widgets::{blink, paused_style}` give
    the amber blink of a paused Pause tile to the player and the CUE window.
+
+**Adaptive frame rate** (adaptive frame rate spec). `Shell` hands each
+frame's CPU time and swap time, as the vendored eframe reports them
+(`IntegrationInfo::cpu_usage`, `swap_usage`), to `AppUi::observe_frame`.
+`view::frame_cost` adds the swap only when the renderer draws in software
+(`view::is_software_renderer` on `IntegrationInfo::gl_renderer`, read and
+logged in `main.rs`): llvmpipe rasterizes in the swap, while with a GPU the
+swap only waits. `view::AdaptiveRate` keeps the average cost of the frames
+drawn while something moved (weight 0.1, each frame counted for at most
+three times the average, the first 10 frames after standing still left
+out), the target
+`ui.frame_budget_percent / cost` held between `ui.min_fps` and
+`ui.max_fps` (with `max_fps` 0, limited only below 60 fps), falls at once
+and climbs by at most 5 fps a second. Its period paces every animation
+frame (`Scene::frame_period`, also the cartwall's sweep), and its notes
+are logged once each (limited, changed by 5 fps or more, back to the
+maximum). Measured on Xvfb (llvmpipe, two cores, one player playing): the
+process went from 147% to 66% of a core, at 12.9 fps. Android
+(`fp-mobile`) does not call `observe_frame` yet, so there the rate stays
+at `ui.max_fps`.
 
 The UI keeps only **view state**: selection, drag target,
 the column edge being dragged (`LiveResize`), the Settings section. Everything else comes

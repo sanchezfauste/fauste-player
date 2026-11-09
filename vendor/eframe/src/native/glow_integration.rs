@@ -345,7 +345,7 @@ impl<'app> GlowWinitApp<'app> {
 
         let painter = Rc::new(RefCell::new(painter));
 
-        let integration = EpiIntegration::new(
+        let mut integration = EpiIntegration::new(
             egui_ctx,
             &glutin.window(ViewportId::ROOT),
             &self.app_name,
@@ -359,6 +359,21 @@ impl<'app> GlowWinitApp<'app> {
             #[cfg(feature = "wgpu_no_default_features")]
             None,
         );
+        // Local change (see `VENDORED.md`): the renderer, for the app.
+        {
+            use glow::HasContext as _;
+            // SAFETY: plain queries on the context the painter was just
+            // created with, which is current on this thread.
+            #[expect(unsafe_code)]
+            let renderer = unsafe {
+                crate::GlRenderer {
+                    renderer: gl.get_parameter_string(glow::RENDERER),
+                    vendor: gl.get_parameter_string(glow::VENDOR),
+                    version: gl.get_parameter_string(glow::VERSION),
+                }
+            };
+            integration.set_gl_renderer(renderer);
+        }
 
         {
             let event_loop_proxy = Arc::clone(&self.repaint_proxy);
@@ -649,6 +664,7 @@ impl GlowWinitRunning<'_> {
 
         let mut frame_timer = crate::stopwatch::Stopwatch::new();
         frame_timer.start();
+        let mut swap_time: Option<f32> = None;
 
         {
             let glutin = self.glutin.borrow();
@@ -948,7 +964,10 @@ impl GlowWinitRunning<'_> {
                 // swap with interval 0 on Wayland (see `GlutinWindowContext::new`).
                 // egui-wgpu does the same. A no-op on other platforms.
                 window.pre_present_notify();
+                // Local change (see `VENDORED.md`): time the swap for the app.
+                let swap_start = Instant::now();
                 gl_surface.swap_buffers(context)?;
+                swap_time = Some(swap_start.elapsed().as_secs_f32());
                 frame_timer.resume();
             }
 
@@ -964,6 +983,9 @@ impl GlowWinitRunning<'_> {
         glutin.handle_viewport_output(event_loop, &integration.egui_ctx, &viewport_output);
 
         integration.report_frame_time(frame_timer.total_time_sec()); // don't count auto-save time as part of regular frame time
+        if let Some(seconds) = swap_time {
+            integration.report_swap_time(seconds);
+        }
 
         integration.maybe_autosave(
             app.as_mut(),

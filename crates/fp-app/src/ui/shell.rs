@@ -124,7 +124,9 @@ impl eframe::App for Shell {
         Shell::logic(self, ctx);
     }
 
-    fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ui: &mut Ui, frame: &mut eframe::Frame) {
+        let info = frame.info();
+        self.app.observe_frame(info.cpu_usage, info.swap_usage);
         Shell::ui(self, ui);
     }
 

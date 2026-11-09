@@ -1050,6 +1050,29 @@ pub struct IntegrationInfo {
     ///
     /// `None` if this is the first frame.
     pub cpu_usage: Option<f32>,
+
+    /// Seconds `swap_buffers` took on the previous frame (local change, see
+    /// `VENDORED.md`). With a software renderer this is where the frame is
+    /// rasterized; with a GPU it is mostly waiting (vsync, the GPU).
+    ///
+    /// `None` on the first frame and outside the glow integration.
+    pub swap_usage: Option<f32>,
+
+    /// The OpenGL renderer, read once when the glow painter is created
+    /// (local change, see `VENDORED.md`). `None` outside the glow integration.
+    pub gl_renderer: Option<GlRenderer>,
+}
+
+/// What OpenGL reports about its implementation (local change, see
+/// `VENDORED.md`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct GlRenderer {
+    /// `GL_RENDERER`.
+    pub renderer: String,
+    /// `GL_VENDOR`.
+    pub vendor: String,
+    /// `GL_VERSION`.
+    pub version: String,
 }
 
 impl IntegrationInfo {
@@ -1071,6 +1094,8 @@ impl IntegrationInfo {
                 },
             },
             cpu_usage: None,
+            swap_usage: None,
+            gl_renderer: None,
         }
     }
 }
