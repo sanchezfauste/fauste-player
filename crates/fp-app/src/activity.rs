@@ -31,6 +31,10 @@ pub struct AnalysisActivity {
     pub loudness: usize,
     /// The library pass, while one runs.
     pub pass: Option<PassProgress>,
+    /// The last *Look for changed files* pass that ended (external editor
+    /// spec EE7.5): its id and how many changed files it found. Each pass
+    /// has a new id, so the interface tells it once per pass.
+    pub changed_found: Option<(u64, usize)>,
 }
 
 /// Where a track is in the analysis.

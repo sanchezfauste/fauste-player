@@ -2195,3 +2195,269 @@ fn an_unused_uncategorised_track_whose_file_is_deleted_leaves_the_library() {
         r.handle.model.load().library.track_at(&path).is_none()
     });
 }
+
+// External editor spec EE7, EE9: changed library files.
+
+/// The stamp of `path` as the analysis would store it.
+fn stamp_of(path: &Path) -> fp_model::FileStamp {
+    let meta = std::fs::metadata(path).unwrap();
+    fp_model::FileStamp::from_metadata(meta.len(), meta.modified().unwrap()).unwrap()
+}
+
+/// A library analysed by this version, tags and bit rates read, each track
+/// stamped with its file as it is (`stale` ones with another size), and
+/// `extra` applied last. Every track has peaks in the media cache, so
+/// nothing is analysed only because the screen draws it.
+fn stamped_rig(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    stale: &[usize],
+    extra: impl FnOnce(&mut fp_model::AppState),
+) -> Rig {
+    let stale_paths: Vec<PathBuf> = stale.iter().map(|i| files[*i].clone()).collect();
+    let mut r = rig_with(files, dir, Duration::ZERO, move |state| {
+        for track_id in state.library.ids() {
+            let t = state.library.get_mut(track_id).unwrap();
+            t.analyzed = true;
+            t.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+            t.tags_read = true;
+            t.bitrate_read = true;
+            t.duration_secs = 1.0;
+            t.format = Some(fp_model::AudioFormat {
+                sample_rate: 48_000,
+                bits: Some(16),
+                channels: 1,
+                dsd_rate: None,
+                bitrate: None,
+            });
+            let mut stamp = stamp_of(&t.path);
+            if stale_paths.contains(&t.path) {
+                stamp.size += 1;
+            }
+            t.file_stamp = Some(stamp);
+        }
+        extra(state);
+    });
+    seed_all(&r);
+    r.now += Duration::from_millis(1);
+    r
+}
+
+/// Peaks for every track, as after an earlier analysis.
+fn seed_all(r: &Rig) {
+    for t in r.handle.model.load().library.iter() {
+        r.media.seed(
+            t.id,
+            TrackMedia {
+                peaks: Vec::new(),
+                peak_bucket_secs: 0.1,
+                cover_png: None,
+            },
+        );
+    }
+}
+
+/// Puts a two-second file in place of `path` (a new size), never seen
+/// half-written.
+fn replace_longer(path: &Path) {
+    let staging = tempfile::tempdir().unwrap();
+    let name = path.file_name().unwrap().to_str().unwrap();
+    std::fs::rename(wav(staging.path(), name, 2), path).unwrap();
+}
+
+fn track_of(r: &Rig, path: &Path) -> fp_model::Track {
+    let model = r.handle.model.load();
+    let id = model.library.track_at(path).unwrap();
+    model.library.get(id).unwrap().clone()
+}
+
+/// Every check asked for so far has been answered.
+fn checks_done(r: &mut Rig) {
+    r.run_until("the change checks answered", |r| {
+        r.services.change_checks_pending() == 0
+    });
+}
+
+/// EE7.1, EE9: a file changed while the application was closed is analysed
+/// again at start, once; its new stamp is stored, so no loop follows.
+#[test]
+fn a_file_changed_before_start_is_analysed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[0], |_| {});
+    let real = stamp_of(&files[0]);
+    r.run_until("the changed file analysed", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    checks_done(&mut r);
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1, "only the changed one");
+    assert_eq!(r.started.lock().unwrap().as_slice(), &files[..1]);
+}
+
+/// EE7.1 and the update (spec §5): a track analysed before stamps existed
+/// gets its file's stamp, taken as unchanged; nothing is analysed.
+#[test]
+fn a_track_without_a_stamp_gets_one_at_start_and_no_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[], |state| {
+        for id in state.library.ids() {
+            state.library.get_mut(id).unwrap().file_stamp = None;
+        }
+    });
+    let real = stamp_of(&files[0]);
+    r.run_until("the stamp stored", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+}
+
+/// EE7.4: a file changed while the application runs is checked when its
+/// track is loaded on a player, and analysed again at once.
+#[test]
+fn loading_a_changed_track_on_a_player_analyses_it_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    idle_for(&mut r, 200);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+    replace_longer(&files[1]);
+    idle_for(&mut r, 200);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "no polling");
+    let model = r.handle.model.load_full();
+    let player = model.players[0].id;
+    let entry = model.playlists.iter().next().unwrap().entries[1].clone();
+    assert_ne!(model.players[0].next, Some(entry.id));
+    assert!(r.handle.send(Command::SetNext(player, entry.id)));
+    r.conductor.tick(r.now);
+    assert_eq!(r.handle.model.load().players[0].next, Some(entry.id));
+    // Its peaks are known: only the change check can ask for an analysis.
+    seed_all(&r);
+    r.run_until("analysed again", |r| {
+        (track_of(r, &files[1]).duration_secs - 2.0).abs() < 1e-6
+    });
+    assert_eq!(
+        track_of(&r, &files[1]).file_stamp,
+        Some(stamp_of(&files[1]))
+    );
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+}
+
+/// EE9: a changed track that sounds (here the library pre-listen's) is not
+/// analysed until it stops sounding.
+#[test]
+fn a_changed_track_that_sounds_waits_until_it_stops() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[0], |state| {
+        state.library_cue.track = state.library.ids().into_iter().next();
+    });
+    checks_done(&mut r);
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "it sounds");
+    assert!(r.handle.send(Command::SelectLibraryCue(None)));
+    let real = stamp_of(&files[0]);
+    r.run_until("analysed once it stopped", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+}
+
+/// EE9: the result of a change's analysis for a track that started sounding
+/// meanwhile is applied only once it stops.
+#[test]
+fn a_result_for_a_track_that_started_sounding_waits() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[0], |_| {});
+    let old = track_of(&r, &files[0]).file_stamp;
+    let id = track_of(&r, &files[0]).id;
+    r.gate.store(false, Ordering::SeqCst);
+    r.run_until("the analysis started", |r| {
+        r.analyses.load(Ordering::SeqCst) == 1
+    });
+    assert!(r.handle.send(Command::SelectLibraryCue(Some(id))));
+    r.conductor.tick(r.now);
+    assert_eq!(r.handle.model.load().library_cue.track, Some(id));
+    r.gate.store(true, Ordering::SeqCst);
+    r.run_until("the result held", |r| r.services.held_results() == 1);
+    idle_for(&mut r, 200);
+    assert_eq!(track_of(&r, &files[0]).file_stamp, old, "not applied");
+    assert!(r.handle.send(Command::SelectLibraryCue(None)));
+    let real = stamp_of(&files[0]);
+    r.run_until("applied once it stopped", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    assert_eq!(r.services.held_results(), 0);
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+}
+
+/// EE7.5: Look for changed files checks every track once, sends the changed
+/// ones to the analysis and tells how many it found, once per pass.
+#[test]
+fn look_for_changed_files_reports_the_count() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    assert_eq!(r.services.activity().load().changed_found, None);
+    replace_longer(&files[0]);
+    replace_longer(&files[2]);
+    let requests = r.services.requests();
+    requests.send(ServiceRequest::LookForChangedFiles).unwrap();
+    r.run_until("the count", |r| {
+        r.services.activity().load().changed_found.is_some()
+    });
+    let (pass, found) = r.services.activity().load().changed_found.unwrap();
+    assert_eq!(found, 2);
+    r.run_until("both analysed", |r| {
+        [&files[0], &files[2]]
+            .iter()
+            .all(|f| (track_of(r, f).duration_secs - 2.0).abs() < 1e-6)
+    });
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
+    requests.send(ServiceRequest::LookForChangedFiles).unwrap();
+    r.run_until("a new pass", |r| {
+        r.services
+            .activity()
+            .load()
+            .changed_found
+            .is_some_and(|(p, _)| p != pass)
+    });
+    let (_, found) = r.services.activity().load().changed_found.unwrap();
+    assert_eq!(found, 0, "both are up to date now");
+    idle_for(&mut r, 200);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
+}
+
+/// EE7: nothing changed, nothing is analysed: neither at start nor on
+/// demand.
+#[test]
+fn an_unchanged_library_sends_no_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    idle_for(&mut r, 300);
+    r.services
+        .requests()
+        .send(ServiceRequest::LookForChangedFiles)
+        .unwrap();
+    r.run_until("the count", |r| {
+        r.services.activity().load().changed_found.is_some()
+    });
+    assert_eq!(r.services.activity().load().changed_found.unwrap().1, 0);
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+}
