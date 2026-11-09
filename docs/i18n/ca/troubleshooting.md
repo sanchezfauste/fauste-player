@@ -204,10 +204,17 @@ exclusiu de Windows no).
 
 Mentre alguna cosa sona, la interfície dibuixa com a màxim 30 fotogrames per
 segon (`max_fps` a la secció `ui` del fitxer de configuració), i els clics i
-les tecles es responen a l'instant. En un ordinador vell o ocupat, abaixa'l
-(per exemple a 20) per deixar més processador a l'àudio; 0 dibuixa cada
-fotograma que mostra la pantalla. Els mesuradors mesuren el mateix a qualsevol
-ritme; només es dibuixen amb menys freqüència.
+les tecles es responen a l'instant. Quan els seus fotogrames costen més d'una
+part del processador (`frame_budget_percent`, el 40% d'un nucli per defecte),
+dibuixa menys fotogrames per si sola, fins a `min_fps` (8 per defecte), i
+torna a pujar quan surten més barats. Passa sobretot en ordinadors sense una
+targeta gràfica utilitzable, on el dibuix el fa el processador: el registre ho
+diu en arrencar ("the interface draws in software"). Per deixar encara més
+processador a l'àudio, abaixa `max_fps` o `frame_budget_percent`; 0 a
+`max_fps` dibuixa cada fotograma que mostra la pantalla. Els mesuradors
+mesuren el mateix a qualsevol ritme; només es dibuixen amb menys freqüència.
+Sense res sonant, la interfície dibuixa un cop per segon (pel rellotge) i cada
+cop que canvia alguna cosa.
 
 ## No es poden deixar anar fitxers a Linux {#files-cannot-be-dropped-on-linux}
 

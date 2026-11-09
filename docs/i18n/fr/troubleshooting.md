@@ -219,11 +219,17 @@ avec le nombre survenu. Tous les systèmes audio ne signalent pas les xruns
 
 Pendant qu'un son joue, l'interface dessine au plus 30 images par seconde
 (`max_fps` dans la section `ui` du fichier de configuration), et les clics et
-les touches reçoivent une réponse immédiate. Sur un ordinateur ancien ou
-occupé, abaissez-le (par exemple à 20) pour laisser plus de processeur à
-l'audio ; 0 dessine chaque image que l'écran montre. Les vumètres mesurent la
-même chose quelle que soit la cadence ; ils sont seulement dessinés moins
-souvent.
+les touches reçoivent une réponse immédiate. Quand ses images coûtent plus
+qu'une part du processeur (`frame_budget_percent`, 40 % d'un cœur par défaut),
+elle dessine d'elle-même moins d'images, jusqu'à `min_fps` (8 par défaut), et
+remonte quand elles coûtent moins. Cela arrive surtout sur les ordinateurs
+sans carte graphique utilisable, où le dessin est fait par le processeur : le
+journal le dit au démarrage ("the interface draws in software"). Pour laisser
+encore plus de processeur à l'audio, abaissez `max_fps` ou
+`frame_budget_percent` ; 0 dans `max_fps` dessine chaque image que l'écran
+montre. Les vumètres mesurent la même chose quelle que soit la cadence ; ils
+sont seulement dessinés moins souvent. Quand rien ne joue, l'interface dessine
+une fois par seconde (pour l'horloge) et chaque fois que quelque chose change.
 
 ## Les fichiers ne peuvent pas être déposés sous Linux {#files-cannot-be-dropped-on-linux}
 

@@ -217,10 +217,18 @@ xrunak adierazten (PulseAudiok ez; Windowsen modu esklusiboak ez).
 
 Zerbait jotzen ari den bitartean, interfazeak gehienez 30 frame segundoko
 marrazten ditu (`max_fps`, konfigurazio-fitxategiaren `ui` atalean), eta
-klikei eta teklei berehala erantzuten zaie. Ordenagailu zahar edo lanpetu
-batean jaitsi (adibidez 20ra) prozesadorearen zati handiagoa audiorako uzteko;
-0 balioak pantailak erakusten duen frame guztiak marrazten ditu. Neurgailuek
-berdin neurtzen dute edozein maiztasunetan; gutxiagotan marrazten dira soilik.
+klikei eta teklei berehala erantzuten zaie. Bere frameek prozesadorearen zati
+bat baino gehiago kostatzen dutenean (`frame_budget_percent`, nukleo baten %
+40 lehenespenez), frame gutxiago marrazten ditu berez, `min_fps` arte (8
+lehenespenez), eta berriro igotzen da merkeago ateratzen direnean. Batez ere
+txartel grafiko erabilgarririk gabeko ordenagailuetan gertatzen da, non
+prozesadoreak egiten duen marrazketa: erregistroak abiaraztean esaten du ("the
+interface draws in software"). Prozesadorearen zati are handiagoa audiorako
+uzteko, jaitsi `max_fps` edo `frame_budget_percent`; `max_fps` 0 denean,
+pantailak erakusten duen frame guztiak marrazten ditu. Neurgailuek berdin
+neurtzen dute edozein maiztasunetan; gutxiagotan marrazten dira soilik. Ezer
+jotzen ez denean, interfazeak segundoko behin marrazten du (erlojuarengatik)
+eta zerbait aldatzen den bakoitzean.
 
 ## Fitxategiak ezin dira jaregin Linuxen {#files-cannot-be-dropped-on-linux}
 

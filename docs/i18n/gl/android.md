@@ -14,6 +14,11 @@ llo pida. Para actualizar, instala o APK máis novo do mesmo xeito: as túas
 listas e a túa configuración quedan. A aplicación aínda non está en Google
 Play.
 
+A versión 0.13.0 e as anteriores instálanse como outra aplicación, así que un
+APK máis novo non as actualiza: aparece como un segundo Fauste Player.
+Desinstala a antiga cando a nova estea configurada. As súas listas e a súa
+configuración non se trasladan.
+
 ## Primeiro arranque {#first-start}
 
 - **Acceso á música.** Permite o acceso á música (e ás notificacións, en
@@ -167,10 +172,11 @@ menú.
 **Preescoita.** Os 🎧 á dereita dunha fila reproducen a súa pista desde o seu
 cue-in na saída de preescoita da biblioteca; os 🎧 doutra fila cambian a esa
 pista. Unha franxa fina sobre a lista mostra o título, o tempo que queda,
-**Pausa**/**Play** e **Stop** mentres soa (ou está en pausa), e unha pista
-noutro caso: sempre conserva o seu sitio, así que as filas non se moven cando
-unha preescoita comeza ou remata. Os 🎧 aparecen atenuados cando o ficheiro
-falta ou non se pode reproducir.
+**Pausa**/**Play** e **Stop** mentres soa (ou está en pausa), o título
+atenuado despois de **Stop**, e unha pista antes da primeira preescoita:
+sempre conserva o seu sitio, así que as filas non se moven cando unha
+preescoita comeza ou remata. Os 🎧 aparecen atenuados cando o ficheiro falta ou
+non se pode reproducir.
 
 **A tarxeta de preescoita.** Toca a franxa (fóra dos seus botóns) para
 abrir a tarxeta baixo a lista, coa forma de onda da pista como na tarxeta

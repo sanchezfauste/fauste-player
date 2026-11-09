@@ -208,10 +208,17 @@ não; o modo exclusivo do Windows não).
 
 Enquanto algo toca, a interface desenha no máximo 30 imagens por segundo
 (`max_fps` na secção `ui` do ficheiro de configuração), e os cliques e as
-teclas são respondidos de imediato. Num computador antigo ou ocupado,
-baixe-o (por exemplo para 20) para deixar mais do processador para o áudio; 0
-desenha todas as imagens que o ecrã mostra. Os medidores medem o mesmo a
-qualquer ritmo; só são desenhados com menos frequência.
+teclas são respondidos de imediato. Quando as suas imagens custam mais do que
+uma parte do processador (`frame_budget_percent`, 40% de um núcleo por
+omissão), desenha menos imagens por si só, até `min_fps` (8 por omissão), e
+volta a subir quando ficam mais baratas. Acontece sobretudo em computadores
+sem uma placa gráfica utilizável, onde o desenho é feito pelo processador: o
+registo indica-o no arranque ("the interface draws in software"). Para deixar
+ainda mais processador para o áudio, baixe `max_fps` ou
+`frame_budget_percent`; 0 em `max_fps` desenha todas as imagens que o ecrã
+mostra. Os medidores medem o mesmo a qualquer ritmo; só são desenhados com
+menos frequência. Sem nada a tocar, a interface desenha uma vez por segundo
+(pelo relógio) e sempre que algo muda.
 
 ## Não é possível largar ficheiros no Linux {#files-cannot-be-dropped-on-linux}
 

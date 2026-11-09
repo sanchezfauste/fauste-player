@@ -13,6 +13,11 @@ permita que o navegador ou o gestor de ficheiros instale aplicações quando o
 Android perguntar. Para atualizar, instale o APK mais recente da mesma forma:
 as suas listas e definições ficam. A aplicação ainda não está no Google Play.
 
+A versão 0.13.0 e as anteriores instalam-se como outra aplicação, por isso um
+APK mais recente não as atualiza: aparece como um segundo Fauste Player.
+Desinstale a antiga depois de configurar a nova. As suas listas e definições
+não passam para a nova.
+
 ## Primeiro arranque {#first-start}
 
 - **Acesso à música.** Permita o acesso à música (e às notificações, no
@@ -166,13 +171,14 @@ também e o menu atua em todas as linhas assinaladas, pela ordem em que as
 assinalou; o **Pré-escutar** não é então oferecido. As marcas ficam depois da
 ação do menu.
 
-**Pré-escuta.** Os 🎧 à direita de uma linha tocam a sua faixa a partir do
-seu cue-in na saída de pré-escuta da biblioteca; os 🎧 de outra linha passam
-para essa faixa. Uma faixa fina por cima da lista mostra o título, o tempo
-restante, **Pausa**/**Play** e **Stop** enquanto toca (ou está em pausa), e
-uma dica caso contrário: mantém sempre o seu lugar, por isso as linhas não se
-movem quando uma pré-escuta começa ou pára. Os 🎧 ficam esbatidos quando o
-ficheiro está em falta ou não pode ser tocado.
+**Pré-escuta.** Os 🎧 à direita de uma linha tocam a sua faixa a partir do seu
+cue-in na saída de pré-escuta da biblioteca; os 🎧 de outra linha passam para
+essa faixa. Uma faixa fina por cima da lista mostra o título, o tempo
+restante, **Pausa**/**Play** e **Stop** enquanto toca (ou está em pausa), o
+título esbatido depois de **Stop**, e uma dica antes da primeira pré-escuta:
+mantém sempre o seu lugar, por isso as linhas não se movem quando uma
+pré-escuta começa ou pára. Os 🎧 ficam esbatidos quando o ficheiro está em
+falta ou não pode ser tocado.
 
 **O cartão de pré-escuta.** Toque na faixa fina (fora dos seus botões)
 para abrir o cartão por baixo da lista, com a forma de onda da faixa como no

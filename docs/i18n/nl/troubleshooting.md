@@ -207,10 +207,17 @@ van Windows niet).
 
 Terwijl er iets speelt, tekent de interface hooguit 30 beelden per seconde
 (`max_fps` in de sectie `ui` van het configuratiebestand), en klikken en
-toetsen worden meteen beantwoord. Verlaag het op een oude of drukke computer
-(bijvoorbeeld naar 20) om meer van de processor aan de audio over te laten; 0
-tekent elk beeld dat het scherm toont. De meters meten hetzelfde bij elke
-snelheid; ze worden alleen minder vaak getekend.
+toetsen worden meteen beantwoord. Als de beelden meer kosten dan een deel van
+de processor (`frame_budget_percent`, standaard 40% van één kern), tekent hij
+vanzelf minder beelden, tot `min_fps` (standaard 8), en gaat weer omhoog als
+ze goedkoper worden. Dat gebeurt vooral op computers zonder bruikbare
+grafische kaart, waar de processor het tekenen doet: het logboek meldt het bij
+het starten ("the interface draws in software"). Om nog meer van de processor
+aan de audio over te laten, verlaag `max_fps` of `frame_budget_percent`; 0 in
+`max_fps` tekent elk beeld dat het scherm toont. De meters meten hetzelfde bij
+elke snelheid; ze worden alleen minder vaak getekend. Als er niets speelt,
+tekent de interface één keer per seconde (voor de klok) en telkens wanneer er
+iets verandert.
 
 ## Bestanden kunnen op Linux niet worden neergezet {#files-cannot-be-dropped-on-linux}
 

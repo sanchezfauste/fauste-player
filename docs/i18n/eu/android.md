@@ -14,6 +14,11 @@ instalatzea Androidek eskatzen duenean. Eguneratzeko, instalatu APK berriagoa
 modu berean: zure zerrendak eta ezarpenak mantentzen dira. Aplikazioa ez dago
 oraindik Google Play-n.
 
+0.13.0 bertsioa eta zaharragoak beste aplikazio gisa instalatzen dira, beraz
+APK berriago batek ez ditu eguneratzen: bigarren Fauste Player gisa agertzen
+da. Desinstalatu zaharra berria konfiguratuta dagoenean. Haren zerrendak eta
+ezarpenak ez dira pasatzen.
+
 ## Lehen abiaraztea {#first-start}
 
 - **Musikarako sarbidea.** Baimendu musikarako sarbidea (eta jakinarazpenak,
@@ -184,12 +189,13 @@ geratzen dira.
 
 **Aurrez entzutea.** Errenkada baten eskuineko 🎧 ikonoak bere pista cue-in
 puntutik jotzen du liburutegiaren aurrez entzuteko irteeran; beste errenkada
-baten 🎧 ikonoak pista horretara pasatzen du. Zerrendaren gaineko zerrenda
-mehe batek izenburua, geratzen den denbora, **Pausatu**/**Aurrez entzun** eta
-**Gelditu** erakusten ditu jotzen ari den bitartean (edo pausan), eta
-bestela iradokizun bat: beti bere lekua mantentzen du, beraz errenkadak ez dira
-mugitzen aurrez entzute bat hasi edo gelditzen denean. 🎧 ilunduta dago
-fitxategia falta denean edo jo ezin denean.
+baten 🎧 ikonoak pista horretara pasatzen du. Zerrendaren gaineko zerrenda mehe
+batek izenburua, geratzen den denbora, **Pausatu**/**Aurrez entzun** eta
+**Gelditu** erakusten ditu jotzen ari den bitartean (edo pausan), izenburua
+ilunduta **Gelditu** ondoren, eta iradokizun bat lehen aurrez entzutearen
+aurretik: beti bere lekua mantentzen du, beraz errenkadak ez dira mugitzen
+aurrez entzute bat hasi edo gelditzen denean. 🎧 ilunduta dago fitxategia falta
+denean edo jo ezin denean.
 
 **Aurrez entzuteko txartela.** Ukitu zerrenda (bere botoietatik kanpo)
 txartela zerrendaren azpian irekitzeko, pistaren uhin-formarekin,

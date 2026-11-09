@@ -14,6 +14,10 @@ aplikacji, gdy Android o to zapyta. Aby zaktualizować, zainstaluj nowszy APK w
 ten sam sposób: Twoje playlisty i ustawienia zostają. Aplikacji nie ma jeszcze
 w Google Play.
 
+Wersja 0.13.0 i starsze instalują się jako inna aplikacja, więc nowszy APK ich
+nie aktualizuje: pojawia się jako drugi Fauste Player. Odinstaluj starą, gdy
+nowa będzie skonfigurowana. Jej playlisty i ustawienia nie są przenoszone.
+
 ## Pierwsze uruchomienie {#first-start}
 
 - **Dostęp do muzyki.** Zezwól na dostęp do muzyki (oraz do powiadomień, w
@@ -161,12 +165,12 @@ jest wtedy oferowane. Zaznaczenia zostają po akcji z menu.
 
 **Odsłuch wstępny.** Słuchawki 🎧 po prawej stronie wiersza odtwarzają jego
 utwór od cue-in na wyjściu odsłuchu wstępnego biblioteki; 🎧 innego wiersza
-przełącza na ten utwór. Smukły pasek nad listą pokazuje tytuł, czas
-pozostały, **Wstrzymaj odsłuch**/**Odsłuch** i **Zatrzymaj odsłuch**, gdy
-gra (lub jest wstrzymany), a w przeciwnym razie podpowiedź: zawsze zachowuje
-swoje miejsce, więc wiersze nie przesuwają się, gdy odsłuch zaczyna się lub
-kończy. 🎧 jest przyciemnione, gdy plik jest brakujący lub nie można go
-odtworzyć.
+przełącza na ten utwór. Smukły pasek nad listą pokazuje tytuł, czas pozostały,
+**Wstrzymaj odsłuch**/**Odsłuch** i **Zatrzymaj odsłuch**, gdy gra (lub jest
+wstrzymany), przyciemniony tytuł po **Zatrzymaj odsłuch**, a przed pierwszym
+odsłuchem podpowiedź: zawsze zachowuje swoje miejsce, więc wiersze nie
+przesuwają się, gdy odsłuch zaczyna się lub kończy. 🎧 jest przyciemnione, gdy
+plik jest brakujący lub nie można go odtworzyć.
 
 **Karta odsłuchu.** Dotknij paska (poza jego przyciskami), aby otworzyć
 kartę pod listą, z przebiegiem utworu jak na karcie odtwarzacza w

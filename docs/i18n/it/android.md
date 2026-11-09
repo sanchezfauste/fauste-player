@@ -13,6 +13,11 @@ consenti al browser o al file manager di installare app quando Android lo
 chiede. Per aggiornare, installa il nuovo APK allo stesso modo: le tue
 playlist e impostazioni restano. L'app non è ancora su Google Play.
 
+La versione 0.13.0 e le precedenti si installano come un'altra app, quindi un
+APK più nuovo non le aggiorna: compare come un secondo Fauste Player.
+Disinstalla quella vecchia quando la nuova è configurata. Le sue playlist e
+impostazioni non vengono trasferite.
+
 ## Primo avvio {#first-start}
 
 - **Accesso alla musica.** Consenti l'accesso alla musica (e alle
@@ -172,13 +177,13 @@ menu agisce su ogni riga spuntata, nell'ordine in cui le hai spuntate;
 menu.
 
 **Preascolto.** Le 🎧 a destra di una riga riproducono il suo brano dal suo
-cue-in sull'uscita di preascolto della libreria; le 🎧 di un'altra riga
-passano a quel brano. Una striscia sottile sopra l'elenco mostra il titolo,
-il tempo rimanente, **Metti in pausa il preascolto**/**Preascolto** e **Ferma
-il preascolto** mentre suona (o è in pausa), e un suggerimento altrimenti:
-mantiene sempre il suo posto, così le righe non si spostano quando un
-preascolto parte o si ferma. Le 🎧 sono attenuate quando il file manca o non
-si può riprodurre.
+cue-in sull'uscita di preascolto della libreria; le 🎧 di un'altra riga passano
+a quel brano. Una striscia sottile sopra l'elenco mostra il titolo, il tempo
+rimanente, **Metti in pausa il preascolto**/**Preascolto** e **Ferma il
+preascolto** mentre suona (o è in pausa), il titolo attenuato dopo **Ferma il
+preascolto**, e un suggerimento prima del primo preascolto: mantiene sempre il
+suo posto, così le righe non si spostano quando un preascolto parte o si
+ferma. Le 🎧 sono attenuate quando il file manca o non si può riprodurre.
 
 **La scheda di preascolto.** Tocca la striscia (fuori dai suoi pulsanti)
 per aprire la scheda sotto l'elenco, con la forma d'onda del brano come

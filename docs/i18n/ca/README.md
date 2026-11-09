@@ -1,6 +1,6 @@
 # Fauste Player — Guia de l'usuari
 
-<div class="ai-notice" role="note">Aquesta guia s'ha traduït amb IA a partir de la guia en anglès (v0.12.0-341-g0eb7ba5b, commit 0eb7ba5) i pot contenir errors. En cas de qualsevol diferència, preval la versió en anglès. <a href="../index.html" hreflang="en">Llegeix l'original en anglès</a></div>
+<div class="ai-notice" role="note">Aquesta guia s'ha traduït amb IA a partir de la guia en anglès (v0.13.1-15-gfcd6eac6, commit fcd6eac) i pot contenir errors. En cas de qualsevol diferència, preval la versió en anglès. <a href="../index.html" hreflang="en">Llegeix l'original en anglès</a></div>
 
 Fauste Player és una aplicació d'emissió (playout) per a estudis de ràdio.
 Executa diversos **reproductors** independents, un al costat de l'altre. Cada

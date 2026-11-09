@@ -14,6 +14,11 @@ installieren, wenn Android danach fragt. Zum Aktualisieren installierst du die
 neuere APK auf dieselbe Weise: Deine Playlists und Einstellungen bleiben
 erhalten. Die App ist noch nicht in Google Play.
 
+Version 0.13.0 und älter werden als andere App installiert, daher aktualisiert
+eine neuere APK sie nicht: Sie erscheint als zweiter Fauste Player.
+Deinstalliere die alte, sobald die neue eingerichtet ist. Ihre Playlists und
+Einstellungen werden nicht übernommen.
+
 ## Erster Start {#first-start}
 
 - **Zugriff auf Musik.** Erlaube den Zugriff auf Musik (und auf Benachrichtigungen,
@@ -176,9 +181,10 @@ Menüs.
 auf dem Vorhör-Ausgang der Bibliothek; das 🎧 einer anderen Zeile wechselt zu
 diesem Track. Ein schlanker Streifen über der Liste zeigt den Titel, die
 Restzeit, **Pause**/**Abspielen** und **Stopp**, solange er spielt (oder
-pausiert ist), und sonst einen Hinweis: Er behält immer seinen Platz, sodass
-sich die Zeilen nicht bewegen, wenn ein Vorhören startet oder stoppt. Das 🎧 ist
-abgeblendet, wenn die Datei fehlt oder nicht gespielt werden kann.
+pausiert ist), den abgeblendeten Titel nach **Stopp** und vor dem ersten
+Vorhören einen Hinweis: Er behält immer seinen Platz, sodass sich die Zeilen
+nicht bewegen, wenn ein Vorhören startet oder stoppt. Das 🎧 ist abgeblendet,
+wenn die Datei fehlt oder nicht gespielt werden kann.
 
 **Die Vorhör-Karte.** Tippe auf den Streifen (neben seinen Schaltflächen),
 um die Karte unter der Liste zu öffnen, mit der Wellenform des Tracks wie auf
