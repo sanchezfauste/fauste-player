@@ -186,9 +186,14 @@ xruns (PulseAudio does not; Windows exclusive mode does not).
 
 While something plays, the interface draws at most 30 frames a second
 (`max_fps` in the `ui` section of the configuration file), and clicks and
-keys are answered at once. On an old or busy computer lower it (for
-example to 20) to leave more of the processor to the audio; 0 draws every
-frame the display shows. The meters measure the same at any rate; they are
+keys are answered at once. When its frames cost more than a share of the
+processor (`frame_budget_percent`, 40% of one core by default), it draws
+fewer frames by itself, down to `min_fps` (8 by default), and goes back up
+when they get cheaper. This happens mostly on computers without a usable
+graphics card, where the drawing is done by the processor: the log says
+so at start ("the interface draws in software"). To leave even more of the
+processor to the audio, lower `max_fps` or `frame_budget_percent`; 0 in
+`max_fps` draws every frame the display shows. The meters measure the same at any rate; they are
 only drawn less often. With nothing playing, the interface draws once a
 second (for the clock) and whenever something changes.
 
