@@ -26,7 +26,7 @@ use fp_model::{
     AppState, CartEdit, CartKind, Command, KeyChord, PlayerId, Shortcut, ShortcutAction,
     TrackAnalysis, apply,
 };
-use support::{Fake, harness, harness_sized, state};
+use support::{Fake, harness, harness_sized, harness_with, state};
 
 /// The shown players' columns in the last frame, in display order.
 fn columns(h: &Harness<'_, AppUi>) -> Vec<(PlayerId, Rect)> {
@@ -2066,13 +2066,20 @@ fn repaint_delay(h: &Harness<'_, AppUi>) -> std::time::Duration {
     h.output().viewport_output[&egui::ViewportId::ROOT].repaint_delay
 }
 
+/// A harness on `state` whose clock is pinned at the start of a second:
+/// the idle wait (until just after the next second) never comes before a
+/// frame at `ui.max_fps`, whenever the test runs.
+fn harness_early_in_the_second(state: AppState) -> (Harness<'static, AppUi>, std::sync::Arc<Fake>) {
+    harness_with(state, |ui| ui.pin_clock_millis(0))
+}
+
 /// One frame at `ui.max_fps` (30 by default).
 const FRAME_AT_30_FPS: std::time::Duration = std::time::Duration::from_nanos(33_333_333);
 
 #[test]
 fn i22_a_cart_on_air_repaints_at_the_frame_rate_with_the_players_shown_or_hidden() {
     for hide in [false, true] {
-        let (mut h, _fake) = harness(cart_on_air(hide));
+        let (mut h, _fake) = harness_early_in_the_second(cart_on_air(hide));
         h.run_steps(3);
         assert_eq!(
             repaint_delay(&h),
@@ -2084,7 +2091,7 @@ fn i22_a_cart_on_air_repaints_at_the_frame_rate_with_the_players_shown_or_hidden
 
 #[test]
 fn i22_a_maximised_cartwall_keeps_repainting_while_a_cart_plays() {
-    let (mut h, _fake) = harness(cart_on_air(false));
+    let (mut h, _fake) = harness_early_in_the_second(cart_on_air(false));
     let at = cartwall_header_point(&h);
     maximise(&mut h, at);
     assert_eq!(h.state().maximised(), Some(Panel::Cartwall));

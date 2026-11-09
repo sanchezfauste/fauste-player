@@ -70,6 +70,13 @@ once for the allocation audits; it only acts inside `assert_no_alloc` blocks.
   does on a device.
 - The `test-hooks` feature of `fp-app` is enabled for its own tests through
   a self dev-dependency.
+- A test never depends on the wall clock. An interface test that checks
+  how soon a frame asks for the next one pins the clock with
+  `AppUi::pin_clock_millis`: an idle interface waits until just after the
+  clock's next second (`view::idle_wait`), so near the end of a second
+  that wait is shorter than a frame. A test that counts the writes of the
+  autosave first waits until every follow-up pass of the analysis (tags,
+  bit rate, loudness) has answered, or a late answer writes a track's row.
 
 ## Fuzzing
 
