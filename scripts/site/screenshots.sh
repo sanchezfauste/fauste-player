@@ -425,14 +425,16 @@ track_ready() {
 
 # The scene (spec O29): players 1 and 2 on air some way into their
 # playlists, player 2 at mid-track, player 1's next 3 entries after the one
-# on air, player 3 paused, player 4 stopped, and one cart playing.
+# on air, players 3 and 4 stopped (the demo session restores player 3
+# paused, and a paused player's buttons blink), and one cart playing.
 build_scene() {
-    local players p1 p2 list current next half cart
+    local players p1 p2 p3 list current next half cart
     wait_analysed
     wait_for 120 all_analysed || die "the playlists and carts are not all analysed and measured after 120 s"
     players=$(api GET /players)
     p1=$(json "d[0]['id']" <<<"$players")
     p2=$(json "d[1]['id']" <<<"$players")
+    p3=$(json "d[2]['id']" <<<"$players")
     list=$(json "d[0]['playlist']" <<<"$players")
     current=$(json "d[0]['current']['entry']" <<<"$players")
     half=$(json "round(d[1]['current']['track']['duration_secs'] / 2, 1)" <<<"$players")
@@ -444,6 +446,7 @@ build_scene() {
     check_silent
     api POST "/players/$p1/play" >/dev/null
     api POST "/players/$p2/play" >/dev/null
+    api POST "/players/$p3/stop" >/dev/null
     api PUT "/players/$p1/next" "{\"entry\": $next}" >/dev/null
     api POST "/players/$p1/seek" '{"secs": 71.5}' >/dev/null
     api POST "/players/$p2/seek" "{\"secs\": $half}" >/dev/null

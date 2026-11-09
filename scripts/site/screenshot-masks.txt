@@ -23,8 +23,6 @@ main-screen.png 1156,162,160,50 # player 3: remaining time
 main-screen.png 1336,284,92,18 # player 3: elapsed / total
 main-screen.png 1316,80,105,145 # player 3: meters and peak readouts
 main-screen.png 1293,899,62,22 # playlist 3: remaining total
-main-screen.png 973,151,68,68 # player 3: PLAY tile (blinks while paused)
-main-screen.png 1114,152,31,31 # player 3: pause button (blinks while paused)
 main-screen.png 1634,162,160,50 # player 4: remaining time
 main-screen.png 1814,284,92,18 # player 4: elapsed / total
 main-screen.png 1794,80,105,145 # player 4: meters and peak readouts
@@ -42,3 +40,8 @@ guide/playlist.png 330,590,62,22
 
 # guide/cartwall.png
 guide/cartwall.png 486,26,232,38
+
+# guide/cue-window.png (the CUE plays: its playhead and times move)
+guide/cue-window.png 14,92,40,54 # playhead, the first seconds of the waveform
+guide/cue-window.png 12,158,56,18 # elapsed
+guide/cue-window.png 340,158,56,18 # remaining
