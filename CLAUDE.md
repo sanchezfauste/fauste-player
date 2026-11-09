@@ -252,8 +252,9 @@ once to sRGB constants in `crates/fp-app/src/ui/theme.rs`.
   loudness normalization on, every output on the silent `null` backend),
   runs the app in Xvfb on a free display, waits for the loudness of the
   players' tracks and starts the app again (so the headers show each
-  track's gain), checks in the log that the null backend is in use before
-  anything plays, builds the scene through the remote API and captures
+  track's gain), waits for the analysis of every track in the playlists
+  and on the carts, checks in the log that the null backend is in use
+  before anything plays, builds the scene through the remote API and captures
   with ImageMagick. Needs `xvfb`, `xdotool`, ImageMagick, `ffmpeg`,
   `python3` and `curl`; the songs are kept in `target/screenshots` and
   reached through the link `/tmp/fauste-demo` (`SHOTS_MEDIA`), so no

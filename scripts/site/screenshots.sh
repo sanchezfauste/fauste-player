@@ -20,7 +20,9 @@
 # there, waits for the API and for the analysis to measure the players'
 # tracks, starts the app again (a track keeps the gain it was loaded with,
 # so the headers show a gain only after a start with the measurements in),
-# builds the scene and captures. Nothing is ever played on a sound card: the
+# waits for the analysis of every track in the playlists and on the carts
+# (no pending rows, no "Analysing" in the status bar), builds the scene and
+# captures. Nothing is ever played on a sound card: the
 # script checks in the log that the null backend is the one in use before
 # it sends any play command, and stops otherwise.
 #
@@ -373,6 +375,22 @@ wait_analysed() {
     done
 }
 
+# Succeeds when every track in the playlists and on the carts is analysed
+# (its tags and the waveform in its row) and measured, so the playlists show
+# no pending rows and the status bar no "Analysing" (the players' tracks come
+# first, the rest of the library is still in the analysis after a restart).
+all_analysed() {
+    local ids lists
+    lists=$(api GET /playlists | json "' '.join(str(p['id']) for p in d)") || return 1
+    ids=$(
+        for l in $lists; do
+            api GET "/playlists/$l" | json "' '.join(str(e['track']['id']) for e in d['entries'] if not (e['track']['analyzed'] and e['track']['loudness'] is not None))" || echo failed
+        done
+        api GET /cartwall | json "' '.join(str(c['track']['id']) for p in d['pages'] for c in p['carts'] if c['track'] and not (c['track']['analyzed'] and c['track']['loudness'] is not None))" || echo failed
+    )
+    [[ -z ${ids//[[:space:]]/} ]]
+}
+
 # The ids of the tracks on the players (current and next).
 player_tracks() {
     api GET /players | json "' '.join(str(e['track']['id']) for p in d for e in (p['current'], p['next']) if e)"
@@ -411,6 +429,7 @@ track_ready() {
 build_scene() {
     local players p1 p2 list current next half cart
     wait_analysed
+    wait_for 120 all_analysed || die "the playlists and carts are not all analysed and measured after 120 s"
     players=$(api GET /players)
     p1=$(json "d[0]['id']" <<<"$players")
     p2=$(json "d[1]['id']" <<<"$players")
