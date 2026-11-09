@@ -723,8 +723,8 @@ The interface shows and edits [loudness normalization](../superpowers/specs/2026
 
 `Shell::ui` runs `AppUi::ui` inside `catch_unwind`. After a panic it draws only
 a banner with **Restart interface**, which calls `AppUi::reset_view`.
-The `test-hooks` feature adds `AppUi::fail_next_frame` and
-`Services::fail_next_step` for tests. Release builds do not contain them.
+The `test-hooks` feature adds `AppUi::fail_next_frame`,
+`AppUi::pin_clock_millis` and `Services::fail_next_step` for tests. Release builds do not contain them.
 
 ## Internationalisation
 

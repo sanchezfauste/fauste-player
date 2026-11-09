@@ -496,6 +496,10 @@ pub struct AppUi {
     last_moving: bool,
     #[cfg(feature = "test-hooks")]
     fail_next_frame: bool,
+    /// Where the frame clock is in its second, in place of the wall clock
+    /// (tests: an idle wait that does not depend on when they run).
+    #[cfg(feature = "test-hooks")]
+    clock_millis: Option<u32>,
     settings: SettingsState,
     settings_shown: bool,
     /// Whether the start-up check for outdated analyses has run.
@@ -573,6 +577,8 @@ impl AppUi {
             themed: false,
             #[cfg(feature = "test-hooks")]
             fail_next_frame: false,
+            #[cfg(feature = "test-hooks")]
+            clock_millis: None,
             rate: super::view::AdaptiveRate::default(),
             software_renderer: false,
             frame_cost: None,
@@ -851,6 +857,14 @@ impl AppUi {
     #[cfg(feature = "test-hooks")]
     pub fn open_outputs(&mut self) {
         self.view.open_outputs = true;
+    }
+
+    /// Pins how far into its second the clock is when a frame asks for the
+    /// next one, so the idle wait (`view::idle_wait`) does not depend on
+    /// when a test runs. Used by tests.
+    #[cfg(feature = "test-hooks")]
+    pub fn pin_clock_millis(&mut self, millis: u32) {
+        self.clock_millis = Some(millis);
     }
 
     /// Makes the next frame panic. Used to test panic isolation.
@@ -1480,6 +1494,8 @@ impl AppUi {
             self.file_drops(&ctx, &state);
         }
         let millis = chrono::Local::now().timestamp_subsec_millis();
+        #[cfg(feature = "test-hooks")]
+        let millis = self.clock_millis.unwrap_or(millis);
         self.last_moving =
             super::view::moving(&state, &telemetry) || !state.cartwall.playing.is_empty();
         ctx.request_repaint_after(super::view::next_frame(
