@@ -30,6 +30,8 @@ fn analysis(duration: f64) -> TrackAnalysis {
         version: 1,
         loudness: None,
         loudness_pass: None,
+        audio_hash: None,
+        file_stamp: None,
     }
 }
 

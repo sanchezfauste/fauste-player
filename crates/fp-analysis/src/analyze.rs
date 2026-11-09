@@ -128,6 +128,8 @@ pub fn analyze_file_cancellable(
             version: crate::cache::ANALYSIS_VERSION,
             loudness,
             loudness_pass: Some(LOUDNESS_VERSION),
+            audio_hash: None,
+            file_stamp: None,
         },
         peak_bucket_secs: envelope.bucket_secs,
         peaks: envelope.peaks,

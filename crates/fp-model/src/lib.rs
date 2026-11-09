@@ -2,6 +2,7 @@
 //! and the pure state machine that implements the player behaviour rules.
 //! This crate performs no I/O and spawns no threads.
 
+pub mod audio_change;
 pub mod availability;
 pub mod bit_perfect;
 mod cart_rules;
@@ -42,6 +43,7 @@ mod tag_sheet;
 pub mod track;
 pub mod volume;
 
+pub use audio_change::{AudioChange, audio_change};
 pub use availability::{Availability, availability, command_available};
 pub use bit_perfect::{bit_perfect_player, fader_locked, faders_reset_by, rate_cut};
 pub use cartwall::{
@@ -115,6 +117,7 @@ pub use tag_sheet::{
     cover_changed, cover_unstored, field_problem, invalid_fields, unstored_fields,
 };
 pub use track::{
-    AudioFormat, FileState, InvalidDate, Library, LibraryChanges, Marker, MarkerKind, MarkerSource,
-    Markers, PlayRange, Track, TrackAnalysis, TrackKind, TrackTags, parse_tag_date,
+    AudioFormat, AudioHash, FileStamp, FileState, InvalidDate, Library, LibraryChanges, Marker,
+    MarkerKind, MarkerSource, Markers, MarkersReview, PlayRange, Track, TrackAnalysis, TrackKind,
+    TrackTags, parse_tag_date,
 };

@@ -5,6 +5,7 @@
 
 mod after_next;
 mod analysis;
+mod audio_change;
 mod availability;
 mod bit_perfect_rules;
 mod bitrate_pass;
