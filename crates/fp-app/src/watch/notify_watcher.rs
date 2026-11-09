@@ -36,6 +36,12 @@ impl FolderWatcher for NotifyWatcher {
             .map_err(|e| e.to_string())
     }
 
+    fn watch_flat(&mut self, folder: &Path) -> Result<(), String> {
+        self.watcher
+            .watch(folder, RecursiveMode::NonRecursive)
+            .map_err(|e| e.to_string())
+    }
+
     fn unwatch(&mut self, folder: &Path) {
         if let Err(e) = self.watcher.unwatch(folder) {
             tracing::debug!(folder = %folder.display(), error = %e, "unwatch refused");

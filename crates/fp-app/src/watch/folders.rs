@@ -21,12 +21,21 @@ pub(crate) struct WatchOutcome {
     pub commands: Vec<Command>,
     /// Missing tracks whose file is there again: to analyse at once.
     pub returned: Vec<TrackId>,
+    /// Known tracks whose file a scan found after an event (external
+    /// editor spec EE7.2): to check for a change, not to analyse straight
+    /// away.
+    pub touched: Vec<TrackId>,
 }
 
 enum Request {
-    Watch(PathBuf),
+    /// Follow the folder and its subfolders (`true`: the folder alone).
+    Watch(PathBuf, bool),
     Unwatch(PathBuf),
 }
+
+/// A watch call's answer: the folder, whether it was a flat watch, and
+/// what the system said.
+type WatchResult = (PathBuf, bool, Result<(), String>);
 
 type SharedWatcher = Arc<Mutex<Box<dyn FolderWatcher>>>;
 
@@ -35,7 +44,7 @@ type SharedWatcher = Arc<Mutex<Box<dyn FolderWatcher>>>;
 /// thread. It ends when `requests` closes.
 struct WatchThread {
     requests: Sender<Request>,
-    results: Receiver<(PathBuf, Result<(), String>)>,
+    results: Receiver<WatchResult>,
 }
 
 impl WatchThread {
@@ -49,9 +58,13 @@ impl WatchThread {
                 while let Ok(request) = request_rx.recv() {
                     let mut watcher = watcher.lock().unwrap_or_else(PoisonError::into_inner);
                     match request {
-                        Request::Watch(folder) => {
-                            let result = watcher.watch(&folder);
-                            if result_tx.send((folder, result)).is_err() {
+                        Request::Watch(folder, flat) => {
+                            let result = if flat {
+                                watcher.watch_flat(&folder)
+                            } else {
+                                watcher.watch(&folder)
+                            };
+                            if result_tx.send((folder, flat, result)).is_err() {
                                 break;
                             }
                         }
@@ -125,6 +138,13 @@ pub(crate) struct FolderWatch {
     retry_at: Option<Instant>,
     /// Scan jobs sent.
     scans: u64,
+    /// Folders of files opened in the external editor, followed alone (not
+    /// recursive) for the rest of the run (EE7.3).
+    flat: BTreeSet<PathBuf>,
+    /// Tracks a scan after an event found gone, with their path: looked
+    /// at once more after the debounce before they count as missing (an
+    /// editor may be replacing the file).
+    doubtful: BTreeMap<TrackId, PathBuf>,
 }
 
 impl FolderWatch {
@@ -152,6 +172,8 @@ impl FolderWatch {
             published: WatchStatus::default(),
             retry_at: None,
             scans: 0,
+            flat: BTreeSet::new(),
+            doubtful: BTreeMap::new(),
         }
     }
 
@@ -159,6 +181,48 @@ impl FolderWatch {
     #[cfg(feature = "test-hooks")]
     pub(crate) fn scans(&self) -> u64 {
         self.scans
+    }
+
+    /// How many tracks found gone after an event wait for a second look.
+    #[cfg(feature = "test-hooks")]
+    pub(crate) fn doubts(&self) -> usize {
+        self.doubtful.len()
+    }
+
+    /// Follows `folder`, the folder of a file opened in the external
+    /// editor, alone (not its subfolders) until the application ends, so a
+    /// save there is noticed (EE7.3). Nothing is done when a followed
+    /// watched folder holds it or it is already followed. A refusal is
+    /// logged; a later open asks again.
+    pub(crate) fn follow_edited(&mut self, folder: PathBuf) {
+        if !usable_folder(&folder) || self.flat.contains(&folder) {
+            return;
+        }
+        let covered = self
+            .folders
+            .keys()
+            .any(|watched| folder.starts_with(watched) && !self.not_followed(watched));
+        if covered {
+            return;
+        }
+        let sent = self.thread.as_ref().is_some_and(|t| {
+            t.requests
+                .send(Request::Watch(folder.clone(), true))
+                .is_ok()
+        });
+        if sent {
+            *self.pending.entry(folder.clone()).or_default() += 1;
+            self.flat.insert(folder);
+        } else {
+            self.lose_watch();
+        }
+    }
+
+    /// Whether an event on `path` concerns a folder followed alone: only
+    /// its direct entries are reported.
+    fn in_flat(&self, path: &Path) -> bool {
+        path.parent()
+            .is_some_and(|parent| self.flat.contains(parent))
     }
 
     /// Commands the conductor could not queue: sent first next round.
@@ -170,7 +234,7 @@ impl FolderWatch {
     pub(crate) fn step(&mut self, state: &AppState, now: Instant) -> WatchOutcome {
         let mut out = WatchOutcome {
             commands: std::mem::take(&mut self.unsent),
-            returned: Vec::new(),
+            ..WatchOutcome::default()
         };
         self.follow_categories(state);
         self.take_watch_results();
@@ -182,7 +246,7 @@ impl FolderWatch {
             .map(Scanner::answers)
             .unwrap_or_default()
         {
-            self.apply_answer(state, answer, &mut out);
+            self.apply_answer(state, answer, now, &mut out);
         }
         self.send_scan(state, now);
         self.publish();
@@ -208,7 +272,7 @@ impl FolderWatch {
     fn watch(&mut self, folder: &Path) -> bool {
         let sent = self.thread.as_ref().is_some_and(|t| {
             t.requests
-                .send(Request::Watch(folder.to_path_buf()))
+                .send(Request::Watch(folder.to_path_buf(), false))
                 .is_ok()
         });
         if sent {
@@ -285,6 +349,7 @@ impl FolderWatch {
             self.roots.remove(folder);
             self.checks.remove(folder);
             self.walk_after_watch.remove(folder);
+            self.doubtful.retain(|_, path| !path.starts_with(folder));
         }
         if !dropped.is_empty() {
             self.unwatch(&dropped, &kept);
@@ -322,12 +387,23 @@ impl FolderWatch {
         if ended {
             self.lose_watch();
         }
-        for (folder, result) in results {
+        for (folder, flat, result) in results {
             if let Some(count) = self.pending.get_mut(&folder) {
                 *count = count.saturating_sub(1);
                 if *count == 0 {
                     self.pending.remove(&folder);
                 }
+            }
+            if flat {
+                if let Err(why) = result {
+                    tracing::warn!(
+                        folder = %folder.display(),
+                        %why,
+                        "the folder of an edited file is not followed; its saves are noticed at the next use"
+                    );
+                    self.flat.remove(&folder);
+                }
+                continue;
             }
             if !self.folders.contains_key(&folder) {
                 continue;
@@ -412,6 +488,7 @@ impl FolderWatch {
                         .folders
                         .keys()
                         .any(|folder| path.starts_with(folder) || folder.starts_with(&path))
+                        || self.in_flat(&path)
                     {
                         self.debouncer.note(path, now);
                     }
@@ -422,10 +499,17 @@ impl FolderWatch {
     }
 
     /// (3) What a scan found.
-    fn apply_answer(&mut self, state: &AppState, answer: ScanAnswer, out: &mut WatchOutcome) {
+    fn apply_answer(
+        &mut self,
+        state: &AppState,
+        answer: ScanAnswer,
+        now: Instant,
+        out: &mut WatchOutcome,
+    ) {
         let ScanAnswer {
             found,
             gone,
+            vanished,
             troubles,
             readable,
         } = answer;
@@ -440,7 +524,24 @@ impl FolderWatch {
                 .collect()
         };
         let mut joining: BTreeMap<CategoryId, Vec<PathBuf>> = BTreeMap::new();
-        for Found { seen, canonical } in found {
+        for Found {
+            seen,
+            canonical,
+            event,
+        } in found
+        {
+            // A known track an event touched: its file may have changed
+            // (EE7.2), in a watched folder or one followed alone.
+            if event
+                && let Some(id) = state.library.track_at(&canonical)
+                && state
+                    .library
+                    .get(id)
+                    .is_some_and(|t| t.file_state != FileState::Missing)
+            {
+                self.doubtful.remove(&id);
+                out.touched.push(id);
+            }
             // A category deleted or cleared meanwhile watches nothing.
             let Some(category) = watching_category(&state.categories, &seen) else {
                 continue;
@@ -457,14 +558,30 @@ impl FolderWatch {
                 category: Some(category),
             });
         }
-        if !gone.is_empty() {
+        // Found gone after an event: looked at once more after the
+        // debounce (an editor may be replacing the file); gone again, or
+        // gone in a walk, it is missing.
+        let mut missing_now = Vec::new();
+        for track in vanished {
+            if self.doubtful.remove(&track).is_some() {
+                missing_now.push(track);
+            } else if let Some(t) = state.library.get(track) {
+                self.doubtful.insert(track, t.path.clone());
+                self.debouncer.note(t.path.clone(), now);
+            }
+        }
+        for track in &gone {
+            self.doubtful.remove(track);
+        }
+        missing_now.extend(gone);
+        if !missing_now.is_empty() {
             let already: HashSet<TrackId> = state
                 .library
                 .iter()
                 .filter(|t| t.file_state == FileState::Missing)
                 .map(|t| t.id)
                 .collect();
-            for track in gone.into_iter().filter(|t| !already.contains(t)) {
+            for track in missing_now.into_iter().filter(|t| !already.contains(t)) {
                 out.commands.push(Command::SetFileState {
                     track,
                     state: FileState::Missing,
@@ -529,7 +646,9 @@ impl FolderWatch {
                 .collect();
             if !held.is_empty() {
                 self.roots.extend(held.into_iter().cloned());
-            } else if self.folders.keys().any(|folder| path.starts_with(folder)) {
+            } else if self.folders.keys().any(|folder| path.starts_with(folder))
+                || self.in_flat(&path)
+            {
                 paths.push(path);
             }
         }

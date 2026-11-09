@@ -132,6 +132,31 @@ fn scan_marks_known_tracks_whose_file_is_gone() {
     assert_eq!(scan(&job).gone, vec![TrackId(2)]);
 }
 
+/// External editor spec EE7.2: a known track gone under an event path (an
+/// editor may be replacing it) is reported apart, to be looked at again; a
+/// file found under one is marked as found by an event.
+#[test]
+fn scan_reports_a_track_gone_after_an_event_apart() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().to_path_buf();
+    touch(&root.join("here.mp3"));
+    let job = ScanJob {
+        paths: vec![root.join("here.mp3"), root.join("gone.mp3")],
+        known: vec![
+            (TrackId(1), root.join("here.mp3")),
+            (TrackId(2), root.join("gone.mp3")),
+        ],
+        ..ScanJob::default()
+    };
+    let answer = scan(&job);
+    assert!(answer.gone.is_empty());
+    assert_eq!(answer.vanished, vec![TrackId(2)]);
+    assert_eq!(answer.found.len(), 1);
+    assert!(answer.found[0].event);
+    let walked = scan(&root_job(&root));
+    assert!(walked.found.iter().all(|f| !f.event));
+}
+
 #[test]
 fn scan_walks_a_touched_folder_and_looks_at_a_touched_file() {
     let dir = tempfile::tempdir().unwrap();

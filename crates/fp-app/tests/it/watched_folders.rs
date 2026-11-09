@@ -1157,3 +1157,127 @@ fn an_unmounted_nested_folder_at_start_is_not_marked_by_the_outer_walk() {
     let c = track_of(&r, &gold_folder.join("c.mp3")).unwrap();
     assert_eq!(c.file_state, FileState::Ok, "the outer walk marks nothing");
 }
+
+/// Puts a two-second file in place of `path` (a new size), never seen
+/// half-written: as an editor that writes a copy and renames it.
+fn replace_longer(path: &Path) {
+    let staging = tempfile::tempdir().unwrap();
+    let name = path.file_name().unwrap().to_str().unwrap();
+    std::fs::rename(wav(staging.path(), name, 2), path).unwrap();
+}
+
+fn lasts_two_seconds(r: &Rig, path: &Path) -> bool {
+    track_of(r, path).is_some_and(|t| (t.duration_secs - 2.0).abs() < 1e-6)
+}
+
+/// External editor spec EE7.2: an event on a file that is a known track
+/// sends it for a change check; the changed file is analysed again, an
+/// unchanged one is not.
+#[test]
+fn an_event_on_a_known_track_reports_it_touched() {
+    use std::sync::atomic::Ordering;
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    let a = wav(&ids_folder, "a.wav", 1);
+    let (mut r, fake) = watching(dir, |s| {
+        create(s, "IDs", TrackKind::Jingle, Some(&ids_folder));
+        set_debounce(s, 100);
+    });
+    settled(&mut r, &fake, 1);
+    r.run_until("the start checks", |r| {
+        r.services.change_checks_pending() == 0
+    });
+    let analyses = r.analyses.load(Ordering::SeqCst);
+    push_and_step(&mut r, &fake, &a);
+    quiet_for(&mut r, 500);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), analyses, "unchanged");
+    replace_longer(&a);
+    push_and_step(&mut r, &fake, &a);
+    r.run_until("analysed again", |r| lasts_two_seconds(r, &a));
+    assert_eq!(tracks(&r), 1);
+}
+
+/// EE7.2: an editor that saves by removing the file and writing it again
+/// (or renaming a copy over it) may leave it gone when the scan looks. It is
+/// looked at once more after the debounce before it counts as missing.
+#[test]
+fn a_file_replaced_within_the_debounce_is_not_gone() {
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    let a = wav(&ids_folder, "a.wav", 1);
+    let (mut r, fake) = watching(dir, |s| {
+        create(s, "IDs", TrackKind::Jingle, Some(&ids_folder));
+        set_debounce(s, 1_000);
+    });
+    settled(&mut r, &fake, 1);
+    let missing = |r: &Rig| track_of(r, &a).is_some_and(|t| t.file_state == FileState::Missing);
+    std::fs::remove_file(&a).unwrap();
+    push_and_step(&mut r, &fake, &a);
+    r.run_until("the first look", |r| {
+        r.services.folder_doubts() == 1 || missing(r)
+    });
+    assert!(!missing(&r), "not missing at the first look");
+    replace_longer(&a);
+    let mut seen_missing = false;
+    r.run_until("analysed again", |r| {
+        seen_missing |= missing(r);
+        lasts_two_seconds(r, &a)
+    });
+    assert!(!seen_missing);
+    assert_eq!(r.services.folder_doubts(), 0);
+    assert_eq!(tracks(&r), 1);
+}
+
+/// EE7.3: the folder of a file opened in the external editor is followed
+/// (not recursively) for the run, once, and a save there is noticed.
+#[test]
+fn an_edited_file_outside_watched_folders_is_followed_flat() {
+    use crate::support::WatchCall;
+    use fp_app::services::ServiceRequest;
+    let dir = tempfile::tempdir().unwrap();
+    let loose = folder(&dir, "loose");
+    let a = wav(&loose, "a.wav", 1);
+    let mut r = rig_with(std::slice::from_ref(&a), dir, Duration::ZERO, |s| {
+        set_debounce(s, 100)
+    });
+    let fake = FakeWatcher::default();
+    r.services.set_watcher(Box::new(fake.clone()));
+    r.run_until("analysed", |r| track_of(r, &a).is_some_and(|t| t.analyzed));
+    let id = track_of(&r, &a).unwrap().id;
+    let requests = r.services.requests();
+    requests.send(ServiceRequest::FollowEditedFile(id)).unwrap();
+    requests.send(ServiceRequest::FollowEditedFile(id)).unwrap();
+    r.run_until("followed flat", |_| {
+        fake.calls().contains(&WatchCall::WatchFlat(loose.clone()))
+    });
+    quiet_for(&mut r, 300);
+    assert_eq!(fake.calls(), vec![WatchCall::WatchFlat(loose.clone())]);
+    replace_longer(&a);
+    push_and_step(&mut r, &fake, &a);
+    r.run_until("analysed again", |r| lasts_two_seconds(r, &a));
+}
+
+/// EE7.3: a file in a watched folder (here a subfolder of one) needs no
+/// other watch; its save is noticed through the folder's.
+#[test]
+fn an_edited_file_in_a_watched_folder_adds_no_watch() {
+    use fp_app::services::ServiceRequest;
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    let sub = folder(&dir, "ids/sub");
+    let a = wav(&sub, "a.wav", 1);
+    let (mut r, fake) = watching(dir, |s| {
+        create(s, "IDs", TrackKind::Jingle, Some(&ids_folder));
+        set_debounce(s, 100);
+    });
+    settled(&mut r, &fake, 1);
+    let calls = fake.calls();
+    let id = track_of(&r, &a).unwrap().id;
+    let requests = r.services.requests();
+    requests.send(ServiceRequest::FollowEditedFile(id)).unwrap();
+    quiet_for(&mut r, 300);
+    assert_eq!(fake.calls(), calls);
+    replace_longer(&a);
+    push_and_step(&mut r, &fake, &a);
+    r.run_until("analysed again", |r| lasts_two_seconds(r, &a));
+}

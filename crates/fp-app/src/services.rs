@@ -787,6 +787,13 @@ impl Services {
         self.held.len()
     }
 
+    /// How many tracks a folder scan found gone after an event and waits
+    /// to look at again (EE7.2).
+    #[cfg(feature = "test-hooks")]
+    pub fn folder_doubts(&self) -> usize {
+        self.folders.as_ref().map_or(0, FolderWatch::doubts)
+    }
+
     /// How many times an unreadable file was reported gone to the model.
     #[cfg(feature = "test-hooks")]
     pub fn gone_reports(&self) -> usize {
@@ -832,6 +839,22 @@ impl Services {
         self.watch_status.clone()
     }
 
+    /// EE7.3: the folder of a file opened in the external editor is
+    /// followed for the rest of the run; its events go through the same
+    /// debounce and scan as a watched folder's.
+    fn follow_edited_file(&mut self, state: &AppState, id: TrackId) {
+        let folder = state
+            .library
+            .get(id)
+            .and_then(|t| t.path.parent())
+            .map(Path::to_path_buf);
+        match (&mut self.folders, folder) {
+            (Some(folders), Some(folder)) => folders.follow_edited(folder),
+            (None, _) => tracing::debug!(?id, "no folder watcher; the edited file is not followed"),
+            (_, None) => tracing::debug!(?id, "an edited track not in the library is not followed"),
+        }
+    }
+
     /// One round of the folder watch: its commands go to the conductor and
     /// the files that came back are analysed at once.
     fn watch_step(&mut self, state: &AppState, now: Instant) {
@@ -850,6 +873,13 @@ impl Services {
         }
         if !unsent.is_empty() {
             folders.requeue(unsent);
+        }
+        // EE7.2: a stamp check, as `CheckTrack`; an unchanged file gives
+        // nothing.
+        for id in outcome.touched {
+            if !self.change_urgent.contains(&id) {
+                self.change_urgent.push_back(id);
+            }
         }
         for id in outcome.returned {
             if self.in_flight.contains(&id) {
@@ -878,9 +908,7 @@ impl Services {
                 ServiceRequest::ReanalyseTrack(id) => self.reanalyse_track(state, id),
                 ServiceRequest::CheckTrack(id) => self.change_urgent.push_back(id),
                 ServiceRequest::LookForChangedFiles => self.look_for_changed_files(state),
-                ServiceRequest::FollowEditedFile(id) => {
-                    tracing::debug!(?id, "following an edited file is not available yet");
-                }
+                ServiceRequest::FollowEditedFile(id) => self.follow_edited_file(state, id),
                 ServiceRequest::RecheckUnreadable => {
                     let unreadable: Vec<TrackId> = state
                         .library

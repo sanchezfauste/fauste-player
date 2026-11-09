@@ -462,6 +462,7 @@ pub struct FakeWatch {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WatchCall {
     Watch(PathBuf),
+    WatchFlat(PathBuf),
     Unwatch(PathBuf),
 }
 
@@ -503,6 +504,15 @@ impl FolderWatcher for FakeWatcher {
         }
         if !inner.watched.iter().any(|f| f == folder) {
             inner.watched.push(folder.to_path_buf());
+        }
+        Ok(())
+    }
+
+    fn watch_flat(&mut self, folder: &std::path::Path) -> Result<(), String> {
+        let mut inner = self.0.lock().unwrap();
+        inner.calls.push(WatchCall::WatchFlat(folder.to_path_buf()));
+        if inner.refused.iter().any(|f| f == folder) {
+            return Err("refused".into());
         }
         Ok(())
     }
