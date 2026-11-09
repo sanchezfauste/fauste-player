@@ -1,5 +1,39 @@
 # Changelog
 
+## [0.14.0](https://github.com/sanchezfauste/fauste-player/compare/v0.13.1...v0.14.0) (2026-11-09)
+
+
+### Features
+
+* **model:** frame budget and minimum frame rate settings ([fc23f7b](https://github.com/sanchezfauste/fauste-player/commit/fc23f7bb466f2647202f6f56cea81e95bd2d00ba))
+* **ui:** adapt the frame rate to what frames cost ([fcd6eac](https://github.com/sanchezfauste/fauste-player/commit/fcd6eac6727128ceb4e07f9a62695bc03d99bbce))
+* **ui:** adaptive frame rate rules ([5e8a0a6](https://github.com/sanchezfauste/fauste-player/commit/5e8a0a629f4f279f563e4ef521c4bbc37f0fed08))
+* **ui:** lower the frame rate when frames cost more than the budget ([7fe9904](https://github.com/sanchezfauste/fauste-player/commit/7fe9904e78f81a07d2b15333cfe42753d2b783c9))
+
+
+### Bug Fixes
+
+* **ci:** install Ruby before fastlane in the Google Play job ([6e268c0](https://github.com/sanchezfauste/fauste-player/commit/6e268c0bc368689f970ba107e663a9afee1ad45d))
+* **ci:** install Ruby before fastlane in the Google Play job ([1e986d5](https://github.com/sanchezfauste/fauste-player/commit/1e986d5e1d5a635a5e95b7c82a2645eac4f95ef9))
+* **ui:** stop redrawing ten times a second when idle on the desktop ([aab0669](https://github.com/sanchezfauste/fauste-player/commit/aab0669a52bd5a80f0a5d8fe73cba16d39e69e0c))
+* **ui:** stop redrawing ten times a second when idle on the desktop ([90df7c7](https://github.com/sanchezfauste/fauste-player/commit/90df7c77cfc15ced3d9ca3882c7e57ac6fadff96))
+* **ui:** the adaptive rate ignores starting frames and single spikes, and comes back uncapped ([5d9fcbf](https://github.com/sanchezfauste/fauste-player/commit/5d9fcbfcb66c719249e7469f82e32ae54789ee95))
+
+
+### Documentation
+
+* retake screenshots ([b9a3968](https://github.com/sanchezfauste/fauste-player/commit/b9a396828d63e5e14ca1dfd9a9d94a917ba7fd00))
+* retake screenshots ([a50733c](https://github.com/sanchezfauste/fauste-player/commit/a50733c6a86c81c3613686a7850f496b48b9f538))
+* **specs:** adaptive frame rate design and plan ([6e9885f](https://github.com/sanchezfauste/fauste-player/commit/6e9885f600ce1b554e5bcb75df74e1510487d01b))
+* the adaptive frame rate in the spec, the technical docs and the guide ([eda7b86](https://github.com/sanchezfauste/fauste-player/commit/eda7b867a628e78ef6c693207a342a8ccb6f2580))
+* **user:** regenerate the translated guides for 0.14.0 ([15c46b2](https://github.com/sanchezfauste/fauste-player/commit/15c46b237d286c3cbcc617544046fc52bd1d768f))
+* **user:** regenerate the translated guides for 0.14.0 ([799d9e2](https://github.com/sanchezfauste/fauste-player/commit/799d9e2538e0459281e3110e4a97d413b7dd7a9c))
+
+
+### Build System
+
+* **deps:** report the swap time and the GL renderer from the vendored eframe ([a955025](https://github.com/sanchezfauste/fauste-player/commit/a9550254c40109c87979a1f1499e9615d931fc73))
+
 ## [0.13.1](https://github.com/sanchezfauste/fauste-player/compare/v0.13.0...v0.13.1) (2026-11-06)
 
 
