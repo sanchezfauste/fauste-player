@@ -13,7 +13,9 @@ name: play-screenshots
 #     only `shots`, so the images can be looked at in its artefact.
 # scripts/package/play-screenshots.sh takes them (a release APK, the demo
 # state, the status bar in demo mode); scripts/site/compare-screenshots.sh
-# compares them with a fuzz and the masks of
+# compares them with a 10 % fuzz (the emulator's software renderer shades
+# text edges differently from run to run, past the default 5 %) and the
+# masks of
 # packaging/android/play/screenshot-masks.txt (the app's clock, the blinking
 # buttons). Nothing is
 # opened when no image changed. The stores workflow uploads the committed
@@ -123,7 +125,7 @@ jobs:
         shell: bash
         run: |
           set -o pipefail
-          scripts/site/compare-screenshots.sh --masks packaging/android/play/screenshot-masks.txt \
+          scripts/site/compare-screenshots.sh --fuzz 10 --masks packaging/android/play/screenshot-masks.txt \
             "$RUNNER_TEMP/new-shots" "$LISTING" | tee "$RUNNER_TEMP/new-shots/changes.txt"
       - uses: actions/upload-artifact@v7
         with:
@@ -179,7 +181,7 @@ jobs:
         run: |
           set -euo pipefail
           new="$RUNNER_TEMP/new-shots"
-          scripts/site/compare-screenshots.sh --masks packaging/android/play/screenshot-masks.txt \
+          scripts/site/compare-screenshots.sh --fuzz 10 --masks packaging/android/play/screenshot-masks.txt \
             --apply "$new" "$LISTING"
           cp "$LISTING"/en-US/images/phoneScreenshots/*.png "$GUIDE_SHOTS"/
           # What the stores workflow checks before an upload.
