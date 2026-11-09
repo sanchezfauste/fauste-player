@@ -503,8 +503,23 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
                 .get_mut(track)
                 .ok_or(ModelError::UnknownTrack(track))?;
             t.markers.clear_manual();
+            t.markers_review = None;
             t.analyzed = false;
             refresh_next(state);
+        }
+        Command::MarkReviewed { tracks } => {
+            for id in tracks {
+                if let Some(t) = state.library.get_mut(id) {
+                    t.markers_review = None;
+                }
+            }
+        }
+        Command::SetFileStamp { track, stamp } => {
+            if let Some(t) = state.library.get_mut(track)
+                && t.file_stamp.is_none()
+            {
+                t.file_stamp = Some(stamp);
+            }
         }
         Command::SetTrackLoudness {
             track,
@@ -1344,6 +1359,8 @@ fn set_marker(
     };
     if let Some(t) = state.library.get_mut(track) {
         t.markers.set_manual(kind, value);
+        // EE5: an accepted edit is a review.
+        t.markers_review = None;
         if matches!(kind, MarkerKind::CueIn | MarkerKind::CueOut) {
             // Keep the inner markers within the new range.
             let (cue_in, cue_out) = (t.cue_in_secs(), t.known_cue_out_secs());
