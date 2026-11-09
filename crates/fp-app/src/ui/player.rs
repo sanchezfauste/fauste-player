@@ -25,7 +25,8 @@ use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 
 const PLAY_SIZE: f32 = 64.0;
 const GAP: f32 = 6.0;
-const WAVE_HEIGHT: f32 = 56.0;
+/// A player's waveform; the library's preview bar uses the same height.
+pub(crate) const WAVE_HEIGHT: f32 = 56.0;
 /// The waveform of a phone's Live card: lower, so two cards fit a phone.
 const CARD_WAVE_HEIGHT: f32 = 44.0;
 /// The Playlists screen's card (PL9): its larger waveform, its height

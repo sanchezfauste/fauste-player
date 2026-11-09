@@ -37,7 +37,7 @@ const NOT_AVAILABLE: &str = "The file cannot be played";
 const WAVE: &str = "Library CUE waveform: click to seek";
 /// The window's title bar and the preview bar under it.
 const TITLE_BAR: f32 = 28.0;
-const BAR: f32 = 112.0;
+const BAR: f32 = 130.0;
 
 fn create(s: &mut AppState, name: &str) -> CategoryId {
     fp_model::apply(
@@ -458,6 +458,16 @@ fn a_minimised_window_draws_no_bar_and_sends_nothing() {
         Transport::Playing,
         "minimising keeps the preview (LB35)"
     );
+}
+
+#[test]
+fn the_waveform_is_as_tall_as_a_players() {
+    let (mut h, _fake) = open(base(true));
+    click_row(&mut h, "Bravo");
+    h.run_steps(2);
+    let library = h.get_by_label(WAVE).rect();
+    let player = h.get_by_label("Waveform: click to seek").rect();
+    assert_eq!(library.height(), player.height());
 }
 
 #[test]

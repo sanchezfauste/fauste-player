@@ -202,8 +202,8 @@ The bar shows:
 - the big remaining time of the track, its title, artist and category;
 - a small meter at the right. It reads only this pre-listen, never a player's
   or the cartwall's meter; click it to restart its maximum;
-- the whole file's waveform, with its markers, and an `elapsed / total` line
-  under it.
+- the whole file's waveform, as tall as a player's, with its markers, and
+  an `elapsed / total` line under it.
 
 Play starts the selected track from its cue-in and plays it to the end of the
 file. Play on a paused preview resumes it, and Play on a playing one does
