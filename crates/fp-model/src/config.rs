@@ -816,6 +816,15 @@ pub struct UiConfig {
     /// leaves the processor to the audio. 0–240, edited only in the config
     /// file.
     pub max_fps: u32,
+    /// The share of one core (percent) the interface may spend on its
+    /// frames while something moves; a frame that costs more lowers the
+    /// frame rate, down to `min_fps` (adaptive frame rate spec AF4). 40 by
+    /// default, 5–100, edited only in the config file.
+    pub frame_budget_percent: u32,
+    /// The lowest frame rate the adaptive rate goes down to (AF8); never
+    /// above `max_fps` when that is set. 8 by default, 1–60, edited only in
+    /// the config file.
+    pub min_fps: u32,
     /// The columns of the track tables, in order; one list for every player
     /// and playlist (feedback 2 spec O24). Title and Duration are required.
     pub table_columns: Vec<TableColumn>,
@@ -839,6 +848,8 @@ impl Default for UiConfig {
             language: None,
             follow_current_grace_secs: 10.0,
             max_fps: 30,
+            frame_budget_percent: 40,
+            min_fps: 8,
             table_columns: default_columns(),
             outputs_view: OutputsView::Basic,
             window_system: WindowSystem::Auto,
@@ -1170,6 +1181,14 @@ impl Config {
             &mut w,
         );
         clamp_to(&mut self.ui.max_fps, 0, 240, "ui.max_fps", &mut w);
+        clamp_to(
+            &mut self.ui.frame_budget_percent,
+            5,
+            100,
+            "ui.frame_budget_percent",
+            &mut w,
+        );
+        clamp_to(&mut self.ui.min_fps, 1, 60, "ui.min_fps", &mut w);
         let columns = normalize_columns(&self.ui.table_columns);
         if columns != self.ui.table_columns {
             w.push(ConfigWarning {
@@ -1626,6 +1645,28 @@ mod tests {
         assert!(warnings.iter().any(|w| w.field == "ui.max_fps"));
         c.ui.max_fps = 0;
         assert!(c.validate().is_empty(), "0 is no limit");
+    }
+
+    #[test]
+    fn frame_rate_fields_default_and_clamp() {
+        let c: Config = serde_json::from_str(r#"{"ui":{"max_fps":20}}"#).unwrap();
+        assert_eq!(c.ui.frame_budget_percent, 40);
+        assert_eq!(c.ui.min_fps, 8);
+        for (budget, min, want_budget, want_min) in [(0, 0, 5, 1), (500, 1_000, 100, 60)] {
+            let mut c = Config::default();
+            c.ui.frame_budget_percent = budget;
+            c.ui.min_fps = min;
+            let warnings = c.validate();
+            assert_eq!(c.ui.frame_budget_percent, want_budget);
+            assert_eq!(c.ui.min_fps, want_min);
+            assert!(
+                warnings
+                    .iter()
+                    .any(|w| w.field == "ui.frame_budget_percent")
+            );
+            assert!(warnings.iter().any(|w| w.field == "ui.min_fps"));
+        }
+        assert!(Config::default().validate().is_empty());
     }
 
     #[test]
