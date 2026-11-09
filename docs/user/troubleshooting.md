@@ -189,7 +189,8 @@ While something plays, the interface draws at most 30 frames a second
 keys are answered at once. On an old or busy computer lower it (for
 example to 20) to leave more of the processor to the audio; 0 draws every
 frame the display shows. The meters measure the same at any rate; they are
-only drawn less often.
+only drawn less often. With nothing playing, the interface draws once a
+second (for the clock) and whenever something changes.
 
 ## Files cannot be dropped on Linux
 

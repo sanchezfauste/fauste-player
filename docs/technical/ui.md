@@ -231,8 +231,12 @@ Each frame, `AppUi::ui`:
 5. requests a repaint: while anything plays, fades or cues
    (`view::animating`, which includes a paused CUE so that its Pause blinks)
    after `view::animation_period(ui.max_fps)` (1/30 s by default; zero, the
-   next display frame, with `max_fps` 0), otherwise every 100 ms for the
-   clock. `widgets::{blink, paused_style}` give
+   next display frame, with `max_fps` 0), the same while a meter still
+   falls or the library CUE plays, four times a second while a paused
+   player or a held library preview blinks, and otherwise just after the
+   clock's next second (`view::next_frame`, `view::idle_wait`; PL32, on
+   the desktop as on a phone). What changes elsewhere wakes the interface
+   (see "Drawing" in `mobile.md`). `widgets::{blink, paused_style}` give
    the amber blink of a paused Pause tile to the player and the CUE window.
 
 The UI keeps only **view state**: selection, drag target,
@@ -269,7 +273,7 @@ loads it once (`load_full`, never a lock) into `Scene::analysis`. It feeds:
   (done of total) while `AnalysisActivity::pass` is set.
 
 The cell changes only when the services thread stores a new snapshot; the
-idle repaint (100 ms) picks it up. Tests build a cell with
+idle frame (once a second) picks it up. Tests build a cell with
 `support::activity_cell` and pass it through `harness_from`.
 
 ## Language switching

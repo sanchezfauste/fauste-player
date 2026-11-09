@@ -1432,9 +1432,7 @@ impl AppUi {
             self.file_drops(&ctx, &state);
         }
         let millis = chrono::Local::now().timestamp_subsec_millis();
-        ctx.request_repaint_after(super::view::next_frame(
-            &state, &telemetry, self.touch, millis,
-        ));
+        ctx.request_repaint_after(super::view::next_frame(&state, &telemetry, millis));
     }
 
     /// O23: opens the tag editor on `track` and asks the tag worker for its
