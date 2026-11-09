@@ -816,7 +816,11 @@ fn a_track_whose_tags_cannot_be_read_is_not_asked_again() {
             cover_png: None,
         },
     );
-    r.run_until("the pass to answer", |r| only_track(r).tags_read);
+    // The start's change check stores the file's stamp (EE7.1) too.
+    r.run_until("the pass to answer", |r| {
+        let t = only_track(r);
+        t.tags_read && t.file_stamp.is_some()
+    });
     let t = only_track(&r);
     assert_eq!((t.title.as_str(), t.artist.as_str()), ("Junk", "Band"));
     let version = r.handle.telemetry.load().model_version;
@@ -2097,7 +2101,11 @@ fn the_bitrate_pass_fills_the_bit_rate_of_an_older_analysis_once() {
             cover_png: None,
         },
     );
-    r.run_until("the bit rate", |r| only_track(r).bitrate_read);
+    // The start's change check stores the file's stamp (EE7.1) too.
+    r.run_until("the bit rate", |r| {
+        let t = only_track(r);
+        t.bitrate_read && t.file_stamp.is_some()
+    });
     // 48 kHz × 16 bit × 1 channel.
     assert_eq!(only_track(&r).format.unwrap().bitrate, Some(768_000));
     let version = r.handle.telemetry.load().model_version;
@@ -2126,7 +2134,11 @@ fn a_file_without_a_readable_bit_rate_is_not_asked_again() {
             cover_png: None,
         },
     );
-    r.run_until("the pass to answer", |r| only_track(r).bitrate_read);
+    // The start's change check stores the file's stamp (EE7.1) too.
+    r.run_until("the pass to answer", |r| {
+        let t = only_track(r);
+        t.bitrate_read && t.file_stamp.is_some()
+    });
     assert_eq!(only_track(&r).format.unwrap().bitrate, None);
     let version = r.handle.telemetry.load().model_version;
     let until = r.now + Duration::from_millis(500);
@@ -2214,6 +2226,18 @@ fn stamped_rig(
     stale: &[usize],
     extra: impl FnOnce(&mut fp_model::AppState),
 ) -> Rig {
+    let r = stamped_rig_unseeded(files, dir, stale, extra);
+    seed_all(&r);
+    r
+}
+
+/// `stamped_rig` with an empty media cache, as at start.
+fn stamped_rig_unseeded(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    stale: &[usize],
+    extra: impl FnOnce(&mut fp_model::AppState),
+) -> Rig {
     let stale_paths: Vec<PathBuf> = stale.iter().map(|i| files[*i].clone()).collect();
     let mut r = rig_with(files, dir, Duration::ZERO, move |state| {
         for track_id in state.library.ids() {
@@ -2238,7 +2262,6 @@ fn stamped_rig(
         }
         extra(state);
     });
-    seed_all(&r);
     r.now += Duration::from_millis(1);
     r
 }
@@ -2273,6 +2296,8 @@ fn track_of(r: &Rig, path: &Path) -> fp_model::Track {
 
 /// Every check asked for so far has been answered.
 fn checks_done(r: &mut Rig) {
+    // The start pass is queued by the first round.
+    idle_for(r, 10);
     r.run_until("the change checks answered", |r| {
         r.services.change_checks_pending() == 0
     });
@@ -2460,4 +2485,55 @@ fn an_unchanged_library_sends_no_analysis() {
     assert_eq!(r.services.activity().load().changed_found.unwrap().1, 0);
     idle_for(&mut r, 300);
     assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+}
+
+/// EE9 through the waveform: at start nothing has peaks, so a player's
+/// current track is read for its waveform. Its file changed while the
+/// application was closed: that read is a new analysis, and it waits until
+/// the track stops sounding; the waveform shows meanwhile.
+#[test]
+fn a_waveform_read_of_a_changed_track_that_sounds_waits() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig_unseeded(&files, dir, &[0], |state| {
+        let entry = state.playlists.iter().next().unwrap().entries[0].id;
+        state.players[0].current = Some(entry);
+        state.players[0].next = None;
+    });
+    let old = track_of(&r, &files[0]).file_stamp;
+    let id = track_of(&r, &files[0]).id;
+    r.run_until("the result held", |r| r.services.held_results() == 1);
+    assert!(r.media.contains(id), "the waveform shows");
+    idle_for(&mut r, 200);
+    assert_eq!(track_of(&r, &files[0]).file_stamp, old, "not applied");
+    let player = r.handle.model.load().players[0].id;
+    assert!(r.handle.send(Command::Stop(player)));
+    let real = stamp_of(&files[0]);
+    r.run_until("applied once it stopped", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+}
+
+/// EE7.5: a changed track already waiting for its analysis (it sounds)
+/// counts in the pass.
+#[test]
+fn look_for_changed_files_counts_a_change_that_waits() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let changed = files[0].clone();
+    let mut r = stamped_rig(&files, dir, &[0], move |state| {
+        state.library_cue.track = state.library.track_at(&changed);
+    });
+    checks_done(&mut r);
+    r.services
+        .requests()
+        .send(ServiceRequest::LookForChangedFiles)
+        .unwrap();
+    r.run_until("the count", |r| {
+        r.services.activity().load().changed_found.is_some()
+    });
+    assert_eq!(r.services.activity().load().changed_found.unwrap().1, 1);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "it still sounds");
 }

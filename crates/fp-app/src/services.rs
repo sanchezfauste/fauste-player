@@ -1124,7 +1124,10 @@ impl Services {
             .collect();
         for id in ready {
             self.changed_waiting.remove(&id);
-            self.analyse_changed(state, id);
+            // A result already held for it reads the changed file.
+            if !self.held.contains_key(&id) {
+                self.analyse_changed(state, id);
+            }
         }
         let ready: Vec<TrackId> = self
             .held
@@ -1152,32 +1155,49 @@ impl Services {
         }
         let mut batch = Vec::new();
         let mut seen = HashSet::new();
+        // Tracks being read for something else (a cart's peaks, say): looked
+        // at once that read is over. (urgent, id)
+        let mut later: Vec<(bool, TrackId)> = Vec::new();
         while batch.len() < CHANGE_BATCH {
-            let Some(id) = self
-                .change_urgent
-                .pop_front()
-                .or_else(|| self.change_bulk.pop_front())
-            else {
-                break;
+            let (urgent, id) = match self.change_urgent.pop_front() {
+                Some(id) => (true, id),
+                None => match self.change_bulk.pop_front() {
+                    Some(id) => (false, id),
+                    None => break,
+                },
             };
             if !seen.insert(id) {
                 continue;
             }
-            // One being analysed (or waiting to be) gets its stamp from that
-            // analysis.
-            let track = state.library.get(id).filter(|t| {
-                Self::checkable(t)
-                    && !self.in_flight.contains(&id)
-                    && !self.changed_waiting.contains(&id)
-                    && !self.held.contains_key(&id)
-            });
-            match track {
-                Some(t) => batch.push((id, t.path.clone(), t.file_stamp)),
-                None => {
-                    if let Some(pass) = &mut self.look_pass {
-                        pass.pending.remove(&id);
-                    }
+            let Some(t) = state.library.get(id).filter(|t| Self::checkable(t)) else {
+                if let Some(pass) = &mut self.look_pass {
+                    pass.pending.remove(&id);
                 }
+                continue;
+            };
+            // A change already found and not applied yet counts as found.
+            if self.changed_waiting.contains(&id)
+                || self.held.contains_key(&id)
+                || self.change_analysing.contains(&id)
+            {
+                if let Some(pass) = &mut self.look_pass
+                    && pass.pending.remove(&id)
+                {
+                    pass.found += 1;
+                }
+                continue;
+            }
+            if self.in_flight.contains(&id) {
+                later.push((urgent, id));
+                continue;
+            }
+            batch.push((id, t.path.clone(), t.file_stamp));
+        }
+        for (urgent, id) in later {
+            if urgent {
+                self.change_urgent.push_back(id);
+            } else {
+                self.change_bulk.push_back(id);
             }
         }
         if batch.is_empty() {
@@ -2059,12 +2079,26 @@ impl Services {
             }
         }
         self.in_flight.remove(&result.track);
-        // EE9: a changed file's analysis waits while its track sounds.
-        if self.change_analysing.remove(&result.track) && track_sounding(state, result.track) {
+        let stamp = result.stamp;
+        if self.hold_while_sounding(&result, state) {
+            // EE9: it waits for the track to stop sounding; the waveform
+            // shows meanwhile.
+            if wanted.contains(&result.track)
+                && let Ok(analysis) = &result.outcome
+            {
+                self.media.insert(
+                    result.track,
+                    TrackMedia {
+                        peaks: analysis.peaks.clone(),
+                        peak_bucket_secs: analysis.peak_bucket_secs,
+                        cover_png: analysis.cover_png.clone().map(Arc::from),
+                    },
+                );
+            }
+            self.shown_only.remove(&result.track);
             self.held.insert(result.track, result);
             return;
         }
-        let stamp = result.stamp;
         // An answer, whatever it is, settles the track in the pass; a
         // command that cannot be queued puts it back below.
         let in_pass = self.library_pass.remove(&result.track);
@@ -2150,6 +2184,29 @@ impl Services {
                 self.library_pass.insert(result.track);
             }
         }
+    }
+
+    /// EE9: whether `result` would change a sounding track's analysis with
+    /// a changed file's: one asked for because the file changed, or any
+    /// other read applied to the model (a player's waveform, say) of a file
+    /// whose stamp differs from the stored one. A read only for the peaks
+    /// changes nothing, and *Re-analyse all* (the library pass) is the
+    /// operator's explicit call.
+    fn hold_while_sounding(&mut self, result: &AnalysisResult, state: &AppState) -> bool {
+        let id = result.track;
+        let asked = self.change_analysing.remove(&id);
+        let Some(track) = state.library.get(id) else {
+            return false;
+        };
+        if !track_sounding(state, id) || (self.peaks_only.contains(&id) && track.analyzed) {
+            return false;
+        }
+        let read = result
+            .stamp
+            .and_then(|(size, modified)| FileStamp::from_metadata(size, modified));
+        let other_file =
+            matches!((track.file_stamp, read), (Some(stored), Some(read)) if stored != read);
+        asked || (other_file && !self.library_pass.contains(&id))
     }
 
     fn autosave(&mut self, state: &AppState, version: u64, now: Instant) {
