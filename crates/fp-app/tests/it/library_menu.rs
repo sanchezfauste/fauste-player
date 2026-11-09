@@ -103,7 +103,7 @@ fn library_rect(h: &H) -> Rect {
 fn in_library(h: &H, label: &str) -> Rect {
     let window = library_rect(h);
     let table = Rect::from_min_max(
-        pos2(window.left() + 240.0, window.top() + 28.0 + 112.0),
+        pos2(window.left() + 240.0, window.top() + 28.0 + 130.0),
         window.max,
     );
     let found: Vec<Rect> = h

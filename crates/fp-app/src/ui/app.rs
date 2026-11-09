@@ -212,6 +212,9 @@ pub(crate) struct ViewState {
     /// The players whose table already had its start-up scroll to the next
     /// entry (feedback 2 spec O7); it happens once, on their first frame.
     pub startup_scrolled: HashSet<PlayerId>,
+    /// Each player's CUE window: how it was opened and whether a resize
+    /// waits to be sent.
+    pub(crate) cue_windows: HashMap<PlayerId, super::cue_window::CueWindowUi>,
     /// Zoomed waveforms; one without a zoom shows the whole track.
     pub wave_zoom: super::wave_view::WaveZooms,
     /// A marker being dragged on a waveform, and the track it belongs to.

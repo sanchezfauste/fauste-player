@@ -10,7 +10,7 @@ use fp_model::{Command, Transport};
 
 use super::super::app::{Scene, ViewState};
 use super::super::glyphs::{self, TransportAction};
-use super::super::player::{paused_play_style, play_button_style};
+use super::super::player::{WAVE_HEIGHT, paused_play_style, play_button_style};
 use super::super::theme;
 use super::super::view::{self, LibraryCueView};
 use super::super::wave_panel::{self, WaveBadges, WavePanelInput};
@@ -18,8 +18,10 @@ use super::super::wave_view::{WaveKey, WaveSubject};
 use super::super::widgets::{self, TileStyle, font, font_semibold};
 use super::state::LibraryUi;
 
-/// The bar's height, under the window's title bar.
-pub(crate) const PREVIEW_BAR_HEIGHT: f32 = 112.0;
+/// The bar's height, under the window's title bar: its rows, with a
+/// waveform as tall as a player's, so markers are as easy to set.
+pub(crate) const PREVIEW_BAR_HEIGHT: f32 =
+    2.0 * PAD_Y + TOP_ROW + ROW_GAP + WAVE_HEIGHT + WAVE_GAP + TIME_ROW;
 /// The margins inside the bar, across and down.
 const PAD_X: f32 = 10.0;
 const PAD_Y: f32 = 6.0;

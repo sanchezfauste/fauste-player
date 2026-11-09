@@ -139,6 +139,30 @@ pub struct Layout {
     /// and pan go on). Its own flag: a layout reset keeps it.
     #[serde(deserialize_with = "lenient")]
     pub touch_locked: bool,
+    /// The CUE windows' content size in points, width and height (feedback
+    /// 2 spec O12): the last size the operator gave one, shared by every
+    /// player's. `None`: a window fits its content. Not a layout command's:
+    /// the lock does not refuse it and a layout reset keeps it.
+    #[serde(deserialize_with = "lenient_size")]
+    pub cue_window: Option<[f32; 2]>,
+}
+
+/// A size that does not parse, or is not finite and above zero, loads as
+/// none.
+fn lenient_size<'de, D: Deserializer<'de>>(d: D) -> Result<Option<[f32; 2]>, D::Error> {
+    Ok(lenient::<_, Option<[f32; 2]>>(d)?.filter(|s| usable_size(*s)))
+}
+
+/// Whether both sides of `size` are finite and above zero.
+pub fn usable_size(size: [f32; 2]) -> bool {
+    size.iter().all(|v| crate::library_view::good_size(*v))
+}
+
+/// Stores the CUE windows' size; one that is not usable changes nothing.
+pub(crate) fn set_cue_window_size(state: &mut AppState, size: [f32; 2]) {
+    if usable_size(size) {
+        state.layout.cue_window = Some(size);
+    }
 }
 
 impl Layout {
@@ -356,6 +380,7 @@ pub(crate) fn reset_layout(state: &mut AppState) -> Result<(), ModelError> {
     unlocked(state)?;
     state.layout = Layout {
         touch_locked: state.layout.touch_locked,
+        cue_window: state.layout.cue_window,
         ..Layout::default()
     };
     Ok(())

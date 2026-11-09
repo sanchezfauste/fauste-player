@@ -282,6 +282,15 @@
   - **Load as next** makes the cued entry the player's explicit next and keeps
     the CUE running.
   - Closing the window stops the CUE.
+  - The window can be resized from its edges and corners; a larger window
+    gives the waveform the extra width and height. It never gets smaller
+    than its first size (380 points of content wide, the waveform 56 high).
+    The last size the operator gives a CUE window is session state, kept
+    with the layout (`Layout::cue_window`, `SetCueWindowSize`) and shared by
+    every player's: the next CUE window opens at that size, after a restart
+    too. A size that is not finite and above zero changes nothing and loads
+    as none (the window fits its content). It is not a layout command: the
+    layout lock does not refuse it and a layout reset keeps it.
   - While the CUE is paused, its Pause button blinks amber like the player's
     (operator feedback 4, Q5).
   - Model:

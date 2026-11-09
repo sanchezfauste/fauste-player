@@ -201,6 +201,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         }
         Command::SetLayoutLocked(locked) => state.layout.locked = locked,
         Command::SetTouchLocked(locked) => state.layout.touch_locked = locked,
+        Command::SetCueWindowSize(size) => crate::layout::set_cue_window_size(state, size),
         Command::ResetLayout => crate::layout::reset_layout(state)?,
         Command::ApplyAnalysis { track, analysis } => {
             // Analysis may finish after the track was removed: nothing to do.

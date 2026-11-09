@@ -673,3 +673,165 @@ fn zooming_one_cue_leaves_the_other_on_the_whole_file() {
     wheel(&mut h, pos2(x_of(w, 90.0), w.center().y), 1.0);
     assert_eq!(h.get_all_by_label(FULL_VIEW).count(), 1);
 }
+
+/// Drags with the primary button from `from` to `to`, in small steps.
+fn drag(h: &mut Harness<'_, AppUi>, from: Pos2, to: Pos2) {
+    h.event(Event::PointerMoved(from));
+    h.run_steps(1);
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    h.run_steps(1);
+    for step in 1..=10 {
+        let t = step as f32 / 10.0;
+        h.event(Event::PointerMoved(from + (to - from) * t));
+        h.run_steps(1);
+    }
+    h.event(Event::PointerButton {
+        pos: to,
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    h.run_steps(2);
+}
+
+#[test]
+fn dragging_the_corner_makes_the_window_and_its_waveform_larger() {
+    let (mut h, _) = cueing(1);
+    let wave = h.get_by_label(WAVE).rect();
+    // It opens as it always did: 380 wide, a player's waveform height.
+    assert_eq!(wave.size(), egui::vec2(380.0, 56.0));
+    let stop = h.get_by_label(STOP).rect();
+    // The window's bottom-right corner: past the waveform's right edge by
+    // the frame's margin, under the buttons by it.
+    let corner = pos2(wave.right() + 10.0, stop.bottom() + 10.0);
+    drag(&mut h, corner, corner + egui::vec2(200.0, 150.0));
+    let bigger = h.get_by_label(WAVE).rect();
+    assert!(
+        bigger.width() >= wave.width() + 150.0,
+        "{wave:?} → {bigger:?}"
+    );
+    assert!(
+        bigger.height() >= wave.height() + 100.0,
+        "{wave:?} → {bigger:?}"
+    );
+    // The buttons stay under the waveform.
+    assert!(h.get_by_label(STOP).rect().top() > bigger.bottom());
+}
+
+#[test]
+fn the_window_never_gets_smaller_than_it_opens() {
+    let (mut h, _) = cueing(1);
+    let wave = h.get_by_label(WAVE).rect();
+    let stop = h.get_by_label(STOP).rect();
+    let corner = pos2(wave.right() + 10.0, stop.bottom() + 10.0);
+    drag(&mut h, corner, corner - egui::vec2(250.0, 150.0));
+    let after = h.get_by_label(WAVE).rect();
+    assert_eq!(after.size(), wave.size(), "{wave:?} → {after:?}");
+    // The buttons are still drawn whole under the waveform.
+    let stop_after = h.get_by_label(STOP).rect();
+    assert_eq!(stop_after.size(), stop.size());
+    assert!(stop_after.top() > after.bottom());
+}
+
+fn size_sends(sent: &[Command]) -> Vec<[f32; 2]> {
+    sent.iter()
+        .filter_map(|c| match c {
+            Command::SetCueWindowSize(size) => Some(*size),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The window's bottom-right corner, from its waveform and its Stop button.
+fn corner(h: &Harness<'_, AppUi>) -> Pos2 {
+    let wave = h.get_by_label(WAVE).rect();
+    let stop = h.get_by_label(STOP).rect();
+    pos2(wave.right() + 10.0, stop.bottom() + 10.0)
+}
+
+#[test]
+fn a_resize_sends_the_new_size_once_when_released() {
+    let (mut h, fake) = cueing(1);
+    sent(&fake);
+    let wave = h.get_by_label(WAVE).rect();
+    let from = corner(&h);
+    drag(&mut h, from, from + egui::vec2(200.0, 150.0));
+    h.run_steps(4);
+    let sizes = size_sends(&sent(&fake));
+    assert_eq!(sizes.len(), 1, "{sizes:?}");
+    let [w, hgt] = sizes[0];
+    let bigger = h.get_by_label(WAVE).rect();
+    assert!((w - bigger.width()).abs() < 1.0, "{w} vs {bigger:?}");
+    assert!(
+        hgt > bigger.height(),
+        "the content holds more than the waveform"
+    );
+    assert!(bigger.width() > wave.width());
+}
+
+#[test]
+fn opening_the_window_draws_no_size() {
+    let (mut h, fake) = cueing(1);
+    h.run_steps(4);
+    assert!(size_sends(&sent(&fake)).is_empty());
+}
+
+#[test]
+fn a_saved_size_opens_the_window_at_that_size() {
+    let mut s = state(1, 3);
+    for track_id in s.library.ids() {
+        s.library.get_mut(track_id).unwrap().duration_secs = 180.0;
+    }
+    s.layout.cue_window = Some([600.0, 400.0]);
+    let (mut h, fake) = harness(s);
+    fake.send(Command::ToggleCue(fake.player(0)));
+    h.run_steps(2);
+    let wave = h.get_by_label(WAVE).rect();
+    assert!((wave.width() - 600.0).abs() < 1.0, "{wave:?}");
+    assert!(wave.height() > 200.0, "{wave:?}");
+}
+
+#[test]
+fn the_next_cue_opens_at_the_size_another_window_was_given() {
+    let (mut h, fake) = cueing(2);
+    let small = h.get_by_label(WAVE).rect();
+    // P1's window is made larger and closed.
+    let from = corner(&h);
+    drag(&mut h, from, from + egui::vec2(200.0, 150.0));
+    let large = h.get_by_label(WAVE).rect();
+    h.get_by_label(STOP).click();
+    h.run_steps(2);
+    // P2's CUE opens at that size.
+    fake.send(Command::ToggleCue(fake.player(1)));
+    h.run_steps(2);
+    let p2 = h.get_by_label(WAVE).rect();
+    assert!(
+        (p2.width() - large.width()).abs() < 1.0,
+        "{p2:?} vs {large:?}"
+    );
+    assert!(
+        (p2.height() - large.height()).abs() < 1.0,
+        "{p2:?} vs {large:?}"
+    );
+    // Made small again and closed, P1's next CUE opens small.
+    let from = corner(&h);
+    drag(&mut h, from, from - egui::vec2(300.0, 300.0));
+    h.get_by_label(STOP).click();
+    h.run_steps(2);
+    fake.send(Command::ToggleCue(fake.player(0)));
+    h.run_steps(2);
+    let p1 = h.get_by_label(WAVE).rect();
+    assert!(
+        (p1.width() - small.width()).abs() < 1.0,
+        "{p1:?} vs {small:?}"
+    );
+    assert!(
+        (p1.height() - small.height()).abs() < 1.0,
+        "{p1:?} vs {small:?}"
+    );
+}

@@ -53,7 +53,8 @@ transaction. The tables:
 | `players` | `id`, `position`, and `doc`: playlist, current, next, `next_explicit`, mode, `stop_after_current`, position, volume, columns, history, `pending_start` |
 
 The session's cartwall state and its layout (`player_shares`,
-`hidden_players`, the cartwall's dock and size, `locked`) are JSON values
+`hidden_players`, the cartwall's dock and size, `locked`, `touch_locked`,
+and `cue_window`, the CUE windows' content size) are JSON values
 in `kv`. A `doc` column holds the model value's JSON, and the key columns
 win over the same fields inside it. Foreign keys are on.
 

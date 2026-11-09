@@ -18,15 +18,40 @@ use super::wave_panel::{self, WaveBadges, WavePanelInput};
 use super::wave_view::{WaveKey, WaveSubject};
 use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 
+/// The window's content width when it opens, and the narrowest it gets.
 const WIDTH: f32 = 380.0;
+/// The waveform's height when the window opens, and the lowest it gets:
+/// a taller window gives the waveform the extra height.
 const WAVE_HEIGHT: f32 = 56.0;
 const BUTTON: egui::Vec2 = vec2(40.0, 28.0);
+
+/// What the interface keeps about one player's CUE window.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub(crate) struct CueWindowUi {
+    /// The window is drawn (its CUE runs).
+    shown: bool,
+    /// Bumped when the window opens and the saved size changed since it was
+    /// last opened: a new egui window takes the saved size (egui keeps a
+    /// window's own size, and its place, by its id).
+    generation: u64,
+    /// The saved size the window last opened with, or last sent.
+    opened_with: Option<[f32; 2]>,
+    /// The content size in the last frame.
+    last: Option<egui::Vec2>,
+    /// The size changed under a held pointer: sent once it is released.
+    resized: bool,
+}
 
 /// Draws the window of every player that has a CUE running.
 pub(crate) fn show_all(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
     for (index, player) in scene.state.players.iter().enumerate() {
         if player.cue.is_none() {
             forget(view_state, WaveKey::Cue(player.id));
+            if let Some(w) = view_state.cue_windows.get_mut(&player.id) {
+                w.shown = false;
+                w.last = None;
+                w.resized = false;
+            }
             continue;
         }
         let position = scene
@@ -61,20 +86,37 @@ fn show(
 ) {
     let t = scene.i18n;
     let stagger = 28.0 * index as f32;
-    egui::Window::new(t.tr_args("cue-window-title", &[("n", (index + 1).into())]))
-        .id(egui::Id::unique(("cue-window", v.player)))
+    let saved = scene.state.layout.cue_window;
+    let state = view_state.cue_windows.entry(v.player).or_default();
+    if !state.shown {
+        state.shown = true;
+        if state.opened_with != saved {
+            state.generation += 1;
+            state.opened_with = saved;
+        }
+    }
+    let generation = state.generation;
+    // With no saved size the window opens fitting its content.
+    let frame = egui::Frame::new()
+        .fill(theme::SURFACE)
+        .stroke(Stroke::new(1.0, theme::CUE))
+        .inner_margin(12.0);
+    // egui sizes the window with its frame; the sizes here are the content's.
+    let around = frame.total_margin().sum();
+    let content = saved.map_or(vec2(WIDTH, 0.0), |[w, h]| vec2(w, h));
+    let shown = egui::Window::new(t.tr_args("cue-window-title", &[("n", (index + 1).into())]))
+        .id(egui::Id::unique(("cue-window", v.player, generation)))
         .title_bar(false)
-        .resizable(false)
+        // Resizable from its edges and corners, to place markers on a
+        // larger waveform; it never gets smaller than it opens.
+        .resizable(true)
+        // No default height: it opens fitting its content, as before.
+        .min_width(WIDTH + around.x)
+        .default_size(content + around)
         .collapsible(false)
         .default_pos(pos2(80.0 + stagger, 120.0 + stagger))
-        .frame(
-            egui::Frame::new()
-                .fill(theme::SURFACE)
-                .stroke(Stroke::new(1.0, theme::CUE))
-                .inner_margin(12.0),
-        )
+        .frame(frame)
         .show(ctx, |ui| {
-            ui.set_width(WIDTH);
             ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
             title_row(ui, scene, index, v);
             ui.add(
@@ -96,10 +138,44 @@ fn show(
                 .selectable(false)
                 .truncate(),
             );
-            wave(ui, scene, view_state, v);
+            // The rows under the waveform: the time row (a horizontal row,
+            // `interact_size` high) and the buttons, each after a gap.
+            let spacing = ui.spacing();
+            let below = spacing.interact_size.y.max(12.0) + BUTTON.y + 2.0 * spacing.item_spacing.y;
+            let wave_height = (ui.available_height() - below).max(WAVE_HEIGHT);
+            wave(ui, scene, view_state, v, wave_height);
             time_row(ui, v);
             buttons(ui, scene, v);
+            ui.min_rect().size()
         });
+    if let Some(size) = shown.and_then(|r| r.inner) {
+        remember_size(ctx, scene, view_state, v.player, size);
+    }
+}
+
+/// A size changed under a held pointer is a resize: once the pointer is
+/// released, the size is sent to be kept for every CUE window.
+fn remember_size(
+    ctx: &egui::Context,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    player: fp_model::PlayerId,
+    size: egui::Vec2,
+) {
+    let Some(state) = view_state.cue_windows.get_mut(&player) else {
+        return;
+    };
+    let held = ctx.input(|i| i.pointer.any_down());
+    if held && state.last.is_some_and(|last| (last - size).length() > 0.5) {
+        state.resized = true;
+    }
+    state.last = Some(size);
+    if state.resized && !held {
+        state.resized = false;
+        let size = [size.x, size.y];
+        state.opened_with = Some(size);
+        scene.ctl.send(Command::SetCueWindowSize(size));
+    }
 }
 
 fn title_row(ui: &mut egui::Ui, scene: &Scene<'_>, index: usize, v: &CueWindowView) {
@@ -135,7 +211,13 @@ fn title_row(ui: &mut egui::Ui, scene: &Scene<'_>, index: usize, v: &CueWindowVi
     });
 }
 
-fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &CueWindowView) {
+fn wave(
+    ui: &mut egui::Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    v: &CueWindowView,
+    height: f32,
+) {
     let track = scene.state.playlists.entry(v.entry).map(|e| e.track);
     let media = track.and_then(|track| scene.media.get(track));
     let input = WavePanelInput {
@@ -156,7 +238,7 @@ fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &Cu
             outro: v.outro,
         },
         editable_markers: true,
-        height: WAVE_HEIGHT,
+        height,
         locked: super::touch::locked(scene, view_state),
     };
     if let Some(secs) = wave_panel::show(ui, scene, view_state, &input).seek {
