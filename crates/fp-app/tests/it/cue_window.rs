@@ -722,3 +722,18 @@ fn dragging_the_corner_makes_the_window_and_its_waveform_larger() {
     // The buttons stay under the waveform.
     assert!(h.get_by_label(STOP).rect().top() > bigger.bottom());
 }
+
+#[test]
+fn the_window_never_gets_smaller_than_it_opens() {
+    let (mut h, _) = cueing(1);
+    let wave = h.get_by_label(WAVE).rect();
+    let stop = h.get_by_label(STOP).rect();
+    let corner = pos2(wave.right() + 10.0, stop.bottom() + 10.0);
+    drag(&mut h, corner, corner - egui::vec2(250.0, 150.0));
+    let after = h.get_by_label(WAVE).rect();
+    assert_eq!(after.size(), wave.size(), "{wave:?} → {after:?}");
+    // The buttons are still drawn whole under the waveform.
+    let stop_after = h.get_by_label(STOP).rect();
+    assert_eq!(stop_after.size(), stop.size());
+    assert!(stop_after.top() > after.bottom());
+}
