@@ -225,3 +225,26 @@ fn pl12_the_touch_lock_round_trips_and_defaults_off() {
     assert!(!loaded.state.layout.touch_locked);
     assert!(loaded.state.layout.locked, "the rest is kept");
 }
+
+/// The CUE windows' size survives a restart; a session written before it,
+/// or a value that is not a usable size, loads as none (the window fits its
+/// content).
+#[test]
+fn the_cue_window_size_round_trips_and_defaults_to_none() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let mut state = saved(&mut s);
+    apply(&mut state, Command::SetCueWindowSize([600.0, 300.0])).unwrap();
+    save_all(&mut s, &state, 0.0);
+    assert_eq!(s.load("Main").state.layout.cue_window, Some([600.0, 300.0]));
+    for bad in [json!("big"), json!([600.0]), json!([-5.0, 300.0])] {
+        edit_layout(&s, |doc| doc["cue_window"] = bad.clone());
+        let loaded = s.load("Main");
+        assert_eq!(loaded.state.layout.cue_window, None, "{bad}");
+        assert!(loaded.state.layout.locked, "the rest is kept");
+    }
+    edit_layout(&s, |doc| {
+        doc.as_object_mut().unwrap().remove("cue_window");
+    });
+    assert_eq!(s.load("Main").state.layout.cue_window, None);
+}

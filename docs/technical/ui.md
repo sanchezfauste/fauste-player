@@ -482,7 +482,7 @@ memoised columns and the pan-drag flag of a player and its CUE never mix.
 
 ## CUE window
 
-`ui/cue_window.rs` draws one resizable window per player with a running CUE (it opens fitting its content, never narrower than `WIDTH`, and a taller window gives the waveform the height over the rows under it, never less than `WAVE_HEIGHT`), from
+`ui/cue_window.rs` draws one resizable window per player with a running CUE (it opens at the saved `Layout::cue_window` content size, or fitting its content without one, never narrower than `WIDTH`, and a taller window gives the waveform the height over the rows under it, never less than `WAVE_HEIGHT`; egui sizes a window with its frame, so the frame's margin is added to the content size). A size that changes while the pointer is held is a resize: once released, `remember_size` sends it once as `SetCueWindowSize`. `ViewState::cue_windows` (`CueWindowUi`) keeps per player whether its window is shown and the saved size it opened with; when it opens and the saved size changed since (another player's window was resized), its egui id takes a new `generation`, so egui's remembered size (and place) gives way to the saved one. Drawn from
 `view::cue_window_view` (title, artist, elapsed, remaining, `paused`, the
 position fraction and `can_load_next`). Its waveform is the shared panel
 (`WaveKey::Cue(player)`): `cue_window_view` gives it `markers`

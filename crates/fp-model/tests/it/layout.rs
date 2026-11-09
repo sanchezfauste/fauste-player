@@ -450,6 +450,34 @@ fn pl12_the_touch_lock_is_its_own_flag() {
     assert!(!s.layout.touch_locked);
 }
 
+/// The CUE windows' size (feedback 2 spec O12) is session state kept with
+/// the layout: set while the layout is locked too, kept by a layout reset,
+/// and a size that is not finite and above zero changes nothing.
+#[test]
+fn the_cue_window_size_is_its_own_value() {
+    let mut s = fixture(0);
+    assert_eq!(s.layout.cue_window, None);
+    apply(&mut s, Command::SetLayoutLocked(true)).unwrap();
+    apply(&mut s, Command::SetCueWindowSize([600.0, 300.0])).unwrap();
+    assert_eq!(s.layout.cue_window, Some([600.0, 300.0]));
+    apply(&mut s, Command::SetLayoutLocked(false)).unwrap();
+    apply(&mut s, Command::ResetLayout).unwrap();
+    assert_eq!(
+        s.layout.cue_window,
+        Some([600.0, 300.0]),
+        "a reset keeps it"
+    );
+    for bad in [
+        [0.0, 300.0],
+        [600.0, -1.0],
+        [f32::NAN, 300.0],
+        [600.0, f32::INFINITY],
+    ] {
+        apply(&mut s, Command::SetCueWindowSize(bad)).unwrap();
+        assert_eq!(s.layout.cue_window, Some([600.0, 300.0]), "{bad:?}");
+    }
+}
+
 #[test]
 fn rl10_reset_gives_the_default_layout() {
     let mut s = fixture(0);
@@ -623,6 +651,7 @@ fn rl19_restore_drops_players_that_do_not_exist_and_shows_everything_hidden() {
         },
         locked: true,
         touch_locked: false,
+        cue_window: None,
     };
     let restored = restore_with(&s, layout);
     assert_eq!(restored.layout.player_shares, vec![(p[0], 2.0)]);

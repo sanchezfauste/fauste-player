@@ -108,6 +108,11 @@ pub enum Command {
     /// Phone layout spec PL12: faders and waveforms ignore touches while
     /// set. Not a layout command: the layout lock does not refuse it.
     SetTouchLocked(bool),
+    /// Feedback 2 spec O12: the CUE windows' content size in points, width
+    /// and height, kept with the layout; one that is not finite and above
+    /// zero changes nothing. Not a layout command: the layout lock does not
+    /// refuse it.
+    SetCueWindowSize([f32; 2]),
     /// Stores the library window's state (placement, selection, columns),
     /// repaired against the category tree. Not a layout command.
     SetLibraryView(Box<crate::library_view::LibraryView>),
