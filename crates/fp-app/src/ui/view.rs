@@ -639,6 +639,13 @@ pub fn frame_cost(cpu: Option<f32>, swap: Option<f32>, software: bool) -> Option
 const COST_WEIGHT: f32 = 0.1;
 /// How fast a limited rate climbs back, in frames a second per second (AF5).
 const CLIMB_PER_SEC: f32 = 5.0;
+/// The frames that start a movement and do not count (AF3): the first
+/// layout of a track that starts, its waveform, its cover.
+const WARMUP_FRAMES: u32 = 10;
+/// A frame counts for at most this many times the average (AF3), so one
+/// slow frame barely moves it while a sustained cost still shows within a
+/// few frames.
+const SPIKE_FACTOR: f32 = 3.0;
 /// How far the rate moves before a new log line (AF7).
 const NOTE_STEP: f32 = 5.0;
 
@@ -696,6 +703,8 @@ pub struct AdaptiveRate {
     last: Option<f64>,
     /// The rate the last note gave while limited.
     noted: Option<f32>,
+    /// Frames drawn moving since the interface last stood still.
+    streak: u32,
 }
 
 impl AdaptiveRate {
@@ -708,12 +717,20 @@ impl AdaptiveRate {
         now: f64,
         ui: &fp_model::UiConfig,
     ) -> Option<RateNote> {
+        if !moving {
+            self.streak = 0;
+            self.last = None;
+            return None;
+        }
+        self.streak = self.streak.saturating_add(1);
         let cost = cost.filter(|c| c.is_finite() && *c > 0.0);
-        let (Some(cost), true) = (cost, moving) else {
+        let Some(cost) = cost.filter(|_| self.streak > WARMUP_FRAMES) else {
             self.last = None;
             return None;
         };
-        let average = self.average.map_or(cost, |a| a + COST_WEIGHT * (cost - a));
+        let average = self
+            .average
+            .map_or(cost, |a| a + COST_WEIGHT * (cost.min(a * SPIKE_FACTOR) - a));
         self.average = Some(average);
         let dt = self
             .last
@@ -727,7 +744,9 @@ impl AdaptiveRate {
         } else {
             target.min(current + CLIMB_PER_SEC * dt)
         };
-        self.limited = (next < ceiling).then_some(next);
+        // With no ceiling, a rate at the display's is no limit (AF4).
+        let uncapped = ceiling.is_infinite() && next >= UNCAPPED_REFERENCE_FPS;
+        self.limited = (next < ceiling && !uncapped).then_some(next);
         let cost_ms = average * 1000.0;
         let budget = ui.frame_budget_percent;
         match (self.noted, self.limited) {

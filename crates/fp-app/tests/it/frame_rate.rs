@@ -230,3 +230,51 @@ fn a_slow_software_renderer_lowers_the_animation_rate() {
     assert!(period_after_slow_frames(true) >= Duration::from_secs_f64(1.0 / 14.0));
     assert_eq!(period_after_slow_frames(false), Duration::from_secs(1) / 30);
 }
+
+/// AF4, AF5 with `max_fps` 0: after a limited spell, cheap frames bring the
+/// rate back to every display frame, with one note, and the log stays quiet.
+#[test]
+fn an_unlimited_ceiling_comes_back_after_a_slow_spell() {
+    let ui = UiConfig {
+        max_fps: 0,
+        ..UiConfig::default()
+    };
+    let mut rate = AdaptiveRate::default();
+    let mut now = 0.0;
+    run(&mut rate, &ui, 0.002, 60, &mut now);
+    run(&mut rate, &ui, 0.050, 300, &mut now);
+    assert!(rate.period(&ui) > Duration::ZERO);
+    let notes = run(&mut rate, &ui, 0.002, 1_800, &mut now);
+    assert_eq!(rate.period(&ui), Duration::ZERO);
+    assert!(
+        notes.iter().any(|n| matches!(n, RateNote::Restored { .. })),
+        "{notes:?}"
+    );
+    assert!(notes.len() <= 12, "{} notes: {notes:?}", notes.len());
+}
+
+/// AF3: the frames that start a movement (the first layout of a track that
+/// starts) do not limit the rate.
+#[test]
+fn a_heavy_first_frame_does_not_drop_the_rate() {
+    let ui = UiConfig::default();
+    let mut rate = AdaptiveRate::default();
+    let mut now = 0.0;
+    let mut notes = run(&mut rate, &ui, 0.060, 1, &mut now);
+    notes.extend(run(&mut rate, &ui, 0.006, 60, &mut now));
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(rate.fps(&ui), 30.0);
+}
+
+/// AF3: one slow frame on a moderate baseline (a modest computer with a
+/// GPU) does not drop the rate.
+#[test]
+fn one_slow_frame_on_a_moderate_baseline_does_not_drop_the_rate() {
+    let ui = UiConfig::default();
+    let mut rate = AdaptiveRate::default();
+    let mut now = 0.0;
+    run(&mut rate, &ui, 0.006, 60, &mut now);
+    let notes = run(&mut rate, &ui, 0.100, 1, &mut now);
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(rate.fps(&ui), 30.0);
+}

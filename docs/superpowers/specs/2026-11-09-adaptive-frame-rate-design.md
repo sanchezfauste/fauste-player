@@ -64,8 +64,11 @@ Anti-goals (a failure even if it works):
   another renderer), nothing is known and the swap is never counted.
 - AF3. **Smoothing.** The cost is an exponential moving average over the
   frames drawn while something moves (weight 0.1 for each new frame), so
-  one slow frame does not change the rate. A frame counts when the frame
-  before it asked for the animation rate; idle and blink frames do not.
+  one slow frame does not change the rate; a frame counts for at most
+  three times the average. A frame counts when the frame before it asked
+  for the animation rate; idle and blink frames do not, nor do the first
+  10 frames after the interface stood still (the first layout of a track
+  that starts, its waveform, its cover).
 - AF4. **Target rate.** `target = ui.frame_budget_percent / 100 / cost`
   frames a second, then held between `ui.min_fps` and the ceiling. The
   ceiling is `ui.max_fps`; with `max_fps` 0 (the display's rate) there
@@ -113,6 +116,8 @@ Anti-goals (a failure even if it works):
   rate) with one test per rule; `next_frame` takes the rate in use.
 - `fp-app::ui::shell`: takes `cpu_usage` and `swap_usage` from eframe's
   frame and hands them to `AppUi`.
+- `fp-mobile` does not hand the frame costs over yet: on Android the
+  rate stays at `ui.max_fps`.
 - `fp-app` `main.rs`: takes the renderer from
   `CreationContext::integration_info`, logs it and tells `AppUi` whether
   it is software (AF2).
