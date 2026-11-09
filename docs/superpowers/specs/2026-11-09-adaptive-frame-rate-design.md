@@ -69,7 +69,9 @@ Anti-goals (a failure even if it works):
 - AF4. **Target rate.** `target = ui.frame_budget_percent / 100 / cost`
   frames a second, then held between `ui.min_fps` and the ceiling. The
   ceiling is `ui.max_fps`; with `max_fps` 0 (the display's rate) there
-  is no ceiling, and an unlimited rate keeps drawing every display frame.
+  is no ceiling, and the rate is limited only when the target falls below
+  60 frames a second (the common display rate); above it, every display
+  frame is drawn as before.
 - AF5. **Hysteresis.** The rate in use falls at once to a lower target,
   and climbs towards a higher one by at most 5 frames a second per
   second. So a sustained high cost limits the rate within a few frames,
