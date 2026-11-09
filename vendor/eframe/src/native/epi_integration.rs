@@ -223,7 +223,11 @@ impl EpiIntegration {
         >,
     ) -> Self {
         let frame = epi::Frame {
-            info: epi::IntegrationInfo { cpu_usage: None },
+            info: epi::IntegrationInfo {
+                cpu_usage: None,
+                swap_usage: None,
+                gl_renderer: None,
+            },
             storage,
             #[cfg(feature = "glow")]
             gl,
@@ -436,6 +440,16 @@ impl EpiIntegration {
 
     pub fn report_frame_time(&mut self, seconds: f32) {
         self.frame.info.cpu_usage = Some(seconds);
+    }
+
+    /// Local change (see `VENDORED.md`): the seconds `swap_buffers` took.
+    pub fn report_swap_time(&mut self, seconds: f32) {
+        self.frame.info.swap_usage = Some(seconds);
+    }
+
+    /// Local change (see `VENDORED.md`): what OpenGL reports about itself.
+    pub fn set_gl_renderer(&mut self, renderer: epi::GlRenderer) {
+        self.frame.info.gl_renderer = Some(renderer);
     }
 
     pub fn post_rendering(&mut self, window: &winit::window::Window) {
