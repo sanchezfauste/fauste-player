@@ -206,10 +206,17 @@ meldet Xruns (PulseAudio nicht; der exklusive Modus von Windows nicht).
 
 Solange etwas spielt, zeichnet die Oberfläche höchstens 30 Bilder pro Sekunde
 (`max_fps` im Abschnitt `ui` der Konfigurationsdatei), und Klicks und Tasten
-werden sofort beantwortet. Senke den Wert auf einem alten oder ausgelasteten
-Computer (zum Beispiel auf 20), um dem Audio mehr vom Prozessor zu lassen; 0
-zeichnet jedes Bild, das die Anzeige zeigt. Die Pegelmesser messen bei jeder Rate
-dasselbe; sie werden nur seltener gezeichnet.
+werden sofort beantwortet. Kosten ihre Bilder mehr als einen Anteil des
+Prozessors (`frame_budget_percent`, standardmäßig 40 % eines Kerns), zeichnet
+sie von selbst weniger Bilder, bis hinunter zu `min_fps` (standardmäßig 8),
+und geht wieder hoch, wenn sie günstiger werden. Das passiert vor allem auf
+Computern ohne brauchbare Grafikkarte, wo der Prozessor das Zeichnen
+übernimmt: Das Protokoll sagt es beim Start ("the interface draws in
+software"). Um dem Audio noch mehr vom Prozessor zu lassen, senke `max_fps`
+oder `frame_budget_percent`; 0 in `max_fps` zeichnet jedes Bild, das die
+Anzeige zeigt. Die Pegelmesser messen bei jeder Rate dasselbe; sie werden nur
+seltener gezeichnet. Wenn nichts spielt, zeichnet die Oberfläche einmal pro
+Sekunde (für die Uhr) und immer dann, wenn sich etwas ändert.
 
 ## Dateien lassen sich unter Linux nicht ablegen {#files-cannot-be-dropped-on-linux}
 

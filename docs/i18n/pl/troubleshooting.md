@@ -202,10 +202,16 @@ zgłasza xruny (PulseAudio nie; tryb wyłączny Windows też nie).
 
 Gdy coś gra, interfejs rysuje najwyżej 30 klatek na sekundę (`max_fps` w
 sekcji `ui` pliku konfiguracyjnego), a kliknięcia i klawisze są obsługiwane od
-razu. Na starym lub zajętym komputerze zmniejsz tę wartość (na przykład do
-20), aby zostawić więcej procesora dźwiękowi; 0 rysuje każdą klatkę, jaką
-pokazuje wyświetlacz. Mierniki mierzą tak samo przy każdej częstotliwości;
-są tylko rysowane rzadziej.
+razu. Gdy jego klatki kosztują więcej niż część procesora
+(`frame_budget_percent`, domyślnie 40% jednego rdzenia), sam rysuje mniej
+klatek, aż do `min_fps` (domyślnie 8), i wraca wyżej, gdy stają się tańsze.
+Dzieje się tak głównie na komputerach bez użytecznej karty graficznej, gdzie
+rysowaniem zajmuje się procesor: dziennik mówi o tym przy starcie ("the
+interface draws in software"). Aby zostawić dźwiękowi jeszcze więcej
+procesora, zmniejsz `max_fps` lub `frame_budget_percent`; 0 w `max_fps` rysuje
+każdą klatkę, jaką pokazuje wyświetlacz. Mierniki mierzą tak samo przy każdej
+częstotliwości; są tylko rysowane rzadziej. Gdy nic nie gra, interfejs rysuje
+raz na sekundę (dla zegara) i za każdym razem, gdy coś się zmienia.
 
 ## Nie można upuszczać plików w Linuksie {#files-cannot-be-dropped-on-linux}
 

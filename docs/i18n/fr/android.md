@@ -15,6 +15,11 @@ demande. Pour mettre à jour, installez l'APK plus récent de la même façon :
 playlists et vos réglages restent. L'application n'est pas encore sur Google
 Play.
 
+La version 0.13.0 et les précédentes s'installent comme une autre application,
+donc un APK plus récent ne les met pas à jour : il apparaît comme un second
+Fauste Player. Désinstallez l'ancienne une fois la nouvelle configurée. Ses
+playlists et ses réglages ne sont pas repris.
+
 ## Premier démarrage {#first-start}
 
 - **Accès à la musique.** Autorisez l'accès à la musique (et aux notifications,
@@ -181,12 +186,13 @@ cochées ; **Pré-écouter** n'est alors pas proposé. Les coches restent aprè
 l'action du menu.
 
 **Pré-écoute.** Le 🎧 à droite d'une ligne joue sa piste depuis son cue-in sur
-la sortie de pré-écoute de la bibliothèque ; le 🎧 d'une autre ligne passe à
+la sortie de pré-écoute de la bibliothèque ; le 🎧 d'une autre ligne passe à
 cette piste. Un fin bandeau au-dessus de la liste montre le titre, le temps
 restant, **Pause**/**Lecture** et **Stop** pendant qu'elle joue (ou est en
-pause), et une indication sinon : il garde toujours sa place, si bien que les
-lignes ne bougent pas quand une pré-écoute démarre ou s'arrête. Le 🎧 est
-grisé quand le fichier est manquant ou ne peut pas être lu.
+pause), le titre grisé après **Stop**, et une indication avant la première
+pré-écoute : il garde toujours sa place, si bien que les lignes ne bougent pas
+quand une pré-écoute démarre ou s'arrête. Le 🎧 est grisé quand le fichier est
+manquant ou ne peut pas être lu.
 
 **La carte de pré-écoute.** Touchez le bandeau (hors de ses boutons) pour
 ouvrir la carte sous la liste, avec la forme d'onde de la piste comme sur la

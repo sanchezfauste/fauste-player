@@ -13,6 +13,11 @@ browser of bestandsbeheerder toe apps te installeren wanneer Android erom vraagt
 Installeer om bij te werken de nieuwere APK op dezelfde manier: je playlists en
 instellingen blijven. De app staat nog niet in Google Play.
 
+Versie 0.13.0 en ouder worden als een andere app geïnstalleerd, dus een
+nieuwere APK werkt ze niet bij: die verschijnt als een tweede Fauste Player.
+Verwijder de oude zodra de nieuwe is ingesteld. De playlists en instellingen
+ervan gaan niet mee.
+
 ## Eerste start {#first-start}
 
 - **Toegang tot muziek.** Sta toegang tot muziek toe (en tot meldingen, op
@@ -163,13 +168,14 @@ ingedrukt houden op een andere rij die ook aan en geldt het menu voor elke
 aangevinkte rij, in de volgorde waarin je ze aanvinkte; **Voorbeluisteren** wordt
 dan niet aangeboden. De vinkjes blijven na de actie van het menu.
 
-**Voorbeluisteren.** De 🎧 rechts van een rij speelt zijn nummer vanaf zijn cue-in
-op de voorbeluisteruitgang van de bibliotheek; de 🎧 van een andere rij schakelt
-over naar dat nummer. Een slanke strook boven de lijst toont de titel, de
-resterende tijd, **Pauze**/**Play** en **Stop** terwijl het speelt (of gepauzeerd
-is), en anders een hint: hij behoudt altijd zijn plaats, zodat de rijen niet
-verspringen wanneer een voorbeluistering begint of stopt. De 🎧 is gedimd wanneer
-het bestand ontbreekt of niet kan worden afgespeeld.
+**Voorbeluisteren.** De 🎧 rechts van een rij speelt zijn nummer vanaf zijn
+cue-in op de voorbeluisteruitgang van de bibliotheek; de 🎧 van een andere rij
+schakelt over naar dat nummer. Een slanke strook boven de lijst toont de
+titel, de resterende tijd, **Pauze**/**Play** en **Stop** terwijl het speelt
+(of gepauzeerd is), de gedimde titel na **Stop**, en een hint vóór de eerste
+voorbeluistering: hij behoudt altijd zijn plaats, zodat de rijen niet
+verspringen wanneer een voorbeluistering begint of stopt. De 🎧 is gedimd
+wanneer het bestand ontbreekt of niet kan worden afgespeeld.
 
 **De voorbeluisterkaart.** Tik op de strook (naast zijn knoppen) om de
 kaart onder de lijst te openen, met de golfvorm van het nummer zoals op de

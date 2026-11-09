@@ -208,10 +208,17 @@ segnalano gli xrun (PulseAudio no; la modalità esclusiva di Windows no).
 
 Mentre qualcosa suona, l'interfaccia disegna al massimo 30 fotogrammi al
 secondo (`max_fps` nella sezione `ui` del file di configurazione), e i clic e
-i tasti ricevono risposta subito. Su un computer vecchio o occupato abbassalo
-(per esempio a 20) per lasciare più processore all'audio; 0 disegna ogni
-fotogramma che mostra lo schermo. I meter misurano lo stesso a qualsiasi
-frequenza; vengono solo disegnati meno spesso.
+i tasti ricevono risposta subito. Quando i suoi fotogrammi costano più di una
+quota del processore (`frame_budget_percent`, il 40% di un core per
+impostazione predefinita), disegna da sola meno fotogrammi, fino a `min_fps`
+(8 per impostazione predefinita), e risale quando costano meno. Succede
+soprattutto sui computer senza una scheda grafica utilizzabile, dove il
+disegno lo fa il processore: il log lo dice all'avvio ("the interface draws in
+software"). Per lasciare ancora più processore all'audio, abbassa `max_fps` o
+`frame_budget_percent`; 0 in `max_fps` disegna ogni fotogramma che mostra lo
+schermo. I meter misurano lo stesso a qualsiasi frequenza; vengono solo
+disegnati meno spesso. Quando non suona niente, l'interfaccia disegna una
+volta al secondo (per l'orologio) e ogni volta che qualcosa cambia.
 
 ## Non si possono rilasciare file su Linux {#files-cannot-be-dropped-on-linux}
 

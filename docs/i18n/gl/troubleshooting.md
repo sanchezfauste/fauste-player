@@ -207,10 +207,17 @@ exclusivo de Windows tampouco).
 
 Mentres algo soa, a interface debuxa como máximo 30 fotogramas por segundo
 (`max_fps` na sección `ui` do ficheiro de configuración), e os clics e as
-teclas respóndense ao instante. Nun computador vello ou ocupado, baixa ese
-valor (por exemplo a 20) para deixar máis procesador ao audio; 0 debuxa todos
-os fotogramas que mostra a pantalla. Os vúmetros miden o mesmo a calquera
-ritmo; só se debuxan con menos frecuencia.
+teclas respóndense ao instante. Cando os seus fotogramas custan máis ca unha
+parte do procesador (`frame_budget_percent`, o 40% dun núcleo por defecto),
+debuxa menos fotogramas por si soa, ata `min_fps` (8 por defecto), e volve
+subir cando saen máis baratos. Pasa sobre todo en computadores sen unha
+tarxeta gráfica utilizable, onde o debuxo o fai o procesador: o rexistro dío
+ao arrancar ("the interface draws in software"). Para deixar aínda máis
+procesador ao audio, baixa `max_fps` ou `frame_budget_percent`; 0 en `max_fps`
+debuxa todos os fotogramas que mostra a pantalla. Os vúmetros miden o mesmo a
+calquera ritmo; só se debuxan con menos frecuencia. Sen nada soando, a
+interface debuxa unha vez por segundo (polo reloxo) e cada vez que algo
+cambia.
 
 ## Non se poden soltar ficheiros en Linux {#files-cannot-be-dropped-on-linux}
 

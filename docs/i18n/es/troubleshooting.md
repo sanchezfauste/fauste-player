@@ -211,10 +211,17 @@ tampoco).
 
 Mientras algo suena, la interfaz se dibuja como mucho a 30 fotogramas por
 segundo (`max_fps` en la sección `ui` del archivo de configuración), y los
-clics y las teclas se atienden al momento. En un ordenador antiguo u ocupado
-bájalo (por ejemplo a 20) para dejar más procesador al audio; 0 dibuja cada
-fotograma que muestra la pantalla. Los vúmetros miden lo mismo a cualquier
-frecuencia; solo se dibujan con menos frecuencia.
+clics y las teclas se atienden al momento. Cuando sus fotogramas cuestan más
+que una parte del procesador (`frame_budget_percent`, el 40% de un núcleo por
+defecto), dibuja menos fotogramas por sí sola, hasta `min_fps` (8 por
+defecto), y vuelve a subir cuando salen más baratos. Pasa sobre todo en
+ordenadores sin una tarjeta gráfica utilizable, donde el dibujo lo hace el
+procesador: el registro lo dice al arrancar ("the interface draws in
+software"). Para dejar aún más procesador al audio, baja `max_fps` o
+`frame_budget_percent`; 0 en `max_fps` dibuja cada fotograma que muestra la
+pantalla. Los vúmetros miden lo mismo a cualquier frecuencia; solo se dibujan
+con menos frecuencia. Sin nada sonando, la interfaz se dibuja una vez por
+segundo (por el reloj) y cada vez que algo cambia.
 
 ## No se pueden soltar archivos en Linux {#files-cannot-be-dropped-on-linux}
 

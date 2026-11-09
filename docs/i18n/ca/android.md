@@ -14,6 +14,11 @@ Android ho demani. Per actualitzar, instal·la l'APK més nou de la mateixa
 manera: les teves llistes i ajustos es conserven. L'aplicació encara no és a
 Google Play.
 
+La versió 0.13.0 i les anteriors s'instal·len com una altra aplicació, de
+manera que un APK més nou no les actualitza: apareix com un segon Fauste
+Player. Desinstal·la l'antiga quan la nova estigui configurada. Les seves
+llistes i ajustos no es traspassen.
+
 ## Primer inici {#first-start}
 
 - **Accés a la música.** Permet l'accés a la música (i a les notificacions, a
@@ -168,11 +173,12 @@ s'ofereix. Les marques es mantenen després de l'acció del menú.
 
 **Preescolta.** El 🎧 a la dreta d'una fila reprodueix la seva pista des del
 seu cue-in per la sortida de preescolta de la biblioteca; el 🎧 d'una altra
-fila canvia a aquella pista. Una franja prima sobre la llista mostra el
-títol, el temps restant, **Pausa**/**Reproduir** i **Stop** mentre sona (o és
-en pausa), i una indicació altrament: sempre manté el seu lloc, de manera que
-les files no es mouen quan una preescolta comença o s'atura. El 🎧 és atenuat
-quan el fitxer és absent o no es pot reproduir.
+fila canvia a aquella pista. Una franja prima sobre la llista mostra el títol,
+el temps restant, **Pausa**/**Reproduir** i **Stop** mentre sona (o és en
+pausa), el títol atenuat després de **Stop**, i una indicació abans de la
+primera preescolta: sempre manté el seu lloc, de manera que les files no es
+mouen quan una preescolta comença o s'atura. El 🎧 és atenuat quan el fitxer és
+absent o no es pot reproduir.
 
 **La targeta de preescolta.** Toca la franja (fora dels seus botons) per
 obrir la targeta sota la llista, amb la forma d'ona de la pista com a la

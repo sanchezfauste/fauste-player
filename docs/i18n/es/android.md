@@ -14,6 +14,11 @@ archivos instale aplicaciones cuando Android lo pida. Para actualizar,
 instala el APK más reciente de la misma manera: tus playlists y ajustes se
 conservan. La aplicación todavía no está en Google Play.
 
+La versión 0.13.0 y las anteriores se instalan como otra aplicación, así que
+un APK más reciente no las actualiza: aparece como un segundo Fauste Player.
+Desinstala la antigua cuando la nueva esté configurada. Sus playlists y
+ajustes no se trasladan.
+
 ## Primer arranque {#first-start}
 
 - **Acceso a la música.** Permite el acceso a la música (y a las
@@ -175,12 +180,13 @@ las filas marcadas, en el orden en que las marcaste; **Preescuchar** entonces
 no se ofrece. Las marcas se quedan tras la acción del menú.
 
 **Preescucha.** Los 🎧 a la derecha de una fila reproducen su pista desde su
-cue-in en la salida de preescucha de la biblioteca; los 🎧 de otra fila
-cambian a esa pista. Una franja delgada sobre la lista muestra el título, el
-tiempo restante, **Pausar**/**Preescuchar** y **Detener** mientras suena (o está
-en pausa), y una indicación en caso contrario: siempre conserva su sitio, de
-modo que las filas no se mueven cuando empieza o acaba una preescucha. Los 🎧
-se atenúan cuando el archivo falta o no se puede reproducir.
+cue-in en la salida de preescucha de la biblioteca; los 🎧 de otra fila cambian
+a esa pista. Una franja delgada sobre la lista muestra el título, el tiempo
+restante, **Pausar**/**Preescuchar** y **Detener** mientras suena (o está en
+pausa), el título atenuado tras **Detener**, y una indicación antes de la
+primera preescucha: siempre conserva su sitio, de modo que las filas no se
+mueven cuando empieza o acaba una preescucha. Los 🎧 se atenúan cuando el
+archivo falta o no se puede reproducir.
 
 **La tarjeta de preescucha.** Toca la franja (fuera de sus botones) para
 abrir la tarjeta bajo la lista, con la forma de onda de la pista como en la
