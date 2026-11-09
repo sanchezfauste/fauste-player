@@ -130,9 +130,7 @@ fn shutdown_saves_the_session_with_positions() {
     let mut r = rig(&[a], dir);
     // An analysis landing between two autosaves would rightly write the
     // track's row (a slow runner): it finishes first.
-    r.run_until("analysis", |r| {
-        r.handle.model.load().library.iter().all(|t| t.analyzed)
-    });
+    r.run_until("analysis", |r| settled(&r.handle.model.load()));
     let p = r.handle.model.load().players[0].id;
     r.handle.send(Command::Play(p));
     r.run_until("playback", |r| {
@@ -150,6 +148,14 @@ fn shutdown_saves_the_session_with_positions() {
         a,
         EngineAction::LoadPaused { player, request } if *player == p && request.from_secs > 0.3
     )));
+}
+
+/// Every track is analysed, and the passes that follow an analysis (tags,
+/// bit rate, loudness) have answered: none of them writes its row any more.
+fn settled(state: &fp_model::AppState) -> bool {
+    state.library.iter().all(|t| {
+        t.analyzed && !t.needs_tag_read() && !t.needs_bitrate_read() && !t.needs_loudness_pass()
+    })
 }
 
 /// The `doc` of every row of `table`, ordered by id.
@@ -172,9 +178,7 @@ fn while_playing_only_the_players_rows_are_written() {
     let mut r = rig(&[a], dir);
     // An analysis landing between two autosaves would rightly write the
     // track's row (a slow runner): it finishes first.
-    r.run_until("analysis", |r| {
-        r.handle.model.load().library.iter().all(|t| t.analyzed)
-    });
+    r.run_until("analysis", |r| settled(&r.handle.model.load()));
     let p = r.handle.model.load().players[0].id;
     r.handle.send(Command::Play(p));
     r.run_until("playback", |r| {
