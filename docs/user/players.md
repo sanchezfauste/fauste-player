@@ -248,6 +248,10 @@ The window shows:
 While the CUE is paused, its **Pause** button (shown as **Resume**) blinks
 amber, like the player's own.
 
+Drag an edge or a corner of the window to make it larger: the waveform
+takes the extra width and height, which helps to place markers. The window
+never gets smaller than it opens.
+
 A jump on a paused CUE keeps it paused. The close button of the window, or
 **Stop**, stops the CUE.
 

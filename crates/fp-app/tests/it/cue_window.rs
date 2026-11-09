@@ -673,3 +673,52 @@ fn zooming_one_cue_leaves_the_other_on_the_whole_file() {
     wheel(&mut h, pos2(x_of(w, 90.0), w.center().y), 1.0);
     assert_eq!(h.get_all_by_label(FULL_VIEW).count(), 1);
 }
+
+/// Drags with the primary button from `from` to `to`, in small steps.
+fn drag(h: &mut Harness<'_, AppUi>, from: Pos2, to: Pos2) {
+    h.event(Event::PointerMoved(from));
+    h.run_steps(1);
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    h.run_steps(1);
+    for step in 1..=10 {
+        let t = step as f32 / 10.0;
+        h.event(Event::PointerMoved(from + (to - from) * t));
+        h.run_steps(1);
+    }
+    h.event(Event::PointerButton {
+        pos: to,
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    h.run_steps(2);
+}
+
+#[test]
+fn dragging_the_corner_makes_the_window_and_its_waveform_larger() {
+    let (mut h, _) = cueing(1);
+    let wave = h.get_by_label(WAVE).rect();
+    // It opens as it always did: a player's waveform height.
+    assert_eq!(wave.height(), 56.0);
+    let stop = h.get_by_label(STOP).rect();
+    // The window's bottom-right corner: past the waveform's right edge by
+    // the frame's margin, under the buttons by it.
+    let corner = pos2(wave.right() + 10.0, stop.bottom() + 10.0);
+    drag(&mut h, corner, corner + egui::vec2(200.0, 150.0));
+    let bigger = h.get_by_label(WAVE).rect();
+    assert!(
+        bigger.width() >= wave.width() + 150.0,
+        "{wave:?} → {bigger:?}"
+    );
+    assert!(
+        bigger.height() >= wave.height() + 100.0,
+        "{wave:?} → {bigger:?}"
+    );
+    // The buttons stay under the waveform.
+    assert!(h.get_by_label(STOP).rect().top() > bigger.bottom());
+}

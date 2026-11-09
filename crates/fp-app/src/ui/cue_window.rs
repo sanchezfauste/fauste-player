@@ -18,7 +18,10 @@ use super::wave_panel::{self, WaveBadges, WavePanelInput};
 use super::wave_view::{WaveKey, WaveSubject};
 use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 
+/// The window's content width when it opens, and the narrowest it gets.
 const WIDTH: f32 = 380.0;
+/// The waveform's height when the window opens, and the lowest it gets:
+/// a taller window gives the waveform the extra height.
 const WAVE_HEIGHT: f32 = 56.0;
 const BUTTON: egui::Vec2 = vec2(40.0, 28.0);
 
@@ -64,7 +67,12 @@ fn show(
     egui::Window::new(t.tr_args("cue-window-title", &[("n", (index + 1).into())]))
         .id(egui::Id::unique(("cue-window", v.player)))
         .title_bar(false)
-        .resizable(false)
+        // Resizable from its edges and corners, to place markers on a
+        // larger waveform; it never gets smaller than it opens.
+        .resizable(true)
+        // No default height: it opens fitting its content, as before.
+        .min_width(WIDTH)
+        .default_size(vec2(WIDTH, 0.0))
         .collapsible(false)
         .default_pos(pos2(80.0 + stagger, 120.0 + stagger))
         .frame(
@@ -74,7 +82,6 @@ fn show(
                 .inner_margin(12.0),
         )
         .show(ctx, |ui| {
-            ui.set_width(WIDTH);
             ui.spacing_mut().item_spacing = vec2(8.0, 8.0);
             title_row(ui, scene, index, v);
             ui.add(
@@ -96,7 +103,12 @@ fn show(
                 .selectable(false)
                 .truncate(),
             );
-            wave(ui, scene, view_state, v);
+            // The rows under the waveform: the time row (a horizontal row,
+            // `interact_size` high) and the buttons, each after a gap.
+            let spacing = ui.spacing();
+            let below = spacing.interact_size.y.max(12.0) + BUTTON.y + 2.0 * spacing.item_spacing.y;
+            let wave_height = (ui.available_height() - below).max(WAVE_HEIGHT);
+            wave(ui, scene, view_state, v, wave_height);
             time_row(ui, v);
             buttons(ui, scene, v);
         });
@@ -135,7 +147,13 @@ fn title_row(ui: &mut egui::Ui, scene: &Scene<'_>, index: usize, v: &CueWindowVi
     });
 }
 
-fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &CueWindowView) {
+fn wave(
+    ui: &mut egui::Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    v: &CueWindowView,
+    height: f32,
+) {
     let track = scene.state.playlists.entry(v.entry).map(|e| e.track);
     let media = track.and_then(|track| scene.media.get(track));
     let input = WavePanelInput {
@@ -156,7 +174,7 @@ fn wave(ui: &mut egui::Ui, scene: &Scene<'_>, view_state: &mut ViewState, v: &Cu
             outro: v.outro,
         },
         editable_markers: true,
-        height: WAVE_HEIGHT,
+        height,
         locked: super::touch::locked(scene, view_state),
     };
     if let Some(secs) = wave_panel::show(ui, scene, view_state, &input).seek {
