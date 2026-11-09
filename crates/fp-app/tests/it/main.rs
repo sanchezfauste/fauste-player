@@ -9,6 +9,7 @@ mod app_session;
 mod bit_perfect_ui;
 mod blink;
 mod cartwall_ui;
+mod changes;
 mod cli;
 mod cue_follow_ui;
 mod cue_on_air_ui;
