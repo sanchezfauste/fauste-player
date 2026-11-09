@@ -340,7 +340,7 @@ fn n4_the_analysis_measures_the_loudness() {
     assert!((l.true_peak_dbtp + 23.0).abs() < 0.5, "{l:?}");
     assert_eq!(a.loudness_pass, Some(LOUDNESS_VERSION));
     assert_eq!(
-        ANALYSIS_VERSION, 10,
+        ANALYSIS_VERSION, 11,
         "the loudness tail did not bump the analysis version again"
     );
 }

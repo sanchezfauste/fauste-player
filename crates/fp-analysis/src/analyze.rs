@@ -11,6 +11,7 @@ use fp_model::{
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
+use crate::fingerprint::Fingerprint;
 use crate::metadata::{read_intro, read_tags, thumbnail_png, title_from_file_name};
 use crate::signal::{EnvelopeBuilder, WavePeak, detect_markers};
 
@@ -63,6 +64,7 @@ pub fn analyze_file_cancellable(
         settings.peak_bucket_ms,
     );
     let mut meter = Meter::new(decoder.sample_rate());
+    let mut fingerprint = Fingerprint::new();
     let mut block = Vec::new();
     let mut decoded_any = false;
     loop {
@@ -73,6 +75,7 @@ pub fn analyze_file_cancellable(
         match decoder.next_block(&mut block) {
             Ok(true) => {
                 decoded_any = true;
+                fingerprint.push(&block);
                 builder.push(&block);
                 meter.push(&block, path);
             }
@@ -128,7 +131,7 @@ pub fn analyze_file_cancellable(
             version: crate::cache::ANALYSIS_VERSION,
             loudness,
             loudness_pass: Some(LOUDNESS_VERSION),
-            audio_hash: None,
+            audio_hash: Some(fingerprint.finish()),
             file_stamp: None,
         },
         peak_bucket_secs: envelope.bucket_secs,

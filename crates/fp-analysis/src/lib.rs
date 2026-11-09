@@ -6,6 +6,7 @@
 pub mod analyze;
 pub mod analyzer;
 pub mod cache;
+mod fingerprint;
 pub mod metadata;
 pub mod signal;
 pub mod tags;

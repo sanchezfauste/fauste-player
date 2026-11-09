@@ -31,11 +31,14 @@ use crate::analyze::Analysis;
 ///    files analysed as noise before are read again.
 /// 10: surround layouts are mixed down by their channel positions (7.1
 ///    side channels, quad, 6.1 and 2.1 files read differently).
+/// 11: `TrackAnalysis::audio_hash`, the fingerprint of the decoded samples
+///    (external editor spec EE8).
 ///
-/// The cache re-analyses every file at 10, but a track analysed at 9 keeps
-/// its analysis when the downmix did not change for it: see
+/// The cache re-analyses every file at 11 (entries of older versions have
+/// another file name prefix and key, so they are never read), but a track
+/// analysed at 9 or 10 keeps its analysis when the downmix did not change for it: see
 /// `analysis_is_current`.
-pub const ANALYSIS_VERSION: u32 = 10;
+pub const ANALYSIS_VERSION: u32 = 11;
 
 /// Whether a track analysed at `version` with `channels` channels (0 when
 /// unknown) is as good as one analysed now. Version 9 is, for the layouts
@@ -43,7 +46,7 @@ pub const ANALYSIS_VERSION: u32 = 10;
 /// (5.1 and DSD 5.1). Other layouts (quad, 6.1, 7.1, 2.1, unknown) were
 /// downmixed differently and are outdated.
 pub fn analysis_is_current(version: u32, channels: u32) -> bool {
-    version >= ANALYSIS_VERSION || (version == 9 && matches!(channels, 1 | 2 | 6))
+    version >= 10 || (version == 9 && matches!(channels, 1 | 2 | 6))
 }
 
 #[derive(Serialize, Deserialize)]
@@ -263,6 +266,14 @@ mod current_tests {
     use super::*;
 
     #[test]
+    fn version_10_stays_current() {
+        for ch in [0, 1, 2, 4, 6, 8] {
+            assert!(analysis_is_current(10, ch), "{ch}");
+        }
+        assert!(analysis_is_current(11, 2));
+    }
+
+    #[test]
     fn version_9_stays_current_only_where_the_downmix_did_not_change() {
         for ch in [1, 2, 6] {
             assert!(analysis_is_current(9, ch), "{ch}");
@@ -271,6 +282,7 @@ mod current_tests {
             assert!(!analysis_is_current(9, ch), "{ch}");
         }
         assert!(analysis_is_current(ANALYSIS_VERSION, 8));
+        assert!(analysis_is_current(10, 8));
         assert!(!analysis_is_current(8, 2));
     }
 }

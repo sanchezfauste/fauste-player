@@ -7,6 +7,7 @@ mod analyze;
 mod analyzer;
 #[path = "support/corpus.rs"]
 mod corpus;
+mod fingerprint;
 mod intro_tag;
 mod long_files;
 mod loudness_pass;
