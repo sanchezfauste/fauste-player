@@ -1043,14 +1043,15 @@ impl Services {
         let in_use = Self::in_use(state);
         if self.change_started {
             let joined: Vec<TrackId> = in_use.difference(&self.in_use).copied().collect();
+            // A check, or at once for a file left unsettled (R1).
             for id in joined {
-                self.change_urgent.push_back(id);
+                self.check_track(state, id);
             }
         } else {
             self.change_started = true;
             // The tracks in use first.
             for id in &in_use {
-                self.change_urgent.push_back(*id);
+                self.check_track(state, *id);
             }
             self.change_bulk.extend(
                 state

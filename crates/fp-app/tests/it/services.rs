@@ -2779,9 +2779,14 @@ fn a_look_during_a_library_pass_counts_the_tracks_in_flight_as_checked() {
 /// A hook that gives the file a new modification time after each analysis
 /// while `moving` holds: a file still being written.
 fn keep_touching(moving: Arc<AtomicBool>) -> AfterAnalysis {
+    keep_touching_only(moving, None)
+}
+
+/// `keep_touching` for `only` alone, when given.
+fn keep_touching_only(moving: Arc<AtomicBool>, only: Option<PathBuf>) -> AfterAnalysis {
     let touches = Arc::new(std::sync::atomic::AtomicU64::new(0));
     Arc::new(move |path| {
-        if moving.load(Ordering::SeqCst) {
+        if moving.load(Ordering::SeqCst) && only.as_deref().is_none_or(|o| o == path) {
             let n = touches.fetch_add(1, Ordering::SeqCst) + 1;
             let f = std::fs::OpenOptions::new().append(true).open(path).unwrap();
             f.set_modified(SystemTime::now() + Duration::from_secs(n))
@@ -2881,4 +2886,91 @@ fn a_shown_track_that_keeps_changing_is_not_read_in_a_loop() {
         track_of(r, &files[0]).file_stamp == Some(real) && r.media.contains(id)
     });
     assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
+}
+
+/// Puts the track of `path` in the library pre-listen bar (stopped): in
+/// use (EE7.4), not sounding.
+fn select_in_library(r: &mut Rig, path: &Path) {
+    let id = track_of(r, path).id;
+    assert!(
+        !r.handle
+            .model
+            .load()
+            .library_cue
+            .track
+            .is_some_and(|t| t == id)
+    );
+    assert!(r.handle.send(Command::SelectLibraryCue(Some(id))));
+    r.conductor.tick(r.now);
+    assert_eq!(r.handle.model.load().library_cue.track, Some(id));
+}
+
+/// How many analyses of `path` started.
+fn reads_of(r: &Rig, path: &Path) -> usize {
+    r.started
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|p| *p == path)
+        .count()
+}
+
+/// EE7.4 (R1): a new track still changing at its retry is analysed once it
+/// comes into use (here the library pre-listen bar), its file settled
+/// meanwhile.
+#[test]
+fn loading_a_new_unsettled_track_analyses_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let b = files[1].clone();
+    let moving = Arc::new(AtomicBool::new(true));
+    let mut r = rig_hooked(
+        &files,
+        dir,
+        Duration::ZERO,
+        |state| state.config.library.watch_debounce_ms = 1_000,
+        keep_touching_only(moving.clone(), Some(b.clone())),
+    );
+    r.run_until("the retry", |r| reads_of(r, &b) == 2);
+    idle_for(&mut r, 3_000);
+    assert_eq!(reads_of(&r, &b), 2);
+    assert!(!track_of(&r, &b).analyzed);
+    moving.store(false, Ordering::SeqCst);
+    select_in_library(&mut r, &b);
+    r.run_until("analysed once in use", |r| track_of(r, &b).analyzed);
+    assert_eq!(reads_of(&r, &b), 3);
+}
+
+/// EE7.4 (R1): an analysed track still changing at its retry is analysed
+/// when it comes into use, even if a stamp check alone would find nothing
+/// (here its file is back at the stored stamp).
+#[test]
+fn an_analysed_unsettled_track_coming_into_use_is_analysed() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let b = files[1].clone();
+    let original = std::fs::metadata(&b).unwrap().modified().unwrap();
+    let moving = Arc::new(AtomicBool::new(true));
+    let mut r = stamped_rig_hooked(
+        &files,
+        dir,
+        &[],
+        |state| state.config.library.watch_debounce_ms = 1_000,
+        keep_touching_only(moving.clone(), Some(b.clone())),
+    );
+    seed_all(&r);
+    checks_done(&mut r);
+    let id = track_of(&r, &b).id;
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(id))
+        .unwrap();
+    r.run_until("the retry", |r| reads_of(r, &b) == 2);
+    idle_for(&mut r, 3_000);
+    assert_eq!(reads_of(&r, &b), 2);
+    moving.store(false, Ordering::SeqCst);
+    let f = std::fs::OpenOptions::new().append(true).open(&b).unwrap();
+    f.set_modified(original).unwrap();
+    select_in_library(&mut r, &b);
+    r.run_until("analysed once in use", |r| reads_of(r, &b) == 3);
 }

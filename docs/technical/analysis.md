@@ -334,8 +334,8 @@ that moved, or a file that is gone, turns the result into
 nothing is cached or applied. The services re-queue that track once after
 `library.watch_debounce_ms` (`changed_retry`); a second `Changed` puts it in
 `unsettled`: neither analysed nor read for the screen until a real trigger (a
-watch event or `CheckTrack` for it, which analyse it at once even if it was
-never analysed, *Look for changed files*, a change found by a check,
+watch event or `CheckTrack` for it, or its coming into use, which analyse it
+at once even if it was never analysed, *Look for changed files*, a change found by a check,
 Re-analyse or Re-analyse all) takes it up.
 
 A changed track goes through `reanalyse_track` once `!track_sounding`; until
