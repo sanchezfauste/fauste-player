@@ -34,10 +34,10 @@ use crate::analyze::Analysis;
 /// 11: `TrackAnalysis::audio_hash`, the fingerprint of the decoded samples
 ///    (external editor spec EE8).
 ///
-/// The cache re-analyses every file at 11 (entries of older versions have
-/// another file name prefix and key, so they are never read), but a track
-/// analysed at 9 or 10 keeps its analysis when the downmix did not change for it: see
-/// `analysis_is_current`.
+/// Cache entries of older versions have another file name prefix and key,
+/// so they are never read. A track analysed at 9 or 10 keeps its analysis
+/// when the downmix did not change for it (see `analysis_is_current`); a
+/// track analysed at 10 gets its fingerprint at its next analysis.
 pub const ANALYSIS_VERSION: u32 = 11;
 
 /// Whether a track analysed at `version` with `channels` channels (0 when

@@ -46,7 +46,7 @@ transaction. The tables:
 | Table | Content |
 |---|---|
 | `kv` | Key-value documents: the library's id counter and the other small values |
-| `tracks` | `id`, `path`, `category` (schema 2; null: uncategorised) and `doc`: the track's JSON (tags, markers and the `analysis_version` of the automatic ones, `analyzed`, `loudness`, `loudness_pass`, `loudness_edit`, `tags_read`). Indexes `tracks_by_path` and `tracks_by_category` (schema 2) |
+| `tracks` | `id`, `path`, `category` (schema 2; null: uncategorised) and `doc`: the track's JSON (tags, markers and the `analysis_version` of the automatic ones, `analyzed`, `loudness`, `loudness_pass`, `loudness_edit`, `tags_read`, and the external editor's `file_stamp`, `audio_hash` with its version, and `markers_review`; all optional, so older rows load without them). Indexes `tracks_by_path` and `tracks_by_category` (schema 2) |
 | `categories` | `id`, `position` and `doc`: the category tree as a flat list in display order (`parent`, `name`, `color`, `kind`, `watched_folder`: an absolute path or absent, plan 5). `position` is the category's place in `Categories`; siblings keep their relative order |
 | `playlists`, `entries` | A playlist's `position` and `name`; its entries with `playlist`, `position`, `track` and `doc` (`played_by`, `repeat`, `stop_after`). Deleting a playlist deletes its entries |
 | `cart_pages` | `id`, `position`, and `doc`: the page with its carts (`color` is a lower-case name, left out when the cart has none) |

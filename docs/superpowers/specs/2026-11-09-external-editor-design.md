@@ -1,6 +1,6 @@
 # External editor and changed files — design
 
-Status: approved 2026-11-09, with the maintainer's decisions on markers (EE10) and
+Status: implemented (approved 2026-11-09), with the maintainer's decisions on markers (EE10) and
 sandboxed packages (§6) included. Extends the track library spec
 (`2026-11-01-track-library-design.md`: the row menus §7.4 and §10, watched
 folders §6) and the analysis rules of the main design spec (§6).
@@ -100,7 +100,8 @@ Anti-goals (a failure even if it works):
   - the track is **sounding** (EE5).
 - **EE5. Sounding.** A track is sounding when it is the current entry of
   a player (playing or paused), the CUE entry of a player, on a playing
-  cart, or in the library pre-listen while that plays. This is the same
+  cart, or in the library pre-listen while it plays or is paused (a stopped
+  preview bar holds no source and does not count). This is the same
   rule as the tag editor's block (`fp_model::tag_edit_block`: `OnAir`,
   `Cued`, `OnCart`) plus the library pre-listen. It is a pure function in
   `fp-model`, so the menu and the change detection (EE9) agree. The
@@ -147,7 +148,8 @@ Anti-goals (a failure even if it works):
   these.
 - **EE8. The audio fingerprint.** While the analysis decodes the file it
   computes a hash of the decoded samples (a fast non-cryptographic hash
-  such as xxHash or FNV over the PCM as decoded, all channels). Tags and
+  such as xxHash or FNV over the PCM as decoded; FNV-1a 64 over the downmixed
+  stereo stream the analysis decodes, not the file's own channels). Tags and
   the cover are not part of it, so a tag-only edit leaves it the same.
   It is stored with the analysis version that computed it. Two
   fingerprints are compared only when both come from the same analysis
@@ -262,7 +264,15 @@ start other programs.
 - Technical docs (`docs/technical/`): the change detection and the
   fingerprint.
 - UI strings in en-US and es-ES with the change; the other locales in
-  bulk.
+  bulk. Keys shipped: `menu-open-in-editor` (and `-no-editor`, `-unavailable`,
+  `-sounding`), `menu-mark-reviewed`, `track-markers-review-tip` and
+  `track-markers-review-tip-dropped`, the five `marker-name-*` keys
+  (`cue-in`, `intro`, `outro`, `mix`, `cue-out`), `library-tree-markers-review`,
+  `settings-external-editor`, `settings-external-editor-none`,
+  `settings-hint-external-editor`, `settings-choose`, `settings-clear`,
+  `settings-look-for-changes`, `settings-hint-look-for-changes`,
+  `notice-changed-files`, `notice-editor-failed`; the analysis activity has a
+  `looking` state.
 - README feature list: one line.
 
 ## 8. Testing

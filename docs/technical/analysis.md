@@ -239,6 +239,17 @@ rewrites an existing entry with a new tail, with the same atomic replace
 (`Ok(false)` when there is no entry). Keep the tail last if
 `CachedAnalysis` ever changes.
 
+### Audio fingerprint and analysis version 11
+
+`TrackAnalysis::audio_hash` is an FNV-1a 64 hash over the decoded samples of
+the downmixed stereo stream the analysis decodes, so tags and covers do not
+change it. `ANALYSIS_VERSION` 11 added it. Tracks analysed at 10 stay current
+(`analysis_is_current`): no library-wide re-analysis follows the update, and
+such a track gets its fingerprint at its next analysis. The model stores it
+with the version that computed it (`AudioHash`); `fp_model::audio_change`
+compares two only when both come from the same version, so a decoder upgrade
+or the first pass after updating never raises a flag.
+
 ## Pool (`analyzer.rs`)
 
 `Analyzer::spawn(threads, settings, limits, cache)` starts the workers.
@@ -297,6 +308,37 @@ live jobs plus a small slack; the live ones are queued again in order.
 
 Dropping the analyzer does not wait for queued jobs. A panicking job is
 reported as `Unreadable`.
+
+## Changed files (external editor spec)
+
+A track stores the `FileStamp` (size and mtime) its analysis read. The
+`fp-app::changes` thread (`ChangeCheck`) stats a batch of tracks off the
+services and UI threads and answers which changed and which had no stamp yet
+(they get the current stamp, taken as unchanged). There is no periodic
+polling. Batches are sent at start, for events of watched folders on known
+tracks (`watch`), for the non-recursive watch of the folder of each file
+opened in the editor (kept until the end of the run), at the point of use
+(`ServiceRequest::CheckTrack`: loading into a player, cart or pre-listen,
+opening the marker menu or dragging a marker), and for *Look for changed
+files* (`AnalysisActivity.looking`). An event-driven removal becomes Missing
+after a second look.
+
+A changed track goes through `reanalyse_track` once `!track_sounding`; until
+then it waits (`changed_waiting`), and a result that arrives while it sounds is
+held and applied when it stops. `fp_model::track_sounding` is the one rule for
+this and for the menu (`external_edit_block`): a player's current, pending or
+CUE entry, the outgoing track of a fade, a playing or CUE cart, and the
+library pre-listen only while it plays or is paused. *Re-analyse all* is
+explicit and may analyse a sounding track. When the analysis is applied,
+`audio_change` decides: a different fingerprint on a track with manual markers
+sets `markers_review` (manual markers past the new end are dropped, and the
+flag lists them); a marker change or `Command::MarkReviewed` clears it.
+
+The editor is launched through `Platform::launch_editor` (a helper thread; on
+macOS a `.app` goes through `open -a`); `can_launch_programs` is false on
+Android and in Flatpak/snap builds (`FLATPAK_ID`, `SNAP`), which hide the
+setting and the menu entry. `library.external_editor` is an optional absolute
+path in `Config`.
 
 ## How the app uses it (`fp-app/src/services.rs`)
 

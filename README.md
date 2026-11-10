@@ -103,6 +103,10 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
 - **Automatic markers:** background analysis finds cue-in, cue-out, the MIX
   point and the outro. It also reads tags and cover art, and draws the
   waveform. Markers set by hand are never overwritten.
+- **External editor and changed files:** open a track in your audio editor
+  from its menu; a file changed by any program is noticed and analysed again
+  (never while it sounds), and a track whose audio changed under markers set
+  by hand is flagged for review.
 - **CUE pre-listen** on a separate device or channel pair (or, with one
   sound card, on the on-air output, asking first while something plays), with a
   window per CUE to seek, zoom, edit markers, pause, stop and load the track as next.
