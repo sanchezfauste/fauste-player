@@ -72,6 +72,7 @@ impl UniqueQueue {
         Some(id)
     }
 
+    #[cfg(any(test, feature = "test-hooks"))]
     fn len(&self) -> usize {
         self.order.len()
     }
@@ -819,6 +820,13 @@ impl Services {
     #[cfg(feature = "test-hooks")]
     pub fn urgent_marks(&self) -> usize {
         self.urgent.len()
+    }
+
+    /// How many tracks wait, their file still changing at their retry,
+    /// for a trigger (EE10).
+    #[cfg(feature = "test-hooks")]
+    pub fn unsettled_tracks(&self) -> usize {
+        self.unsettled.len()
     }
 
     /// How many change checks wait or run (EE7).

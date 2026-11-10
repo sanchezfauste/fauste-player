@@ -95,7 +95,9 @@ fn the_desktop_reports_a_program_that_cannot_start() {
 fn the_desktop_reports_a_started_program() {
     let (tx, rx) = std::sync::mpsc::channel();
     fp_app::platform::DesktopPlatform.launch_editor(
-        Path::new("/bin/true"),
+        // On every Unix system (it fails on the missing file later: only
+        // the start is reported).
+        Path::new("/bin/sh"),
         Path::new("/music/a.flac"),
         Box::new(move |r| tx.send(r).unwrap()),
     );

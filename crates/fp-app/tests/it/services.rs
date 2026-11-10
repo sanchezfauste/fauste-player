@@ -2700,7 +2700,8 @@ fn a_file_that_keeps_changing_waits_for_the_next_trigger() {
     );
     seed_all(&r);
     let old = track_of(&r, &files[0]).file_stamp;
-    r.run_until("the retry", |r| r.analyses.load(Ordering::SeqCst) == 2);
+    // The retry's answer is in: the file may settle from now on.
+    r.run_until("the retry answered", |r| r.services.unsettled_tracks() == 1);
     idle_for(&mut r, 10_000);
     assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "no third analysis");
     assert_eq!(track_of(&r, &files[0]).file_stamp, old, "nothing applied");
@@ -2809,7 +2810,8 @@ fn a_new_track_still_changing_at_its_retry_is_analysed_at_the_next_check() {
         |state| state.config.library.watch_debounce_ms = 1_000,
         keep_touching(moving.clone()),
     );
-    r.run_until("the retry", |r| r.analyses.load(Ordering::SeqCst) == 2);
+    // The retry's answer is in: the file may settle from now on.
+    r.run_until("the retry answered", |r| r.services.unsettled_tracks() == 1);
     idle_for(&mut r, 10_000);
     assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "no third analysis");
     assert!(!track_of(&r, &files[0]).analyzed);
@@ -2839,7 +2841,8 @@ fn a_look_takes_up_a_new_track_that_was_still_changing() {
         |state| state.config.library.watch_debounce_ms = 1_000,
         keep_touching(moving.clone()),
     );
-    r.run_until("the retry", |r| r.analyses.load(Ordering::SeqCst) == 2);
+    // The retry's answer is in: the file may settle from now on.
+    r.run_until("the retry answered", |r| r.services.unsettled_tracks() == 1);
     idle_for(&mut r, 3_000);
     moving.store(false, Ordering::SeqCst);
     r.services
@@ -2872,7 +2875,7 @@ fn a_shown_track_that_keeps_changing_is_not_read_in_a_loop() {
         keep_touching(moving.clone()),
     );
     let id = track_of(&r, &files[0]).id;
-    r.run_until("two reads", |r| r.analyses.load(Ordering::SeqCst) >= 2);
+    r.run_until("two reads answered", |r| r.services.unsettled_tracks() == 1);
     idle_for(&mut r, 10_000);
     assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "read in a loop");
     assert!(!r.media.contains(id));
@@ -2931,7 +2934,7 @@ fn loading_a_new_unsettled_track_analyses_it() {
         |state| state.config.library.watch_debounce_ms = 1_000,
         keep_touching_only(moving.clone(), Some(b.clone())),
     );
-    r.run_until("the retry", |r| reads_of(r, &b) == 2);
+    r.run_until("the retry answered", |r| r.services.unsettled_tracks() == 1);
     idle_for(&mut r, 3_000);
     assert_eq!(reads_of(&r, &b), 2);
     assert!(!track_of(&r, &b).analyzed);
@@ -2965,7 +2968,7 @@ fn an_analysed_unsettled_track_coming_into_use_is_analysed() {
         .requests()
         .send(ServiceRequest::ReanalyseTrack(id))
         .unwrap();
-    r.run_until("the retry", |r| reads_of(r, &b) == 2);
+    r.run_until("the retry answered", |r| r.services.unsettled_tracks() == 1);
     idle_for(&mut r, 3_000);
     assert_eq!(reads_of(&r, &b), 2);
     moving.store(false, Ordering::SeqCst);
