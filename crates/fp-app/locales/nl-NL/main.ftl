@@ -364,6 +364,7 @@ marker-name-mix = MIX-punt
 marker-name-cue-out = cue-out
 library-tree-markers-review = Te controleren markers
 settings-external-editor = Externe editor
+settings-external-editor-none = Geen
 settings-hint-external-editor = Het programma dat Openen in externe editor start met het bestand van het nummer.
 settings-choose = Kiezen…
 settings-clear = Wissen

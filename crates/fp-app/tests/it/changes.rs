@@ -7,6 +7,7 @@
 //! The change-check thread and its comparison rule (EE7).
 
 use std::io;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use fp_app::changes::{ChangeCheck, Check, compare};
@@ -94,4 +95,20 @@ fn the_thread_reports_a_rewritten_file() {
     assert_eq!(answers.len(), 1);
     assert_eq!(answers[0].changed, vec![a]);
     assert_eq!(answers[0].unstamped, vec![(c, stamp_of(&fresh))]);
+}
+
+/// A thread that ended without answering (it panicked) is noticed: the
+/// check is no longer busy and says it is gone, so nothing waits on it.
+#[test]
+fn a_thread_that_died_is_noticed() {
+    let mut ids = IdGen::default();
+    let mut check = ChangeCheck::spawn_dying().unwrap();
+    assert!(check.send(vec![(ids.track(), PathBuf::from("/nowhere.wav"), None)]));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !check.gone() {
+        assert!(check.answers().is_empty());
+        assert!(Instant::now() < deadline, "the death is noticed");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    assert!(!check.busy());
 }

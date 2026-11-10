@@ -364,6 +364,7 @@ marker-name-mix = MIX puntua
 marker-name-cue-out = cue-out
 library-tree-markers-review = Berrikusteko markatzaileak
 settings-external-editor = Kanpoko editorea
+settings-external-editor-none = Bat ere ez
 settings-hint-external-editor = Ireki kanpoko editorean aukerak pistaren fitxategiarekin abiarazten duen programa.
 settings-choose = Aukeratu…
 settings-clear = Kendu

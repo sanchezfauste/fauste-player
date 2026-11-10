@@ -364,6 +364,7 @@ marker-name-mix = punt MIX
 marker-name-cue-out = cue-out
 library-tree-markers-review = Marcadors per revisar
 settings-external-editor = Editor extern
+settings-external-editor-none = Cap
 settings-hint-external-editor = El programa que Obrir a l'editor extern inicia amb el fitxer de la pista.
 settings-choose = Triar…
 settings-clear = Treure

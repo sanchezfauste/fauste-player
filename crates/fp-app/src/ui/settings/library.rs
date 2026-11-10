@@ -49,23 +49,20 @@ pub(super) fn section(
 fn external_editor(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let current = scene.state.config.library.external_editor.clone();
-    let shown = current
-        .as_ref()
-        .map(|p| p.display().to_string())
-        .unwrap_or_default();
+    // No editor set: a dimmed placeholder rather than an empty space.
+    let (shown, colour) = match &current {
+        Some(p) => (p.display().to_string(), theme::NEUTRAL_300),
+        None => (t.tr("settings-external-editor-none"), theme::NEUTRAL_500),
+    };
     row(
         ui,
         &t.tr("settings-external-editor"),
         Some(&t.tr("settings-hint-external-editor")),
         |ui| {
             ui.add(
-                egui::Label::new(
-                    RichText::new(shown)
-                        .font(font(12.0))
-                        .color(theme::NEUTRAL_300),
-                )
-                .selectable(false)
-                .truncate(),
+                egui::Label::new(RichText::new(shown).font(font(12.0)).color(colour))
+                    .selectable(false)
+                    .truncate(),
             );
             let choose = t.tr("settings-choose");
             if widgets::text_button(

@@ -466,6 +466,12 @@ fn the_settings_row_is_hidden_when_programs_cannot_be_launched() {
     h.get_by_role_and_label(Role::Button, "Clear").click();
     h.run_steps(2);
     assert_eq!(fake.state.load().config.library.external_editor, None);
+    h.run_steps(2);
+    assert!(h.query_by_label(EDITOR).is_none());
+    assert!(
+        h.query_by_label("None").is_some(),
+        "a placeholder, not blank"
+    );
 }
 
 /// EE1: Choose… asks the platform for a file off the interface thread.

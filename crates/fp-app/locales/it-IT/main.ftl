@@ -364,6 +364,7 @@ marker-name-mix = punto MIX
 marker-name-cue-out = cue-out
 library-tree-markers-review = Marker da verificare
 settings-external-editor = Editor esterno
+settings-external-editor-none = Nessuno
 settings-hint-external-editor = Il programma che Apri nell'editor esterno avvia con il file del brano.
 settings-choose = Scegli…
 settings-clear = Rimuovi

@@ -48,11 +48,24 @@ pub struct ChangeCheck {
     jobs: Sender<Vec<Item>>,
     answers: Receiver<ChangeAnswer>,
     busy: bool,
+    /// The thread ended (it can only end on its own by panicking).
+    gone: bool,
 }
 
 impl ChangeCheck {
     /// Starts the thread; `None` (logged) when it cannot start.
     pub fn spawn() -> Option<Self> {
+        Self::spawn_with(false)
+    }
+
+    /// A check whose thread takes one batch and ends without answering, as
+    /// one that panicked (tests).
+    #[cfg(feature = "test-hooks")]
+    pub fn spawn_dying() -> Option<Self> {
+        Self::spawn_with(true)
+    }
+
+    fn spawn_with(dies: bool) -> Option<Self> {
         let (jobs, job_rx) = crossbeam_channel::unbounded::<Vec<Item>>();
         let (answer_tx, answers) = crossbeam_channel::unbounded::<ChangeAnswer>();
         let spawned = std::thread::Builder::new()
@@ -60,6 +73,9 @@ impl ChangeCheck {
             .spawn(move || {
                 // Ends when the owner drops its side.
                 while let Ok(batch) = job_rx.recv() {
+                    if dies {
+                        break;
+                    }
                     if answer_tx.send(run(batch)).is_err() {
                         break;
                     }
@@ -70,6 +86,7 @@ impl ChangeCheck {
                 jobs,
                 answers,
                 busy: false,
+                gone: false,
             }),
             Err(e) => {
                 tracing::error!(error = %e, "cannot start the change check; changed files go unnoticed");
@@ -88,13 +105,30 @@ impl ChangeCheck {
         true
     }
 
-    /// The answers that arrived, without blocking.
+    /// The answers that arrived, without blocking. A thread found gone
+    /// (its side of the channel closed) clears `busy` and sets `gone`.
     pub fn answers(&mut self) -> Vec<ChangeAnswer> {
-        let answers: Vec<ChangeAnswer> = self.answers.try_iter().collect();
+        let mut answers = Vec::new();
+        loop {
+            match self.answers.try_recv() {
+                Ok(answer) => answers.push(answer),
+                Err(crossbeam_channel::TryRecvError::Empty) => break,
+                Err(crossbeam_channel::TryRecvError::Disconnected) => {
+                    self.gone = true;
+                    self.busy = false;
+                    break;
+                }
+            }
+        }
         if !answers.is_empty() {
             self.busy = false;
         }
         answers
+    }
+
+    /// The thread has ended: no batch will be answered any more.
+    pub fn gone(&self) -> bool {
+        self.gone
     }
 
     /// A batch was sent and its answer has not been taken.

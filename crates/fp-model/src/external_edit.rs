@@ -2,7 +2,7 @@
 //! operator's external editor right now.
 
 use crate::ids::TrackId;
-use crate::sounding::track_sounding_now;
+use crate::sounding::track_sounding;
 use crate::state::AppState;
 
 /// Why "Open in external editor" is disabled for a track.
@@ -29,7 +29,7 @@ pub fn external_edit_block(state: &AppState, track: TrackId) -> Option<ExternalE
     {
         return Some(ExternalEditBlock::FileUnavailable);
     }
-    if track_sounding_now(state, track) {
+    if track_sounding(state, track) {
         return Some(ExternalEditBlock::Sounding);
     }
     None

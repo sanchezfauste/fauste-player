@@ -1080,6 +1080,10 @@ impl Services {
             return;
         };
         let answers = check.answers();
+        if check.gone() {
+            self.change_check_stopped();
+            return;
+        }
         if answers.is_empty() {
             return;
         }
@@ -1239,12 +1243,25 @@ impl Services {
         if check.send(batch) {
             self.change_sent = ids;
         } else {
-            tracing::error!("the change check stopped; changed files go unnoticed");
-            self.change_check = None;
-            self.change_urgent.clear();
-            self.change_bulk.clear();
-            self.look_pass = None;
+            self.change_check_stopped();
         }
+    }
+
+    /// The change-check thread is gone: nothing more is looked at, and a
+    /// running look ends without a count (so `looking` does not stick).
+    fn change_check_stopped(&mut self) {
+        tracing::error!("the change check stopped; changed files go unnoticed");
+        self.change_check = None;
+        self.change_urgent.clear();
+        self.change_bulk.clear();
+        self.change_sent.clear();
+        self.look_pass = None;
+    }
+
+    /// Replaces the change-check thread (tests).
+    #[cfg(feature = "test-hooks")]
+    pub fn set_change_check(&mut self, check: ChangeCheck) {
+        self.change_check = Some(check);
     }
 
     /// The inputs of the library walks now (see `WalkInputs`).

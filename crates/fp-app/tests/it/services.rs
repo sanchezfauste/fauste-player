@@ -2372,19 +2372,20 @@ fn loading_a_changed_track_on_a_player_analyses_it_again() {
     assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
 }
 
-/// EE9: a changed track that sounds (here the library pre-listen's) is not
-/// analysed until it stops sounding.
+/// EE9: a changed track that sounds (here the library pre-listen's,
+/// paused) is not analysed until it stops sounding.
 #[test]
 fn a_changed_track_that_sounds_waits_until_it_stops() {
     let dir = tempfile::tempdir().unwrap();
     let files = [wav(dir.path(), "a.wav", 1)];
     let mut r = stamped_rig(&files, dir, &[0], |state| {
         state.library_cue.track = state.library.ids().into_iter().next();
+        state.library_cue.transport = Transport::Paused;
     });
     checks_done(&mut r);
     idle_for(&mut r, 300);
     assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "it sounds");
-    assert!(r.handle.send(Command::SelectLibraryCue(None)));
+    assert!(r.handle.send(Command::StopLibraryCue));
     let real = stamp_of(&files[0]);
     r.run_until("analysed once it stopped", |r| {
         track_of(r, &files[0]).file_stamp == Some(real)
@@ -2399,21 +2400,31 @@ fn a_changed_track_that_sounds_waits_until_it_stops() {
 fn a_result_for_a_track_that_started_sounding_waits() {
     let dir = tempfile::tempdir().unwrap();
     let files = [wav(dir.path(), "a.wav", 1)];
-    let mut r = stamped_rig(&files, dir, &[0], |_| {});
+    let mut r = stamped_rig(&files, dir, &[0], |state| {
+        state.config.outputs.library.cue = None;
+        state.config.outputs.library.default_output = true;
+    });
     let old = track_of(&r, &files[0]).file_stamp;
     let id = track_of(&r, &files[0]).id;
     r.gate.store(false, Ordering::SeqCst);
     r.run_until("the analysis started", |r| {
         r.analyses.load(Ordering::SeqCst) == 1
     });
+    // The pre-listen starts on it and is held (paused): it sounds.
     assert!(r.handle.send(Command::SelectLibraryCue(Some(id))));
+    assert!(r.handle.send(Command::PlayLibraryCue));
+    assert!(r.handle.send(Command::SetLibraryCuePaused(true)));
     r.conductor.tick(r.now);
     assert_eq!(r.handle.model.load().library_cue.track, Some(id));
+    assert_eq!(
+        r.handle.model.load().library_cue.transport,
+        Transport::Paused
+    );
     r.gate.store(true, Ordering::SeqCst);
     r.run_until("the result held", |r| r.services.held_results() == 1);
     idle_for(&mut r, 200);
     assert_eq!(track_of(&r, &files[0]).file_stamp, old, "not applied");
-    assert!(r.handle.send(Command::SelectLibraryCue(None)));
+    assert!(r.handle.send(Command::StopLibraryCue));
     let real = stamp_of(&files[0]);
     r.run_until("applied once it stopped", |r| {
         track_of(r, &files[0]).file_stamp == Some(real)
@@ -2516,6 +2527,29 @@ fn a_waveform_read_of_a_changed_track_that_sounds_waits() {
     assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
 }
 
+/// EE5, EE9: a track only selected in the library (the pre-listen bar
+/// stopped on it, as a right-click leaves it before Open in external
+/// editor) does not sound: its change is analysed at once.
+#[test]
+fn a_changed_track_selected_in_the_stopped_library_bar_is_analysed_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[0], |state| {
+        state.library_cue.track = state.library.ids().into_iter().next();
+        state.library_cue.transport = Transport::Stopped;
+    });
+    let real = stamp_of(&files[0]);
+    r.run_until("analysed while the bar holds it stopped", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    assert_eq!(
+        r.handle.model.load().library_cue.track,
+        Some(track_of(&r, &files[0]).id)
+    );
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+}
+
 /// EE7.5: a changed track already waiting for its analysis (it sounds)
 /// counts in the pass.
 #[test]
@@ -2525,6 +2559,7 @@ fn look_for_changed_files_counts_a_change_that_waits() {
     let changed = files[0].clone();
     let mut r = stamped_rig(&files, dir, &[0], move |state| {
         state.library_cue.track = state.library.track_at(&changed);
+        state.library_cue.transport = Transport::Paused;
     });
     checks_done(&mut r);
     r.services
@@ -2561,4 +2596,26 @@ fn the_activity_says_while_a_look_runs() {
         r.services.activity().load().changed_found.is_some()
     });
     assert!(!r.services.activity().load().looking);
+}
+
+/// EE7.5: a change-check thread that dies during a look ends the pass: the
+/// activity stops saying a look runs, so the button works again.
+#[test]
+fn a_look_ends_when_the_change_check_dies() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    r.services
+        .set_change_check(fp_app::changes::ChangeCheck::spawn_dying().unwrap());
+    r.services
+        .requests()
+        .send(ServiceRequest::LookForChangedFiles)
+        .unwrap();
+    r.services.step(r.now);
+    assert!(r.services.activity().load().looking);
+    r.run_until("the pass ended", |r| !r.services.activity().load().looking);
+    assert_eq!(r.services.change_checks_pending(), 0);
 }

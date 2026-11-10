@@ -1,4 +1,4 @@
-//! External editor spec EE12: whether a track is audible right now, so the
+//! External editor spec EE5: whether a track is audible right now, so the
 //! app can refuse to replace or hand over a file that is on the air or
 //! being pre-listened.
 
@@ -8,15 +8,11 @@ use crate::state::AppState;
 /// True when `track` is a player's current entry (any transport), its
 /// pending start or its CUE entry; the last history entry of a player that
 /// is fading; a playing cart or the cartwall CUE cart; or the library CUE
-/// track (any transport).
+/// track while it plays or is paused (holding its audio). A library bar
+/// stopped on a track (a row only selected) holds no source and does not
+/// count. One rule for "Open in external editor" and the change detection
+/// (external editor spec EE5).
 pub fn track_sounding(state: &AppState, track: TrackId) -> bool {
-    on_players_or_carts(state, track) || state.library_cue.track == Some(track)
-}
-
-/// As [`track_sounding`], but the library CUE counts only while it plays or
-/// holds its audio paused: a track merely selected in the library (the bar
-/// stopped on it) does not (EE5, for "Open in external editor").
-pub fn track_sounding_now(state: &AppState, track: TrackId) -> bool {
     on_players_or_carts(state, track)
         || (state.library_cue.track == Some(track)
             && state.library_cue.transport != crate::player::Transport::Stopped)

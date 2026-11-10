@@ -104,12 +104,16 @@ fn the_cart_in_cartwall_cue_sounds() {
 }
 
 #[test]
-fn the_library_cue_track_sounds_in_any_transport() {
-    for t in [Transport::Stopped, Transport::Playing, Transport::Paused] {
+fn the_library_cue_track_sounds_while_it_plays_or_is_paused() {
+    for (t, sounds) in [
+        (Transport::Stopped, false),
+        (Transport::Playing, true),
+        (Transport::Paused, true),
+    ] {
         let (mut s, _, a, b) = two();
         s.library_cue.track = Some(a);
         s.library_cue.transport = t;
-        assert!(track_sounding(&s, a));
+        assert_eq!(track_sounding(&s, a), sounds, "{t:?}");
         assert!(!track_sounding(&s, b));
     }
 }

@@ -364,6 +364,7 @@ marker-name-mix = punto MIX
 marker-name-cue-out = cue-out
 library-tree-markers-review = Marcadores por revisar
 settings-external-editor = Editor externo
+settings-external-editor-none = Ningún
 settings-hint-external-editor = O programa que Abrir no editor externo inicia co ficheiro da pista.
 settings-choose = Escoller…
 settings-clear = Quitar
