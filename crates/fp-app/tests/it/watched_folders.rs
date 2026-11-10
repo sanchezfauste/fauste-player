@@ -1255,6 +1255,60 @@ fn an_edited_file_outside_watched_folders_is_followed_flat() {
     replace_longer(&a);
     push_and_step(&mut r, &fake, &a);
     r.run_until("analysed again", |r| lasts_two_seconds(r, &a));
+    // M10: a folder followed alone is not a watched folder: a new file
+    // there joins nothing.
+    let b = wav(&loose, "b.wav", 1);
+    push_and_step(&mut r, &fake, &b);
+    quiet_for(&mut r, 500);
+    assert_eq!(
+        tracks(&r),
+        1,
+        "a new file in a followed folder was imported"
+    );
+}
+
+/// M9: a track found gone after an event, then found again by a walk (not
+/// an event), is no longer in doubt.
+#[test]
+fn a_doubt_ends_when_a_walk_finds_the_file_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    let a = wav(&ids_folder, "a.wav", 1);
+    let (mut r, fake) = watching(dir, |s| {
+        create(s, "IDs", TrackKind::Jingle, Some(&ids_folder));
+        set_debounce(s, 5_000);
+    });
+    settled(&mut r, &fake, 1);
+    std::fs::remove_file(&a).unwrap();
+    push_and_step(&mut r, &fake, &a);
+    r.run_until("the first look", |r| r.services.folder_doubts() == 1);
+    // The second look is due one debounce later; a walk comes first.
+    let second_look = r.now + Duration::from_millis(5_000);
+    replace_longer(&a);
+    fake.push(FolderEvent::Rescan);
+    r.run_until("the doubt cleared", |r| r.services.folder_doubts() == 0);
+    assert!(r.now < second_look, "cleared only by the second look");
+}
+
+/// M9: a doubt about a track that left the library is dropped.
+#[test]
+fn a_doubt_about_a_removed_track_is_dropped() {
+    let dir = tempfile::tempdir().unwrap();
+    let ids_folder = folder(&dir, "ids");
+    let a = wav(&ids_folder, "a.wav", 1);
+    let (mut r, fake) = watching(dir, |s| {
+        create(s, "IDs", TrackKind::Jingle, Some(&ids_folder));
+        set_debounce(s, 5_000);
+    });
+    settled(&mut r, &fake, 1);
+    let id = track_of(&r, &a).unwrap().id;
+    std::fs::remove_file(&a).unwrap();
+    push_and_step(&mut r, &fake, &a);
+    r.run_until("the first look", |r| r.services.folder_doubts() == 1);
+    let second_look = r.now + Duration::from_millis(5_000);
+    assert!(r.handle.send(Command::RemoveTracks(vec![id])));
+    r.run_until("the doubt dropped", |r| r.services.folder_doubts() == 0);
+    assert!(r.now < second_look, "dropped only by the second look");
 }
 
 /// EE7.3: a file in a watched folder (here a subfolder of one) needs no

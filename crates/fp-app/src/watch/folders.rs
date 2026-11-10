@@ -237,6 +237,7 @@ impl FolderWatch {
             ..WatchOutcome::default()
         };
         self.follow_categories(state);
+        self.prune_doubts(state);
         self.take_watch_results();
         self.retry(state, now);
         self.take_events(now);
@@ -251,6 +252,20 @@ impl FolderWatch {
         self.send_scan(state, now);
         self.publish();
         out
+    }
+
+    /// M9: a doubt about a track that left the library, or that is
+    /// missing already, has nothing left to decide.
+    fn prune_doubts(&mut self, state: &AppState) {
+        if self.doubtful.is_empty() {
+            return;
+        }
+        self.doubtful.retain(|id, _| {
+            state
+                .library
+                .get(*id)
+                .is_some_and(|t| t.file_state != FileState::Missing)
+        });
     }
 
     /// The watch thread is gone: every folder shows as not followed, and
@@ -530,17 +545,21 @@ impl FolderWatch {
             event,
         } in found
         {
-            // A known track an event touched: its file may have changed
-            // (EE7.2), in a watched folder or one followed alone.
-            if event
-                && let Some(id) = state.library.track_at(&canonical)
-                && state
-                    .library
-                    .get(id)
-                    .is_some_and(|t| t.file_state != FileState::Missing)
-            {
+            if let Some(id) = state.library.track_at(&canonical) {
+                // Its file is there: no longer in doubt, however it was
+                // found (M9).
                 self.doubtful.remove(&id);
-                out.touched.push(id);
+                // A known track an event touched: its file may have
+                // changed (EE7.2), in a watched folder or one followed
+                // alone.
+                if event
+                    && state
+                        .library
+                        .get(id)
+                        .is_some_and(|t| t.file_state != FileState::Missing)
+                {
+                    out.touched.push(id);
+                }
             }
             // A category deleted or cleared meanwhile watches nothing.
             let Some(category) = watching_category(&state.categories, &seen) else {
