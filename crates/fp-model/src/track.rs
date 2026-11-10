@@ -639,15 +639,21 @@ impl TrackAnalysis {
 }
 
 impl Track {
-    /// EE10, run after the markers took the analysis: when the audio
-    /// changed under manual markers, drops those past the new end and
-    /// raises (or extends) the review flag. `self.audio_hash` is still the
-    /// previous one.
+    /// EE10, run after the markers took the analysis: drops the manual
+    /// markers past the new end and raises (or extends) the review flag.
+    /// When the audio changed under manual markers the track is flagged
+    /// even if none is dropped. When the change is unknown (no fingerprint
+    /// to compare, or one from another version), markers past a known new
+    /// end are still dropped, and the flag names them: a track never
+    /// reaches air with a marker past its end. The same audio drops
+    /// nothing. `self.audio_hash` is still the previous one.
     fn review_markers(&mut self, analysis: &TrackAnalysis) {
-        if audio_change(self.audio_hash, analysis.audio_hash, analysis.version)
-            != AudioChange::Changed
-        {
-            return;
+        let change = audio_change(self.audio_hash, analysis.audio_hash, analysis.version);
+        let length_known = analysis.duration_secs.is_finite() && analysis.duration_secs > 0.0;
+        match change {
+            AudioChange::Same => return,
+            AudioChange::Unknown if !length_known => return,
+            AudioChange::Changed | AudioChange::Unknown => {}
         }
         let manual = |m: &Markers, kind| {
             m.get(kind)
@@ -668,6 +674,19 @@ impl Track {
                 self.markers.set_auto(kind, analysis.marker(kind));
                 dropped.push(kind);
             }
+        }
+        if dropped
+            .iter()
+            .any(|k| matches!(k, MarkerKind::CueIn | MarkerKind::CueOut))
+        {
+            // As a cue point set by hand: the inner markers stay within
+            // the new cue range.
+            let (cue_in, cue_out) = (self.cue_in_secs(), self.known_cue_out_secs());
+            self.markers
+                .clamp_manual_inner(cue_in, cue_out.unwrap_or(f64::INFINITY));
+        }
+        if change == AudioChange::Unknown && dropped.is_empty() {
+            return;
         }
         let mut all = self
             .markers_review

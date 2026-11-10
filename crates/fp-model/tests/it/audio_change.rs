@@ -204,3 +204,91 @@ fn an_old_track_document_loads_without_the_new_fields() {
     assert_eq!(back.audio_hash, None);
     assert_eq!(back.markers_review, None);
 }
+
+/// M1: a dropped manual cue-out takes the inner manual markers with it into
+/// the new cue range, as setting the cue-out by hand does.
+#[test]
+fn a_dropped_cue_out_clamps_the_manual_inner_markers() {
+    let mut t = track();
+    t.markers.set_manual(MarkerKind::CueOut, Some(230.0));
+    // Inside the new audio, but past its automatic cue-out (199 s).
+    t.markers.set_manual(MarkerKind::SegueStart, Some(199.5));
+    t.markers.set_manual(MarkerKind::OutroStart, Some(199.8));
+    t.apply_analysis(&analysis(Some(8), 200.0));
+    let out = t.markers.get(MarkerKind::CueOut).unwrap();
+    assert_eq!((out.secs, out.source), (199.0, MarkerSource::Auto));
+    for kind in [MarkerKind::SegueStart, MarkerKind::OutroStart] {
+        let m = t.markers.get(kind).unwrap();
+        assert_eq!(
+            (m.secs, m.source),
+            (199.0, MarkerSource::Manual),
+            "{kind:?}"
+        );
+    }
+    assert_eq!(
+        t.markers_review,
+        Some(MarkersReview {
+            dropped: vec![MarkerKind::CueOut]
+        })
+    );
+}
+
+/// M2: without a fingerprint to compare (the first pass after updating),
+/// a manual marker past the new end is still dropped and named in the
+/// flag: a track never reaches air with a marker past its end.
+#[test]
+fn an_unknown_change_still_drops_a_marker_past_the_new_end() {
+    let mut t = track();
+    t.audio_hash = None;
+    t.markers.set_manual(MarkerKind::SegueStart, Some(220.0));
+    t.apply_analysis(&analysis(Some(8), 200.0));
+    let m = t.markers.get(MarkerKind::SegueStart).unwrap();
+    assert_eq!((m.secs, m.source), (190.0, MarkerSource::Auto));
+    assert_eq!(
+        t.markers_review,
+        Some(MarkersReview {
+            dropped: vec![MarkerKind::SegueStart]
+        })
+    );
+}
+
+/// M2: the same with a fingerprint from another analysis version.
+#[test]
+fn another_version_still_drops_a_marker_past_the_new_end() {
+    let mut t = track();
+    t.audio_hash = Some(AudioHash {
+        value: 7,
+        version: VERSION - 1,
+    });
+    t.markers.set_manual(MarkerKind::SegueStart, Some(220.0));
+    t.apply_analysis(&analysis(Some(7), 200.0));
+    assert_eq!(
+        t.markers_review,
+        Some(MarkersReview {
+            dropped: vec![MarkerKind::SegueStart]
+        })
+    );
+}
+
+/// M2: an unknown change with no length found drops nothing.
+#[test]
+fn an_unknown_change_without_a_length_drops_nothing() {
+    let mut t = track();
+    t.audio_hash = None;
+    t.markers.set_manual(MarkerKind::SegueStart, Some(220.0));
+    t.apply_analysis(&analysis(Some(8), 0.0));
+    let m = t.markers.get(MarkerKind::SegueStart).unwrap();
+    assert_eq!((m.secs, m.source), (220.0, MarkerSource::Manual));
+    assert_eq!(t.markers_review, None);
+}
+
+/// M2: the same fingerprint never drops (the length cannot have changed).
+#[test]
+fn the_same_fingerprint_never_drops() {
+    let mut t = track();
+    t.markers.set_manual(MarkerKind::SegueStart, Some(220.0));
+    t.apply_analysis(&analysis(Some(7), 200.0));
+    let m = t.markers.get(MarkerKind::SegueStart).unwrap();
+    assert_eq!((m.secs, m.source), (220.0, MarkerSource::Manual));
+    assert_eq!(t.markers_review, None);
+}
