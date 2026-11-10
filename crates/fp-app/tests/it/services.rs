@@ -2775,3 +2775,110 @@ fn a_look_during_a_library_pass_counts_the_tracks_in_flight_as_checked() {
     assert_eq!(r.services.change_checks_pending(), 0);
     r.gate.store(true, Ordering::SeqCst);
 }
+
+/// A hook that gives the file a new modification time after each analysis
+/// while `moving` holds: a file still being written.
+fn keep_touching(moving: Arc<AtomicBool>) -> AfterAnalysis {
+    let touches = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    Arc::new(move |path| {
+        if moving.load(Ordering::SeqCst) {
+            let n = touches.fetch_add(1, Ordering::SeqCst) + 1;
+            let f = std::fs::OpenOptions::new().append(true).open(path).unwrap();
+            f.set_modified(SystemTime::now() + Duration::from_secs(n))
+                .unwrap();
+        }
+    })
+}
+
+/// EE10 (R1): a new track whose file is caught mid-write twice (a big copy
+/// into a watched folder) waits, and is analysed at its next check.
+#[test]
+fn a_new_track_still_changing_at_its_retry_is_analysed_at_the_next_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let moving = Arc::new(AtomicBool::new(true));
+    let mut r = rig_hooked(
+        &files,
+        dir,
+        Duration::ZERO,
+        |state| state.config.library.watch_debounce_ms = 1_000,
+        keep_touching(moving.clone()),
+    );
+    r.run_until("the retry", |r| r.analyses.load(Ordering::SeqCst) == 2);
+    idle_for(&mut r, 10_000);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "no third analysis");
+    assert!(!track_of(&r, &files[0]).analyzed);
+    moving.store(false, Ordering::SeqCst);
+    let id = track_of(&r, &files[0]).id;
+    r.services
+        .requests()
+        .send(ServiceRequest::CheckTrack(id))
+        .unwrap();
+    r.run_until("analysed at the next check", |r| {
+        track_of(r, &files[0]).analyzed
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
+}
+
+/// EE10 (R1): Look for changed files also takes up a new track that was
+/// still changing at its retry.
+#[test]
+fn a_look_takes_up_a_new_track_that_was_still_changing() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let moving = Arc::new(AtomicBool::new(true));
+    let mut r = rig_hooked(
+        &files,
+        dir,
+        Duration::ZERO,
+        |state| state.config.library.watch_debounce_ms = 1_000,
+        keep_touching(moving.clone()),
+    );
+    r.run_until("the retry", |r| r.analyses.load(Ordering::SeqCst) == 2);
+    idle_for(&mut r, 3_000);
+    moving.store(false, Ordering::SeqCst);
+    r.services
+        .requests()
+        .send(ServiceRequest::LookForChangedFiles)
+        .unwrap();
+    r.run_until("analysed after the look", |r| {
+        track_of(r, &files[0]).analyzed
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
+}
+
+/// EE10 (R2): an analysed track on a player, with no waveform yet, whose
+/// file keeps changing is read twice and then waits for a trigger: the
+/// screen's need for its waveform does not read it again and again.
+#[test]
+fn a_shown_track_that_keeps_changing_is_not_read_in_a_loop() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let moving = Arc::new(AtomicBool::new(true));
+    let mut r = stamped_rig_hooked(
+        &files,
+        dir,
+        &[],
+        |state| {
+            state.config.library.watch_debounce_ms = 1_000;
+            let entry = state.playlists.iter().next().unwrap().entries[0].id;
+            state.players[0].next = Some(entry);
+        },
+        keep_touching(moving.clone()),
+    );
+    let id = track_of(&r, &files[0]).id;
+    r.run_until("two reads", |r| r.analyses.load(Ordering::SeqCst) >= 2);
+    idle_for(&mut r, 10_000);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "read in a loop");
+    assert!(!r.media.contains(id));
+    moving.store(false, Ordering::SeqCst);
+    r.services
+        .requests()
+        .send(ServiceRequest::CheckTrack(id))
+        .unwrap();
+    let real = stamp_of(&files[0]);
+    r.run_until("read at the next check", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real) && r.media.contains(id)
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
+}

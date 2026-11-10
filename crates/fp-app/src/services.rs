@@ -51,9 +51,6 @@ struct LookPass {
     found: usize,
 }
 
-/// The thread that looks for files not found and at unreadable files, off
-/// the services thread: a share that is offline can make each look block
-/// for seconds.
 /// A queue of tracks that holds each one once: pushing a queued track does
 /// nothing (M8: O(1), however long the queue).
 #[derive(Default)]
@@ -85,6 +82,9 @@ impl UniqueQueue {
     }
 }
 
+/// The thread that looks for files not found and at unreadable files, off
+/// the services thread: a share that is offline can make each look block
+/// for seconds.
 struct Probe {
     paths: Sender<Job>,
     answers: Receiver<Answer>,
@@ -612,6 +612,10 @@ pub struct Services {
     /// Tracks whose one retry is used: a file still changing then waits
     /// for the next event, use or look.
     changed_retried: HashSet<TrackId>,
+    /// Tracks whose file was still changing at their retry: neither
+    /// analysed nor read for the screen until a real trigger (an event, a
+    /// check, a look, a Re-analyse) takes them up.
+    unsettled: HashSet<TrackId>,
     /// The time of the current step.
     clock: Instant,
     /// Steps that panicked (shown by the UI as an alert).
@@ -712,6 +716,7 @@ impl Services {
             held: HashMap::new(),
             changed_retry: HashMap::new(),
             changed_retried: HashSet::new(),
+            unsettled: HashSet::new(),
             clock: Instant::now(),
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
@@ -920,7 +925,7 @@ impl Services {
         // EE7.2: a stamp check, as `CheckTrack`; an unchanged file gives
         // nothing.
         for id in outcome.touched {
-            self.change_urgent.push_back(id);
+            self.check_track(state, id);
         }
         for id in outcome.returned {
             if self.in_flight.contains(&id) {
@@ -948,7 +953,7 @@ impl Services {
                 ServiceRequest::ReanalyseAll => self.reanalyse_all(state),
                 ServiceRequest::AnalyseOutdated => self.analyse_outdated = true,
                 ServiceRequest::ReanalyseTrack(id) => self.reanalyse_track(state, id),
-                ServiceRequest::CheckTrack(id) => self.change_urgent.push_back(id),
+                ServiceRequest::CheckTrack(id) => self.check_track(state, id),
                 ServiceRequest::LookForChangedFiles => self.look_for_changed_files(state),
                 ServiceRequest::FollowEditedFile(id) => self.follow_edited_file(state, id),
                 ServiceRequest::RecheckUnreadable => {
@@ -1096,6 +1101,11 @@ impl Services {
             return;
         }
         self.look_passes += 1;
+        // Files still changing at their retry are analysed now.
+        let unsettled: Vec<TrackId> = self.unsettled.iter().copied().collect();
+        for id in unsettled {
+            self.take_up_changed(state, id);
+        }
         let pending: HashSet<TrackId> = state
             .library
             .iter()
@@ -1173,6 +1183,7 @@ impl Services {
             return;
         }
         tracing::info!(?id, "a library file changed; analysing it again");
+        self.unsettled.remove(&id);
         if track_sounding(state, id) {
             self.changed_waiting.insert(id);
         } else {
@@ -1197,6 +1208,7 @@ impl Services {
         self.held.retain(|id, _| known(id));
         self.changed_retry.retain(|id, _| known(id));
         self.changed_retried.retain(known);
+        self.unsettled.retain(known);
         let ready: Vec<TrackId> = self
             .changed_waiting
             .iter()
@@ -1497,6 +1509,7 @@ impl Services {
         self.urgent.clear();
         self.changed_retry.clear();
         self.changed_retried.clear();
+        self.unsettled.clear();
         self.forced = state.library.iter().map(|t| t.id).collect();
         self.library_pass = self.forced.clone();
         self.pass_total = self.library_pass.len();
@@ -1533,6 +1546,7 @@ impl Services {
         // to settle (EE10) is superseded by this analysis.
         self.held.remove(&id);
         self.changed_retry.remove(&id);
+        self.unsettled.remove(&id);
         self.forced.insert(id);
         if fresh {
             self.fresh.insert(id);
@@ -2122,7 +2136,10 @@ impl Services {
         let id = track.id;
         // Its new analysis waits for it to stop sounding (EE9), or for its
         // file to settle (EE10).
-        if self.held.contains_key(&id) || self.changed_retry.contains_key(&id) {
+        if self.held.contains_key(&id)
+            || self.changed_retry.contains_key(&id)
+            || self.unsettled.contains(&id)
+        {
             return;
         }
         if self.in_flight.contains(&id) {
@@ -2195,6 +2212,7 @@ impl Services {
             return;
         }
         self.changed_retried.remove(&result.track);
+        self.unsettled.remove(&result.track);
         let stamp = result.stamp;
         if self.hold_while_sounding(&result, state) {
             // EE9: it waits for the track to stop sounding; a waveform
@@ -2325,16 +2343,11 @@ impl Services {
             self.changed_retry.insert(id, self.clock + quiet);
         } else {
             tracing::info!(path = %result.path.display(), "the file is still changing; it is analysed on its next change");
-            // A track never analysed is not submitted again by itself.
-            if state.library.get(id).is_some_and(|t| !t.analyzed) {
-                self.failed.insert(id);
-            }
+            self.unsettled.insert(id);
         }
     }
 
-    /// EE10: the retries whose time came. An analysed track goes through
-    /// the changed-file path (EE9: not while it sounds); one never analysed
-    /// is analysed.
+    /// EE10: the retries whose time came (see `take_up_changed`).
     fn retry_changed(&mut self, state: &AppState, now: Instant) {
         if self.changed_retry.is_empty() {
             return;
@@ -2347,14 +2360,33 @@ impl Services {
             .collect();
         for id in due {
             self.changed_retry.remove(&id);
-            match state.library.get(id) {
-                Some(t) if t.analyzed => self.on_changed(state, id),
-                Some(_) => {
-                    self.reanalyse(state, id, false);
-                    self.walk_again = true;
-                }
-                None => {}
+            self.take_up_changed(state, id);
+        }
+    }
+
+    /// Analyses a track whose file changed: an analysed one goes through
+    /// the changed-file path (EE9: not while it sounds); one never
+    /// analysed is analysed.
+    fn take_up_changed(&mut self, state: &AppState, id: TrackId) {
+        self.unsettled.remove(&id);
+        match state.library.get(id) {
+            Some(t) if t.analyzed => self.on_changed(state, id),
+            Some(_) => {
+                self.reanalyse(state, id, false);
+                self.walk_again = true;
             }
+            None => {}
+        }
+    }
+
+    /// An event on a known track or `CheckTrack`: a stamp check, or, for a
+    /// track whose file was still changing at its retry (whose stored stamp
+    /// may be none at all), an analysis at once.
+    fn check_track(&mut self, state: &AppState, id: TrackId) {
+        if self.unsettled.contains(&id) {
+            self.take_up_changed(state, id);
+        } else {
+            self.change_urgent.push_back(id);
         }
     }
 

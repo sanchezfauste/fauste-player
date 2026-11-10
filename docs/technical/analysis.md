@@ -332,8 +332,11 @@ The pool stats the file again after each analysis (`analysis_job`): a stamp
 that moved, or a file that is gone, turns the result into
 `AnalysisError::Changed` (the file may have been read half-written), and
 nothing is cached or applied. The services re-queue that track once after
-`library.watch_debounce_ms` (`changed_retry`); a second `Changed` leaves it
-for the next event, use or look.
+`library.watch_debounce_ms` (`changed_retry`); a second `Changed` puts it in
+`unsettled`: neither analysed nor read for the screen until a real trigger (a
+watch event or `CheckTrack` for it, which analyse it at once even if it was
+never analysed, *Look for changed files*, a change found by a check,
+Re-analyse or Re-analyse all) takes it up.
 
 A changed track goes through `reanalyse_track` once `!track_sounding`; until
 then it waits (`changed_waiting`), and a result that arrives while it sounds is
