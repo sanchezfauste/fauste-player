@@ -55,6 +55,39 @@ pub enum FileOutcome {
         result: Result<ImportedPlaylist, FileError>,
     },
     Exported(Result<PathBuf, FileError>),
+    /// The external editor could not be started (EE3).
+    EditorFailed {
+        program: PathBuf,
+        error: String,
+    },
+}
+
+/// Opens `file` in the external editor `program` through the platform,
+/// which starts it on its own thread. Only a failure comes back, as a
+/// [`FileOutcome::EditorFailed`].
+pub fn open_in_editor(
+    ctx: &egui::Context,
+    platform: &Arc<dyn Platform>,
+    program: PathBuf,
+    file: &Path,
+    tx: Sender<FileOutcome>,
+) {
+    let ctx = ctx.clone();
+    let shown = program.clone();
+    platform.launch_editor(
+        &program,
+        file,
+        Box::new(move |result| {
+            if let Err(error) = result {
+                tracing::warn!(%error, program = %shown.display(), "could not open the external editor");
+                let _ = tx.send(FileOutcome::EditorFailed {
+                    program: shown,
+                    error,
+                });
+                ctx.request_repaint();
+            }
+        }),
+    );
 }
 
 /// Why a playlist or cart page file could not be read or written, told in

@@ -349,6 +349,7 @@ playlist-streams-skipped = { $streams ->
 playlist-import-failed = No s'ha pogut importar «{ $name }»: { $error }
 playlist-exported = Llista desada a { $path }.
 playlist-export-failed = No s'ha pogut desar la llista: { $error }
+notice-editor-failed = No s'ha pogut obrir l'editor extern { $program }: { $error }
 file-error-too-large = el fitxer ocupa més de { $limit } bytes
 file-error-not-found = el fitxer no existeix
 file-error-denied = no hi ha permís per usar el fitxer

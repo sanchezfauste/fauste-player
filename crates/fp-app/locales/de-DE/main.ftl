@@ -349,6 +349,7 @@ playlist-streams-skipped = { $streams ->
 playlist-import-failed = „{ $name }“ konnte nicht importiert werden: { $error }
 playlist-exported = Playlist gespeichert unter { $path }.
 playlist-export-failed = Die Playlist konnte nicht gespeichert werden: { $error }
+notice-editor-failed = Der externe Editor { $program } konnte nicht geöffnet werden: { $error }
 file-error-too-large = die Datei ist größer als { $limit } Bytes
 file-error-not-found = die Datei existiert nicht
 file-error-denied = der Zugriff auf die Datei wurde verweigert

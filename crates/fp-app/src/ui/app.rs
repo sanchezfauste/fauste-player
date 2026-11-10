@@ -368,6 +368,13 @@ pub(crate) struct Scene<'a> {
 }
 
 impl Scene<'_> {
+    /// Opens `file` in the configured external editor `program` (EE3);
+    /// never waits for it. A failure comes back as a notice.
+    #[allow(dead_code)] // the row menu entry (EE2) calls it
+    pub fn open_in_external_editor(&self, program: PathBuf, file: &Path) {
+        playlist_files::open_in_editor(&self.ctx, self.platform, program, file, self.files.clone());
+    }
+
     /// Asks the services thread for something. Without services (tests) or
     /// with a full queue the request is dropped: it is only a convenience.
     pub fn request(&self, request: ServiceRequest) {
@@ -1954,6 +1961,13 @@ impl AppUi {
             FileOutcome::Exported(Err(e)) => {
                 t.tr_args("playlist-export-failed", &[("error", e.text(t).into())])
             }
+            FileOutcome::EditorFailed { program, error } => t.tr_args(
+                "notice-editor-failed",
+                &[
+                    ("program", program.display().to_string().into()),
+                    ("error", error.into()),
+                ],
+            ),
         }
     }
 

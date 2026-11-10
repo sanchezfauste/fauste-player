@@ -18,6 +18,7 @@ mod cue_window;
 mod dsd_ui;
 mod entry_notice_ui;
 mod exit_guard;
+mod external_editor;
 mod fade_countdown_ui;
 mod fader_readout_ui;
 mod fader_ui;

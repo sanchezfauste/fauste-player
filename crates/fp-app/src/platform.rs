@@ -2,7 +2,7 @@
 //! the audio focus and whether user files may be written (mobile spec §4).
 //! The desktop uses the native dialogs; the mobile shell brings its own.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 pub trait Platform: Send + Sync {
     /// Audio files chosen by the operator, starting in `start`; none when
@@ -39,6 +39,37 @@ pub trait Platform: Send + Sync {
     /// background and plays on, otherwise it saves and ends. Nothing by
     /// default: a desktop window closes through its own button.
     fn leave(&self, _playing: bool) {}
+    /// Whether this system can start another program (the external editor,
+    /// spec EE3): not inside a Flatpak or snap sandbox, not on Android.
+    fn can_launch_programs(&self) -> bool;
+    /// Starts `program` with `file` as its only argument, on a helper
+    /// thread, and never makes the interface wait for it. `done` gets the
+    /// result of the start (not of the editor's work).
+    fn launch_editor(
+        &self,
+        program: &Path,
+        file: &Path,
+        done: Box<dyn FnOnce(Result<(), String>) + Send>,
+    );
+}
+
+/// The command that starts `program` on `file`: through `open -a` for a
+/// macOS application bundle, otherwise the program itself. No shell and no
+/// string interpolation: the paths are passed as arguments.
+#[cfg(not(target_os = "android"))]
+fn editor_command(program: &Path, file: &Path) -> std::process::Command {
+    let bundle = program
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("app"));
+    if cfg!(target_os = "macos") && bundle {
+        let mut command = std::process::Command::new("open");
+        command.arg("-a").arg(program).arg(file);
+        command
+    } else {
+        let mut command = std::process::Command::new(program);
+        command.arg(file);
+        command
+    }
 }
 
 /// The native dialogs (`rfd`) and the system opener (`open`).
@@ -113,6 +144,42 @@ impl Platform for DesktopPlatform {
     fn can_write_user_files(&self) -> bool {
         true
     }
+
+    fn can_launch_programs(&self) -> bool {
+        std::env::var_os("FLATPAK_ID").is_none() && std::env::var_os("SNAP").is_none()
+    }
+
+    /// The `fp-editor` thread spawns the program, reports the start and
+    /// then waits for the editor to end, so that no zombie process stays.
+    fn launch_editor(
+        &self,
+        program: &Path,
+        file: &Path,
+        done: Box<dyn FnOnce(Result<(), String>) + Send>,
+    ) {
+        let mut command = editor_command(program, file);
+        let slot = std::sync::Arc::new(std::sync::Mutex::new(Some(done)));
+        let in_thread = slot.clone();
+        let spawned = std::thread::Builder::new()
+            .name("fp-editor".to_owned())
+            .spawn(move || {
+                let Some(done) = in_thread.lock().ok().and_then(|mut d| d.take()) else {
+                    return;
+                };
+                match command.spawn() {
+                    Ok(mut child) => {
+                        done(Ok(()));
+                        let _ = child.wait();
+                    }
+                    Err(e) => done(Err(e.to_string())),
+                }
+            });
+        if let Err(e) = spawned
+            && let Some(done) = slot.lock().ok().and_then(|mut d| d.take())
+        {
+            done(Err(e.to_string()));
+        }
+    }
 }
 
 /// What the interface uses on Android until the mobile shell gives its
@@ -158,5 +225,18 @@ impl Platform for NoPlatform {
 
     fn can_write_user_files(&self) -> bool {
         false
+    }
+
+    fn can_launch_programs(&self) -> bool {
+        false
+    }
+
+    fn launch_editor(
+        &self,
+        _program: &Path,
+        _file: &Path,
+        done: Box<dyn FnOnce(Result<(), String>) + Send>,
+    ) {
+        done(Err("not available".to_owned()));
     }
 }

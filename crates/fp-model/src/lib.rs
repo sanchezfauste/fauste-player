@@ -16,6 +16,7 @@ pub mod device_offer;
 pub mod dsd;
 mod entry_notice;
 pub mod error;
+pub mod external_edit;
 pub mod ids;
 pub mod insertion;
 pub mod layout;
@@ -77,6 +78,7 @@ pub use dsd::{
 };
 pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;
+pub use external_edit::{ExternalEditBlock, external_edit_block};
 pub use ids::{CartId, CartPageId, CategoryId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
 pub use insertion::after_next;
 pub use layout::{
