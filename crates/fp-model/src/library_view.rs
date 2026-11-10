@@ -20,6 +20,8 @@ pub enum LibrarySelection {
     Uncategorised,
     /// The tracks of one category (and its subcategories).
     Category(CategoryId),
+    /// The tracks whose markers need review (external editor spec EE11).
+    MarkersToReview,
 }
 
 /// A column of the library table: a tag column or one the library adds.

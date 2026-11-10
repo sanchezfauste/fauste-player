@@ -40,7 +40,7 @@ const HEADER_READS_IN_FLIGHT: usize = 8;
 const CHANGE_BATCH: usize = 256;
 
 /// What a published activity was built from (`Services::publish_activity`).
-type ActivityKey = (u64, usize, usize, usize, usize, Option<(u64, usize)>);
+type ActivityKey = (u64, usize, usize, usize, usize, Option<(u64, usize)>, bool);
 
 /// A *Look for changed files* pass (EE7.5) still running.
 struct LookPass {
@@ -1292,6 +1292,7 @@ impl Services {
             self.library_pass.len(),
             self.pass_total,
             self.changed_found,
+            self.look_pass.is_some(),
         );
         if self.activity_key == Some(key) {
             return;
@@ -1318,6 +1319,7 @@ impl Services {
             loudness: pool.loudness,
             pass,
             changed_found: self.changed_found,
+            looking: self.look_pass.is_some(),
         };
         if **self.activity.load() != activity {
             self.activity.store(Arc::new(activity));

@@ -15,7 +15,7 @@ use super::theme;
 use super::view::MarkerFractions;
 use super::wave_view::{WaveKey, WaveSubject, WaveView, WaveZoom, min_span, wheel_notches};
 use super::widgets::{self, TileStyle, font};
-use crate::services::TrackMedia;
+use crate::services::{ServiceRequest, TrackMedia};
 
 /// The intro and outro countdowns drawn over the waveform (spec §3 rules
 /// 18 and 19).
@@ -317,6 +317,9 @@ fn edit_markers(
         && let Some(p) = response.interact_pointer_pos()
     {
         view_state.wave_menu.insert(key, secs_at(p.x));
+        // External editor spec EE7.4: the markers are opened for editing,
+        // so the file is checked for a change (once per opening).
+        scene.request(ServiceRequest::CheckTrack(track));
     }
     let at = view_state.wave_menu.get(&key).copied();
     let phone = view_state.phone_active;
@@ -426,6 +429,10 @@ fn edit_markers(
             .filter(|(_, d)| *d <= 8.0)
             .min_by(|a, b| a.1.total_cmp(&b.1));
         view_state.marker_drag = nearest.map(|(kind, _)| (key, kind, track));
+        if nearest.is_some() {
+            // EE7.4, as for the menu.
+            scene.request(ServiceRequest::CheckTrack(track));
+        }
     }
     // A drag belongs to the track it started on: if the player moved on,
     // it is dropped.

@@ -3,14 +3,19 @@
 //! that row alone first). Add to ▸ a playlist, Add to cart ▸ the shown
 //! page's empty carts, Move to category ▸, Kind ▸, Edit tags… and
 //! Loudness… (one row), Re-analyse, Reset markers to automatic, Remove
-//! from library… (LB17) and Show file location (one row). The phone's
-//! track list opens a reduced one on a long press (LB43).
+//! from library… (LB17) and Show file location (one row), Open in external
+//! editor (one row) and Mark as reviewed (flagged rows; external editor
+//! spec EE2, EE12). The phone's track list opens a reduced one on a long
+//! press (LB43).
 
 use std::path::Path;
 
 use egui::Ui;
 use egui_phosphor::regular as icon;
-use fp_model::{AppState, CartPage, Categories, CategoryId, Command, TrackId};
+use fp_model::{
+    AppState, CartPage, Categories, CategoryId, Command, ExternalEditBlock, TrackId,
+    external_edit_block,
+};
 
 use super::super::app::Scene;
 use super::super::table::RowMenuOutcome;
@@ -258,11 +263,13 @@ pub(crate) fn row_menu(
                 ui.close();
             }
         }
+        open_in_editor(ui, scene, track.id);
         if entry(ui, icon::SPEAKER_HIGH, &t.tr("menu-loudness"), true).clicked() {
             outcome = Some(MenuOutcome::Row(RowMenuOutcome::Loudness(track.id)));
             ui.close();
         }
     }
+    mark_reviewed(ui, scene, tracks);
 
     // Re-analyse: a track already queued or running is left alone (main
     // spec §6.1).
@@ -316,6 +323,71 @@ pub(crate) fn row_menu(
         ui.close();
     }
     outcome
+}
+
+/// The tooltip of a dimmed Open in external editor (EE4).
+fn editor_block_key(block: ExternalEditBlock) -> &'static str {
+    match block {
+        ExternalEditBlock::NoEditor => "menu-open-in-editor-no-editor",
+        ExternalEditBlock::FileUnavailable => "menu-open-in-editor-unavailable",
+        ExternalEditBlock::Sounding => "menu-open-in-editor-sounding",
+    }
+}
+
+/// Open in external editor, after Edit tags… (EE2–EE4): one track, only
+/// where programs can be started; dimmed with the reason when blocked.
+/// Shared by the library's and the playlists' row menus.
+pub(crate) fn open_in_editor(ui: &mut Ui, scene: &Scene<'_>, id: TrackId) {
+    let t = scene.i18n;
+    let state = scene.state;
+    if scene.platform.can_launch_programs()
+        && let Some(track) = state.library.get(id)
+    {
+        // The check happens as the menu is drawn (EE5).
+        let block = external_edit_block(state, track.id);
+        let response = entry(
+            ui,
+            icon::ARROW_SQUARE_OUT,
+            &t.tr("menu-open-in-editor"),
+            block.is_none(),
+        );
+        let response = match block {
+            Some(reason) => response.on_disabled_hover_text(t.tr(editor_block_key(reason))),
+            None => response,
+        };
+        if response.clicked()
+            && let Some(program) = state.config.library.external_editor.clone()
+        {
+            // The platform starts it off this thread (the UI never blocks).
+            scene.open_in_external_editor(program, &track.path);
+            scene.request(ServiceRequest::FollowEditedFile(track.id));
+            ui.close();
+        }
+    }
+}
+
+/// Mark as reviewed (EE12): shown when a track of `tracks` is flagged; it
+/// clears the flagged ones. Shared by the library's and the playlists' row
+/// menus.
+pub(crate) fn mark_reviewed(ui: &mut Ui, scene: &Scene<'_>, tracks: &[TrackId]) {
+    let t = scene.i18n;
+    let state = scene.state;
+    let flagged: Vec<TrackId> = tracks
+        .iter()
+        .copied()
+        .filter(|id| {
+            state
+                .library
+                .get(*id)
+                .is_some_and(|tr| tr.markers_review.is_some())
+        })
+        .collect();
+    if !flagged.is_empty()
+        && entry(ui, icon::SEAL_CHECK, &t.tr("menu-mark-reviewed"), true).clicked()
+    {
+        scene.ctl.send(Command::MarkReviewed { tracks: flagged });
+        ui.close();
+    }
 }
 
 /// Pre-listen (LB45): dimmed, with the reason, when the track cannot be.

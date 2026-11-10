@@ -117,6 +117,7 @@ pub fn library_rows(
                 || match selection {
                     LibrarySelection::All => true,
                     LibrarySelection::Uncategorised => t.category.is_none(),
+                    LibrarySelection::MarkersToReview => t.markers_review.is_some(),
                     LibrarySelection::Category(_) => t
                         .category
                         .is_some_and(|c| scope.as_ref().is_some_and(|s| s.contains(&c))),
@@ -295,6 +296,8 @@ pub fn sort_rows_by(rows: &mut [TrackId], keys: &SortKeys, ascending: bool) {
 pub struct CategoryCounts {
     pub all: usize,
     pub uncategorised: usize,
+    /// Tracks whose markers need review (external editor spec EE11).
+    pub markers_review: usize,
     /// Own tracks plus those of the subcategories.
     pub by_category: HashMap<CategoryId, usize>,
 }
@@ -302,7 +305,11 @@ pub struct CategoryCounts {
 pub fn category_counts(library: &Library, categories: &Categories) -> CategoryCounts {
     let mut own: HashMap<CategoryId, usize> = HashMap::new();
     let mut uncategorised = 0;
+    let mut markers_review = 0;
     for track in library.iter() {
+        if track.markers_review.is_some() {
+            markers_review += 1;
+        }
         match track.category {
             Some(c) => *own.entry(c).or_default() += 1,
             None => uncategorised += 1,
@@ -335,6 +342,7 @@ pub fn category_counts(library: &Library, categories: &Categories) -> CategoryCo
     CategoryCounts {
         all: library.len(),
         uncategorised,
+        markers_review,
         by_category,
     }
 }

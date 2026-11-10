@@ -8,7 +8,8 @@ pub trait Platform: Send + Sync {
     /// Audio files chosen by the operator, starting in `start`; none when
     /// cancelled. Blocks: call it from a helper thread only (rule 8).
     fn pick_audio_files(&self, filter_name: &str, start: Option<PathBuf>) -> Vec<PathBuf>;
-    /// One file with one of `extensions`. Blocks, as `pick_audio_files`.
+    /// One file with one of `extensions`; an empty `extensions` sets no
+    /// filter. Blocks, as `pick_audio_files`.
     fn pick_file(
         &self,
         filter_name: &str,
@@ -95,7 +96,10 @@ impl Platform for DesktopPlatform {
         extensions: &[&str],
         start: Option<PathBuf>,
     ) -> Option<PathBuf> {
-        let mut dialog = rfd::AsyncFileDialog::new().add_filter(filter_name, extensions);
+        let mut dialog = rfd::AsyncFileDialog::new();
+        if !extensions.is_empty() {
+            dialog = dialog.add_filter(filter_name, extensions);
+        }
         if let Some(dir) = start {
             dialog = dialog.set_directory(dir);
         }

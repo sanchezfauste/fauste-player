@@ -842,6 +842,7 @@ fn header(
     let name = match selection {
         LibrarySelection::All => t.tr("library-tree-all"),
         LibrarySelection::Uncategorised => t.tr("library-tree-uncategorised"),
+        LibrarySelection::MarkersToReview => t.tr("library-tree-markers-review"),
         LibrarySelection::Category(id) => scene
             .state
             .categories

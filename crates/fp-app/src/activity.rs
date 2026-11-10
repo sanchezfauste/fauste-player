@@ -35,6 +35,9 @@ pub struct AnalysisActivity {
     /// spec EE7.5): its id and how many changed files it found. Each pass
     /// has a new id, so the interface tells it once per pass.
     pub changed_found: Option<(u64, usize)>,
+    /// A *Look for changed files* pass runs (EE7.5): another request is
+    /// ignored until it ends.
+    pub looking: bool,
 }
 
 /// Where a track is in the analysis.

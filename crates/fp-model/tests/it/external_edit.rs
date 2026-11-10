@@ -63,3 +63,24 @@ fn a_quiet_track_with_an_editor_is_allowed() {
     let t = first_track(&s);
     assert_eq!(external_edit_block(&s, t), None);
 }
+
+/// EE5: the library pre-listen blocks while it plays (or holds its audio,
+/// paused); a track only selected in the library (the bar stopped on it)
+/// can be opened.
+#[test]
+fn the_library_preview_blocks_only_while_it_sounds() {
+    let mut s = fixture(2);
+    with_editor(&mut s);
+    let t = first_track(&s);
+    s.library_cue.track = Some(t);
+    s.library_cue.transport = fp_model::Transport::Stopped;
+    assert_eq!(external_edit_block(&s, t), None);
+    for transport in [fp_model::Transport::Playing, fp_model::Transport::Paused] {
+        s.library_cue.transport = transport;
+        assert_eq!(
+            external_edit_block(&s, t),
+            Some(ExternalEditBlock::Sounding),
+            "{transport:?}"
+        );
+    }
+}

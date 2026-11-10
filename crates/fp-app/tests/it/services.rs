@@ -2537,3 +2537,28 @@ fn look_for_changed_files_counts_a_change_that_waits() {
     assert_eq!(r.services.activity().load().changed_found.unwrap().1, 1);
     assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "it still sounds");
 }
+
+/// EE7.5: the activity says while a look for changed files runs, so the
+/// interface can wait for it (a second request meanwhile is ignored).
+#[test]
+fn the_activity_says_while_a_look_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    assert!(!r.services.activity().load().looking);
+    r.services
+        .requests()
+        .send(ServiceRequest::LookForChangedFiles)
+        .unwrap();
+    // The answers are taken before the batch goes out: after one step the
+    // pass waits for them.
+    r.services.step(r.now);
+    assert!(r.services.activity().load().looking);
+    r.run_until("the count", |r| {
+        r.services.activity().load().changed_found.is_some()
+    });
+    assert!(!r.services.activity().load().looking);
+}

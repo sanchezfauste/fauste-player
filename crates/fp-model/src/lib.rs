@@ -113,7 +113,7 @@ pub use reset_played::{can_reset_played, resettable_entries};
 pub use restore::{SettingsSection, restore_defaults};
 pub use session::{PlayerSession, RestoreParts};
 pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts, player_command};
-pub use sounding::track_sounding;
+pub use sounding::{track_sounding, track_sounding_now};
 pub use state::AppState;
 pub use tag_edit::{TagEditBlock, tag_edit_block};
 pub use tag_sheet::{

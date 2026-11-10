@@ -10,6 +10,20 @@ use crate::state::AppState;
 /// is fading; a playing cart or the cartwall CUE cart; or the library CUE
 /// track (any transport).
 pub fn track_sounding(state: &AppState, track: TrackId) -> bool {
+    on_players_or_carts(state, track) || state.library_cue.track == Some(track)
+}
+
+/// As [`track_sounding`], but the library CUE counts only while it plays or
+/// holds its audio paused: a track merely selected in the library (the bar
+/// stopped on it) does not (EE5, for "Open in external editor").
+pub fn track_sounding_now(state: &AppState, track: TrackId) -> bool {
+    on_players_or_carts(state, track)
+        || (state.library_cue.track == Some(track)
+            && state.library_cue.transport != crate::player::Transport::Stopped)
+}
+
+/// The players' and the carts' part of [`track_sounding`].
+fn on_players_or_carts(state: &AppState, track: TrackId) -> bool {
     let of_entry = |entry| {
         state
             .playlists
@@ -29,5 +43,4 @@ pub fn track_sounding(state: &AppState, track: TrackId) -> bool {
             || (p.fading && p.history.last().copied().is_some_and(of_entry))
     }) || state.cartwall.playing.iter().any(|c| of_cart(c.cart))
         || state.cartwall.cue.is_some_and(of_cart)
-        || state.library_cue.track == Some(track)
 }

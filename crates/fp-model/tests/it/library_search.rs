@@ -405,3 +405,21 @@ fn a_change_to_20000_sorted_tracks_takes_less_than_a_frame() {
     assert_eq!(rows.len(), 20_000);
     assert!(took.as_millis() < 8, "took {took:?}");
 }
+
+/// External editor spec EE11: *Markers to review* lists the flagged
+/// tracks, whatever their category, and the counts tell how many.
+#[test]
+fn markers_to_review_lists_only_flagged_tracks() {
+    let mut lib = tree_library();
+    for id in [2, 4] {
+        lib.get_mut(TrackId(id)).unwrap().markers_review = Some(fp_model::MarkersReview {
+            dropped: Vec::new(),
+        });
+    }
+    let got = rows(&lib, &tree(), LibrarySelection::MarkersToReview, false, "");
+    assert_eq!(got, vec![2, 4]);
+    let searched = rows(&lib, &tree(), LibrarySelection::MarkersToReview, false, "d");
+    assert_eq!(searched, vec![4]);
+    assert_eq!(category_counts(&lib, &tree()).markers_review, 2);
+    assert_eq!(category_counts(&tree_library(), &tree()).markers_review, 0);
+}
