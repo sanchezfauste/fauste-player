@@ -231,7 +231,9 @@ A changed track is never analysed again while it sounds: it waits until it
 stops, and its markers and loudness never move under a playing source.
 (**Re-analyse all tracks** is your explicit request and does not wait.) Editors
 often save by deleting and recreating the file, so a file that vanishes is
-looked at twice before it is marked missing. A missing track whose file comes
+looked at twice before it is marked missing. A file that changes while it is
+being analysed (an editor still saving it) is not used: it is analysed again
+shortly after, or at its next change, use or look. A missing track whose file comes
 back in a folder that is followed only because of the editor is not restored
 by itself.
 
@@ -239,14 +241,16 @@ by itself.
 markers you set by hand, the track shows an amber warning icon on its row (its
 tooltip names any markers that were dropped). Manual markers that now lie past
 the end of the audio are dropped and the automatic value takes their place; the
-others stay as they are. The flag never stops the track from loading, cueing or
+others stay as they are (when the cue-in or cue-out was dropped, the intro,
+outro and MIX markers are moved inside the new cue range). The flag never stops the track from loading, cueing or
 playing. It clears when you choose **Mark as reviewed** in the track's menu (on
 several selected rows, it clears all of them) or change any marker of the
 track. The **Markers to review** item of the tree, after *Uncategorised*, lists
 the flagged tracks while there are any (not on a phone). A change to the tags
 or the cover alone refreshes the tags and raises no flag, which is also what
 happens after you edit tags in Fauste Player. The first analysis after an
-update never raises the flag.
+update raises the flag only if it had to drop a marker past the end of the
+audio.
 
 ## Pre-listening
 

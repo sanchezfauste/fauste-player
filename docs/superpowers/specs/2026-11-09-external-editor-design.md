@@ -91,8 +91,11 @@ Anti-goals (a failure even if it works):
   Fauste Player does not wait for it or track it. On macOS, a chosen
   `.app` bundle is launched with `open -a <bundle> <file>`; a plain
   executable is run directly. On Windows and Linux the program is run
-  directly. If the launch fails (not found, not executable), the status
-  bar shows a notice naming the program and the log gets the error.
+  directly. The editor's standard input, output and error are null. If
+  the launch fails (not found, not executable; for `open -a`, the opener
+  ending with an error status, which the helper thread waits for), the
+  status bar shows a notice naming the program and the log gets the
+  error.
 - **EE4. When it is disabled.** The entry is shown dimmed, with the
   reason as its tooltip, when:
   - no editor is set (the tooltip points to Settings ▸ Library);
@@ -146,6 +149,14 @@ Anti-goals (a failure even if it works):
 
   A file found missing follows the existing missing-file rules, not
   these.
+
+  A check can still reach a file while another program writes it (at
+  start, at the point of use, on demand). The analysis therefore looks
+  at the file's stamp again when it ends: if it differs from the one
+  taken before (or the file is gone), nothing from that read is applied,
+  since it may come from a truncated file. The track is analysed once
+  more one watch debounce interval later; if the file still moves then,
+  it waits for the next event, use or look (no polling).
 - **EE8. The audio fingerprint.** While the analysis decodes the file it
   computes a hash of the decoded samples (a fast non-cryptographic hash
   such as xxHash or FNV over the PCM as decoded; FNV-1a 64 over the downmixed
@@ -176,7 +187,14 @@ Anti-goals (a failure even if it works):
     markers were recalculated);
   - no stored fingerprint, or one from another version: the new one is
     stored and **no flag** is raised (the first pass after updating, or
-    after a decoder upgrade, never flags).
+    after a decoder upgrade, never flags), unless a manual marker lies
+    past the new duration: it is dropped as above and the flag names it,
+    so that here too a track never reaches air with a marker past its
+    end.
+
+  When a dropped marker is the cue-in or the cue-out, the manual intro,
+  outro and MIX markers are kept inside the new cue range, as when a cue
+  point is set by hand.
 
   This rule is a pure function in `fp-model`, with one test per case
   (including a dropped marker and its automatic replacement).
@@ -249,7 +267,9 @@ both, an external editor cannot be launched, and the editor could not
 save over the file anyway. **Decided (maintainer, 2026-11-09):** like
 Android, these builds show neither the setting nor the menu entry; no
 extra sandbox permissions are asked for. They are detected at
-run time (`FLATPAK_ID`, `SNAP` in the environment). Part B still works
+run time, once per run: a Flatpak by the file `/.flatpak-info`, a snap by
+`SNAP` in the environment holding the running program (a stray `SNAP`
+variable alone does not count). Part B still works
 there for files changed outside the sandbox.
 
 The `.deb`, `.rpm`, AppImage, AUR, Windows (installer and MSIX) and macOS

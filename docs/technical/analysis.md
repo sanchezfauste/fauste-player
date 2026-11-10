@@ -321,7 +321,19 @@ opened in the editor (kept until the end of the run), at the point of use
 (`ServiceRequest::CheckTrack`: loading into a player, cart or pre-listen,
 opening the marker menu or dragging a marker), and for *Look for changed
 files* (`AnalysisActivity.looking`). An event-driven removal becomes Missing
-after a second look.
+after a second look; a doubt ends when any scan finds the file again, and is
+dropped for a track that left the library or is missing. The urgent queue
+holds each track once (`UniqueQueue`). A pass skips a track whose analysis is
+queued or running and is applied to the model (that analysis reads the file
+as it is now); a check asked for by an event or a use, or a track read only
+for its waveform, waits for that read to end.
+
+The pool stats the file again after each analysis (`analysis_job`): a stamp
+that moved, or a file that is gone, turns the result into
+`AnalysisError::Changed` (the file may have been read half-written), and
+nothing is cached or applied. The services re-queue that track once after
+`library.watch_debounce_ms` (`changed_retry`); a second `Changed` leaves it
+for the next event, use or look.
 
 A changed track goes through `reanalyse_track` once `!track_sounding`; until
 then it waits (`changed_waiting`), and a result that arrives while it sounds is
@@ -332,12 +344,19 @@ library pre-listen only while it plays or is paused. *Re-analyse all* is
 explicit and may analyse a sounding track. When the analysis is applied,
 `audio_change` decides: a different fingerprint on a track with manual markers
 sets `markers_review` (manual markers past the new end are dropped, and the
-flag lists them); a marker change or `Command::MarkReviewed` clears it.
+flag lists them); without a comparable fingerprint, markers past a known new
+end are still dropped and flagged, and the same fingerprint drops nothing. A
+dropped cue point clamps the manual inner markers into the new cue range. A
+result held while its track sounds does not replace a waveform already in the
+media cache. A marker change or `Command::MarkReviewed` clears the flag.
 
-The editor is launched through `Platform::launch_editor` (a helper thread; on
-macOS a `.app` goes through `open -a`); `can_launch_programs` is false on
-Android and in Flatpak/snap builds (`FLATPAK_ID`, `SNAP`), which hide the
-setting and the menu entry. `library.external_editor` is an optional absolute
+The editor is launched through `Platform::launch_editor` (a helper thread,
+with null standard streams; on macOS a `.app` goes through `open -a`, whose
+exit status is waited for and reported; a program run directly reports its
+start and is reaped when it ends); `can_launch_programs` is false on Android
+and in Flatpak (`/.flatpak-info`) and snap (`SNAP` holding `current_exe`)
+builds, which hide the setting and the menu entry. It is computed once per
+run. `library.external_editor` is an optional absolute
 path in `Config`.
 
 ## How the app uses it (`fp-app/src/services.rs`)
