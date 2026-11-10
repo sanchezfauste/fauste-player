@@ -35,6 +35,12 @@ pub enum AnalysisError {
     Unreadable(String),
     #[error("the analysis was cancelled")]
     Cancelled,
+    /// The file's size or modification time changed while it was analysed
+    /// (an editor still writing it), or it disappeared: what was decoded
+    /// may be a truncated file, so nothing is reported from it (external
+    /// editor spec EE10). The file is analysed again later.
+    #[error("the file changed while it was analysed")]
+    Changed,
 }
 
 /// Analyses `path` completely (spec §6).

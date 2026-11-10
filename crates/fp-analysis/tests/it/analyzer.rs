@@ -265,6 +265,55 @@ fn a_file_changed_during_analysis_is_not_cached_under_its_new_key() {
     );
 }
 
+/// External editor spec EE10: a file rewritten while it is analysed (an
+/// editor still exporting it) gives no analysis: what was decoded may be a
+/// truncated file. The result says the file changed instead.
+#[test]
+fn a_file_changed_during_analysis_gives_no_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "a.wav");
+    let rewriting: AnalyzeFn = Arc::new(|path, settings, limits, _cancelled| {
+        let result = analyze_file(path, settings, limits);
+        std::fs::write(path, vec![0u8; 12_345]).unwrap();
+        result
+    });
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        None,
+        rewriting,
+    )
+    .unwrap();
+    analyzer.submit(TrackId(1), path.clone());
+    let result = analyzer.results().recv_timeout(WAIT).unwrap();
+    assert_eq!(result.outcome, Err(AnalysisError::Changed));
+}
+
+/// The same for a file removed while it is analysed: changed, not missing
+/// (the next analysis tells which).
+#[test]
+fn a_file_removed_during_analysis_is_changed() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = wav(dir.path(), "a.wav");
+    let removing: AnalyzeFn = Arc::new(|path, settings, limits, _cancelled| {
+        let result = analyze_file(path, settings, limits);
+        std::fs::remove_file(path).unwrap();
+        result
+    });
+    let analyzer = Analyzer::with_analyze_fn(
+        1,
+        AnalysisSettings::default(),
+        Limits::default(),
+        None,
+        removing,
+    )
+    .unwrap();
+    analyzer.submit(TrackId(1), path);
+    let result = analyzer.results().recv_timeout(WAIT).unwrap();
+    assert_eq!(result.outcome, Err(AnalysisError::Changed));
+}
+
 #[test]
 fn the_pool_sweeps_old_cache_entries_off_the_callers_thread() {
     let dir = tempfile::tempdir().unwrap();

@@ -557,11 +557,14 @@ fn analysis_job(job: Job, results: &Sender<AnalysisResult>, shared: &Shared) {
     };
     // Before the analysis: a file that changes while it runs (a copy
     // that completes) is told apart from what was analysed.
-    let stamp = std::fs::metadata(&job.path)
-        .ok()
-        .and_then(|m| Some((m.len(), m.modified().ok()?)));
-    let outcome = catch_unwind(AssertUnwindSafe(|| run(&job, fresh, shared)))
+    let stamp = stamp_of(&job.path);
+    let mut outcome = catch_unwind(AssertUnwindSafe(|| run(&job, fresh, shared)))
         .unwrap_or_else(|_| Err(AnalysisError::Unreadable("the analysis crashed".to_owned())));
+    // EE10: a file that changed or went away meanwhile may have been read
+    // half-written; its analysis is not trusted.
+    if !matches!(outcome, Err(AnalysisError::Cancelled)) && stamp_of(&job.path) != stamp {
+        outcome = Err(AnalysisError::Changed);
+    }
     let deliver = {
         let mut book = lock(&shared.book);
         book.changes += 1;
@@ -582,6 +585,13 @@ fn analysis_job(job: Job, results: &Sender<AnalysisResult>, shared: &Shared) {
             stamp,
         });
     }
+}
+
+/// The size and modification time of `path`; `None` if the `stat` fails.
+fn stamp_of(path: &Path) -> Option<(u64, SystemTime)> {
+    std::fs::metadata(path)
+        .ok()
+        .and_then(|m| Some((m.len(), m.modified().ok()?)))
 }
 
 fn run(job: &Job, fresh: bool, shared: &Shared) -> Result<Analysis, AnalysisError> {

@@ -54,6 +54,37 @@ struct LookPass {
 /// The thread that looks for files not found and at unreadable files, off
 /// the services thread: a share that is offline can make each look block
 /// for seconds.
+/// A queue of tracks that holds each one once: pushing a queued track does
+/// nothing (M8: O(1), however long the queue).
+#[derive(Default)]
+struct UniqueQueue {
+    order: VecDeque<TrackId>,
+    queued: HashSet<TrackId>,
+}
+
+impl UniqueQueue {
+    fn push_back(&mut self, id: TrackId) {
+        if self.queued.insert(id) {
+            self.order.push_back(id);
+        }
+    }
+
+    fn pop_front(&mut self) -> Option<TrackId> {
+        let id = self.order.pop_front()?;
+        self.queued.remove(&id);
+        Some(id)
+    }
+
+    fn len(&self) -> usize {
+        self.order.len()
+    }
+
+    fn clear(&mut self) {
+        self.order.clear();
+        self.queued.clear();
+    }
+}
+
 struct Probe {
     paths: Sender<Job>,
     answers: Receiver<Answer>,
@@ -551,7 +582,7 @@ pub struct Services {
     change_check: Option<ChangeCheck>,
     /// Tracks to check that are in use (EE7.4) or asked for
     /// (`CheckTrack`): sent before `change_bulk`.
-    change_urgent: VecDeque<TrackId>,
+    change_urgent: UniqueQueue,
     /// Tracks to check for the start (EE7.1) and on-demand (EE7.5) passes.
     change_bulk: VecDeque<TrackId>,
     /// The tracks of the batch the change check is looking at.
@@ -574,6 +605,15 @@ pub struct Services {
     /// Results of those analyses for tracks that sound now (EE9): applied
     /// once they stop.
     held: HashMap<TrackId, AnalysisResult>,
+    /// Tracks whose file changed while it was analysed (EE10: an editor
+    /// still writing it), with when they are analysed once more: the watch
+    /// debounce interval later.
+    changed_retry: HashMap<TrackId, Instant>,
+    /// Tracks whose one retry is used: a file still changing then waits
+    /// for the next event, use or look.
+    changed_retried: HashSet<TrackId>,
+    /// The time of the current step.
+    clock: Instant,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
@@ -659,7 +699,7 @@ impl Services {
             headers_in_flight: 0,
             headers_unsent: HashMap::new(),
             change_check: ChangeCheck::spawn(),
-            change_urgent: VecDeque::new(),
+            change_urgent: UniqueQueue::default(),
             change_bulk: VecDeque::new(),
             change_sent: Vec::new(),
             change_started: false,
@@ -670,6 +710,9 @@ impl Services {
             changed_waiting: HashSet::new(),
             change_analysing: HashSet::new(),
             held: HashMap::new(),
+            changed_retry: HashMap::new(),
+            changed_retried: HashSet::new(),
+            clock: Instant::now(),
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
@@ -877,9 +920,7 @@ impl Services {
         // EE7.2: a stamp check, as `CheckTrack`; an unchanged file gives
         // nothing.
         for id in outcome.touched {
-            if !self.change_urgent.contains(&id) {
-                self.change_urgent.push_back(id);
-            }
+            self.change_urgent.push_back(id);
         }
         for id in outcome.returned {
             if self.in_flight.contains(&id) {
@@ -900,6 +941,7 @@ impl Services {
                 panic!("injected services failure");
             }
         }
+        self.clock = now;
         while let Ok(request) = self.requests.try_recv() {
             self.walk_again = true;
             match request {
@@ -926,6 +968,7 @@ impl Services {
         self.follow_limits(state);
         self.recheck_missing(state, now);
         self.watch_step(state, now);
+        self.retry_changed(state, now);
         self.change_step(state);
         let now_inputs = self.walk_inputs(state);
         let walk = std::mem::take(&mut self.walk_again)
@@ -995,11 +1038,15 @@ impl Services {
         let in_use = Self::in_use(state);
         if self.change_started {
             let joined: Vec<TrackId> = in_use.difference(&self.in_use).copied().collect();
-            self.change_urgent.extend(joined);
+            for id in joined {
+                self.change_urgent.push_back(id);
+            }
         } else {
             self.change_started = true;
             // The tracks in use first.
-            self.change_urgent.extend(in_use.iter().copied());
+            for id in &in_use {
+                self.change_urgent.push_back(*id);
+            }
             self.change_bulk.extend(
                 state
                     .library
@@ -1148,6 +1195,8 @@ impl Services {
         self.changed_waiting.retain(known);
         self.change_analysing.retain(known);
         self.held.retain(|id, _| known(id));
+        self.changed_retry.retain(|id, _| known(id));
+        self.changed_retried.retain(known);
         let ready: Vec<TrackId> = self
             .changed_waiting
             .iter()
@@ -1220,7 +1269,15 @@ impl Services {
                 continue;
             }
             if self.in_flight.contains(&id) {
-                later.push((urgent, id));
+                // A read applied to the model reads the file as it is now:
+                // for a pass it counts as checked. A check asked for now
+                // (an event, a use), or a read only for a waveform, waits
+                // for it to end. Each track is popped once per step.
+                if urgent || self.peaks_only.contains(&id) {
+                    later.push((urgent, id));
+                } else if let Some(pass) = &mut self.look_pass {
+                    pass.pending.remove(&id);
+                }
                 continue;
             }
             batch.push((id, t.path.clone(), t.file_stamp));
@@ -1438,6 +1495,8 @@ impl Services {
         self.stamps.clear();
         self.failed_at.clear();
         self.urgent.clear();
+        self.changed_retry.clear();
+        self.changed_retried.clear();
         self.forced = state.library.iter().map(|t| t.id).collect();
         self.library_pass = self.forced.clone();
         self.pass_total = self.library_pass.len();
@@ -1470,8 +1529,10 @@ impl Services {
         self.retried.remove(&id);
         self.stamps.remove(&id);
         self.failed_at.remove(&id);
-        // A result held for the track (EE9) is superseded by this analysis.
+        // A result held for the track (EE9) or a retry waiting for its file
+        // to settle (EE10) is superseded by this analysis.
         self.held.remove(&id);
+        self.changed_retry.remove(&id);
         self.forced.insert(id);
         if fresh {
             self.fresh.insert(id);
@@ -1828,7 +1889,9 @@ impl Services {
                     loudness,
                     version: LOUDNESS_VERSION,
                 },
-                Err(AnalysisError::Cancelled) => continue,
+                // The measurement never reports a changed file; nothing
+                // to record either way.
+                Err(AnalysisError::Cancelled | AnalysisError::Changed) => continue,
                 Err(AnalysisError::Missing) => {
                     if track.file_state == FileState::Missing {
                         continue;
@@ -2057,8 +2120,9 @@ impl Services {
         on_carts: &HashSet<TrackId>,
     ) {
         let id = track.id;
-        // Its new analysis waits for it to stop sounding (EE9).
-        if self.held.contains_key(&id) {
+        // Its new analysis waits for it to stop sounding (EE9), or for its
+        // file to settle (EE10).
+        if self.held.contains_key(&id) || self.changed_retry.contains_key(&id) {
             return;
         }
         if self.in_flight.contains(&id) {
@@ -2126,11 +2190,18 @@ impl Services {
             }
         }
         self.in_flight.remove(&result.track);
+        if matches!(result.outcome, Err(AnalysisError::Changed)) {
+            self.changed_during_analysis(state, &result);
+            return;
+        }
+        self.changed_retried.remove(&result.track);
         let stamp = result.stamp;
         if self.hold_while_sounding(&result, state) {
-            // EE9: it waits for the track to stop sounding; the waveform
-            // shows meanwhile.
+            // EE9: it waits for the track to stop sounding; a waveform
+            // shows meanwhile, but one already shown (the audio that
+            // plays) is kept.
             if wanted.contains(&result.track)
+                && !self.media.contains(result.track)
                 && let Ok(analysis) = &result.outcome
             {
                 self.media.insert(
@@ -2211,7 +2282,8 @@ impl Services {
                     state: FileState::Unreadable,
                 }
             }
-            Err(AnalysisError::Cancelled) => return,
+            // Both were handled above.
+            Err(AnalysisError::Cancelled | AnalysisError::Changed) => return,
         };
         // A file still missing changes nothing: no new model version, so
         // nothing is saved every recheck.
@@ -2229,6 +2301,59 @@ impl Services {
             self.forced.insert(result.track);
             if in_pass {
                 self.library_pass.insert(result.track);
+            }
+        }
+    }
+
+    /// EE10: the file changed while it was analysed (an editor still
+    /// writing it), so nothing from that read is applied. The track is
+    /// analysed once more after the watch debounce interval; if its file
+    /// still moved then, it waits for the next event, use or look (no
+    /// polling).
+    fn changed_during_analysis(&mut self, state: &AppState, result: &AnalysisResult) {
+        let id = result.track;
+        // The pass has its answer: the retry is not part of it.
+        self.library_pass.remove(&id);
+        self.shown_only.remove(&id);
+        self.peaks_only.remove(&id);
+        // Not a change waiting to be applied any more: a later check finds
+        // it again (the retry asks for it anew).
+        self.change_analysing.remove(&id);
+        if self.changed_retried.insert(id) {
+            tracing::info!(path = %result.path.display(), "the file changed while it was analysed; analysing it again shortly");
+            let quiet = Duration::from_millis(state.config.library.watch_debounce_ms);
+            self.changed_retry.insert(id, self.clock + quiet);
+        } else {
+            tracing::info!(path = %result.path.display(), "the file is still changing; it is analysed on its next change");
+            // A track never analysed is not submitted again by itself.
+            if state.library.get(id).is_some_and(|t| !t.analyzed) {
+                self.failed.insert(id);
+            }
+        }
+    }
+
+    /// EE10: the retries whose time came. An analysed track goes through
+    /// the changed-file path (EE9: not while it sounds); one never analysed
+    /// is analysed.
+    fn retry_changed(&mut self, state: &AppState, now: Instant) {
+        if self.changed_retry.is_empty() {
+            return;
+        }
+        let due: Vec<TrackId> = self
+            .changed_retry
+            .iter()
+            .filter(|(_, at)| now >= **at)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in due {
+            self.changed_retry.remove(&id);
+            match state.library.get(id) {
+                Some(t) if t.analyzed => self.on_changed(state, id),
+                Some(_) => {
+                    self.reanalyse(state, id, false);
+                    self.walk_again = true;
+                }
+                None => {}
             }
         }
     }
@@ -2397,6 +2522,26 @@ mod tests {
 
     fn at(secs: u64) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(secs)
+    }
+
+    /// M8: a track already queued is not queued again; once taken it
+    /// can be queued anew.
+    #[test]
+    fn the_unique_queue_holds_each_track_once() {
+        let mut q = UniqueQueue::default();
+        q.push_back(TrackId(1));
+        q.push_back(TrackId(2));
+        q.push_back(TrackId(1));
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.pop_front(), Some(TrackId(1)));
+        q.push_back(TrackId(1));
+        assert_eq!(q.pop_front(), Some(TrackId(2)));
+        assert_eq!(q.pop_front(), Some(TrackId(1)));
+        assert_eq!(q.pop_front(), None);
+        q.push_back(TrackId(3));
+        q.clear();
+        q.push_back(TrackId(3));
+        assert_eq!(q.len(), 1);
     }
 
     #[test]
