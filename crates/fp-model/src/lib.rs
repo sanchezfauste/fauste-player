@@ -38,6 +38,7 @@ pub mod remote;
 pub mod reset_played;
 pub mod restore;
 pub mod rotation;
+pub mod selection;
 pub mod session;
 pub mod shortcuts;
 pub mod sounding;

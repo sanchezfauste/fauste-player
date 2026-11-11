@@ -56,6 +56,7 @@ mod restore;
 mod reuse_tracks;
 mod review_fixes;
 mod rotations;
+mod selection;
 mod session;
 mod set_values;
 mod shortcuts;

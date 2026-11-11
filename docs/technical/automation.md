@@ -43,3 +43,35 @@ went back does not make the track look older. A track removed from the
 library loses its time; a duplicate merged into another hands its time to
 the survivor. There is one time per track, so the map never outgrows the
 library.
+
+## Selection (`selection.rs`)
+
+`pick(state, source, at, planned, rng)` chooses the next track of a step
+(AU31–AU34). `pool` is the source's playable tracks. `planned` lists tracks
+already queued but not yet aired, with their expected start: they count as
+aired then, so a look-ahead never queues two tracks that break the rules
+between themselves. `last(t)` is the later of the air time and any planned
+time.
+
+- **Track separation (AU31).** A track that never aired is eligible.
+  Otherwise it is eligible when `track_separation_mins` have passed since
+  `last(t)`, **or** when at least `ceil(track_separation_percent × (pool − 1)
+  / 100)` other tracks of the pool aired after it. A criterion set to 0 is
+  off; with both off every track is eligible. A time in the future (the
+  clock went back) has not "passed". With no other track in the pool, the
+  percentage is met trivially.
+- **Artist separation (AU32).** No track of the library whose artist
+  (trimmed, lower-cased) equals the candidate's aired within
+  `artist_separation_mins` before `at`. An empty artist is exempt.
+- **Fair choice (AU33).** The eligible tracks are ordered by `last`
+  (never aired first, then by id), and the pick is uniform among the first
+  `PICK_SPREAD` (5).
+- **Relaxing (AU34).** With no track meeting both rules, artist separation
+  is dropped (`Relaxed::Artist`); with none meeting track separation
+  either, the whole pool is used (`Relaxed::Track`), least recently aired
+  first. An empty pool gives `None`.
+
+The counts behind the percentage come from the pool's sorted air times
+(a binary search), so one choice is O(n log n) in the pool's size.
+`eligible` returns the tracks that meet both rules, in that order, for
+tests and for the editor.
