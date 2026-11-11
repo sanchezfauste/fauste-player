@@ -17,6 +17,12 @@ use crate::track::{Library, Track, TrackKind};
 /// `text` in lower case with its accents dropped (NFD, combining marks
 /// removed), so case and accents do not change a search or an order.
 pub fn fold(text: &str) -> String {
+    // Most tags and file names are ASCII: NFD leaves them as they are and
+    // they have no combining marks, so a plain lower case is the same fold
+    // at a fraction of the cost (a large library's index and sort keys).
+    if text.is_ascii() {
+        return text.to_ascii_lowercase();
+    }
     text.nfd()
         .filter(|c| !unicode_normalization::char::is_combining_mark(*c))
         .flat_map(char::to_lowercase)
@@ -50,12 +56,17 @@ fn haystack(track: &Track) -> String {
         &track.comment,
         &file,
     ];
-    let mut out = String::new();
+    let mut out = String::with_capacity(fields.iter().map(|f| f.len() + 1).sum());
     for (i, field) in fields.into_iter().enumerate() {
         if i > 0 {
             out.push('\n');
         }
-        out.push_str(&fold(field));
+        if field.is_ascii() {
+            // As `fold` does, without a String per field.
+            out.extend(field.chars().map(|c| c.to_ascii_lowercase()));
+        } else {
+            out.push_str(&fold(field));
+        }
     }
     out
 }

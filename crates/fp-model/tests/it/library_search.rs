@@ -423,3 +423,57 @@ fn markers_to_review_lists_only_flagged_tracks() {
     assert_eq!(category_counts(&lib, &tree()).markers_review, 2);
     assert_eq!(category_counts(&tree_library(), &tree()).markers_review, 0);
 }
+
+/// ASCII text folds as a plain lower case; text with accents still drops
+/// them (the fast path changes nothing a search or an order sees).
+#[test]
+fn fold_folds_ascii_as_lower_case() {
+    assert_eq!(
+        fold("Hello World 42 /Path-To_File.FLAC"),
+        "hello world 42 /path-to_file.flac"
+    );
+    assert_eq!(fold(""), "");
+    assert_eq!(fold("Ça Ñu é"), "ca nu e");
+}
+
+/// 50 000 tracks of plain ASCII text, as most tags and file names are.
+fn ascii_library(n: u64) -> Library {
+    library(
+        (1..=n)
+            .map(|i| {
+                track(
+                    i,
+                    &format!("/music/folder {}/Song {i}.mp3", i % 50),
+                    &format!("Song {} {}", (i * 7919) % n, i % 977),
+                    &format!("Artist {}", i % 997),
+                    Some(100 + i % 3),
+                )
+            })
+            .collect(),
+    )
+}
+
+/// The first search of a large library builds its index within a frame.
+#[test]
+#[cfg_attr(debug_assertions, ignore)]
+fn indexing_50000_tracks_takes_less_than_a_frame() {
+    let lib = ascii_library(50_000);
+    let started = Instant::now();
+    let index = SearchIndex::build(&lib);
+    let took = started.elapsed();
+    eprintln!("index of 50 000 tracks: {took:?}");
+    assert!(index.matches(TrackId(1), &query_words("song")));
+    assert!(took.as_millis() < 16, "took {took:?}");
+}
+
+/// A click on a header of a large library folds its keys within a frame.
+#[test]
+#[cfg_attr(debug_assertions, ignore)]
+fn sort_keys_of_50000_tracks_take_less_than_a_frame() {
+    let lib = ascii_library(50_000);
+    let started = Instant::now();
+    let _keys = SortKeys::build(&lib, &tree(), LibraryColumn::Tag(TableColumn::Title));
+    let took = started.elapsed();
+    eprintln!("sort keys of 50 000 tracks: {took:?}");
+    assert!(took.as_millis() < 10, "took {took:?}");
+}
