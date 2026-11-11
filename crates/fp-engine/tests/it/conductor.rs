@@ -1115,3 +1115,40 @@ fn the_library_meter_maximum_restarts_on_request() {
     let restarted = library_telemetry(&handle).unwrap().meter;
     assert!(restarted.max_db < playing.max_db - 3.0, "{restarted:?}");
 }
+
+/// Background work (the analysis, the folder watch) has a queue of its
+/// own: however much of it waits, an operator's command is never refused.
+#[test]
+fn background_work_never_refuses_an_operator_command() {
+    let (mut conductor, handle, _device, now) = offline_conductor(model(1, 3));
+    conductor.tick(now);
+    let p = handle.model.load().players[0].id;
+    let mut queued = 0;
+    while handle.send_background(Command::SetVolume(p, 0.5)) {
+        queued += 1;
+        assert!(queued < 1_000_000, "the background queue is bounded");
+    }
+    assert!(queued > 0);
+    assert!(
+        handle.send(Command::SetVolume(p, 0.25)),
+        "the operator's command is taken"
+    );
+    conductor.tick(now);
+    assert!(
+        handle.send_background(Command::SetVolume(p, 0.5)),
+        "drained"
+    );
+}
+
+/// In one tick the operator's commands are applied before background work.
+#[test]
+fn operator_commands_go_before_background_work() {
+    let (mut conductor, handle, _device, now) = offline_conductor(model(1, 3));
+    conductor.tick(now);
+    let p = handle.model.load().players[0].id;
+    assert!(handle.send_background(Command::SetVolume(p, 0.5)));
+    assert!(handle.send(Command::SetVolume(p, 0.25)));
+    conductor.tick(now);
+    let volume = handle.model.load().player(p).unwrap().volume;
+    assert_eq!(volume, 0.5, "the background command came second");
+}

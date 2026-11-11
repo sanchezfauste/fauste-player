@@ -100,7 +100,8 @@ allocation or free.
 
 | From → to | Channel | Blocking? |
 |---|---|---|
-| UI → conductor | `crossbeam-channel` bounded (1024) `Command` | `try_send`; a full queue drops and logs |
+| UI, remote API, MIDI → conductor | `crossbeam-channel` bounded (1024) `Command`, the operator's queue (`ConductorHandle::send`) | `try_send`; a full queue drops and logs |
+| Services → conductor | a second bounded (1024) `Command` queue for background work: analysis, tags, file states, the folder watch (`send_background`, `offer_background`) | `try_send`; a full queue is back-pressure, not logged: the services keep or redo the work. Each tick applies the operator's commands first, so a large scan never refuses or delays an operator's command |
 | UI → conductor (test tones) | bounded (16) `EngineRequest` | `try_send` |
 | Conductor → UI and services | `arc-swap` of `Arc<AppState>` and `Arc<Telemetry>` | wait-free reads |
 | Conductor → mixer | `rtrb` SPSC `BusCommand` (at most `tuning.max_commands_per_block` drained per block) | wait-free |
