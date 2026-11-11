@@ -1018,6 +1018,35 @@ fn the_telemetry_carries_the_library_preview_and_its_meter() {
     assert_eq!(library_telemetry(&handle), None);
 }
 
+/// The library CUE's maximum after 20 blocks of track 1 at `volume`.
+fn library_max_at(volume: f32) -> f32 {
+    let (mut conductor, handle, device, mut now) = library_conductor();
+    let fp_model::EngineAction::StartLibraryCue {
+        mut request,
+        paused,
+    } = library_preview(1, 0.0)
+    else {
+        unreachable!()
+    };
+    request.volume = volume;
+    conductor.execute(
+        fp_model::EngineAction::StartLibraryCue { request, paused },
+        now,
+    );
+    settle(&mut conductor, now);
+    play_blocks(&mut conductor, &device, &mut now, 20);
+    library_telemetry(&handle).unwrap().meter.max_db
+}
+
+/// LB59: the library CUE's meter reads after its listening level.
+#[test]
+fn lb59_the_library_meter_reads_after_the_listening_level() {
+    let full = library_max_at(1.0);
+    let half = library_max_at(0.5);
+    assert!(full > -60.0, "{full}");
+    assert!((full - half - 6.02).abs() < 0.2, "{full} {half}");
+}
+
 /// Plays track `n` in the library CUE for 200 ms, stops it and lets 500 ms
 /// pass; returns the meter while playing and after.
 fn preview_then_stop(
