@@ -4,7 +4,7 @@
 //! documented methods: least recently played order and simple separation
 //! rules.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use crate::ids::TrackId;
 use crate::rotation::StepSource;
@@ -68,18 +68,19 @@ pub fn eligible(
     planned: Planned<'_>,
 ) -> Vec<TrackId> {
     let ctx = Context::new(state, source, at, planned);
-    let mut out: Vec<TrackId> = ctx
-        .pool
+    ctx.ordered
         .iter()
-        .copied()
+        .map(|(_, t)| *t)
         .filter(|t| ctx.track_ok(*t) && ctx.artist_ok(*t))
-        .collect();
-    ctx.order(&mut out);
-    out
+        .collect()
 }
 
 /// The next track from `source` (AU31–AU34), or `None` when it has no
 /// playable track.
+///
+/// One pass over the pool in least-recently-aired order, checking the
+/// rules lazily: it stops as soon as `PICK_SPREAD` tracks meet both, so a
+/// large library costs a sort and a short scan, not a check of every track.
 pub fn pick(
     state: &AppState,
     source: &StepSource,
@@ -88,33 +89,35 @@ pub fn pick(
     rng: &mut SplitMix64,
 ) -> Option<Picked> {
     let ctx = Context::new(state, source, at, planned);
-    if ctx.pool.is_empty() {
-        return None;
-    }
-    let both: Vec<TrackId> = ctx
-        .pool
-        .iter()
-        .copied()
-        .filter(|t| ctx.track_ok(*t) && ctx.artist_ok(*t))
-        .collect();
-    let (mut tier, relaxed) = if !both.is_empty() {
-        (both, Relaxed::None)
-    } else {
-        let track_only: Vec<TrackId> = ctx
-            .pool
-            .iter()
-            .copied()
-            .filter(|t| ctx.track_ok(*t))
-            .collect();
-        if track_only.is_empty() {
-            (ctx.pool.clone(), Relaxed::Track)
-        } else {
-            (track_only, Relaxed::Artist)
+    let mut both = Vec::with_capacity(PICK_SPREAD);
+    let mut track_only = Vec::with_capacity(PICK_SPREAD);
+    for (_, track) in &ctx.ordered {
+        if !ctx.track_ok(*track) {
+            continue;
         }
+        if ctx.artist_ok(*track) {
+            both.push(*track);
+            if both.len() == PICK_SPREAD {
+                break;
+            }
+        } else if track_only.len() < PICK_SPREAD {
+            track_only.push(*track);
+        }
+    }
+    let (tier, relaxed) = if !both.is_empty() {
+        (both, Relaxed::None)
+    } else if !track_only.is_empty() {
+        (track_only, Relaxed::Artist)
+    } else {
+        let all: Vec<TrackId> = ctx
+            .ordered
+            .iter()
+            .take(PICK_SPREAD)
+            .map(|(_, t)| *t)
+            .collect();
+        (all, Relaxed::Track)
     };
-    ctx.order(&mut tier);
-    let spread = tier.len().min(PICK_SPREAD);
-    let index = usize::try_from(rng.below(spread as u64)).unwrap_or(0);
+    let index = usize::try_from(rng.below(tier.len() as u64)).unwrap_or(0);
     tier.get(index).map(|track| Picked {
         track: *track,
         relaxed,
@@ -125,60 +128,91 @@ pub fn pick(
 struct Context<'a> {
     state: &'a AppState,
     at: WallTime,
-    pool: Vec<TrackId>,
-    /// Last aired time of every track that has one, with the planned
-    /// overlay.
-    last: HashMap<TrackId, WallTime>,
-    /// Latest aired time per normalized artist, across the library.
-    artists: HashMap<String, WallTime>,
+    planned: Planned<'a>,
+    /// The pool with each track's last aired time, least recently aired
+    /// first (never aired before all), then by id (AU33).
+    ordered: Vec<(Option<WallTime>, TrackId)>,
     /// The aired times of the pool's tracks, ascending: how many aired
-    /// after a time is a binary search, so a choice over a large library
-    /// stays O(n log n).
+    /// after a time is a binary search.
     pool_times: Vec<WallTime>,
+    /// The normalized artists aired within the artist separation (or at a
+    /// time after `at`), each with its latest time. Only these can block a
+    /// candidate, so the rest of the library is never normalized.
+    recent_artists: Vec<(String, WallTime)>,
 }
 
+/// Trimmed and lower-cased (AU32).
 fn norm(artist: &str) -> String {
     artist.trim().to_lowercase()
 }
 
+/// `artist` normalized equals `key` (already normalized), without
+/// allocating.
+fn same_artist(artist: &str, key: &str) -> bool {
+    artist
+        .trim()
+        .chars()
+        .flat_map(char::to_lowercase)
+        .eq(key.chars())
+}
+
 impl<'a> Context<'a> {
-    fn new(state: &'a AppState, source: &StepSource, at: WallTime, planned: Planned<'_>) -> Self {
-        let mut last: HashMap<TrackId, WallTime> = state.air_times.iter().collect();
-        for (track, when) in planned {
-            let slot = last.entry(*track).or_insert(*when);
-            if *when > *slot {
-                *slot = *when;
-            }
-        }
-        let mut artists: HashMap<String, WallTime> = HashMap::new();
-        for (track, when) in &last {
-            let Some(artist) = state.library.get(*track).map(|t| norm(&t.artist)) else {
-                continue;
-            };
-            if artist.is_empty() {
-                continue;
-            }
-            let slot = artists.entry(artist).or_insert(*when);
-            if *when > *slot {
-                *slot = *when;
-            }
-        }
-        let pool = pool(state, source);
-        let mut pool_times: Vec<WallTime> =
-            pool.iter().filter_map(|t| last.get(t).copied()).collect();
+    fn new(state: &'a AppState, source: &StepSource, at: WallTime, planned: Planned<'a>) -> Self {
+        let last_of = |t: TrackId| {
+            let planned = planned
+                .iter()
+                .filter(|(p, _)| *p == t)
+                .map(|(_, w)| *w)
+                .max();
+            state.air_times.get(t).max(planned)
+        };
+        let mut ordered: Vec<(Option<WallTime>, TrackId)> = pool(state, source)
+            .into_iter()
+            .map(|t| (last_of(t), t))
+            .collect();
+        ordered.sort();
+        let mut pool_times: Vec<WallTime> = ordered.iter().filter_map(|(w, _)| *w).collect();
         pool_times.sort();
+        let mins = state.config.automation.artist_separation_mins;
+        let mut recent_artists: Vec<(String, WallTime)> = Vec::new();
+        if mins > 0 {
+            let window = i64::from(mins) * 60_000;
+            let recent = state
+                .air_times
+                .iter()
+                .chain(planned.iter().copied())
+                .filter(|(_, when)| at.millis_since(*when) < window);
+            for (track, when) in recent {
+                let Some(artist) = state.library.get(track).map(|t| norm(&t.artist)) else {
+                    continue;
+                };
+                if artist.is_empty() {
+                    continue;
+                }
+                match recent_artists.iter_mut().find(|(a, _)| *a == artist) {
+                    Some((_, latest)) => *latest = (*latest).max(when),
+                    None => recent_artists.push((artist, when)),
+                }
+            }
+        }
         Self {
             state,
             at,
-            pool,
-            last,
-            artists,
+            planned,
+            ordered,
             pool_times,
+            recent_artists,
         }
     }
 
     fn last(&self, track: TrackId) -> Option<WallTime> {
-        self.last.get(&track).copied()
+        let planned = self
+            .planned
+            .iter()
+            .filter(|(p, _)| *p == track)
+            .map(|(_, w)| *w)
+            .max();
+        self.state.air_times.get(track).max(planned)
     }
 
     /// AU31: eligible again by time or by the share of the pool aired
@@ -194,7 +228,7 @@ impl<'a> Context<'a> {
             return true;
         }
         let by_time = mins > 0 && self.at.millis_since(last) >= i64::from(mins) * 60_000;
-        let others = self.pool.len().saturating_sub(1);
+        let others = self.ordered.len().saturating_sub(1);
         let needed = (usize::from(pct) * others).div_ceil(100);
         // Strictly later times only, so the track itself never counts.
         let since = self.pool_times.len() - self.pool_times.partition_point(|w| *w <= last);
@@ -202,27 +236,21 @@ impl<'a> Context<'a> {
         by_time || by_pct
     }
 
-    /// AU32: no track of the same artist aired within the separation.
+    /// AU32: no track of the same artist aired within the separation (a
+    /// time after `at`, the clock gone back, counts as within).
     fn artist_ok(&self, track: TrackId) -> bool {
-        let mins = self.state.config.automation.artist_separation_mins;
-        if mins == 0 {
+        if self.recent_artists.is_empty() {
             return true;
         }
-        let Some(artist) = self.state.library.get(track).map(|t| norm(&t.artist)) else {
+        let Some(artist) = self.state.library.get(track).map(|t| t.artist.as_str()) else {
             return true;
         };
-        if artist.is_empty() {
+        if artist.trim().is_empty() {
             return true;
         }
-        match self.artists.get(&artist) {
-            // A time in the future (the clock went back) is "just aired".
-            Some(when) => self.at.millis_since(*when) >= i64::from(mins) * 60_000,
-            None => true,
-        }
-    }
-
-    /// AU33: least recently aired first (never aired before all), then by id.
-    fn order(&self, tracks: &mut [TrackId]) {
-        tracks.sort_by_key(|t| (self.last(*t), *t));
+        !self
+            .recent_artists
+            .iter()
+            .any(|(key, _)| same_artist(artist, key))
     }
 }

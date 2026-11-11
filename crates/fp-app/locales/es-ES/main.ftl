@@ -241,6 +241,7 @@ error-last-panel = Al menos un panel debe seguir visible.
 error-layout-locked = La distribución está bloqueada.
 error-rotation-step = Un paso reproduce de 1 a 99 pistas, y el primer número no puede ser mayor que el segundo.
 error-rotation-name-empty = La rotación necesita un nombre.
+error-rotation-empty = La rotación necesita al menos un paso.
 error-last-rotation = No se puede borrar la última rotación.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartuchera

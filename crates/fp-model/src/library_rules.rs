@@ -145,7 +145,7 @@ pub(crate) fn merge_duplicate_paths(state: &mut AppState) -> usize {
         // The survivor keeps the later of the two air times (AU35).
         if let Some(at) = state.air_times.get(*id) {
             state.air_times.remove(*id);
-            state.air_times.record(*to, at);
+            state.air_times.record_later(*to, at);
         }
     }
     // `remove` unindexed only the paths it owned: index the survivors again.

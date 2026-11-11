@@ -241,6 +241,7 @@ error-last-panel = Mindestens ein Bereich muss sichtbar bleiben.
 error-layout-locked = Das Layout ist gesperrt.
 error-rotation-step = Ein Schritt spielt 1 bis 99 Titel, die erste Zahl nicht größer als die zweite.
 error-rotation-name-empty = Die Rotation braucht einen Namen.
+error-rotation-empty = Die Rotation braucht mindestens einen Schritt.
 error-last-rotation = Die letzte Rotation kann nicht gelöscht werden.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall

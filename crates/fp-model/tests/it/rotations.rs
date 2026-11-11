@@ -54,6 +54,30 @@ fn create_validates_the_name_and_steps() {
 }
 
 #[test]
+fn a_rotation_needs_at_least_one_step() {
+    // Final review: a default rotation without steps would leave the
+    // filler nothing to fall back on (AU34).
+    let mut s = state();
+    assert_eq!(
+        create(&mut s, "Day", vec![]),
+        Err(ModelError::EmptyRotation)
+    );
+    let day = create(&mut s, "Day", vec![music(1, 1)]).unwrap();
+    assert_eq!(
+        apply(
+            &mut s,
+            Command::UpdateRotation(Rotation {
+                id: day,
+                name: "Day".into(),
+                steps: vec![],
+            }),
+        ),
+        Err(ModelError::EmptyRotation)
+    );
+    assert_eq!(s.rotations.get(day).unwrap().steps.len(), 1);
+}
+
+#[test]
 fn create_update_delete_round_trip() {
     let mut s = state();
     let day = create(&mut s, "Day", vec![music(2, 3)]).unwrap();
@@ -78,7 +102,7 @@ fn create_update_delete_round_trip() {
             Command::UpdateRotation(Rotation {
                 id: RotationId(12_345),
                 name: "X".into(),
-                steps: vec![],
+                steps: vec![music(1, 1)],
             }),
         ),
         Err(ModelError::UnknownRotation(RotationId(12_345)))

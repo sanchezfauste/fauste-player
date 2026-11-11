@@ -241,6 +241,7 @@ error-last-panel = At least one panel must stay shown.
 error-layout-locked = The layout is locked.
 error-rotation-step = A step plays from 1 to 99 tracks, the first number not above the second.
 error-rotation-name-empty = A rotation needs a name.
+error-rotation-empty = A rotation needs at least one step.
 error-last-rotation = The last rotation cannot be deleted.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall

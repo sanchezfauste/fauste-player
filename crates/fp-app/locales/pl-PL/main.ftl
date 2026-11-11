@@ -247,6 +247,7 @@ error-last-panel = Co najmniej jeden panel musi pozostać widoczny.
 error-layout-locked = Układ jest zablokowany.
 error-rotation-step = Krok odtwarza od 1 do 99 utworów, a pierwsza liczba nie może być większa od drugiej.
 error-rotation-name-empty = Rotacja musi mieć nazwę.
+error-rotation-empty = Rotacja musi mieć co najmniej jeden krok.
 error-last-rotation = Nie można usunąć ostatniej rotacji.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall

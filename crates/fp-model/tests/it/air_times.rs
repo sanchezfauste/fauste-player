@@ -66,13 +66,35 @@ fn removing_a_track_drops_its_air_time() {
 }
 
 #[test]
-fn record_keeps_the_later_time() {
+fn record_keeps_the_latest_airing_even_when_the_clock_went_back() {
+    // Final review, Important 2: the latest airing is the truth, so a
+    // stamp left in the future by a wrong clock is replaced when the
+    // track airs again.
     let mut a = AirTimes::default();
     a.record(TrackId(1), WallTime(500));
     a.record(TrackId(1), WallTime(100));
+    assert_eq!(a.get(TrackId(1)), Some(WallTime(100)));
+}
+
+#[test]
+fn loading_keeps_the_later_of_two_times() {
+    let a: AirTimes = [(TrackId(1), WallTime(500)), (TrackId(1), WallTime(100))]
+        .into_iter()
+        .collect();
     assert_eq!(a.get(TrackId(1)), Some(WallTime(500)));
-    a.record(TrackId(1), WallTime(900));
-    assert_eq!(a.get(TrackId(1)), Some(WallTime(900)));
+}
+
+#[test]
+fn clamp_future_brings_times_ahead_of_now_back_to_now() {
+    let year = 365 * 24 * 3_600 * 1_000;
+    let now = WallTime(1_000_000_000_000);
+    let mut a = AirTimes::default();
+    a.record(TrackId(1), WallTime(now.0 + year));
+    a.record(TrackId(2), WallTime(now.0 - 5));
+    assert_eq!(a.clamp_future(now), 1);
+    assert_eq!(a.get(TrackId(1)), Some(now));
+    assert_eq!(a.get(TrackId(2)), Some(WallTime(now.0 - 5)));
+    assert_eq!(a.clamp_future(now), 0);
 }
 
 #[test]

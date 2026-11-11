@@ -18,7 +18,9 @@ runtime only.
 
 A `Rotation` has a name and an ordered list of `RotationStep`s. A step
 names its `StepSource` and a count range `min..=max` (both in
-`STEP_COUNT_RANGE`, 1–99, `min <= max`):
+`STEP_COUNT_RANGE`, 1–99, `min <= max`); a rotation needs at least one
+step (a damaged database may still hold one without, and the walk then
+falls back on the default):
 
 - `StepSource::Category(id)`: the category with all its subcategories;
 - `StepSource::Kind(kind)`: every track of that kind.
@@ -37,9 +39,13 @@ Commands: `CreateRotation`, `UpdateRotation`, `DeleteRotation`,
 
 `AppState::air_times` holds, per track, when it last started on air
 (AU35): `advance_to` (any player's Main) and `cart_rules::fire` (the
-cartwall's Main) record `wall_now`. Pre-listen never does. A record keeps
-the later of the old and new time, so an airing logged after the clock
-went back does not make the track look older. A track removed from the
+cartwall's Main) record `wall_now`. Pre-listen never does. A record replaces the stored
+time: the latest airing is the truth, even when the clock went back. The
+conductor brings every time after the clock back to it when it starts and
+whenever the clock goes back (`AirTimes::clamp_future`, with a log line),
+so a stamp left by a clock that was ahead never holds a track or an artist
+back for as long as the clock was wrong. Loading keeps the later of two
+times for a track. A track removed from the
 library loses its time; a duplicate merged into another hands its time to
 the survivor. There is one time per track, so the map never outgrows the
 library.

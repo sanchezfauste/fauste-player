@@ -241,6 +241,7 @@ error-last-panel = Gutxienez panel batek ikusgai egon behar du.
 error-layout-locked = Diseinua blokeatuta dago.
 error-rotation-step = Urrats batek 1 eta 99 pista artean jotzen ditu, eta lehen zenbakiak ezin du bigarrena gainditu.
 error-rotation-name-empty = Errotazioak izena behar du.
+error-rotation-empty = Errotazioak urrats bat behar du gutxienez.
 error-last-rotation = Ezin da azken errotazioa ezabatu.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Kartutxoak

@@ -258,3 +258,31 @@ fn a_kind_source_takes_every_track_of_that_kind() {
     assert_eq!(pool(&s, &StepSource::Kind(TrackKind::Music)), vec![a]);
     assert_eq!(pool(&s, &StepSource::Kind(TrackKind::Jingle)), vec![b]);
 }
+
+/// Final review, Important 1: a choice over a 50 000-track library, every
+/// track aired, runs on the conductor thread and must stay short. The
+/// bound is generous for a debug build on a busy machine.
+#[test]
+fn a_choice_over_a_large_library_is_quick() {
+    let mut s = state();
+    for id in 1..=50_000u64 {
+        let mut t = Track::new(TrackId(id), PathBuf::from(format!("/m/{id}.flac")));
+        t.artist = format!("Artist {}", id % 5_000);
+        s.library.insert(t);
+        s.air_times
+            .record(TrackId(id), WallTime(NOW.0 - id as i64 * MIN));
+    }
+    let mut rng = SplitMix64(7);
+    // Warm up once, then time the best of three.
+    let _ = pick(&s, &all_music(), NOW, &[], &mut rng);
+    let best = (0..3)
+        .map(|_| {
+            let started = std::time::Instant::now();
+            assert!(pick(&s, &all_music(), NOW, &[], &mut rng).is_some());
+            started.elapsed()
+        })
+        .min()
+        .unwrap();
+    eprintln!("pick over 50 000 tracks: {best:?}");
+    assert!(best < std::time::Duration::from_millis(60), "{best:?}");
+}

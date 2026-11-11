@@ -241,6 +241,7 @@ error-last-panel = Er moet minstens één paneel zichtbaar blijven.
 error-layout-locked = De indeling is vergrendeld.
 error-rotation-step = Een stap speelt 1 tot 99 nummers, het eerste getal niet groter dan het tweede.
 error-rotation-name-empty = De rotatie heeft een naam nodig.
+error-rotation-empty = De rotatie heeft minstens één stap nodig.
 error-last-rotation = De laatste rotatie kan niet worden verwijderd.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall

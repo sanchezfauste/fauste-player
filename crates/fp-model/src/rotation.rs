@@ -108,6 +108,9 @@ fn checked_name(name: &str) -> Result<String, ModelError> {
 }
 
 fn check_steps(steps: &[RotationStep]) -> Result<(), ModelError> {
+    if steps.is_empty() {
+        return Err(ModelError::EmptyRotation);
+    }
     steps.iter().try_for_each(check_step)
 }
 

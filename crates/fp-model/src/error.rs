@@ -79,6 +79,9 @@ pub enum ModelError {
     InvalidRotationStep,
     #[error("a rotation name must not be empty")]
     EmptyRotationName,
+    /// A rotation with no step would give the filler nothing to play.
+    #[error("a rotation needs at least one step")]
+    EmptyRotation,
     /// AU4: there is always a rotation to fall back on.
     #[error("the last rotation cannot be deleted")]
     LastRotation,

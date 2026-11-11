@@ -303,6 +303,20 @@ fn random_seed() -> u64 {
     nanos | 1
 }
 
+/// Brings air times after the clock back to it (the clock went back, or
+/// was ahead when they were stored), so no track or artist is held back
+/// for as long as the clock was wrong.
+fn settle_air_times(state: &mut AppState) {
+    let now = state.wall_now;
+    let changed = state.air_times.clamp_future(now);
+    if changed > 0 {
+        tracing::warn!(
+            tracks = changed,
+            "air times were ahead of the clock; brought back to now"
+        );
+    }
+}
+
 impl Conductor {
     /// Takes over `state` (typically restored from disk) and runs the
     /// `initial` actions that came with it (e.g. `LoadPaused`).
@@ -315,6 +329,7 @@ impl Conductor {
         // Automation's choices differ from one run to the next.
         state.wall_now = WallTime::now();
         state.rng = SplitMix64(random_seed());
+        settle_air_times(&mut state);
         for player in &state.players {
             engine.execute(EngineAction::AddPlayer { player: player.id }, now);
         }
@@ -385,7 +400,11 @@ impl Conductor {
     /// One iteration: commands, engine, events, snapshots.
     pub fn tick(&mut self, now: Instant) {
         // The model never reads the clock: it is told the time here.
+        let before = self.state.wall_now;
         self.state.wall_now = WallTime::now();
+        if self.state.wall_now < before {
+            settle_air_times(&mut self.state);
+        }
         let mut changed = false;
         let mut refused = false;
         // The operator's commands first, then the background work waiting.

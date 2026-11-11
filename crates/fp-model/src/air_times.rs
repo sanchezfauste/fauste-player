@@ -17,14 +17,34 @@ impl AirTimes {
         self.times.get(&track).copied()
     }
 
-    /// Records that `track` aired at `at`, keeping the later time: an
-    /// airing recorded after the clock went back must not make the track
-    /// look older than it is.
+    /// Records that `track` aired at `at`. The latest airing is the
+    /// truth, even when its time is earlier than the stored one (a stamp a
+    /// wrong clock left in the future is replaced).
     pub fn record(&mut self, track: TrackId, at: WallTime) {
+        self.times.insert(track, at);
+    }
+
+    /// Keeps the later of the stored time and `at` (loading, merging).
+    pub fn record_later(&mut self, track: TrackId, at: WallTime) {
         let slot = self.times.entry(track).or_insert(at);
         if at > *slot {
             *slot = at;
         }
+    }
+
+    /// Brings every time after `now` back to `now` (the clock went back,
+    /// or was ahead when the times were stored), so no track or artist is
+    /// held back for as long as the clock was wrong. Returns how many
+    /// changed.
+    pub fn clamp_future(&mut self, now: WallTime) -> usize {
+        let mut changed = 0;
+        for at in self.times.values_mut() {
+            if *at > now {
+                *at = now;
+                changed += 1;
+            }
+        }
+        changed
     }
 
     pub fn retain_tracks(&mut self, keep: impl Fn(TrackId) -> bool) {
@@ -52,7 +72,7 @@ impl FromIterator<(TrackId, WallTime)> for AirTimes {
     fn from_iter<I: IntoIterator<Item = (TrackId, WallTime)>>(iter: I) -> Self {
         let mut out = Self::default();
         for (track, at) in iter {
-            out.record(track, at);
+            out.record_later(track, at);
         }
         out
     }

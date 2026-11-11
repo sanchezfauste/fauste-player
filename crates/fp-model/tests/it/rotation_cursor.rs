@@ -191,7 +191,15 @@ fn a_rotation_without_steps_falls_back_to_the_default() {
     ensure_default(&mut s, "Music");
     let a = category(&mut s, "A");
     fill(&mut s, a, 1, 1);
-    let r = rotation(&mut s, vec![]);
+    // Commands refuse it, but a damaged database may still hold one.
+    let r = RotationId(7_777);
+    let (mut list, default) = s.rotations.clone().into_parts();
+    list.push(fp_model::Rotation {
+        id: r,
+        name: "Empty".into(),
+        steps: vec![],
+    });
+    s.rotations = fp_model::Rotations::from_parts(list, default);
     let mut cursor = RotationCursor::new(r);
     let out = next_track(&s, &mut cursor, NOW, &[], &mut SplitMix64(1));
     assert!(out.picked.is_some());
