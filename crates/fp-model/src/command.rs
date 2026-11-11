@@ -327,6 +327,17 @@ pub enum Command {
     ResetMarkers {
         track: TrackId,
     },
+    /// External editor spec EE5: the operator has seen the markers review
+    /// notice; clears `markers_review` on each track (unknown ids ignored).
+    MarkReviewed {
+        tracks: Vec<TrackId>,
+    },
+    /// External editor spec EE5: records the stamp of a track that has none
+    /// (ignored when it already has one or the track is gone).
+    SetFileStamp {
+        track: TrackId,
+        stamp: crate::track::FileStamp,
+    },
     /// Loudness normalization spec N10: excludes a track from
     /// normalization or trims its gain. Allowed while it plays: it changes
     /// what loads afterwards.

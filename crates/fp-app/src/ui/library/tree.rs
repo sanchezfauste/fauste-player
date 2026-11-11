@@ -1,6 +1,8 @@
 //! The library's category tree (track library spec §7.3, LB9–LB11, LB27):
-//! *All tracks*, the categories in tree order and *Uncategorised*, each
-//! with its colour and its count (its own tracks and its subcategories').
+//! *All tracks*, the categories in tree order, *Uncategorised* and, while a
+//! track's markers need review, *Markers to review* (external editor spec
+//! EE11), each with its colour and its count (its own tracks and its
+//! subcategories').
 //! A click selects, the arrow opens or closes a category (saved, LB27), the
 //! ＋ and the right-click menu create, rename, recolour, change the kind
 //! and delete, and a category is moved by dragging it.
@@ -61,6 +63,8 @@ enum Item {
         expanded: bool,
     },
     Uncategorised,
+    /// The tracks whose markers need review (EE11); shown while any is.
+    MarkersToReview,
 }
 
 /// What an item asked for this frame, done once the items are drawn.
@@ -85,8 +89,13 @@ enum Action {
 }
 
 /// The items shown: the categories in tree order, the children of a closed
-/// category left out.
-fn items(categories: &Categories, expanded: &[CategoryId], mode: TreeMode) -> Vec<Item> {
+/// category left out; *Markers to review* when `review`.
+fn items(
+    categories: &Categories,
+    expanded: &[CategoryId],
+    mode: TreeMode,
+    review: bool,
+) -> Vec<Item> {
     let mut children: HashMap<Option<CategoryId>, Vec<&Category>> = HashMap::new();
     for c in categories.iter() {
         children.entry(c.parent).or_default().push(c);
@@ -120,6 +129,9 @@ fn items(categories: &Categories, expanded: &[CategoryId], mode: TreeMode) -> Ve
     }
     if mode == TreeMode::Window {
         out.push(Item::Uncategorised);
+        if review {
+            out.push(Item::MarkersToReview);
+        }
     }
     out
 }
@@ -144,6 +156,7 @@ fn count_of(counts: Option<&CategoryCounts>, item: Item) -> usize {
     match item {
         Item::All => counts.all,
         Item::Uncategorised => counts.uncategorised,
+        Item::MarkersToReview => counts.markers_review,
         Item::Category { id, .. } => counts.by_category.get(&id).copied().unwrap_or(0),
     }
 }
@@ -159,8 +172,15 @@ pub(crate) fn category_tree(
     refresh_counts(&mut view_state.library, scene.state);
     let mut actions = Vec::new();
     header(ui, scene, mode, &view, &mut actions);
-    let shown = items(&scene.state.categories, &view.expanded, mode);
     let counts = view_state.library.counts.as_ref().map(|c| &c.counts);
+    let review = counts.is_some_and(|c| c.markers_review > 0);
+    // EE11: the filter is shown only while a track is flagged; once none
+    // is, the view returns to *All tracks* rather than an empty, hidden
+    // selection.
+    if mode == TreeMode::Window && !review && view.selection == LibrarySelection::MarkersToReview {
+        actions.push(Action::Select(LibrarySelection::All));
+    }
+    let shown = items(&scene.state.categories, &view.expanded, mode, review);
     let dragging = view_state
         .library
         .tree_drag
@@ -279,6 +299,7 @@ fn row(
     let (name, color, depth) = match item {
         Item::All => (t.tr("library-tree-all"), None, 0),
         Item::Uncategorised => (t.tr("library-tree-uncategorised"), None, 0),
+        Item::MarkersToReview => (t.tr("library-tree-markers-review"), None, 0),
         Item::Category { depth, .. } => (
             category.map(|c| c.name.clone()).unwrap_or_default(),
             category.and_then(|c| c.color),
@@ -288,6 +309,7 @@ fn row(
     let selection = match item {
         Item::All => LibrarySelection::All,
         Item::Uncategorised => LibrarySelection::Uncategorised,
+        Item::MarkersToReview => LibrarySelection::MarkersToReview,
         Item::Category { id, .. } => LibrarySelection::Category(id),
     };
     let selected = mode == TreeMode::Window && view.selection == selection;
@@ -349,6 +371,16 @@ fn row(
         match color {
             Some(c) => {
                 painter.rect_filled(swatch, 2.0, theme::cart_color(c));
+            }
+            // The review flag's sign, where the others have a swatch.
+            None if item == Item::MarkersToReview => {
+                painter.text(
+                    swatch.center(),
+                    Align2::CENTER_CENTER,
+                    icon::SEAL_WARNING,
+                    font(12.0),
+                    theme::AMBER,
+                );
             }
             None => {
                 painter.rect_stroke(

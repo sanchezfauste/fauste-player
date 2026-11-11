@@ -2,6 +2,7 @@
 //! and the pure state machine that implements the player behaviour rules.
 //! This crate performs no I/O and spawns no threads.
 
+pub mod audio_change;
 pub mod availability;
 pub mod bit_perfect;
 mod cart_rules;
@@ -15,6 +16,7 @@ pub mod device_offer;
 pub mod dsd;
 mod entry_notice;
 pub mod error;
+pub mod external_edit;
 pub mod ids;
 pub mod insertion;
 pub mod layout;
@@ -36,12 +38,14 @@ pub mod reset_played;
 pub mod restore;
 pub mod session;
 pub mod shortcuts;
+pub mod sounding;
 pub mod state;
 mod tag_edit;
 mod tag_sheet;
 pub mod track;
 pub mod volume;
 
+pub use audio_change::{AudioChange, audio_change};
 pub use availability::{Availability, availability, command_available};
 pub use bit_perfect::{bit_perfect_player, fader_locked, faders_reset_by, rate_cut};
 pub use cartwall::{
@@ -74,6 +78,7 @@ pub use dsd::{
 };
 pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;
+pub use external_edit::{ExternalEditBlock, external_edit_block};
 pub use ids::{CartId, CartPageId, CategoryId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
 pub use insertion::after_next;
 pub use layout::{
@@ -108,6 +113,7 @@ pub use reset_played::{can_reset_played, resettable_entries};
 pub use restore::{SettingsSection, restore_defaults};
 pub use session::{PlayerSession, RestoreParts};
 pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts, player_command};
+pub use sounding::track_sounding;
 pub use state::AppState;
 pub use tag_edit::{TagEditBlock, tag_edit_block};
 pub use tag_sheet::{
@@ -115,6 +121,7 @@ pub use tag_sheet::{
     cover_changed, cover_unstored, field_problem, invalid_fields, unstored_fields,
 };
 pub use track::{
-    AudioFormat, FileState, InvalidDate, Library, LibraryChanges, Marker, MarkerKind, MarkerSource,
-    Markers, PlayRange, Track, TrackAnalysis, TrackKind, TrackTags, parse_tag_date,
+    AudioFormat, AudioHash, FileStamp, FileState, InvalidDate, Library, LibraryChanges, Marker,
+    MarkerKind, MarkerSource, Markers, MarkersReview, PlayRange, Track, TrackAnalysis, TrackKind,
+    TrackTags, parse_tag_date,
 };

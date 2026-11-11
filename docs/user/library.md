@@ -33,8 +33,9 @@ is not saved.
 ## Categories
 
 The tree on the left groups the tracks. At the top, **All tracks**; then your
-categories, which can hold subcategories; at the end, **Uncategorised**, the
-tracks that belong to no category. Each item shows its colour and a count: a
+categories, which can hold subcategories; then **Uncategorised**, the
+tracks that belong to no category; and, only while some track needs it,
+**Markers to review** (see [When a file changes](#when-a-file-changes)). Each item shows its colour and a count: a
 category counts its own tracks and those of its subcategories. A track
 belongs to at most one category.
 
@@ -183,11 +184,73 @@ selected when it is for several.
 | Move to category ▸ | A category, or Uncategorised |
 | Kind ▸ | Music, Jingle, Effect, Ad or Voice |
 | Edit tags… | The tag editor (one track) |
+| Open in external editor | Start your audio editor with the track's file (one track; see [When a file changes](#when-a-file-changes)) |
+| Mark as reviewed | Clear the *markers need review* flag (shown when a selected track has it) |
 | Loudness… | The loudness popup (one track) |
 | Re-analyse | Analyse the tracks again |
 | Reset markers to automatic | Drop the manual markers |
 | Show file location | Open the file's folder (one track) |
 | Remove from library… | Remove the tracks from the library, after asking (below) |
+
+## When a file changes
+
+Preparing material often means trimming or fixing a file in an audio editor.
+Fauste Player helps with both halves.
+
+**Open in external editor** (the row menu of the library and of playlist rows)
+starts the program you chose in [Settings → Library](settings.md#library) with
+the track's file. It acts on one track. The entry is dimmed, with the reason
+as its tooltip, when no editor is set, when the file is missing or unreadable,
+or when the track is *sounding*: the current track of a player (playing or
+paused), a track waiting to start or on CUE, the outgoing track of a fade, a
+playing cart or the cartwall's CUE cart, or the library pre-listen while it
+plays or is paused. The editor is not offered on Android, nor in the Flatpak
+and snap builds, which cannot start other programs; the rest of this section
+still applies there.
+
+Fauste Player notices when a file it knows has changed (its size or
+modification time differ from the last analysis), whoever changed it, and
+analyses it again by itself: duration, markers, loudness, waveform, format and
+tags. It looks:
+
+- once at start, at every track in the library;
+- when a watched folder reports a change to a known track;
+- in the folder of any file you opened in the editor, until you quit, so a
+  save is noticed at once;
+- when a track is loaded into a player, a cart or the pre-listen, and when its
+  markers are opened for editing or dragged on the waveform;
+- when you press **Look for changed files** in
+  [Settings → Analysis](settings.md#analysis), which checks the whole library
+  and says in a notice how many files changed.
+
+There is no periodic polling. A file outside the watched folders, changed by
+another program while Fauste Player runs and not used since, is found at its
+next use or by **Look for changed files**.
+
+A changed track is never analysed again while it sounds: it waits until it
+stops, and its markers and loudness never move under a playing source.
+(**Re-analyse all tracks** is your explicit request and does not wait.) Editors
+often save by deleting and recreating the file, so a file that vanishes is
+looked at twice before it is marked missing. A file that changes while it is
+being analysed (an editor still saving it) is not used: it is analysed again
+shortly after, or at its next change, use or look. A missing track whose file comes
+back in a folder that is followed only because of the editor is not restored
+by itself.
+
+**Markers to review.** If the *audio* of a file changed and the track has
+markers you set by hand, the track shows an amber warning icon on its row (its
+tooltip names any markers that were dropped). Manual markers that now lie past
+the end of the audio are dropped and the automatic value takes their place; the
+others stay as they are (when the cue-in or cue-out was dropped, the intro,
+outro and MIX markers are moved inside the new cue range). The flag never stops the track from loading, cueing or
+playing. It clears when you choose **Mark as reviewed** in the track's menu (on
+several selected rows, it clears all of them) or change any marker of the
+track. The **Markers to review** item of the tree, after *Uncategorised*, lists
+the flagged tracks while there are any (not on a phone). A change to the tags
+or the cover alone refreshes the tags and raises no flag, which is also what
+happens after you edit tags in Fauste Player. The first analysis after an
+update raises the flag only if it had to drop a marker past the end of the
+audio.
 
 ## Pre-listening
 

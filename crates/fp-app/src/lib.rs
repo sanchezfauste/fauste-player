@@ -6,6 +6,7 @@ pub const APP_ID: &str = "com.sanchezfauste.FaustePlayer";
 
 pub mod activity;
 pub mod bootstrap;
+pub mod changes;
 #[cfg(not(target_os = "android"))]
 pub mod cli;
 pub mod crash;

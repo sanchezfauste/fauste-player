@@ -5,7 +5,7 @@
 
 use egui::{Align, Color32, FontId, Layout, Rect, RichText, Sense, Ui, pos2, vec2};
 use egui_phosphor::regular as icon;
-use fp_model::{TableColumn, Track};
+use fp_model::{MarkerKind, TableColumn, Track};
 
 use super::app::Scene;
 use super::theme;
@@ -65,9 +65,48 @@ pub(crate) fn file_flag(ui: &mut Ui, scene: &Scene<'_>, track: &Track) {
     });
 }
 
+/// A marker's name in running text (the review flag's tooltip).
+fn marker_name_key(kind: MarkerKind) -> &'static str {
+    match kind {
+        MarkerKind::CueIn => "marker-name-cue-in",
+        MarkerKind::IntroEnd => "marker-name-intro",
+        MarkerKind::OutroStart => "marker-name-outro",
+        MarkerKind::SegueStart => "marker-name-mix",
+        MarkerKind::CueOut => "marker-name-cue-out",
+    }
+}
+
+/// The "markers need review" flag (external editor spec EE11): its tooltip
+/// names the manual markers the new audio dropped (EE10); nothing when the
+/// track is not flagged. It never blocks anything.
+pub(crate) fn review_flag(ui: &mut Ui, scene: &Scene<'_>, track: &Track) {
+    let Some(review) = &track.markers_review else {
+        return;
+    };
+    let t = scene.i18n;
+    let markers = review
+        .dropped
+        .iter()
+        .map(|kind| t.tr(marker_name_key(*kind)))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let tip = if review.dropped.is_empty() {
+        t.tr("track-markers-review-tip")
+    } else {
+        t.tr_args(
+            "track-markers-review-tip-dropped",
+            &[("markers", markers.into())],
+        )
+    };
+    flag(ui, &tip, |p, r| {
+        widgets::glyph(p, r, icon::SEAL_WARNING, 13.0, theme::AMBER, false);
+    });
+}
+
 /// The title cell: the title (after what `leading` draws before it, such
 /// as an entry's repeat and stop flags) and, at the right, the analysis
-/// flags (main spec §6.1).
+/// flags (main spec §6.1) and the markers review flag (external editor
+/// spec EE11).
 pub(crate) fn title_cell(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -84,6 +123,7 @@ pub(crate) fn title_cell(
         ui.spacing_mut().item_spacing.x = 4.0;
         ui.add_space(4.0);
         analysis_flags(ui, scene, track);
+        review_flag(ui, scene, track);
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             ui.spacing_mut().item_spacing.x = 4.0;
             leading(ui);

@@ -193,6 +193,11 @@ else to do, whether normalization is on or off; their markers are not
 touched. **Re-analyse** (in the playlist menu) and **Re-analyse all tracks**
 measure again.
 
+**Look for changed files** checks every track in the library for a file that
+another program changed while Fauste Player was running, and analyses the
+changed ones again; a notice says how many it found. The button is dimmed
+while a look runs. See [When a file changes](library.md#when-a-file-changes).
+
 ## Loudness
 
 ![Settings, Loudness: normalization on, with the target, the true-peak ceiling, the maximum boost and the maximum trim at their defaults](../images/guide/settings-loudness.png)
@@ -257,6 +262,13 @@ categories that group your tracks, watch a folder with a category and remove
 its missing tracks, without opening the library window. See
 [Library](library.md#categories) and
 [Watched folders](library.md#watched-folders).
+
+**External editor** is the audio editor that *Open in external editor* starts
+with a track's file: the program's path (or *None*), **Choose…** to pick it
+and **Clear** to remove it. On macOS an application bundle (`.app`) can be
+chosen. If the program cannot be started, a notice says so. The row is not
+shown on Android, nor in the Flatpak and snap builds. See [When a file
+changes](library.md#when-a-file-changes).
 
 ## Keyboard shortcuts
 

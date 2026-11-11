@@ -816,7 +816,11 @@ fn a_track_whose_tags_cannot_be_read_is_not_asked_again() {
             cover_png: None,
         },
     );
-    r.run_until("the pass to answer", |r| only_track(r).tags_read);
+    // The start's change check stores the file's stamp (EE7.1) too.
+    r.run_until("the pass to answer", |r| {
+        let t = only_track(r);
+        t.tags_read && t.file_stamp.is_some()
+    });
     let t = only_track(&r);
     assert_eq!((t.title.as_str(), t.artist.as_str()), ("Junk", "Band"));
     let version = r.handle.telemetry.load().model_version;
@@ -2097,7 +2101,11 @@ fn the_bitrate_pass_fills_the_bit_rate_of_an_older_analysis_once() {
             cover_png: None,
         },
     );
-    r.run_until("the bit rate", |r| only_track(r).bitrate_read);
+    // The start's change check stores the file's stamp (EE7.1) too.
+    r.run_until("the bit rate", |r| {
+        let t = only_track(r);
+        t.bitrate_read && t.file_stamp.is_some()
+    });
     // 48 kHz × 16 bit × 1 channel.
     assert_eq!(only_track(&r).format.unwrap().bitrate, Some(768_000));
     let version = r.handle.telemetry.load().model_version;
@@ -2126,7 +2134,11 @@ fn a_file_without_a_readable_bit_rate_is_not_asked_again() {
             cover_png: None,
         },
     );
-    r.run_until("the pass to answer", |r| only_track(r).bitrate_read);
+    // The start's change check stores the file's stamp (EE7.1) too.
+    r.run_until("the pass to answer", |r| {
+        let t = only_track(r);
+        t.bitrate_read && t.file_stamp.is_some()
+    });
     assert_eq!(only_track(&r).format.unwrap().bitrate, None);
     let version = r.handle.telemetry.load().model_version;
     let until = r.now + Duration::from_millis(500);
@@ -2194,4 +2206,774 @@ fn an_unused_uncategorised_track_whose_file_is_deleted_leaves_the_library() {
     r.run_until("the track gone", |r| {
         r.handle.model.load().library.track_at(&path).is_none()
     });
+}
+
+// External editor spec EE7, EE9: changed library files.
+
+/// The stamp of `path` as the analysis would store it.
+fn stamp_of(path: &Path) -> fp_model::FileStamp {
+    let meta = std::fs::metadata(path).unwrap();
+    fp_model::FileStamp::from_metadata(meta.len(), meta.modified().unwrap()).unwrap()
+}
+
+/// A library analysed by this version, tags and bit rates read, each track
+/// stamped with its file as it is (`stale` ones with another size), and
+/// `extra` applied last. Every track has peaks in the media cache, so
+/// nothing is analysed only because the screen draws it.
+fn stamped_rig(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    stale: &[usize],
+    extra: impl FnOnce(&mut fp_model::AppState),
+) -> Rig {
+    let r = stamped_rig_unseeded(files, dir, stale, extra);
+    seed_all(&r);
+    r
+}
+
+/// `stamped_rig` with an empty media cache, as at start.
+fn stamped_rig_unseeded(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    stale: &[usize],
+    extra: impl FnOnce(&mut fp_model::AppState),
+) -> Rig {
+    stamped_rig_hooked(files, dir, stale, extra, Arc::new(|_| {}))
+}
+
+/// `stamped_rig_unseeded` with `after` run after each analysis.
+fn stamped_rig_hooked(
+    files: &[PathBuf],
+    dir: tempfile::TempDir,
+    stale: &[usize],
+    extra: impl FnOnce(&mut fp_model::AppState),
+    after: AfterAnalysis,
+) -> Rig {
+    let stale_paths: Vec<PathBuf> = stale.iter().map(|i| files[*i].clone()).collect();
+    let prepare = move |state: &mut fp_model::AppState| {
+        for track_id in state.library.ids() {
+            let t = state.library.get_mut(track_id).unwrap();
+            t.analyzed = true;
+            t.analysis_version = fp_analysis::cache::ANALYSIS_VERSION;
+            t.tags_read = true;
+            t.bitrate_read = true;
+            t.duration_secs = 1.0;
+            t.format = Some(fp_model::AudioFormat {
+                sample_rate: 48_000,
+                bits: Some(16),
+                channels: 1,
+                dsd_rate: None,
+                bitrate: None,
+            });
+            let mut stamp = stamp_of(&t.path);
+            if stale_paths.contains(&t.path) {
+                stamp.size += 1;
+            }
+            t.file_stamp = Some(stamp);
+        }
+        extra(state);
+    };
+    let mut r = rig_hooked(files, dir, Duration::ZERO, prepare, after);
+    r.now += Duration::from_millis(1);
+    r
+}
+
+/// Peaks for every track, as after an earlier analysis.
+fn seed_all(r: &Rig) {
+    for t in r.handle.model.load().library.iter() {
+        r.media.seed(
+            t.id,
+            TrackMedia {
+                peaks: Vec::new(),
+                peak_bucket_secs: 0.1,
+                cover_png: None,
+            },
+        );
+    }
+}
+
+/// Puts a two-second file in place of `path` (a new size), never seen
+/// half-written.
+fn replace_longer(path: &Path) {
+    let staging = tempfile::tempdir().unwrap();
+    let name = path.file_name().unwrap().to_str().unwrap();
+    std::fs::rename(wav(staging.path(), name, 2), path).unwrap();
+}
+
+fn track_of(r: &Rig, path: &Path) -> fp_model::Track {
+    let model = r.handle.model.load();
+    let id = model.library.track_at(path).unwrap();
+    model.library.get(id).unwrap().clone()
+}
+
+/// Every check asked for so far has been answered.
+fn checks_done(r: &mut Rig) {
+    // The start pass is queued by the first round.
+    idle_for(r, 10);
+    r.run_until("the change checks answered", |r| {
+        r.services.change_checks_pending() == 0
+    });
+}
+
+/// EE7.1, EE9: a file changed while the application was closed is analysed
+/// again at start, once; its new stamp is stored, so no loop follows.
+#[test]
+fn a_file_changed_before_start_is_analysed_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[0], |_| {});
+    let real = stamp_of(&files[0]);
+    r.run_until("the changed file analysed", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    checks_done(&mut r);
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1, "only the changed one");
+    assert_eq!(r.started.lock().unwrap().as_slice(), &files[..1]);
+}
+
+/// EE7.1 and the update (spec §5): a track analysed before stamps existed
+/// gets its file's stamp, taken as unchanged; nothing is analysed.
+#[test]
+fn a_track_without_a_stamp_gets_one_at_start_and_no_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[], |state| {
+        for id in state.library.ids() {
+            state.library.get_mut(id).unwrap().file_stamp = None;
+        }
+    });
+    let real = stamp_of(&files[0]);
+    r.run_until("the stamp stored", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+}
+
+/// EE7.4: a file changed while the application runs is checked when its
+/// track is loaded on a player, and analysed again at once.
+#[test]
+fn loading_a_changed_track_on_a_player_analyses_it_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    idle_for(&mut r, 200);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+    replace_longer(&files[1]);
+    idle_for(&mut r, 200);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "no polling");
+    let model = r.handle.model.load_full();
+    let player = model.players[0].id;
+    let entry = model.playlists.iter().next().unwrap().entries[1].clone();
+    assert_ne!(model.players[0].next, Some(entry.id));
+    assert!(r.handle.send(Command::SetNext(player, entry.id)));
+    r.conductor.tick(r.now);
+    assert_eq!(r.handle.model.load().players[0].next, Some(entry.id));
+    // Its peaks are known: only the change check can ask for an analysis.
+    seed_all(&r);
+    r.run_until("analysed again", |r| {
+        (track_of(r, &files[1]).duration_secs - 2.0).abs() < 1e-6
+    });
+    assert_eq!(
+        track_of(&r, &files[1]).file_stamp,
+        Some(stamp_of(&files[1]))
+    );
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+}
+
+/// EE9: a changed track that sounds (here the library pre-listen's,
+/// paused) is not analysed until it stops sounding.
+#[test]
+fn a_changed_track_that_sounds_waits_until_it_stops() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[0], |state| {
+        state.library_cue.track = state.library.ids().into_iter().next();
+        state.library_cue.transport = Transport::Paused;
+    });
+    checks_done(&mut r);
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "it sounds");
+    assert!(r.handle.send(Command::StopLibraryCue));
+    let real = stamp_of(&files[0]);
+    r.run_until("analysed once it stopped", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+}
+
+/// EE9: the result of a change's analysis for a track that started sounding
+/// meanwhile is applied only once it stops.
+#[test]
+fn a_result_for_a_track_that_started_sounding_waits() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[0], |state| {
+        state.config.outputs.library.cue = None;
+        state.config.outputs.library.default_output = true;
+    });
+    let old = track_of(&r, &files[0]).file_stamp;
+    let id = track_of(&r, &files[0]).id;
+    r.gate.store(false, Ordering::SeqCst);
+    r.run_until("the analysis started", |r| {
+        r.analyses.load(Ordering::SeqCst) == 1
+    });
+    // The pre-listen starts on it and is held (paused): it sounds.
+    assert!(r.handle.send(Command::SelectLibraryCue(Some(id))));
+    assert!(r.handle.send(Command::PlayLibraryCue));
+    assert!(r.handle.send(Command::SetLibraryCuePaused(true)));
+    r.conductor.tick(r.now);
+    assert_eq!(r.handle.model.load().library_cue.track, Some(id));
+    assert_eq!(
+        r.handle.model.load().library_cue.transport,
+        Transport::Paused
+    );
+    r.gate.store(true, Ordering::SeqCst);
+    r.run_until("the result held", |r| r.services.held_results() == 1);
+    idle_for(&mut r, 200);
+    assert_eq!(track_of(&r, &files[0]).file_stamp, old, "not applied");
+    assert!(r.handle.send(Command::StopLibraryCue));
+    let real = stamp_of(&files[0]);
+    r.run_until("applied once it stopped", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    assert_eq!(r.services.held_results(), 0);
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+}
+
+/// EE7.5: Look for changed files checks every track once, sends the changed
+/// ones to the analysis and tells how many it found, once per pass.
+#[test]
+fn look_for_changed_files_reports_the_count() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    assert_eq!(r.services.activity().load().changed_found, None);
+    replace_longer(&files[0]);
+    replace_longer(&files[2]);
+    let requests = r.services.requests();
+    requests.send(ServiceRequest::LookForChangedFiles).unwrap();
+    r.run_until("the count", |r| {
+        r.services.activity().load().changed_found.is_some()
+    });
+    let (pass, found) = r.services.activity().load().changed_found.unwrap();
+    assert_eq!(found, 2);
+    r.run_until("both analysed", |r| {
+        [&files[0], &files[2]]
+            .iter()
+            .all(|f| (track_of(r, f).duration_secs - 2.0).abs() < 1e-6)
+    });
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
+    requests.send(ServiceRequest::LookForChangedFiles).unwrap();
+    r.run_until("a new pass", |r| {
+        r.services
+            .activity()
+            .load()
+            .changed_found
+            .is_some_and(|(p, _)| p != pass)
+    });
+    let (_, found) = r.services.activity().load().changed_found.unwrap();
+    assert_eq!(found, 0, "both are up to date now");
+    idle_for(&mut r, 200);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
+}
+
+/// EE7: nothing changed, nothing is analysed: neither at start nor on
+/// demand.
+#[test]
+fn an_unchanged_library_sends_no_analysis() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    idle_for(&mut r, 300);
+    r.services
+        .requests()
+        .send(ServiceRequest::LookForChangedFiles)
+        .unwrap();
+    r.run_until("the count", |r| {
+        r.services.activity().load().changed_found.is_some()
+    });
+    assert_eq!(r.services.activity().load().changed_found.unwrap().1, 0);
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0);
+}
+
+/// EE9 through the waveform: at start nothing has peaks, so a player's
+/// current track is read for its waveform. Its file changed while the
+/// application was closed: that read is a new analysis, and it waits until
+/// the track stops sounding; the waveform shows meanwhile.
+#[test]
+fn a_waveform_read_of_a_changed_track_that_sounds_waits() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig_unseeded(&files, dir, &[0], |state| {
+        let entry = state.playlists.iter().next().unwrap().entries[0].id;
+        state.players[0].current = Some(entry);
+        state.players[0].next = None;
+    });
+    let old = track_of(&r, &files[0]).file_stamp;
+    let id = track_of(&r, &files[0]).id;
+    r.run_until("the result held", |r| r.services.held_results() == 1);
+    assert!(r.media.contains(id), "the waveform shows");
+    idle_for(&mut r, 200);
+    assert_eq!(track_of(&r, &files[0]).file_stamp, old, "not applied");
+    let player = r.handle.model.load().players[0].id;
+    assert!(r.handle.send(Command::Stop(player)));
+    let real = stamp_of(&files[0]);
+    r.run_until("applied once it stopped", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+}
+
+/// EE5, EE9: a track only selected in the library (the pre-listen bar
+/// stopped on it, as a right-click leaves it before Open in external
+/// editor) does not sound: its change is analysed at once.
+#[test]
+fn a_changed_track_selected_in_the_stopped_library_bar_is_analysed_at_once() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[0], |state| {
+        state.library_cue.track = state.library.ids().into_iter().next();
+        state.library_cue.transport = Transport::Stopped;
+    });
+    let real = stamp_of(&files[0]);
+    r.run_until("analysed while the bar holds it stopped", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    assert_eq!(
+        r.handle.model.load().library_cue.track,
+        Some(track_of(&r, &files[0]).id)
+    );
+    idle_for(&mut r, 300);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 1);
+}
+
+/// EE7.5: a changed track already waiting for its analysis (it sounds)
+/// counts in the pass.
+#[test]
+fn look_for_changed_files_counts_a_change_that_waits() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let changed = files[0].clone();
+    let mut r = stamped_rig(&files, dir, &[0], move |state| {
+        state.library_cue.track = state.library.track_at(&changed);
+        state.library_cue.transport = Transport::Paused;
+    });
+    checks_done(&mut r);
+    r.services
+        .requests()
+        .send(ServiceRequest::LookForChangedFiles)
+        .unwrap();
+    r.run_until("the count", |r| {
+        r.services.activity().load().changed_found.is_some()
+    });
+    assert_eq!(r.services.activity().load().changed_found.unwrap().1, 1);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 0, "it still sounds");
+}
+
+/// EE7.5: the activity says while a look for changed files runs, so the
+/// interface can wait for it (a second request meanwhile is ignored).
+#[test]
+fn the_activity_says_while_a_look_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    assert!(!r.services.activity().load().looking);
+    r.services
+        .requests()
+        .send(ServiceRequest::LookForChangedFiles)
+        .unwrap();
+    // The answers are taken before the batch goes out: after one step the
+    // pass waits for them.
+    r.services.step(r.now);
+    assert!(r.services.activity().load().looking);
+    r.run_until("the count", |r| {
+        r.services.activity().load().changed_found.is_some()
+    });
+    assert!(!r.services.activity().load().looking);
+}
+
+/// EE7.5: a change-check thread that dies during a look ends the pass: the
+/// activity stops saying a look runs, so the button works again.
+#[test]
+fn a_look_ends_when_the_change_check_dies() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    r.services
+        .set_change_check(fp_app::changes::ChangeCheck::spawn_dying().unwrap());
+    r.services
+        .requests()
+        .send(ServiceRequest::LookForChangedFiles)
+        .unwrap();
+    r.services.step(r.now);
+    assert!(r.services.activity().load().looking);
+    r.run_until("the pass ended", |r| !r.services.activity().load().looking);
+    assert_eq!(r.services.change_checks_pending(), 0);
+}
+
+/// EE10 (I1): a file still being written when it is analysed (its stamp
+/// moved during the analysis) gives no analysis: nothing read from the
+/// half-written file reaches the model. It is analysed once more after the
+/// watch debounce interval, and that analysis is applied.
+#[test]
+fn a_file_that_changes_during_its_analysis_is_analysed_again_later() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let first = Arc::new(AtomicBool::new(true));
+    let rewrite = first.clone();
+    let mut r = stamped_rig_hooked(
+        &files,
+        dir,
+        &[0],
+        |state| state.config.library.watch_debounce_ms = 2_000,
+        Arc::new(move |path| {
+            if rewrite.swap(false, Ordering::SeqCst) {
+                replace_longer(path);
+            }
+        }),
+    );
+    seed_all(&r);
+    let old = track_of(&r, &files[0]).file_stamp;
+    r.run_until("the first analysis", |r| {
+        r.analyses.load(Ordering::SeqCst) == 1 && !first.load(Ordering::SeqCst)
+    });
+    idle_for(&mut r, 500);
+    assert_eq!(track_of(&r, &files[0]).file_stamp, old, "nothing applied");
+    assert_eq!(
+        r.analyses.load(Ordering::SeqCst),
+        1,
+        "not before the debounce"
+    );
+    let real = stamp_of(&files[0]);
+    r.run_until("analysed again", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    assert!((track_of(&r, &files[0]).duration_secs - 2.0).abs() < 1e-6);
+    idle_for(&mut r, 5_000);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2);
+}
+
+/// EE10 (I1): a file that still moves at the retry is left for the next
+/// natural trigger (an event, a use, a look): no polling loop.
+#[test]
+fn a_file_that_keeps_changing_waits_for_the_next_trigger() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let moving = Arc::new(AtomicBool::new(true));
+    let rewrite = moving.clone();
+    let touches = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let mut r = stamped_rig_hooked(
+        &files,
+        dir,
+        &[0],
+        |state| state.config.library.watch_debounce_ms = 1_000,
+        Arc::new(move |path| {
+            if rewrite.load(Ordering::SeqCst) {
+                // Touched again: a new modification time each time.
+                let n = touches.fetch_add(1, Ordering::SeqCst) + 1;
+                let f = std::fs::OpenOptions::new().append(true).open(path).unwrap();
+                f.set_modified(SystemTime::now() + Duration::from_secs(n))
+                    .unwrap();
+            }
+        }),
+    );
+    seed_all(&r);
+    let old = track_of(&r, &files[0]).file_stamp;
+    // The retry's answer is in: the file may settle from now on.
+    r.run_until("the retry answered", |r| r.services.unsettled_tracks() == 1);
+    idle_for(&mut r, 10_000);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "no third analysis");
+    assert_eq!(track_of(&r, &files[0]).file_stamp, old, "nothing applied");
+    moving.store(false, Ordering::SeqCst);
+    let id = track_of(&r, &files[0]).id;
+    r.services
+        .requests()
+        .send(ServiceRequest::CheckTrack(id))
+        .unwrap();
+    let real = stamp_of(&files[0]);
+    r.run_until("analysed on the next check", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real)
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
+}
+
+/// EE9 (M3): a result held for a track that sounds does not replace the
+/// waveform already shown: the peaks on screen stay those of the audio
+/// that plays until the result is applied.
+#[test]
+fn a_held_result_keeps_the_waveform_shown() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let mut r = stamped_rig(&files, dir, &[0], |state| {
+        state.config.outputs.library.cue = None;
+        state.config.outputs.library.default_output = true;
+        state.library_view.open = true;
+    });
+    let id = track_of(&r, &files[0]).id;
+    r.gate.store(false, Ordering::SeqCst);
+    r.run_until("the analysis started", |r| {
+        r.analyses.load(Ordering::SeqCst) == 1
+    });
+    assert!(r.handle.send(Command::SelectLibraryCue(Some(id))));
+    assert!(r.handle.send(Command::PlayLibraryCue));
+    assert!(r.handle.send(Command::SetLibraryCuePaused(true)));
+    r.conductor.tick(r.now);
+    r.gate.store(true, Ordering::SeqCst);
+    r.run_until("the result held", |r| r.services.held_results() == 1);
+    assert!(
+        r.media.get(id).unwrap().peaks.is_empty(),
+        "the seeded waveform was replaced"
+    );
+    assert!(r.handle.send(Command::StopLibraryCue));
+    r.run_until("applied once it stopped", |r| {
+        !r.media.get(id).unwrap().peaks.is_empty()
+    });
+}
+
+/// EE7.5 (M7): a look for changed files during *Re-analyse all* ends: a
+/// track whose analysis is running or queued counts as checked (that
+/// analysis reads the file as it is now).
+#[test]
+fn a_look_during_a_library_pass_counts_the_tracks_in_flight_as_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    let files: Vec<PathBuf> = (1..=3)
+        .map(|n| wav(dir.path(), &format!("{n}.wav"), 1))
+        .collect();
+    let mut r = stamped_rig(&files, dir, &[], |_| {});
+    checks_done(&mut r);
+    r.gate.store(false, Ordering::SeqCst);
+    let requests = r.services.requests();
+    requests.send(ServiceRequest::ReanalyseAll).unwrap();
+    r.run_until("the pass started", |r| {
+        r.analyses.load(Ordering::SeqCst) == 1
+    });
+    requests.send(ServiceRequest::LookForChangedFiles).unwrap();
+    r.run_until("the count", |r| {
+        r.services.activity().load().changed_found.is_some()
+    });
+    assert_eq!(r.services.activity().load().changed_found.unwrap().1, 0);
+    assert_eq!(r.services.change_checks_pending(), 0);
+    r.gate.store(true, Ordering::SeqCst);
+}
+
+/// A hook that gives the file a new modification time after each analysis
+/// while `moving` holds: a file still being written.
+fn keep_touching(moving: Arc<AtomicBool>) -> AfterAnalysis {
+    keep_touching_only(moving, None)
+}
+
+/// `keep_touching` for `only` alone, when given.
+fn keep_touching_only(moving: Arc<AtomicBool>, only: Option<PathBuf>) -> AfterAnalysis {
+    let touches = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    Arc::new(move |path| {
+        if moving.load(Ordering::SeqCst) && only.as_deref().is_none_or(|o| o == path) {
+            let n = touches.fetch_add(1, Ordering::SeqCst) + 1;
+            let f = std::fs::OpenOptions::new().append(true).open(path).unwrap();
+            f.set_modified(SystemTime::now() + Duration::from_secs(n))
+                .unwrap();
+        }
+    })
+}
+
+/// EE10 (R1): a new track whose file is caught mid-write twice (a big copy
+/// into a watched folder) waits, and is analysed at its next check.
+#[test]
+fn a_new_track_still_changing_at_its_retry_is_analysed_at_the_next_check() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let moving = Arc::new(AtomicBool::new(true));
+    let mut r = rig_hooked(
+        &files,
+        dir,
+        Duration::ZERO,
+        |state| state.config.library.watch_debounce_ms = 1_000,
+        keep_touching(moving.clone()),
+    );
+    // The retry's answer is in: the file may settle from now on.
+    r.run_until("the retry answered", |r| r.services.unsettled_tracks() == 1);
+    idle_for(&mut r, 10_000);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "no third analysis");
+    assert!(!track_of(&r, &files[0]).analyzed);
+    moving.store(false, Ordering::SeqCst);
+    let id = track_of(&r, &files[0]).id;
+    r.services
+        .requests()
+        .send(ServiceRequest::CheckTrack(id))
+        .unwrap();
+    r.run_until("analysed at the next check", |r| {
+        track_of(r, &files[0]).analyzed
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
+}
+
+/// EE10 (R1): Look for changed files also takes up a new track that was
+/// still changing at its retry.
+#[test]
+fn a_look_takes_up_a_new_track_that_was_still_changing() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let moving = Arc::new(AtomicBool::new(true));
+    let mut r = rig_hooked(
+        &files,
+        dir,
+        Duration::ZERO,
+        |state| state.config.library.watch_debounce_ms = 1_000,
+        keep_touching(moving.clone()),
+    );
+    // The retry's answer is in: the file may settle from now on.
+    r.run_until("the retry answered", |r| r.services.unsettled_tracks() == 1);
+    idle_for(&mut r, 3_000);
+    moving.store(false, Ordering::SeqCst);
+    r.services
+        .requests()
+        .send(ServiceRequest::LookForChangedFiles)
+        .unwrap();
+    r.run_until("analysed after the look", |r| {
+        track_of(r, &files[0]).analyzed
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
+}
+
+/// EE10 (R2): an analysed track on a player, with no waveform yet, whose
+/// file keeps changing is read twice and then waits for a trigger: the
+/// screen's need for its waveform does not read it again and again.
+#[test]
+fn a_shown_track_that_keeps_changing_is_not_read_in_a_loop() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1)];
+    let moving = Arc::new(AtomicBool::new(true));
+    let mut r = stamped_rig_hooked(
+        &files,
+        dir,
+        &[],
+        |state| {
+            state.config.library.watch_debounce_ms = 1_000;
+            let entry = state.playlists.iter().next().unwrap().entries[0].id;
+            state.players[0].next = Some(entry);
+        },
+        keep_touching(moving.clone()),
+    );
+    let id = track_of(&r, &files[0]).id;
+    r.run_until("two reads answered", |r| r.services.unsettled_tracks() == 1);
+    idle_for(&mut r, 10_000);
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 2, "read in a loop");
+    assert!(!r.media.contains(id));
+    moving.store(false, Ordering::SeqCst);
+    r.services
+        .requests()
+        .send(ServiceRequest::CheckTrack(id))
+        .unwrap();
+    let real = stamp_of(&files[0]);
+    r.run_until("read at the next check", |r| {
+        track_of(r, &files[0]).file_stamp == Some(real) && r.media.contains(id)
+    });
+    assert_eq!(r.analyses.load(Ordering::SeqCst), 3);
+}
+
+/// Puts the track of `path` in the library pre-listen bar (stopped): in
+/// use (EE7.4), not sounding.
+fn select_in_library(r: &mut Rig, path: &Path) {
+    let id = track_of(r, path).id;
+    assert!(
+        !r.handle
+            .model
+            .load()
+            .library_cue
+            .track
+            .is_some_and(|t| t == id)
+    );
+    assert!(r.handle.send(Command::SelectLibraryCue(Some(id))));
+    r.conductor.tick(r.now);
+    assert_eq!(r.handle.model.load().library_cue.track, Some(id));
+}
+
+/// How many analyses of `path` started.
+fn reads_of(r: &Rig, path: &Path) -> usize {
+    r.started
+        .lock()
+        .unwrap()
+        .iter()
+        .filter(|p| *p == path)
+        .count()
+}
+
+/// EE7.4 (R1): a new track still changing at its retry is analysed once it
+/// comes into use (here the library pre-listen bar), its file settled
+/// meanwhile.
+#[test]
+fn loading_a_new_unsettled_track_analyses_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let b = files[1].clone();
+    let moving = Arc::new(AtomicBool::new(true));
+    let mut r = rig_hooked(
+        &files,
+        dir,
+        Duration::ZERO,
+        |state| state.config.library.watch_debounce_ms = 1_000,
+        keep_touching_only(moving.clone(), Some(b.clone())),
+    );
+    r.run_until("the retry answered", |r| r.services.unsettled_tracks() == 1);
+    idle_for(&mut r, 3_000);
+    assert_eq!(reads_of(&r, &b), 2);
+    assert!(!track_of(&r, &b).analyzed);
+    moving.store(false, Ordering::SeqCst);
+    select_in_library(&mut r, &b);
+    r.run_until("analysed once in use", |r| track_of(r, &b).analyzed);
+    assert_eq!(reads_of(&r, &b), 3);
+}
+
+/// EE7.4 (R1): an analysed track still changing at its retry is analysed
+/// when it comes into use, even if a stamp check alone would find nothing
+/// (here its file is back at the stored stamp).
+#[test]
+fn an_analysed_unsettled_track_coming_into_use_is_analysed() {
+    let dir = tempfile::tempdir().unwrap();
+    let files = [wav(dir.path(), "a.wav", 1), wav(dir.path(), "b.wav", 1)];
+    let b = files[1].clone();
+    let original = std::fs::metadata(&b).unwrap().modified().unwrap();
+    let moving = Arc::new(AtomicBool::new(true));
+    let mut r = stamped_rig_hooked(
+        &files,
+        dir,
+        &[],
+        |state| state.config.library.watch_debounce_ms = 1_000,
+        keep_touching_only(moving.clone(), Some(b.clone())),
+    );
+    seed_all(&r);
+    checks_done(&mut r);
+    let id = track_of(&r, &b).id;
+    r.services
+        .requests()
+        .send(ServiceRequest::ReanalyseTrack(id))
+        .unwrap();
+    r.run_until("the retry answered", |r| r.services.unsettled_tracks() == 1);
+    idle_for(&mut r, 3_000);
+    assert_eq!(reads_of(&r, &b), 2);
+    moving.store(false, Ordering::SeqCst);
+    let f = std::fs::OpenOptions::new().append(true).open(&b).unwrap();
+    f.set_modified(original).unwrap();
+    select_in_library(&mut r, &b);
+    r.run_until("analysed once in use", |r| reads_of(r, &b) == 3);
 }

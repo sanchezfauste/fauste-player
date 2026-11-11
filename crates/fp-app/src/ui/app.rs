@@ -368,6 +368,12 @@ pub(crate) struct Scene<'a> {
 }
 
 impl Scene<'_> {
+    /// Opens `file` in the configured external editor `program` (EE3);
+    /// never waits for it. A failure comes back as a notice.
+    pub fn open_in_external_editor(&self, program: PathBuf, file: &Path) {
+        playlist_files::open_in_editor(&self.ctx, self.platform, program, file, self.files.clone());
+    }
+
     /// Asks the services thread for something. Without services (tests) or
     /// with a full queue the request is dropped: it is only a convenience.
     pub fn request(&self, request: ServiceRequest) {
@@ -543,6 +549,9 @@ pub struct AppUi {
     cover_picks_rx: Receiver<CoverPick>,
     /// Counts the openings of the tag editor.
     tag_sessions: u64,
+    /// The last *Look for changed files* pass whose count was told
+    /// (EE7.5).
+    changed_told: Option<u64>,
     /// Stands in for the native image dialog in tests.
     #[cfg(feature = "test-hooks")]
     cover_picker: Option<CoverPicker>,
@@ -607,6 +616,7 @@ impl AppUi {
             cover_picks_tx,
             cover_picks_rx,
             tag_sessions: 0,
+            changed_told: None,
             #[cfg(feature = "test-hooks")]
             cover_picker: None,
         }
@@ -1060,6 +1070,16 @@ impl AppUi {
         self.keyboard(&ctx, &state);
         let pending = fp_model::pending(&state);
         let analysis = self.analysis.load_full();
+        // EE7.5: how many changed files a finished look found, once.
+        if let Some((pass, found)) = analysis.changed_found
+            && self.changed_told != Some(pass)
+        {
+            self.changed_told = Some(pass);
+            let text = self
+                .i18n
+                .tr_args("notice-changed-files", &[("count", found.into())]);
+            self.view.notice = Some((text, time + NOTICE_SECS));
+        }
         let watch = self.watch.load_full();
         let scene = Scene {
             ctl: self.ctl.as_ref(),
@@ -1954,6 +1974,13 @@ impl AppUi {
             FileOutcome::Exported(Err(e)) => {
                 t.tr_args("playlist-export-failed", &[("error", e.text(t).into())])
             }
+            FileOutcome::EditorFailed { program, error } => t.tr_args(
+                "notice-editor-failed",
+                &[
+                    ("program", program.display().to_string().into()),
+                    ("error", error.into()),
+                ],
+            ),
         }
     }
 

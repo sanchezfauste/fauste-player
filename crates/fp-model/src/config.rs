@@ -311,6 +311,11 @@ pub struct LibraryConfig {
     /// How long (ms) a watched folder must be quiet before its file-system
     /// events are acted on (100 ..= 60 000, LB22).
     pub watch_debounce_ms: u64,
+    /// The audio editor a track's "open in external editor" action starts
+    /// (desktop only). Default none: the action is hidden. Must be an
+    /// absolute path; a relative one is dropped with a warning.
+    #[serde(default)]
+    pub external_editor: Option<PathBuf>,
 }
 
 impl Default for LibraryConfig {
@@ -318,6 +323,7 @@ impl Default for LibraryConfig {
         Self {
             max_category_depth: 8,
             watch_debounce_ms: 1_000,
+            external_editor: None,
         }
     }
 }
@@ -1542,6 +1548,18 @@ impl Config {
             "library.watch_debounce_ms",
             &mut w,
         );
+        if self
+            .library
+            .external_editor
+            .as_ref()
+            .is_some_and(|p| !p.is_absolute())
+        {
+            self.library.external_editor = None;
+            w.push(ConfigWarning {
+                field: "library.external_editor",
+                message: "not an absolute path; no external editor".to_owned(),
+            });
+        }
 
         w
     }
@@ -1550,6 +1568,27 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn external_editor_defaults_to_none_and_drops_a_relative_path() {
+        let mut c = Config::default();
+        assert_eq!(c.library.external_editor, None);
+
+        c.library.external_editor = Some(PathBuf::from("audacity"));
+        let w = c.validate();
+        assert_eq!(c.library.external_editor, None);
+        assert!(w.iter().any(|w| w.field == "library.external_editor"));
+
+        let abs = std::env::current_dir().unwrap().join("audacity");
+        c.library.external_editor = Some(abs.clone());
+        assert!(c.validate().is_empty());
+        assert_eq!(c.library.external_editor, Some(abs));
+
+        let loaded: Config = serde_json::from_str("{}").unwrap();
+        assert_eq!(loaded.library.external_editor, None);
+        let loaded: Config = serde_json::from_str(r#"{"library":{}}"#).unwrap();
+        assert_eq!(loaded.library.external_editor, None);
+    }
 
     #[test]
     fn the_follow_grace_is_validated() {

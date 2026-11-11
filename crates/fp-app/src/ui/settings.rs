@@ -100,6 +100,9 @@ pub(crate) struct SettingsState {
     new_name: String,
     /// A folder dialog is open; it answers `None` when cancelled.
     folder: Option<Receiver<Option<PathBuf>>>,
+    /// The external editor's file dialog is open (EE1); `None` when
+    /// cancelled.
+    pub(super) editor: Option<Receiver<Option<PathBuf>>>,
     /// Number of players being dragged, sent on release.
     player_count_draft: Option<usize>,
     /// On a phone, a section shows instead of the list of sections (PL20).
@@ -266,6 +269,14 @@ pub(crate) fn show(
             update(scene, |c| c.ui.music_dir = Some(dir));
         }
         st.folder = None;
+    }
+    if let Some(rx) = &st.editor
+        && let Ok(picked) = rx.try_recv()
+    {
+        if let Some(program) = picked {
+            update(scene, |c| c.library.external_editor = Some(program));
+        }
+        st.editor = None;
     }
     let t = scene.i18n;
     let mut open = true;
@@ -470,7 +481,7 @@ fn body(
                             Section::Loudness => loudness::section(ui, scene, deps.unmeasured),
                             Section::Playlists => playlists(ui, scene, st),
                             Section::Cartwall => carts::section(ui, scene, st),
-                            Section::Library => library::section(ui, scene, view_state),
+                            Section::Library => library::section(ui, scene, view_state, st),
                             Section::Shortcuts => keys::section(ui, scene, st),
                             #[cfg(not(target_os = "android"))]
                             Section::Midi => midi::section(ui, scene, st, deps.midi),
@@ -1899,6 +1910,28 @@ fn analysis(ui: &mut Ui, scene: &Scene<'_>, deps: &SettingsDeps<'_>) {
             let _ = services.try_send(ServiceRequest::ReanalyseAll);
         }
     });
+    // EE7.5: one pass at a time (another request meanwhile is ignored).
+    let label = t.tr("settings-look-for-changes");
+    row(
+        ui,
+        &label,
+        Some(&t.tr("settings-hint-look-for-changes")),
+        |ui| {
+            let enabled = deps.services.is_some() && !scene.analysis.looking;
+            if widgets::text_button(
+                ui,
+                Some(icon::MAGNIFYING_GLASS),
+                &label,
+                enabled,
+                TileStyle::plain(),
+            )
+            .clicked()
+                && let Some(services) = deps.services
+            {
+                let _ = services.try_send(ServiceRequest::LookForChangedFiles);
+            }
+        },
+    );
     // Tracks an earlier version analysed wait for the operator (the
     // start-up notice offers the same).
     let outdated = deps.outdated;

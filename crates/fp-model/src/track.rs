@@ -2,9 +2,11 @@
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
 
+use crate::audio_change::{AudioChange, audio_change};
 use crate::ids::{CategoryId, TrackId};
 use crate::loudness::{LOUDNESS_VERSION, LoudnessEdit, LoudnessMeasurement};
 
@@ -262,6 +264,43 @@ pub fn parse_tag_date(text: &str) -> Result<Option<String>, InvalidDate> {
     }
 }
 
+/// The size and modification time of the file an analysis read (external
+/// editor spec EE6). A different current stamp means the file changed.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileStamp {
+    pub size: u64,
+    /// Nanoseconds since the Unix epoch.
+    pub modified_ns: u64,
+}
+
+impl FileStamp {
+    /// `None` when the time is before the epoch or does not fit in `u64`
+    /// nanoseconds.
+    pub fn from_metadata(size: u64, modified: SystemTime) -> Option<Self> {
+        let nanos = modified.duration_since(UNIX_EPOCH).ok()?.as_nanos();
+        Some(Self {
+            size,
+            modified_ns: u64::try_from(nanos).ok()?,
+        })
+    }
+}
+
+/// The audio fingerprint of a track and the analysis version that computed
+/// it (EE6). Fingerprints of different versions are not comparable.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AudioHash {
+    pub value: u64,
+    pub version: u32,
+}
+
+/// The "markers need review" flag (EE10): the audio changed under manual
+/// markers. `dropped` are the manual markers removed because they no
+/// longer fit the new audio.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MarkersReview {
+    pub dropped: Vec<MarkerKind>,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Track {
     pub id: TrackId,
@@ -321,6 +360,15 @@ pub struct Track {
     /// The category the track is filed under (track library spec §5).
     #[serde(default)]
     pub category: Option<CategoryId>,
+    /// Size and modification time of the file the last analysis read (EE6).
+    #[serde(default)]
+    pub file_stamp: Option<FileStamp>,
+    /// The audio fingerprint the last analysis computed (EE6).
+    #[serde(default)]
+    pub audio_hash: Option<AudioHash>,
+    /// Set when the audio changed under manual markers (EE10).
+    #[serde(default)]
+    pub markers_review: Option<MarkersReview>,
 }
 
 /// Where a player plays a track: from `cue_in` to `cue_out`. See
@@ -377,6 +425,9 @@ impl Track {
             loudness_pass: None,
             loudness_edit: LoudnessEdit::default(),
             category: None,
+            file_stamp: None,
+            audio_hash: None,
+            markers_review: None,
         }
     }
 
@@ -529,6 +580,14 @@ impl Track {
     }
 }
 
+const MARKER_KINDS: [MarkerKind; 5] = [
+    MarkerKind::CueIn,
+    MarkerKind::IntroEnd,
+    MarkerKind::OutroStart,
+    MarkerKind::SegueStart,
+    MarkerKind::CueOut,
+];
+
 /// What analysis learned about a file (spec §6). Metadata fields are
 /// `None` when the file did not provide them.
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -558,9 +617,90 @@ pub struct TrackAnalysis {
     /// before loudness was measured.
     #[serde(skip)]
     pub loudness_pass: Option<u32>,
+    /// The audio fingerprint (EE8); cached with the analysis.
+    #[serde(default)]
+    pub audio_hash: Option<u64>,
+    /// The stamp of the file as the job read it; set by the services, never
+    /// taken from the cache.
+    #[serde(skip)]
+    pub file_stamp: Option<FileStamp>,
+}
+
+impl TrackAnalysis {
+    fn marker(&self, kind: MarkerKind) -> Option<f64> {
+        match kind {
+            MarkerKind::CueIn => self.cue_in,
+            MarkerKind::IntroEnd => self.intro_end,
+            MarkerKind::OutroStart => self.outro_start,
+            MarkerKind::SegueStart => self.segue_start,
+            MarkerKind::CueOut => self.cue_out,
+        }
+    }
 }
 
 impl Track {
+    /// EE10, run after the markers took the analysis: drops the manual
+    /// markers past the new end and raises (or extends) the review flag.
+    /// When the audio changed under manual markers the track is flagged
+    /// even if none is dropped. When the change is unknown (no fingerprint
+    /// to compare, or one from another version), markers past a known new
+    /// end are still dropped, and the flag names them: a track never
+    /// reaches air with a marker past its end. The same audio drops
+    /// nothing. `self.audio_hash` is still the previous one.
+    fn review_markers(&mut self, analysis: &TrackAnalysis) {
+        let change = audio_change(self.audio_hash, analysis.audio_hash, analysis.version);
+        let length_known = analysis.duration_secs.is_finite() && analysis.duration_secs > 0.0;
+        match change {
+            AudioChange::Same => return,
+            AudioChange::Unknown if !length_known => return,
+            AudioChange::Changed | AudioChange::Unknown => {}
+        }
+        let manual = |m: &Markers, kind| {
+            m.get(kind)
+                .is_some_and(|m| m.source == MarkerSource::Manual)
+        };
+        let had_manual = MARKER_KINDS.iter().any(|&k| manual(&self.markers, k));
+        if !had_manual {
+            return;
+        }
+        let mut dropped = Vec::new();
+        for kind in MARKER_KINDS {
+            let past_end = self
+                .markers
+                .get(kind)
+                .is_some_and(|m| manual(&self.markers, kind) && m.secs > self.duration_secs);
+            if past_end {
+                self.markers.set_manual(kind, None);
+                self.markers.set_auto(kind, analysis.marker(kind));
+                dropped.push(kind);
+            }
+        }
+        if dropped
+            .iter()
+            .any(|k| matches!(k, MarkerKind::CueIn | MarkerKind::CueOut))
+        {
+            // As a cue point set by hand: the inner markers stay within
+            // the new cue range.
+            let (cue_in, cue_out) = (self.cue_in_secs(), self.known_cue_out_secs());
+            self.markers
+                .clamp_manual_inner(cue_in, cue_out.unwrap_or(f64::INFINITY));
+        }
+        if change == AudioChange::Unknown && dropped.is_empty() {
+            return;
+        }
+        let mut all = self
+            .markers_review
+            .take()
+            .map(|r| r.dropped)
+            .unwrap_or_default();
+        for kind in dropped {
+            if !all.contains(&kind) {
+                all.push(kind);
+            }
+        }
+        self.markers_review = Some(MarkersReview { dropped: all });
+    }
+
     /// Stores an analysis result. Known metadata is only replaced by values
     /// the analysis actually found, and manual markers always win.
     pub fn apply_analysis(&mut self, analysis: &TrackAnalysis) {
@@ -597,6 +737,14 @@ impl Track {
                 self.loudness_pass = None;
             }
         }
+        self.review_markers(analysis);
+        if analysis.file_stamp.is_some() {
+            self.file_stamp = analysis.file_stamp;
+        }
+        self.audio_hash = analysis.audio_hash.map(|value| AudioHash {
+            value,
+            version: analysis.version,
+        });
         self.analysis_version = analysis.version;
         // Title, artist and album come from this analysis; the rest wait for
         // the tag-only pass.

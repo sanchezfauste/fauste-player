@@ -3,7 +3,7 @@
 //! touches the audio path; it only talks to the conductor through its
 //! non-blocking handle.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, PoisonError, RwLock};
@@ -15,12 +15,13 @@ use fp_analysis::analyzer::{AnalysisResult, Analyzer, LoudnessResult};
 use fp_analysis::{AnalysisError, WavePeak};
 use fp_engine::conductor::ConductorHandle;
 use fp_model::{
-    AnalysisSettings, AppState, Command, FileState, LOUDNESS_VERSION, Library, PlayerId, TrackId,
-    Transport,
+    AnalysisSettings, AppState, Command, FileStamp, FileState, LOUDNESS_VERSION, Library, PlayerId,
+    TrackId, Transport, track_sounding,
 };
 use fp_store::Store;
 
 use crate::activity::{ActivityCell, AnalysisActivity, PassProgress};
+use crate::changes::ChangeCheck;
 use crate::header::HeaderReader;
 use crate::tags::{TagJob, TagOutcome, TagWorker};
 use crate::watch::folders::FolderWatch;
@@ -32,6 +33,55 @@ const PERIOD: Duration = Duration::from_millis(50);
 /// How many header reads wait on the reader at once: few enough that a
 /// track loaded on a player goes ahead of a large folder just added.
 const HEADER_READS_IN_FLIGHT: usize = 8;
+
+/// How many files one change check looks at (EE7): a large library is
+/// checked in several batches, so a track loaded on a player meanwhile is
+/// checked after the batch running, not after the whole library.
+const CHANGE_BATCH: usize = 256;
+
+/// What a published activity was built from (`Services::publish_activity`).
+type ActivityKey = (u64, usize, usize, usize, usize, Option<(u64, usize)>, bool);
+
+/// A *Look for changed files* pass (EE7.5) still running.
+struct LookPass {
+    id: u64,
+    /// Its tracks without an answer yet.
+    pending: HashSet<TrackId>,
+    /// How many of the answered ones changed.
+    found: usize,
+}
+
+/// A queue of tracks that holds each one once: pushing a queued track does
+/// nothing (M8: O(1), however long the queue).
+#[derive(Default)]
+struct UniqueQueue {
+    order: VecDeque<TrackId>,
+    queued: HashSet<TrackId>,
+}
+
+impl UniqueQueue {
+    fn push_back(&mut self, id: TrackId) {
+        if self.queued.insert(id) {
+            self.order.push_back(id);
+        }
+    }
+
+    fn pop_front(&mut self) -> Option<TrackId> {
+        let id = self.order.pop_front()?;
+        self.queued.remove(&id);
+        Some(id)
+    }
+
+    #[cfg(any(test, feature = "test-hooks"))]
+    fn len(&self) -> usize {
+        self.order.len()
+    }
+
+    fn clear(&mut self) {
+        self.order.clear();
+        self.queued.clear();
+    }
+}
 
 /// The thread that looks for files not found and at unreadable files, off
 /// the services thread: a share that is offline can make each look block
@@ -271,6 +321,15 @@ pub enum ServiceRequest {
     /// could not before (Android: the media permission was just granted),
     /// which changes neither their size nor their modification time.
     RecheckUnreadable,
+    /// Check this track's file for a change now (external editor spec
+    /// EE7.4: its markers were opened for editing).
+    CheckTrack(TrackId),
+    /// *Look for changed files* (EE7.5): check every track's file and tell
+    /// how many changed (`AnalysisActivity::changed_found`).
+    LookForChangedFiles,
+    /// Follow the folder of a file just opened in the external editor
+    /// (EE7.3).
+    FollowEditedFile(TrackId),
 }
 
 /// Whether `track` was analysed by an earlier version: before formats were
@@ -436,9 +495,9 @@ pub struct Services {
     /// What the analysis is doing, for the interface.
     activity: ActivityCell,
     /// What the published activity was built from: the pool's version,
-    /// the forced and shown-only counts and the pass; nothing is rebuilt
-    /// while it stays the same.
-    activity_key: Option<(u64, usize, usize, usize, usize)>,
+    /// the forced and shown-only counts, the pass and the last count of
+    /// changed files; nothing is rebuilt while it stays the same.
+    activity_key: Option<ActivityKey>,
     /// How many times the activity was rebuilt (a test hook reads it).
     activity_builds: u64,
     /// The library pass came from *Re-analyse all*: a settings change that
@@ -519,6 +578,47 @@ pub struct Services {
     /// Lengths read whose command could not be queued (the conductor's
     /// queue was full): sent again on a later round, not read again.
     headers_unsent: HashMap<TrackId, f64>,
+    /// Looks at library files for changes (external editor spec EE7);
+    /// `None` if its thread could not start.
+    change_check: Option<ChangeCheck>,
+    /// Tracks to check that are in use (EE7.4) or asked for
+    /// (`CheckTrack`): sent before `change_bulk`.
+    change_urgent: UniqueQueue,
+    /// Tracks to check for the start (EE7.1) and on-demand (EE7.5) passes.
+    change_bulk: VecDeque<TrackId>,
+    /// The tracks of the batch the change check is looking at.
+    change_sent: Vec<TrackId>,
+    /// The start pass was queued.
+    change_started: bool,
+    /// The tracks in use at the last step (EE7.4): a track that joins them
+    /// is checked.
+    in_use: HashSet<TrackId>,
+    /// The *Look for changed files* pass running, if any.
+    look_pass: Option<LookPass>,
+    /// How many such passes were started: the id of the last one.
+    look_passes: u64,
+    /// The last such pass that ended: its id and its count.
+    changed_found: Option<(u64, usize)>,
+    /// Changed tracks that sound (EE9): analysed once they stop.
+    changed_waiting: HashSet<TrackId>,
+    /// Tracks sent to the analysis because their file changed.
+    change_analysing: HashSet<TrackId>,
+    /// Results of those analyses for tracks that sound now (EE9): applied
+    /// once they stop.
+    held: HashMap<TrackId, AnalysisResult>,
+    /// Tracks whose file changed while it was analysed (EE10: an editor
+    /// still writing it), with when they are analysed once more: the watch
+    /// debounce interval later.
+    changed_retry: HashMap<TrackId, Instant>,
+    /// Tracks whose one retry is used: a file still changing then waits
+    /// for the next event, use or look.
+    changed_retried: HashSet<TrackId>,
+    /// Tracks whose file was still changing at their retry: neither
+    /// analysed nor read for the screen until a real trigger (an event, a
+    /// check, a look, a Re-analyse) takes them up.
+    unsettled: HashSet<TrackId>,
+    /// The time of the current step.
+    clock: Instant,
     /// Steps that panicked (shown by the UI as an alert).
     faults: Arc<AtomicU64>,
     #[cfg(feature = "test-hooks")]
@@ -603,6 +703,22 @@ impl Services {
             headers_asked: HashSet::new(),
             headers_in_flight: 0,
             headers_unsent: HashMap::new(),
+            change_check: ChangeCheck::spawn(),
+            change_urgent: UniqueQueue::default(),
+            change_bulk: VecDeque::new(),
+            change_sent: Vec::new(),
+            change_started: false,
+            in_use: HashSet::new(),
+            look_pass: None,
+            look_passes: 0,
+            changed_found: None,
+            changed_waiting: HashSet::new(),
+            change_analysing: HashSet::new(),
+            held: HashMap::new(),
+            changed_retry: HashMap::new(),
+            changed_retried: HashSet::new(),
+            unsettled: HashSet::new(),
+            clock: Instant::now(),
             faults: Arc::new(AtomicU64::new(0)),
             #[cfg(feature = "test-hooks")]
             fail_steps: 0,
@@ -706,6 +822,34 @@ impl Services {
         self.urgent.len()
     }
 
+    /// How many tracks wait, their file still changing at their retry,
+    /// for a trigger (EE10).
+    #[cfg(feature = "test-hooks")]
+    pub fn unsettled_tracks(&self) -> usize {
+        self.unsettled.len()
+    }
+
+    /// How many change checks wait or run (EE7).
+    #[cfg(feature = "test-hooks")]
+    pub fn change_checks_pending(&self) -> usize {
+        let busy = self.change_check.as_ref().is_some_and(ChangeCheck::busy);
+        self.change_urgent.len() + self.change_bulk.len() + usize::from(busy)
+    }
+
+    /// How many analysis results wait for their track to stop sounding
+    /// (EE9).
+    #[cfg(feature = "test-hooks")]
+    pub fn held_results(&self) -> usize {
+        self.held.len()
+    }
+
+    /// How many tracks a folder scan found gone after an event and waits
+    /// to look at again (EE7.2).
+    #[cfg(feature = "test-hooks")]
+    pub fn folder_doubts(&self) -> usize {
+        self.folders.as_ref().map_or(0, FolderWatch::doubts)
+    }
+
     /// How many times an unreadable file was reported gone to the model.
     #[cfg(feature = "test-hooks")]
     pub fn gone_reports(&self) -> usize {
@@ -751,6 +895,22 @@ impl Services {
         self.watch_status.clone()
     }
 
+    /// EE7.3: the folder of a file opened in the external editor is
+    /// followed for the rest of the run; its events go through the same
+    /// debounce and scan as a watched folder's.
+    fn follow_edited_file(&mut self, state: &AppState, id: TrackId) {
+        let folder = state
+            .library
+            .get(id)
+            .and_then(|t| t.path.parent())
+            .map(Path::to_path_buf);
+        match (&mut self.folders, folder) {
+            (Some(folders), Some(folder)) => folders.follow_edited(folder),
+            (None, _) => tracing::debug!(?id, "no folder watcher; the edited file is not followed"),
+            (_, None) => tracing::debug!(?id, "an edited track not in the library is not followed"),
+        }
+    }
+
     /// One round of the folder watch: its commands go to the conductor and
     /// the files that came back are analysed at once.
     fn watch_step(&mut self, state: &AppState, now: Instant) {
@@ -769,6 +929,11 @@ impl Services {
         }
         if !unsent.is_empty() {
             folders.requeue(unsent);
+        }
+        // EE7.2: a stamp check, as `CheckTrack`; an unchanged file gives
+        // nothing.
+        for id in outcome.touched {
+            self.check_track(state, id);
         }
         for id in outcome.returned {
             if self.in_flight.contains(&id) {
@@ -789,12 +954,16 @@ impl Services {
                 panic!("injected services failure");
             }
         }
+        self.clock = now;
         while let Ok(request) = self.requests.try_recv() {
             self.walk_again = true;
             match request {
                 ServiceRequest::ReanalyseAll => self.reanalyse_all(state),
                 ServiceRequest::AnalyseOutdated => self.analyse_outdated = true,
                 ServiceRequest::ReanalyseTrack(id) => self.reanalyse_track(state, id),
+                ServiceRequest::CheckTrack(id) => self.check_track(state, id),
+                ServiceRequest::LookForChangedFiles => self.look_for_changed_files(state),
+                ServiceRequest::FollowEditedFile(id) => self.follow_edited_file(state, id),
                 ServiceRequest::RecheckUnreadable => {
                     let unreadable: Vec<TrackId> = state
                         .library
@@ -812,6 +981,8 @@ impl Services {
         self.follow_limits(state);
         self.recheck_missing(state, now);
         self.watch_step(state, now);
+        self.retry_changed(state, now);
+        self.change_step(state);
         let now_inputs = self.walk_inputs(state);
         let walk = std::mem::take(&mut self.walk_again)
             || !self
@@ -828,22 +999,7 @@ impl Services {
             self.walk_again = true;
         }
         for result in results {
-            // A result taken from the analyzer is gone from it: if applying
-            // it panics, the track is asked for again (once) instead of
-            // staying "in progress" until the next start.
-            let track = result.track;
-            let routed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                self.route(result, state, &wanted);
-            }));
-            if routed.is_err() {
-                self.faults.fetch_add(1, Ordering::AcqRel);
-                tracing::error!(?track, "applying an analysis result panicked");
-                self.in_flight.remove(&track);
-                self.done.remove(&track);
-                if !self.retried.insert(track) {
-                    self.failed.insert(track);
-                }
-            }
+            self.route_guarded(result, state, &wanted);
         }
         // Nothing queued and nothing to queue: the pass has nothing left
         // to wait for, whatever happened to its tracks.
@@ -855,6 +1011,335 @@ impl Services {
             self.library_walks += 1;
         }
         self.publish_activity();
+    }
+
+    /// Applies `result`. A result taken from the analyzer is gone from it: if
+    /// applying it panics, the track is asked for again (once) instead of
+    /// staying "in progress" until the next start.
+    fn route_guarded(
+        &mut self,
+        result: AnalysisResult,
+        state: &AppState,
+        wanted: &HashSet<TrackId>,
+    ) {
+        let track = result.track;
+        let routed = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.route(result, state, wanted);
+        }));
+        if routed.is_err() {
+            self.faults.fetch_add(1, Ordering::AcqRel);
+            tracing::error!(?track, "applying an analysis result panicked");
+            self.in_flight.remove(&track);
+            self.done.remove(&track);
+            if !self.retried.insert(track) {
+                self.failed.insert(track);
+            }
+        }
+    }
+
+    /// External editor spec EE7, EE9: one round of the change checks. The
+    /// first round checks every analysed track (EE7.1); later rounds check
+    /// the tracks that came into use (EE7.4). Answers send the changed
+    /// tracks to the analysis, unless they sound, and store the stamp of
+    /// tracks that had none. There is no polling: nothing is checked
+    /// unless something asks for it.
+    fn change_step(&mut self, state: &AppState) {
+        if self.change_check.is_none() {
+            return;
+        }
+        self.take_change_answers(state);
+        let in_use = Self::in_use(state);
+        if self.change_started {
+            let joined: Vec<TrackId> = in_use.difference(&self.in_use).copied().collect();
+            // A check, or at once for a file left unsettled (R1).
+            for id in joined {
+                self.check_track(state, id);
+            }
+        } else {
+            self.change_started = true;
+            // The tracks in use first.
+            for id in &in_use {
+                self.check_track(state, *id);
+            }
+            self.change_bulk.extend(
+                state
+                    .library
+                    .iter()
+                    .filter(|t| Self::checkable(t) && !in_use.contains(&t.id))
+                    .map(|t| t.id),
+            );
+        }
+        self.in_use = in_use;
+        self.release_changed(state);
+        self.send_change_batch(state);
+    }
+
+    /// The tracks in use (EE7.4): the players' current, next and CUE
+    /// entries, the carts of the page shown and the library pre-listen.
+    fn in_use(state: &AppState) -> HashSet<TrackId> {
+        let mut used = Self::on_players(state);
+        used.extend(
+            state
+                .cartwall
+                .shown_page()
+                .into_iter()
+                .flat_map(|page| page.carts.iter())
+                .filter_map(|cart| cart.track),
+        );
+        used.extend(state.library_cue.track);
+        used
+    }
+
+    /// Whether a track's file is worth a change check: one not analysed
+    /// yet gets its analysis anyway, and missing and unreadable files keep
+    /// their own rules.
+    fn checkable(track: &fp_model::Track) -> bool {
+        track.analyzed && track.file_state.is_playable()
+    }
+
+    /// *Look for changed files* (EE7.5): every analysed track is checked;
+    /// the count is published when the last one is answered. Ignored while
+    /// a pass runs.
+    fn look_for_changed_files(&mut self, state: &AppState) {
+        if self.change_check.is_none() {
+            tracing::error!("the change check is not running; changed files cannot be looked for");
+            return;
+        }
+        if self.look_pass.is_some() {
+            tracing::debug!("look for changed files ignored: a pass is running");
+            return;
+        }
+        self.look_passes += 1;
+        // Files still changing at their retry are analysed now.
+        let unsettled: Vec<TrackId> = self.unsettled.iter().copied().collect();
+        for id in unsettled {
+            self.take_up_changed(state, id);
+        }
+        let pending: HashSet<TrackId> = state
+            .library
+            .iter()
+            .filter(|t| Self::checkable(t))
+            .map(|t| t.id)
+            .collect();
+        self.change_bulk.extend(pending.iter().copied());
+        self.look_pass = Some(LookPass {
+            id: self.look_passes,
+            pending,
+            found: 0,
+        });
+        self.finish_look_pass();
+    }
+
+    /// Publishes the count of the pass when none of its tracks is left.
+    fn finish_look_pass(&mut self) {
+        if let Some(pass) = &self.look_pass
+            && pass.pending.is_empty()
+        {
+            tracing::info!(found = pass.found, "looked for changed files");
+            self.changed_found = Some((pass.id, pass.found));
+            self.look_pass = None;
+        }
+    }
+
+    fn take_change_answers(&mut self, state: &AppState) {
+        let Some(check) = &mut self.change_check else {
+            return;
+        };
+        let answers = check.answers();
+        if check.gone() {
+            self.change_check_stopped();
+            return;
+        }
+        if answers.is_empty() {
+            return;
+        }
+        let sent = std::mem::take(&mut self.change_sent);
+        for answer in answers {
+            for (track, stamp) in answer.unstamped {
+                // A track gone or stamped meanwhile needs nothing: the
+                // command would still make a new model version.
+                let needed = state
+                    .library
+                    .get(track)
+                    .is_some_and(|t| t.file_stamp.is_none());
+                // Not queued: the next start stores it.
+                if needed && !self.conductor.send(Command::SetFileStamp { track, stamp }) {
+                    tracing::debug!(?track, "the stamp of a file could not be queued");
+                }
+            }
+            if let Some(pass) = &mut self.look_pass {
+                pass.found += answer
+                    .changed
+                    .iter()
+                    .filter(|id| pass.pending.contains(id))
+                    .count();
+            }
+            for id in answer.changed {
+                self.on_changed(state, id);
+            }
+        }
+        if let Some(pass) = &mut self.look_pass {
+            for id in &sent {
+                pass.pending.remove(id);
+            }
+        }
+        self.finish_look_pass();
+    }
+
+    /// EE9: a changed track is analysed again at once, unless it sounds.
+    fn on_changed(&mut self, state: &AppState, id: TrackId) {
+        if state.library.get(id).is_none() {
+            return;
+        }
+        tracing::info!(?id, "a library file changed; analysing it again");
+        self.unsettled.remove(&id);
+        if track_sounding(state, id) {
+            self.changed_waiting.insert(id);
+        } else {
+            self.analyse_changed(state, id);
+        }
+    }
+
+    /// Re-analyse of a changed track: urgent, through the cache (its key
+    /// changed with the file).
+    fn analyse_changed(&mut self, state: &AppState, id: TrackId) {
+        self.reanalyse(state, id, false);
+        self.change_analysing.insert(id);
+        self.walk_again = true;
+    }
+
+    /// EE9: changed tracks and held results whose track stopped sounding go
+    /// ahead.
+    fn release_changed(&mut self, state: &AppState) {
+        let known = |id: &TrackId| state.library.get(*id).is_some();
+        self.changed_waiting.retain(known);
+        self.change_analysing.retain(known);
+        self.held.retain(|id, _| known(id));
+        self.changed_retry.retain(|id, _| known(id));
+        self.changed_retried.retain(known);
+        self.unsettled.retain(known);
+        let ready: Vec<TrackId> = self
+            .changed_waiting
+            .iter()
+            .copied()
+            .filter(|id| !track_sounding(state, *id))
+            .collect();
+        for id in ready {
+            self.changed_waiting.remove(&id);
+            // A result already held for it reads the changed file.
+            if !self.held.contains_key(&id) {
+                self.analyse_changed(state, id);
+            }
+        }
+        let ready: Vec<TrackId> = self
+            .held
+            .keys()
+            .copied()
+            .filter(|id| !track_sounding(state, *id))
+            .collect();
+        if ready.is_empty() {
+            return;
+        }
+        let wanted = Self::wanted(state);
+        for id in ready {
+            if let Some(result) = self.held.remove(&id) {
+                self.walk_again = true;
+                self.route_guarded(result, state, &wanted);
+            }
+        }
+    }
+
+    /// Sends the next batch when the change check is free: tracks in use
+    /// first.
+    fn send_change_batch(&mut self, state: &AppState) {
+        if self.change_check.as_ref().is_none_or(ChangeCheck::busy) {
+            return;
+        }
+        let mut batch = Vec::new();
+        let mut seen = HashSet::new();
+        // Tracks being read for something else (a cart's peaks, say): looked
+        // at once that read is over. (urgent, id)
+        let mut later: Vec<(bool, TrackId)> = Vec::new();
+        while batch.len() < CHANGE_BATCH {
+            let (urgent, id) = match self.change_urgent.pop_front() {
+                Some(id) => (true, id),
+                None => match self.change_bulk.pop_front() {
+                    Some(id) => (false, id),
+                    None => break,
+                },
+            };
+            if !seen.insert(id) {
+                continue;
+            }
+            let Some(t) = state.library.get(id).filter(|t| Self::checkable(t)) else {
+                if let Some(pass) = &mut self.look_pass {
+                    pass.pending.remove(&id);
+                }
+                continue;
+            };
+            // A change already found and not applied yet counts as found.
+            if self.changed_waiting.contains(&id)
+                || self.held.contains_key(&id)
+                || self.change_analysing.contains(&id)
+            {
+                if let Some(pass) = &mut self.look_pass
+                    && pass.pending.remove(&id)
+                {
+                    pass.found += 1;
+                }
+                continue;
+            }
+            if self.in_flight.contains(&id) {
+                // A read applied to the model reads the file as it is now:
+                // for a pass it counts as checked. A check asked for now
+                // (an event, a use), or a read only for a waveform, waits
+                // for it to end. Each track is popped once per step.
+                if urgent || self.peaks_only.contains(&id) {
+                    later.push((urgent, id));
+                } else if let Some(pass) = &mut self.look_pass {
+                    pass.pending.remove(&id);
+                }
+                continue;
+            }
+            batch.push((id, t.path.clone(), t.file_stamp));
+        }
+        for (urgent, id) in later {
+            if urgent {
+                self.change_urgent.push_back(id);
+            } else {
+                self.change_bulk.push_back(id);
+            }
+        }
+        if batch.is_empty() {
+            self.finish_look_pass();
+            return;
+        }
+        let ids: Vec<TrackId> = batch.iter().map(|(id, _, _)| *id).collect();
+        let Some(check) = &mut self.change_check else {
+            return;
+        };
+        if check.send(batch) {
+            self.change_sent = ids;
+        } else {
+            self.change_check_stopped();
+        }
+    }
+
+    /// The change-check thread is gone: nothing more is looked at, and a
+    /// running look ends without a count (so `looking` does not stick).
+    fn change_check_stopped(&mut self) {
+        tracing::error!("the change check stopped; changed files go unnoticed");
+        self.change_check = None;
+        self.change_urgent.clear();
+        self.change_bulk.clear();
+        self.change_sent.clear();
+        self.look_pass = None;
+    }
+
+    /// Replaces the change-check thread (tests).
+    #[cfg(feature = "test-hooks")]
+    pub fn set_change_check(&mut self, check: ChangeCheck) {
+        self.change_check = Some(check);
     }
 
     /// The inputs of the library walks now (see `WalkInputs`).
@@ -901,6 +1386,8 @@ impl Services {
             self.shown_only.len(),
             self.library_pass.len(),
             self.pass_total,
+            self.changed_found,
+            self.look_pass.is_some(),
         );
         if self.activity_key == Some(key) {
             return;
@@ -926,6 +1413,8 @@ impl Services {
             running,
             loudness: pool.loudness,
             pass,
+            changed_found: self.changed_found,
+            looking: self.look_pass.is_some(),
         };
         if **self.activity.load() != activity {
             self.activity.store(Arc::new(activity));
@@ -1027,6 +1516,9 @@ impl Services {
         self.stamps.clear();
         self.failed_at.clear();
         self.urgent.clear();
+        self.changed_retry.clear();
+        self.changed_retried.clear();
+        self.unsettled.clear();
         self.forced = state.library.iter().map(|t| t.id).collect();
         self.library_pass = self.forced.clone();
         self.pass_total = self.library_pass.len();
@@ -1037,6 +1529,11 @@ impl Services {
     /// the model. A track already queued or running is left alone (main
     /// spec §6.1); one read only for its waveform is analysed.
     fn reanalyse_track(&mut self, state: &AppState, id: TrackId) {
+        self.reanalyse(state, id, true);
+    }
+
+    /// `reanalyse_track`; `fresh` skips the cache lookup.
+    fn reanalyse(&mut self, state: &AppState, id: TrackId, fresh: bool) {
         if state.library.get(id).is_none() {
             return;
         }
@@ -1054,8 +1551,15 @@ impl Services {
         self.retried.remove(&id);
         self.stamps.remove(&id);
         self.failed_at.remove(&id);
+        // A result held for the track (EE9) or a retry waiting for its file
+        // to settle (EE10) is superseded by this analysis.
+        self.held.remove(&id);
+        self.changed_retry.remove(&id);
+        self.unsettled.remove(&id);
         self.forced.insert(id);
-        self.fresh.insert(id);
+        if fresh {
+            self.fresh.insert(id);
+        }
         self.urgent.insert(id);
     }
 
@@ -1408,7 +1912,9 @@ impl Services {
                     loudness,
                     version: LOUDNESS_VERSION,
                 },
-                Err(AnalysisError::Cancelled) => continue,
+                // The measurement never reports a changed file; nothing
+                // to record either way.
+                Err(AnalysisError::Cancelled | AnalysisError::Changed) => continue,
                 Err(AnalysisError::Missing) => {
                     if track.file_state == FileState::Missing {
                         continue;
@@ -1637,6 +2143,14 @@ impl Services {
         on_carts: &HashSet<TrackId>,
     ) {
         let id = track.id;
+        // Its new analysis waits for it to stop sounding (EE9), or for its
+        // file to settle (EE10).
+        if self.held.contains_key(&id)
+            || self.changed_retry.contains_key(&id)
+            || self.unsettled.contains(&id)
+        {
+            return;
+        }
         if self.in_flight.contains(&id) {
             // Loaded on a player while queued with the library: its
             // waveform is needed now.
@@ -1702,6 +2216,34 @@ impl Services {
             }
         }
         self.in_flight.remove(&result.track);
+        if matches!(result.outcome, Err(AnalysisError::Changed)) {
+            self.changed_during_analysis(state, &result);
+            return;
+        }
+        self.changed_retried.remove(&result.track);
+        self.unsettled.remove(&result.track);
+        let stamp = result.stamp;
+        if self.hold_while_sounding(&result, state) {
+            // EE9: it waits for the track to stop sounding; a waveform
+            // shows meanwhile, but one already shown (the audio that
+            // plays) is kept.
+            if wanted.contains(&result.track)
+                && !self.media.contains(result.track)
+                && let Ok(analysis) = &result.outcome
+            {
+                self.media.insert(
+                    result.track,
+                    TrackMedia {
+                        peaks: analysis.peaks.clone(),
+                        peak_bucket_secs: analysis.peak_bucket_secs,
+                        cover_png: analysis.cover_png.clone().map(Arc::from),
+                    },
+                );
+            }
+            self.shown_only.remove(&result.track);
+            self.held.insert(result.track, result);
+            return;
+        }
         // An answer, whatever it is, settles the track in the pass; a
         // command that cannot be queued puts it back below.
         let in_pass = self.library_pass.remove(&result.track);
@@ -1739,9 +2281,14 @@ impl Services {
                 }
                 // It resets `tags_read`: the tags are read again.
                 self.tags_answered.remove(&result.track);
+                // What the analysis read (EE6): a later check compares the
+                // file with it.
+                let mut applied = analysis.analysis;
+                applied.file_stamp =
+                    stamp.and_then(|(size, modified)| FileStamp::from_metadata(size, modified));
                 Command::ApplyAnalysis {
                     track: result.track,
-                    analysis: Box::new(analysis.analysis),
+                    analysis: Box::new(applied),
                 }
             }
             Err(AnalysisError::Missing) => {
@@ -1762,7 +2309,8 @@ impl Services {
                     state: FileState::Unreadable,
                 }
             }
-            Err(AnalysisError::Cancelled) => return,
+            // Both were handled above.
+            Err(AnalysisError::Cancelled | AnalysisError::Changed) => return,
         };
         // A file still missing changes nothing: no new model version, so
         // nothing is saved every recheck.
@@ -1782,6 +2330,96 @@ impl Services {
                 self.library_pass.insert(result.track);
             }
         }
+    }
+
+    /// EE10: the file changed while it was analysed (an editor still
+    /// writing it), so nothing from that read is applied. The track is
+    /// analysed once more after the watch debounce interval; if its file
+    /// still moved then, it waits for the next event, use or look (no
+    /// polling).
+    fn changed_during_analysis(&mut self, state: &AppState, result: &AnalysisResult) {
+        let id = result.track;
+        // The pass has its answer: the retry is not part of it.
+        self.library_pass.remove(&id);
+        self.shown_only.remove(&id);
+        self.peaks_only.remove(&id);
+        // Not a change waiting to be applied any more: a later check finds
+        // it again (the retry asks for it anew).
+        self.change_analysing.remove(&id);
+        if self.changed_retried.insert(id) {
+            tracing::info!(path = %result.path.display(), "the file changed while it was analysed; analysing it again shortly");
+            let quiet = Duration::from_millis(state.config.library.watch_debounce_ms);
+            self.changed_retry.insert(id, self.clock + quiet);
+        } else {
+            tracing::info!(path = %result.path.display(), "the file is still changing; it is analysed on its next change");
+            self.unsettled.insert(id);
+        }
+    }
+
+    /// EE10: the retries whose time came (see `take_up_changed`).
+    fn retry_changed(&mut self, state: &AppState, now: Instant) {
+        if self.changed_retry.is_empty() {
+            return;
+        }
+        let due: Vec<TrackId> = self
+            .changed_retry
+            .iter()
+            .filter(|(_, at)| now >= **at)
+            .map(|(id, _)| *id)
+            .collect();
+        for id in due {
+            self.changed_retry.remove(&id);
+            self.take_up_changed(state, id);
+        }
+    }
+
+    /// Analyses a track whose file changed: an analysed one goes through
+    /// the changed-file path (EE9: not while it sounds); one never
+    /// analysed is analysed.
+    fn take_up_changed(&mut self, state: &AppState, id: TrackId) {
+        self.unsettled.remove(&id);
+        match state.library.get(id) {
+            Some(t) if t.analyzed => self.on_changed(state, id),
+            Some(_) => {
+                self.reanalyse(state, id, false);
+                self.walk_again = true;
+            }
+            None => {}
+        }
+    }
+
+    /// An event on a known track or `CheckTrack`: a stamp check, or, for a
+    /// track whose file was still changing at its retry (whose stored stamp
+    /// may be none at all), an analysis at once.
+    fn check_track(&mut self, state: &AppState, id: TrackId) {
+        if self.unsettled.contains(&id) {
+            self.take_up_changed(state, id);
+        } else {
+            self.change_urgent.push_back(id);
+        }
+    }
+
+    /// EE9: whether `result` would change a sounding track's analysis with
+    /// a changed file's: one asked for because the file changed, or any
+    /// other read applied to the model (a player's waveform, say) of a file
+    /// whose stamp differs from the stored one. A read only for the peaks
+    /// changes nothing, and *Re-analyse all* (the library pass) is the
+    /// operator's explicit call.
+    fn hold_while_sounding(&mut self, result: &AnalysisResult, state: &AppState) -> bool {
+        let id = result.track;
+        let asked = self.change_analysing.remove(&id);
+        let Some(track) = state.library.get(id) else {
+            return false;
+        };
+        if !track_sounding(state, id) || (self.peaks_only.contains(&id) && track.analyzed) {
+            return false;
+        }
+        let read = result
+            .stamp
+            .and_then(|(size, modified)| FileStamp::from_metadata(size, modified));
+        let other_file =
+            matches!((track.file_stamp, read), (Some(stored), Some(read)) if stored != read);
+        asked || (other_file && !self.library_pass.contains(&id))
     }
 
     fn autosave(&mut self, state: &AppState, version: u64, now: Instant) {
@@ -1925,6 +2563,26 @@ mod tests {
 
     fn at(secs: u64) -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(secs)
+    }
+
+    /// M8: a track already queued is not queued again; once taken it
+    /// can be queued anew.
+    #[test]
+    fn the_unique_queue_holds_each_track_once() {
+        let mut q = UniqueQueue::default();
+        q.push_back(TrackId(1));
+        q.push_back(TrackId(2));
+        q.push_back(TrackId(1));
+        assert_eq!(q.len(), 2);
+        assert_eq!(q.pop_front(), Some(TrackId(1)));
+        q.push_back(TrackId(1));
+        assert_eq!(q.pop_front(), Some(TrackId(2)));
+        assert_eq!(q.pop_front(), Some(TrackId(1)));
+        assert_eq!(q.pop_front(), None);
+        q.push_back(TrackId(3));
+        q.clear();
+        q.push_back(TrackId(3));
+        assert_eq!(q.len(), 1);
     }
 
     #[test]

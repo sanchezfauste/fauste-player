@@ -18,7 +18,8 @@ pub struct ScanJob {
     pub roots: Vec<PathBuf>,
     /// Paths an event touched: a file is looked at, a folder walked.
     pub paths: Vec<PathBuf>,
-    /// Tracks to check: each one whose file is not there is `gone`.
+    /// Tracks to check: each one whose file is not there is `gone` (under
+    /// a root) or `vanished` (under event paths only).
     pub known: Vec<(TrackId, PathBuf)>,
     /// Watched folders looked at, not walked: the ones an event path lies
     /// in, and every followed folder on a retry (LB22). One that is not
@@ -36,12 +37,18 @@ pub struct ScanJob {
 pub struct Found {
     pub seen: PathBuf,
     pub canonical: PathBuf,
+    /// Found under one of the job's event paths, not by a root walk.
+    pub event: bool,
 }
 
 #[derive(Debug, Default)]
 pub struct ScanAnswer {
     pub found: Vec<Found>,
+    /// Known tracks whose file is not there, under a root walk.
     pub gone: Vec<TrackId>,
+    /// Known tracks whose file is not there, under event paths only: an
+    /// editor may be replacing the file, so they are looked at again.
+    pub vanished: Vec<TrackId>,
     /// Roots that could not be walked, and why.
     pub troubles: Vec<(PathBuf, FolderTrouble)>,
     /// Roots walked (checks are never listed).
@@ -51,7 +58,13 @@ pub struct ScanAnswer {
 /// Walks `start` with an explicit stack. Folder symlinks are not followed
 /// (no cycles); an unreadable subfolder is skipped and counted. One deleted
 /// meanwhile (an ordinary removal) is not counted.
-fn walk(start: &Path, found: &mut Vec<Found>, seen: &mut HashSet<PathBuf>, skipped: &mut usize) {
+fn walk(
+    start: &Path,
+    event: bool,
+    found: &mut Vec<Found>,
+    seen: &mut HashSet<PathBuf>,
+    skipped: &mut usize,
+) {
     let mut stack = vec![start.to_path_buf()];
     while let Some(dir) = stack.pop() {
         let entries = match std::fs::read_dir(&dir) {
@@ -73,21 +86,22 @@ fn walk(start: &Path, found: &mut Vec<Found>, seen: &mut HashSet<PathBuf>, skipp
             } else if kind.is_symlink() {
                 // A file symlink is read; a folder symlink is not followed.
                 if path.is_file() && is_audio(&path) {
-                    add(path, found, seen);
+                    add(path, event, found, seen);
                 }
             } else if kind.is_file() && is_audio(&path) {
-                add(path, found, seen);
+                add(path, event, found, seen);
             }
         }
     }
 }
 
-fn add(path: PathBuf, found: &mut Vec<Found>, seen: &mut HashSet<PathBuf>) {
+fn add(path: PathBuf, event: bool, found: &mut Vec<Found>, seen: &mut HashSet<PathBuf>) {
     if seen.insert(path.clone()) {
         let canonical = canonical_path(&path);
         found.push(Found {
             seen: path,
             canonical,
+            event,
         });
     }
 }
@@ -135,7 +149,7 @@ pub fn scan(job: &ScanJob) -> ScanAnswer {
         let holds = job.known.iter().any(|(_, path)| path.starts_with(root));
         match look(root, holds) {
             Ok(()) => {
-                walk(root, &mut answer.found, &mut seen, &mut skipped);
+                walk(root, false, &mut answer.found, &mut seen, &mut skipped);
                 answer.readable.push(root.clone());
             }
             Err(trouble) => answer.troubles.push((root.clone(), trouble)),
@@ -146,9 +160,9 @@ pub fn scan(job: &ScanJob) -> ScanAnswer {
         // Not followed when it is a link to a folder, as in the walk.
         let kind = std::fs::symlink_metadata(path).map(|m| m.file_type());
         if kind.as_ref().is_ok_and(|k| k.is_dir()) {
-            walk(path, &mut answer.found, &mut seen, &mut skipped);
+            walk(path, true, &mut answer.found, &mut seen, &mut skipped);
         } else if path.is_file() && is_audio(path) {
-            add(path.clone(), &mut answer.found, &mut seen);
+            add(path.clone(), true, &mut answer.found, &mut seen);
         }
     }
     if skipped > 0 {
@@ -158,12 +172,16 @@ pub fn scan(job: &ScanJob) -> ScanAnswer {
         tracing::debug!(root = %root.display(), ?trouble, "watched folder not scanned");
     }
     let blocked: Vec<&PathBuf> = answer.troubles.iter().map(|(root, _)| root).collect();
-    answer.gone = job
-        .known
-        .iter()
-        .filter(|(_, path)| !blocked.iter().any(|root| path.starts_with(root)) && is_gone(path))
-        .map(|(id, _)| *id)
-        .collect();
+    for (id, path) in &job.known {
+        if blocked.iter().any(|root| path.starts_with(root)) || !is_gone(path) {
+            continue;
+        }
+        if job.roots.iter().any(|root| path.starts_with(root)) {
+            answer.gone.push(*id);
+        } else {
+            answer.vanished.push(*id);
+        }
+    }
     answer
 }
 
@@ -253,6 +271,7 @@ mod tests {
         let (mut found, mut seen, mut skipped) = (Vec::new(), HashSet::new(), 0);
         walk(
             &dir.path().join("deleted"),
+            false,
             &mut found,
             &mut seen,
             &mut skipped,

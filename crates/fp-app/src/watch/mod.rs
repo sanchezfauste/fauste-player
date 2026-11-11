@@ -32,6 +32,11 @@ pub enum FolderEvent {
 pub trait FolderWatcher: Send {
     /// Follows `folder` and its subfolders; `Err`: why the system refused.
     fn watch(&mut self, folder: &Path) -> Result<(), String>;
+    /// Follows `folder` alone, not its subfolders (the folder of a file
+    /// opened in the external editor). By default as [`Self::watch`].
+    fn watch_flat(&mut self, folder: &Path) -> Result<(), String> {
+        self.watch(folder)
+    }
     fn unwatch(&mut self, folder: &Path);
     /// The events since the last call; never blocks.
     fn events(&mut self) -> Vec<FolderEvent>;

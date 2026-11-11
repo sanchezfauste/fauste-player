@@ -2,7 +2,7 @@
 //! through the activity, read-only music (spec §2) and the audio focus the
 //! Kotlin shell reports.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -82,5 +82,18 @@ impl Platform for AndroidPlatform {
 
     fn can_write_user_files(&self) -> bool {
         false
+    }
+
+    fn can_launch_programs(&self) -> bool {
+        false
+    }
+
+    fn launch_editor(
+        &self,
+        _program: &Path,
+        _file: &Path,
+        done: Box<dyn FnOnce(Result<(), String>) + Send>,
+    ) {
+        done(Err("not available".to_owned()));
     }
 }

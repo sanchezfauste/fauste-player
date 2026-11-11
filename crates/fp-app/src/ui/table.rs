@@ -925,6 +925,8 @@ fn context_menu(
             ui.close();
         }
     }
+    // External editor spec EE2: as on a library row.
+    super::library::open_in_editor(ui, scene, track.id);
     if labelled(ui, icon::SPEAKER_HIGH, "menu-loudness", true).clicked() {
         outcome = Some(RowMenuOutcome::Loudness(track.id));
         ui.close();
@@ -941,6 +943,8 @@ fn context_menu(
             super::library::move_to_category(ui, scene, &[track.id]);
         }
     }
+    // EE12: as on a library row.
+    super::library::mark_reviewed(ui, scene, &[track.id]);
     ui.separator();
     if labelled(ui, icon::PLUS, "menu-add-below", true).clicked() {
         scene.pick_files(PickTarget::Playlist {

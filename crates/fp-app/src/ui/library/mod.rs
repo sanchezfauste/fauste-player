@@ -9,7 +9,7 @@
 mod category_dialog;
 pub(crate) mod confirm;
 pub(crate) mod menu;
-pub(crate) use menu::move_to_category;
+pub(crate) use menu::{mark_reviewed, move_to_category, open_in_editor};
 mod preview;
 pub(crate) use preview::PREVIEW_BAR_HEIGHT;
 pub(crate) mod state;
@@ -628,11 +628,13 @@ fn table(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
 }
 
 /// The category that added files join (track library spec §7.4): the
-/// selected one; none (uncategorised) with *All tracks* or
-/// *Uncategorised* selected.
+/// selected one; none (uncategorised) with *All tracks*, *Uncategorised*
+/// or *Markers to review* selected.
 pub(crate) fn added_category(view: &LibraryView) -> Option<CategoryId> {
     match view.selection {
         LibrarySelection::Category(id) => Some(id),
-        LibrarySelection::All | LibrarySelection::Uncategorised => None,
+        LibrarySelection::All
+        | LibrarySelection::Uncategorised
+        | LibrarySelection::MarkersToReview => None,
     }
 }

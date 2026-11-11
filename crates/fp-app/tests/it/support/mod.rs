@@ -399,6 +399,12 @@ pub struct FakePlatform {
     pub browser: Option<fp_app::ui::media_browser::MediaBrowser>,
     /// The folder a desktop dialog answers with when there is no browser.
     pub folder: Option<PathBuf>,
+    /// The programs started, as `(program, file)`, in order.
+    pub launches: Mutex<Vec<(PathBuf, PathBuf)>>,
+    /// What `launch_editor` answers; the default is a success.
+    pub launch_result: Option<String>,
+    /// Whether programs may be started (the default is not: set it).
+    pub programs: bool,
 }
 
 impl fp_app::platform::Platform for FakePlatform {
@@ -448,6 +454,23 @@ impl fp_app::platform::Platform for FakePlatform {
     fn can_write_user_files(&self) -> bool {
         !self.read_only
     }
+
+    fn can_launch_programs(&self) -> bool {
+        self.programs
+    }
+
+    fn launch_editor(
+        &self,
+        program: &std::path::Path,
+        file: &std::path::Path,
+        done: Box<dyn FnOnce(Result<(), String>) + Send>,
+    ) {
+        self.launches
+            .lock()
+            .unwrap()
+            .push((program.to_path_buf(), file.to_path_buf()));
+        done(self.launch_result.clone().map_or(Ok(()), Err));
+    }
 }
 
 #[derive(Default)]
@@ -462,6 +485,7 @@ pub struct FakeWatch {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WatchCall {
     Watch(PathBuf),
+    WatchFlat(PathBuf),
     Unwatch(PathBuf),
 }
 
@@ -503,6 +527,15 @@ impl FolderWatcher for FakeWatcher {
         }
         if !inner.watched.iter().any(|f| f == folder) {
             inner.watched.push(folder.to_path_buf());
+        }
+        Ok(())
+    }
+
+    fn watch_flat(&mut self, folder: &std::path::Path) -> Result<(), String> {
+        let mut inner = self.0.lock().unwrap();
+        inner.calls.push(WatchCall::WatchFlat(folder.to_path_buf()));
+        if inner.refused.iter().any(|f| f == folder) {
+            return Err("refused".into());
         }
         Ok(())
     }
