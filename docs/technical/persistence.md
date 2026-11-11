@@ -39,7 +39,7 @@ SQL: `Store::load` returns the state the model restores from, and
 
 ### Schema (`db/schema.rs`)
 
-`PRAGMA user_version` is the schema version (`SCHEMA_VERSION`, 2), and
+`PRAGMA user_version` is the schema version (`SCHEMA_VERSION`, 3), and
 `MIGRATIONS[n - 1]` takes it from *n − 1* to *n*, each in its own
 transaction. The tables:
 
@@ -51,8 +51,11 @@ transaction. The tables:
 | `playlists`, `entries` | A playlist's `position` and `name`; its entries with `playlist`, `position`, `track` and `doc` (`played_by`, `repeat`, `stop_after`). Deleting a playlist deletes its entries |
 | `cart_pages` | `id`, `position`, and `doc`: the page with its carts (`color` is a lower-case name, left out when the cart has none) |
 | `players` | `id`, `position`, and `doc`: playlist, current, next, `next_explicit`, mode, `stop_after_current`, position, volume, columns, history, `pending_start` |
+| `rotations` | `id`, `position` and `doc` (schema 3): a rotation of the music filler (`name`, `steps`: each a `source`, `{"Category": id}` or `{"Kind": "Music"}`, with `min` and `max`). An unreadable record is dropped; a step's counts are brought into 1–99 with `min ≤ max` ([automation](automation.md)) |
+| `air_times` | `track` and `at` (schema 3): when each track last aired, UTC Unix milliseconds. A row of a track not in the library is dropped on load |
 
-The session's cartwall state and its layout (`player_shares`,
+The default rotation is the `kv` value `default_rotation` (a rotation id,
+or null); one that names no rotation falls back on the first. The session's cartwall state and its layout (`player_shares`,
 `hidden_players`, the cartwall's dock and size, `locked`, `touch_locked`,
 and `cue_window`, the CUE windows' content size) are JSON values
 in `kv`. A `doc` column holds the model value's JSON, and the key columns

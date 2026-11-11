@@ -107,6 +107,11 @@ pub struct RestoreParts {
     /// The saved library window state; `restore` repairs it for the categories.
     pub library_view: crate::library_view::LibraryView,
     pub ids: IdGen,
+    /// The music filler's rotations (automation spec AU1–AU4).
+    pub rotations: crate::rotation::Rotations,
+    /// When each track last aired (AU35); times of tracks not in `library`
+    /// are dropped.
+    pub air_times: crate::air_times::AirTimes,
 }
 
 impl AppState {
@@ -151,8 +156,12 @@ impl AppState {
             layout,
             library_view,
             mut ids,
+            rotations,
+            mut air_times,
         } = parts;
         ids.observe(library.max_raw_id());
+        ids.observe(rotations.max_raw_id());
+        air_times.retain_tracks(|t| library.get(t).is_some());
         ids.observe(categories.max_raw_id());
         ids.observe(playlists.max_raw_id());
         for s in sessions {
@@ -194,8 +203,8 @@ impl AppState {
             library_cue: crate::library_cue::LibraryCue::default(),
             layout: Layout::default(),
             library_view: crate::library_view::LibraryView::default(),
-            rotations: crate::rotation::Rotations::default(),
-            air_times: crate::air_times::AirTimes::default(),
+            rotations,
+            air_times,
             wall_now: crate::wall_time::WallTime::default(),
             rng: crate::wall_time::SplitMix64::default(),
         };

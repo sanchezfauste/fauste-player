@@ -4,7 +4,7 @@ use std::fs;
 use std::path::Path;
 
 use fp_store::db::{DbSource, open_with_fallback};
-use fp_store::{Db, backup_path};
+use fp_store::{Db, SCHEMA_VERSION, backup_path};
 use tempfile::tempdir;
 
 fn names(dir: &Path) -> Vec<String> {
@@ -97,7 +97,8 @@ fn a_newer_database_is_kept_aside() {
     make_db(&path, "future");
     {
         let conn = rusqlite::Connection::open(&path).unwrap();
-        conn.pragma_update(None, "user_version", 3).unwrap();
+        conn.pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+            .unwrap();
     }
     let before = fs::read(&path).unwrap();
     let opened = open_with_fallback(&path, 3).unwrap();
@@ -119,7 +120,10 @@ fn without_anything_readable_it_starts_fresh() {
     fs::write(backup_path(&path, 1), vec![0xCD; 4096]).unwrap();
     let opened = open_with_fallback(&path, 3).unwrap();
     assert_eq!(opened.source, DbSource::Fresh);
-    assert_eq!(opened.db.pragma_i64("user_version"), 2);
+    assert_eq!(
+        opened.db.pragma_i64("user_version"),
+        i64::from(SCHEMA_VERSION)
+    );
     assert!(path.exists());
 }
 
@@ -129,7 +133,10 @@ fn an_unopenable_directory_gives_an_in_memory_database() {
     let path = dir.path().join("missing/fauste.db");
     let opened = open_with_fallback(&path, 3).unwrap();
     assert_eq!(opened.source, DbSource::Fresh);
-    assert_eq!(opened.db.pragma_i64("user_version"), 2);
+    assert_eq!(
+        opened.db.pragma_i64("user_version"),
+        i64::from(SCHEMA_VERSION)
+    );
     assert!(!opened.warnings.is_empty());
     assert!(!path.exists());
 }
@@ -234,8 +241,11 @@ fn a_newer_database_in_rollback_journal_mode_is_not_modified() {
     let path = dir.path().join("fauste.db");
     {
         let conn = rusqlite::Connection::open(&path).unwrap();
-        conn.execute_batch("CREATE TABLE t (x); PRAGMA user_version = 3;")
-            .unwrap();
+        conn.execute_batch(&format!(
+            "CREATE TABLE t (x); PRAGMA user_version = {};",
+            SCHEMA_VERSION + 1
+        ))
+        .unwrap();
     }
     let before = fs::read(&path).unwrap();
     open_with_fallback(&path, 0).unwrap();

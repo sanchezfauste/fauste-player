@@ -259,6 +259,8 @@ fn add_to_library_takes_the_category_and_its_kind() {
 
 fn parts(s: &AppState, library: Library) -> RestoreParts {
     RestoreParts {
+        rotations: Default::default(),
+        air_times: Default::default(),
         library_view: Default::default(),
         config: s.config.clone(),
         library,

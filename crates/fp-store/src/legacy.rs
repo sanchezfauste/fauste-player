@@ -132,6 +132,8 @@ pub fn fuzz_documents(bytes: &[u8]) {
         .unwrap_or_default();
     let _ = AppState::restore(
         RestoreParts {
+            rotations: Default::default(),
+            air_times: Default::default(),
             config,
             library,
             categories: Default::default(),

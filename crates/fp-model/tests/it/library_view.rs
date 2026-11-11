@@ -98,6 +98,8 @@ fn restore_repairs_the_saved_view() {
     let known = create(&mut s);
     let unknown = fp_model::CategoryId(known.0 + 100);
     let parts = RestoreParts {
+        rotations: Default::default(),
+        air_times: Default::default(),
         config: s.config.clone(),
         categories: s.categories.clone(),
         ids: s.ids.clone(),

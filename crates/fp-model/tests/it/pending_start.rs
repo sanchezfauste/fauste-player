@@ -316,6 +316,8 @@ fn a_pending_start_is_clamped_again_when_the_analysis_moves_the_cue_in() {
 
 fn restore(state: &AppState, sessions: &[PlayerSession]) -> (AppState, Vec<EngineAction>) {
     let parts = RestoreParts {
+        rotations: Default::default(),
+        air_times: Default::default(),
         library_view: Default::default(),
         config: state.config.clone(),
         library: state.library.clone(),
