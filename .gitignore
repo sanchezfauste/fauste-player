@@ -27,3 +27,8 @@ __pycache__/
 /mobile/android/app/src/main/assets/licenses/
 /mobile/android/local.properties
 /mobile/android/.kotlin/
+
+# Claude Code: personal settings and runtime files (the shared ones are in .claude/)
+/.claude/settings.local.json
+/.claude/worktrees/
+/.claude/scheduled_tasks.lock

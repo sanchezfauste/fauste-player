@@ -410,6 +410,12 @@ The project is developed with Claude Code and the **superpowers** skills.
 [`CLAUDE.md`](CLAUDE.md) is the canonical guide for agents (rules, commands,
 invariants, workflow). [`AGENTS.md`](AGENTS.md) points other agents to it.
 
+The repository's `.claude/` folder adds hooks (bash and `jq`: Rust files are
+formatted on edit, release-managed files are protected, and the names of other
+products are kept out of commits) and two read-only review agents (real-time
+safety, documentation in step with the diff); see "Hooks and project agents"
+in `CLAUDE.md`.
+
 Install the skills from the official plugin marketplace inside Claude Code
 (`/plugin` → *superpowers*). Use them as follows:
 
