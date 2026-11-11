@@ -442,8 +442,9 @@ From top to bottom (mockup:
 look follows the Nocturne design system):
 
 1. **Preview bar (§8),** like a player's header: Play, Pause, Stop; the big
-   remaining time; title, artist and category; a small meter of the library
-   CUE; the waveform with markers, zoomable as on a player.
+   remaining time; title, artist and category; the library CUE's meter and,
+   on the desktop, its listening level fader (§8.5); the waveform with
+   markers, zoomable as on a player.
 2. **Category tree** (left) with a **＋** button, and below it a resizable
    split with the **table** (right): **search field** and a **Whole library**
    toggle above the table.
@@ -554,8 +555,8 @@ look follows the Nocturne design system):
   tail (stop, seek, replacement) is de-clicked, because a preview may share a
   channel with a Main (CA7); a forced rate change reopens it at its position,
   also while held.
-- The small meter has its own reading in the telemetry; it is not a
-  programme meter (CA9). Its maximum restarts when the bar's track changes
+- The meter (since plan 11 a desktop player's full meter, §8.5) has its
+  own reading in the telemetry; it is not a programme meter (CA9). Its maximum restarts when the bar's track changes
   and when it is clicked.
 - Without a route the transport is dimmed with the reason as its tooltip;
   the bar still shows the track, its waveform and marker editing (LB18 needs

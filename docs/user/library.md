@@ -270,8 +270,9 @@ The bar shows:
   never changes a track (its file, its loudness gain or its markers), a
   player or the cartwall. It stays as you left it when the preview moves to
   another track and is saved for the next start; its tooltip and the
-  readout under it show the level in dB. A phone's pre-listen card has no
-  fader;
+  readout under it show the level in dB. If the Library output shares
+  channels with an on-air output, the fader also sets how loud the
+  pre-listen is there. A phone's pre-listen card has no fader;
 - the whole file's waveform, as tall as a player's, with its markers, and
   an `elapsed / total` line under it.
 
