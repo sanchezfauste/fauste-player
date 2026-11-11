@@ -181,7 +181,7 @@ fn br15_the_players_note_shows_only_while_a_bit_perfect_player_exists() {
     );
     // The settings it explains stay editable.
     assert!(
-        h.query_by_role_and_label(egui::accesskit::Role::Slider, "Fade time")
+        h.query_by_role_and_label(egui::accesskit::Role::Slider, "Crossfade time")
             .is_some()
     );
     // Bit-perfect turned off for the device.

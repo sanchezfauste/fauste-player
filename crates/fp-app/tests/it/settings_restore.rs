@@ -34,7 +34,8 @@ fn open(
 #[test]
 fn players_restores_its_defaults_after_confirmation() {
     let mut s = state(1, 1);
-    s.config.players.fade_ms = 3000;
+    s.config.players.crossfade_ms = 3000;
+    s.config.players.fade_stop_ms = 5000;
     let (mut h, fake) = open("Players", s);
     h.get_by_label("Restore defaults").click();
     h.run_steps(2);
@@ -46,7 +47,8 @@ fn players_restores_its_defaults_after_confirmation() {
         fake.take_sent(),
         vec![Command::RestoreDefaults(SettingsSection::Players)]
     );
-    assert_eq!(fake.state.load().config.players.fade_ms, 1000);
+    assert_eq!(fake.state.load().config.players.crossfade_ms, 1000);
+    assert_eq!(fake.state.load().config.players.fade_stop_ms, 2000);
     assert!(h.query_by_label(QUESTION).is_none());
 }
 

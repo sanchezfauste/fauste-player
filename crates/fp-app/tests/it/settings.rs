@@ -17,27 +17,44 @@ use fp_backends::{AudioBackend, OfflineBackend};
 use fp_model::{Command, PlayerRoutes, Route};
 use support::{harness, harness_with_backends, state};
 
-#[test]
-fn changing_fade_time_updates_the_config() {
+/// Nudges the Players slider labelled `label` one step to the right and
+/// returns the config the UI sent.
+fn nudge_players_slider(label: &str) -> (fp_model::Config, fp_model::Config) {
     let (mut h, fake) = harness(state(1, 1));
     h.get_by_label("Settings").click();
     h.run_steps(2);
     h.get_by_role_and_label(Role::Button, "Players").click();
     h.run_steps(2);
-    h.get_by_role_and_label(Role::Slider, "Fade time").focus();
+    h.get_by_role_and_label(Role::Slider, label).focus();
     h.run_steps(1);
     h.key_press(Key::ArrowRight);
     h.run_steps(2);
-    let fades: Vec<u32> = fake
+    let sent = fake
         .take_sent()
         .into_iter()
-        .filter_map(|c| match c {
-            Command::UpdateConfig(config) => Some(config.players.fade_ms),
+        .rev()
+        .find_map(|c| match c {
+            Command::UpdateConfig(config) => Some(*config),
             _ => None,
         })
-        .collect();
-    assert_eq!(fades.last(), Some(&1100));
-    assert_eq!(fake.state.load().config.players.fade_ms, 1100);
+        .expect("an UpdateConfig was sent");
+    (sent, fake.state.load().config.clone())
+}
+
+#[test]
+fn changing_the_crossfade_time_updates_only_that_setting() {
+    let (sent, state) = nudge_players_slider("Crossfade time");
+    assert_eq!(sent.players.crossfade_ms, 1100);
+    assert_eq!(sent.players.fade_stop_ms, 2000);
+    assert_eq!(state.players.crossfade_ms, 1100);
+}
+
+#[test]
+fn changing_the_fade_stop_time_updates_only_that_setting() {
+    let (sent, state) = nudge_players_slider("Fade stop time");
+    assert_eq!(sent.players.fade_stop_ms, 2100);
+    assert_eq!(sent.players.crossfade_ms, 1000);
+    assert_eq!(state.players.fade_stop_ms, 2100);
 }
 
 #[test]

@@ -196,7 +196,7 @@ costs. Three things such a station expects and does not get today:
   `Crossfade`, whatever the rates, as the O25 hold already does (`held` in
   `start_or_crossfade`); the player does not enter `fading`, so the
   **Mixing** badge never lights and Previous stays available.
-  `players.fade_ms` is not used for these starts.
+  `players.crossfade_ms` is not used for these starts.
 - **BR8 The engine reopens under a hard start.** In `start_current`
   (`crates/fp-engine/src/engine.rs` ~L2295) without a crossfade, on a
   bit-perfect bus, when the file's rate differs from the stream rate: the
@@ -219,7 +219,7 @@ costs. Three things such a station expects and does not get today:
 ### 4.5 What does not change
 
 - **BR9 Fades that are not transitions stay.** On a bit-perfect player:
-  Fade stop still fades out over `players.fade_ms` and stops
+  Fade stop still fades out over `players.fade_stop_ms` and stops
   (`FadeOutAndStop`, main spec rule 8); Pause and resume keep their ramp
   (`tuning.pause_ramp_ms`); Stop, a manual start over the current and a cut
   inside the file keep the declick (`tuning.declick_ms`), and a start
@@ -329,8 +329,11 @@ costs. Three things such a station expects and does not get today:
     (`crates/fp-app/src/ui/widgets.rs` ~L1626): the marker belongs to the
     track and still applies on other players;
   - Settings → Players shows the note `settings-players-bit-perfect-note`
-    (§6.5) under **Fade time** and **Automatic mix at the MIX point** while
-    at least one player is a bit-perfect player. Both settings stay
+    (§6.5) under **Crossfade time**, **Fade stop time** and **Automatic
+    mix at the MIX point** while at least one player is a bit-perfect
+    player. *(2026-11-11: the fade time was split into a crossfade time
+    and a fade stop time; the note now names only the crossfade time and
+    automatic mix.)* These settings stay
     editable: they are global and still apply to the other players.
 - **BR16 MIDI, the remote API and OSC add nothing.** Their Play/Next and
   Previous map to `Command::Play` and `Command::Previous`, so on a
@@ -505,8 +508,10 @@ refuses a `SetVolume` with `ModelError::FaderLocked`.
 
 | Locale | Text |
 |---|---|
-| en-US | Players on a bit-perfect output never mix or crossfade: automatic mix does not apply to them, and the fade time only to Fade stop. |
-| es-ES | Los reproductores con salida bit-perfect nunca mezclan ni encadenan con fundido: la mezcla automática no se les aplica, y la duración del fundido solo cuenta para Stop con fundido. |
+| en-US | Players on a bit-perfect output never mix or crossfade: automatic mix and the crossfade time do not apply to them. |
+| es-ES | Los players con salida bit-perfect nunca mezclan ni encadenan con fundido: la mezcla automática y la duración del fundido entre pistas no se les aplican. |
+
+*(2026-11-11: reworded when the fade time was split into a crossfade time and a fade stop time.)*
 
 The remote API's error message (BF3, BF12) is English, like every API
 message, and is not a Fluent string.
@@ -524,7 +529,7 @@ message, and is not a Fluent string.
 No configuration field is added: a hard transition and a rate cut have
 nothing to tune (the gap is the device's reopen time plus
 `tuning.declick_ms`, both already configurable or the device's own), the
-lock has no setting (Q1), and `players.fade_ms` and `players.auto_segue`
+lock has no setting (Q1), and `players.crossfade_ms` (then `fade_ms`) and `players.auto_segue`
 keep their meaning for the other players (BR15).
 
 ## 8. Testing
@@ -543,7 +548,7 @@ backend and explicit `now: Instant`; nothing sleeps.
 | BR6 | `fp-engine` `tests/bit_perfect.rs` | `rate_cut: None`: the next starts on the current's stop frame with no overlapping ramp and the device keeps its rate. `rate_cut: Some(r)`: the preload is opened at `r`; at `at_secs` the current stops, `OfflineDevice::config()` shows `r`, the next starts and is bit-perfect; `TransitionStarted` is reported. A cart fired just before the cut: no reopen, the next plays resampled. A refused rate: B3.4 fallback, the next plays. |
 | BR7 | `fp-model` `tests/bit_perfect_rules.rs` | on a bit-perfect player, Play while playing, Play on the self-next (O37) and Previous emit `StartCurrent` (not `Crossfade`) at the same rate and at another rate (Previous to an entry at another rate included), and `fading` stays false; on another player they emit `Crossfade`. |
 | BR8 | `fp-engine` `tests/bit_perfect.rs` | a `StartCurrent` at another rate replacing a playing source on a bit-perfect bus reopens the bus after the declick; at the same rate it starts at once with no reopen; a `Crossfade` at another rate does not reopen (resampled). In the gap before the reopen: a cart fired or a rate refused keeps the bus's rate and the track plays opened again at it; a seek keeps the cut and the track starts bit-perfect from the seek point once the bus reopens (two seeks: the last wins; a seek and then a refused rate or a cart: it plays from the seek point at the stream rate; a seek and then a stop: nothing starts); a second start plays at its own rate (at once at the stream rate, after a cut of its own at another). |
-| BR9 | `fp-model` `tests/bit_perfect_rules.rs` | on a bit-perfect player `FadeStop` emits `FadeOutAndStop` with `fade_ms`, and `Pause` and `Restart` emit what they emit on any player. |
+| BR9 | `fp-model` `tests/bit_perfect_rules.rs` | on a bit-perfect player `FadeStop` emits `FadeOutAndStop` with `players.fade_stop_ms`, and `Pause` and `Restart` emit what they emit on any player. |
 | BR10 | `fp-model` `tests/bit_perfect_rules.rs` | an unknown-format next gets a hard plan with `rate_cut: None`; a DSD next and a DSD stream on air get no rate cut; the O25 hold still gives `StopAt`; another player placed on an ordinary device keeps its segue plan while the bit-perfect one stays hard. |
 | BR11 | `fp-engine` `tests/bit_perfect.rs` | the existing B3.3 test (a source started on a sounding bus is resampled) still passes. |
 | BR12 | `fp-model` `tests/live.rs` | with a rate cut scheduled, a pending buffer change on the player's device is not due at any point up to `TransitionStarted` (the player stays `Playing`, so it stays a cause). |
@@ -602,7 +607,7 @@ place.
     - the **volume fader is held at 100 %**, on screen, on MIDI and over
       the remote API and OSC, and goes to 100 % when bit-perfect is turned
       on;
-    - **what still works:** Fade stop (it fades over the fade time), Pause,
+    - **what still works:** Fade stop (it fades over the fade stop time), Pause,
       Stop, Restart, repeat and stop-after marks, Single and Continuous
       modes, Cue (pre-listen, which is not locked), carts (they play, and
       while one plays on the device the next track is not bit-perfect and
@@ -639,10 +644,10 @@ place.
   saying that a player on a bit-perfect output ignores the MIX point and
   the automatic mix, and that Play while on air does not fade there, with
   a link to "What it costs".
-- **`settings.md`**: in **Players**, the **Fade time** and **Automatic mix
-  at the MIX point** rows say they do not apply to players on a
-  bit-perfect output (except Fade stop), and the note under them is
-  mentioned; in **Audio outputs**, the **Bit-perfect: *device*** row says
+- **`settings.md`**: in **Players**, the **Crossfade time** and **Automatic
+  mix at the MIX point** rows say they do not apply to players on a
+  bit-perfect output (the **Fade stop time** row says it applies to every
+  player), and the note under them is mentioned; in **Audio outputs**, the **Bit-perfect: *device*** row says
   it is a special mode, the players on it never crossfade, a change of rate
   leaves a short silence and their volume is held at 100 %, linking to
   "What it costs".
@@ -705,7 +710,7 @@ place.
 - A rate cut for the Cue path, carts, or DSD streams (BR10).
 - Gapless rate changes: the gap is the device's reopen and cannot be
   hidden without resampling.
-- Hiding or disabling the fade time and automatic mix settings: they are
+- Hiding or disabling the crossfade time and automatic mix settings: they are
   global and apply to the other players (BR15).
 - Fader position feedback to MIDI surfaces (motorised faders, LED rings)
   (BF11).

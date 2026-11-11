@@ -278,9 +278,9 @@ fn update_config_keeps_the_player_count() {
     let mut state = fixture(1);
     let mut config = Config::default();
     config.players.count = 9;
-    config.players.fade_ms = 2500;
+    config.players.crossfade_ms = 2500;
     apply(&mut state, Command::UpdateConfig(Box::new(config))).unwrap();
-    assert_eq!(state.config.players.fade_ms, 2500);
+    assert_eq!(state.config.players.crossfade_ms, 2500);
     assert_eq!(state.config.players.count, 4);
     assert_eq!(state.players.len(), 4);
 }
@@ -342,12 +342,15 @@ fn a_config_update_is_validated_and_a_lower_player_limit_removes_idle_players() 
     let last = state.players[3].id;
     let mut config = state.config.clone();
     config.limits.max_players = 3;
-    config.players.fade_ms = 0; // out of range: validated
+    config.players.crossfade_ms = 0; // out of range: validated
     let actions = apply(&mut state, Command::UpdateConfig(Box::new(config))).unwrap();
     assert!(actions.contains(&EngineAction::RemovePlayer { player: last }));
     assert_eq!(state.players.len(), 3);
     assert_eq!(state.config.players.count, 3);
-    assert_eq!(state.config.players.fade_ms, 50, "clamped to its range");
+    assert_eq!(
+        state.config.players.crossfade_ms, 50,
+        "clamped to its range"
+    );
 }
 
 #[test]

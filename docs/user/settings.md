@@ -104,20 +104,22 @@ the device is reopened when it comes back (see
 
 ## Players
 
-![Settings, Players: number of players, default mode, fade time, automatic mix, cue-in and cue-out, end-of-track warning and language](../images/guide/settings-players.png)
+![Settings, Players: number of players, default mode, crossfade time, fade stop time, automatic mix, cue-in and cue-out, end-of-track warning and language](../images/guide/settings-players.png)
 
 | Setting | Default | Meaning |
 |---|---|---|
 | Language | System | Interface language |
 | Number of players | 4 | Columns on the main screen (a player on air cannot be removed). The number applies when you release the slider; a number typed into the box applies when you press Enter or leave the box, and Escape cancels it |
 | Default mode | CONT | The mode players start in |
-| Fade time | 1000 ms | Used by Play while on air and by Fade stop. On a player whose Main output is bit-perfect, only by Fade stop |
+| Crossfade time | 1000 ms | How long the track on air fades out when you press Play (next) while it plays, and for Previous track. Does not apply to a player whose Main output is bit-perfect |
+| Fade stop time | 2000 ms | How long **Fade stop** takes to fade the track out. Applies to every player, bit-perfect ones included |
 | Automatic mix at the MIX point | On | Overlap tracks in continuous mode. Does not apply to a player whose Main output is bit-perfect |
 | Use cue-in and cue-out | On | Off: players play every track from the start to the end of the file; the markers are kept and carts still use theirs. Durations and playlist totals follow the same range |
 | End-of-track warning | 10 s | When the countdown starts blinking red |
 
 While a player's Main output is bit-perfect, a note under **Automatic mix at
-the MIX point** says that such players never mix or crossfade. Both settings
+the MIX point** says that such players never mix or crossfade, so the
+crossfade time and automatic mix do not apply to them. Both settings
 stay editable: they still apply to the other players. See [What it costs](bit-perfect.md#what-it-costs).
 
 ## Meters

@@ -6,13 +6,33 @@
 use fp_model::Config;
 use serde_json::Value;
 
+/// Fields stored under another name by earlier versions: (section, old
+/// name, new name). The old value is taken when the new name is absent; a
+/// rename needs no schema upgrade, so older versions still read the file.
+const RENAMED: &[(&str, &str, &str)] = &[("players", "fade_ms", "crossfade_ms")];
+
 /// Builds a `Config` from the user's JSON object, keeping every valid field.
 pub fn config_from_value(user: &Value, warnings: &mut Vec<String>) -> Config {
     let Ok(mut root) = serde_json::to_value(Config::default()) else {
         return Config::default();
     };
-    merge(&mut root, "", user, warnings);
+    let user = renamed(user);
+    merge(&mut root, "", &user, warnings);
     serde_json::from_value(root).unwrap_or_default()
+}
+
+/// `user` with every old field name of `RENAMED` moved to its new name.
+fn renamed(user: &Value) -> Value {
+    let mut user = user.clone();
+    for (section, old, new) in RENAMED {
+        if let Some(Value::Object(fields)) = user.get_mut(*section)
+            && let Some(value) = fields.remove(*old)
+            && !fields.contains_key(*new)
+        {
+            fields.insert((*new).to_owned(), value);
+        }
+    }
+    user
 }
 
 fn escape(key: &str) -> String {
@@ -146,13 +166,32 @@ mod tests {
         let mut warnings = Vec::new();
         let c = config_from_value(&bad, &mut warnings);
         assert!(c.players.use_cue_markers);
-        assert_eq!(c.players.fade_ms, 2000, "the other fields are kept");
+        assert_eq!(c.players.crossfade_ms, 2000, "the other fields are kept");
         assert_eq!(warnings.len(), 1, "{warnings:?}");
 
         let off: serde_json::Value =
             serde_json::from_str(r#"{"players":{"use_cue_markers":false}}"#).unwrap();
         let c = config_from_value(&off, &mut Vec::new());
         assert!(!c.players.use_cue_markers);
+    }
+
+    #[test]
+    fn the_old_fade_ms_loads_as_the_crossfade_length() {
+        let old: serde_json::Value =
+            serde_json::from_str(r#"{"players":{"fade_ms":3000}}"#).unwrap();
+        let mut warnings = Vec::new();
+        let c = config_from_value(&old, &mut warnings);
+        assert_eq!(c.players.crossfade_ms, 3000);
+        assert_eq!(
+            c.players.fade_stop_ms, 2000,
+            "the fade stop keeps its default"
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
+
+        let both: serde_json::Value =
+            serde_json::from_str(r#"{"players":{"fade_ms":3000,"crossfade_ms":500}}"#).unwrap();
+        let c = config_from_value(&both, &mut Vec::new());
+        assert_eq!(c.players.crossfade_ms, 500, "the new name wins");
     }
 
     #[test]

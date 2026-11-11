@@ -1714,11 +1714,18 @@ fn players(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             }
         },
     );
-    let mut fade = config.players.fade_ms;
-    let label = t.tr("settings-fade");
-    row(ui, &label, Some(&t.tr("settings-hint-fade")), |ui| {
-        if slider(ui, &mut fade, 100..=5000, 100.0, " ms", &label) {
-            update(scene, |c| c.players.fade_ms = fade);
+    let mut crossfade = config.players.crossfade_ms;
+    let label = t.tr("settings-crossfade");
+    row(ui, &label, Some(&t.tr("settings-hint-crossfade")), |ui| {
+        if slider(ui, &mut crossfade, 100..=5000, 100.0, " ms", &label) {
+            update(scene, |c| c.players.crossfade_ms = crossfade);
+        }
+    });
+    let mut fade_stop = config.players.fade_stop_ms;
+    let label = t.tr("settings-fade-stop");
+    row(ui, &label, Some(&t.tr("settings-hint-fade-stop")), |ui| {
+        if slider(ui, &mut fade_stop, 100..=10_000, 100.0, " ms", &label) {
+            update(scene, |c| c.players.fade_stop_ms = fade_stop);
         }
     });
     let mut auto = config.players.auto_segue;
@@ -1732,9 +1739,10 @@ fn players(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
             }
         },
     );
-    // BR15: the two settings above are global; say they do not apply to
-    // the players on a bit-perfect output, which never mix. Both stay
-    // editable for the other players.
+    // BR15: the crossfade time and automatic mix are global; say they do
+    // not apply to the players on a bit-perfect output, which never mix.
+    // Both stay editable for the other players. The fade stop time does
+    // apply to them (BR9).
     if scene
         .state
         .players

@@ -83,7 +83,7 @@ seeks to its `cue_in`, with the same anti-click replace-source path as a seek
   entry; the others are
   discarded. If none is left, nothing happens;
 - the popped entry starts at full level and the current one fades out over
-  `fade_ms`, exactly as Play-while-Playing (rule 5);
+  `crossfade_ms`, exactly as Play-while-Playing (rule 5);
 - the old current is marked played (rule 12) but is **not** pushed onto the
   history, so that Previous followed by Previous keeps going back instead of
   bouncing between two entries;

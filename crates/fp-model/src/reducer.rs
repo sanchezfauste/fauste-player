@@ -831,7 +831,7 @@ fn fade_stop(
         // O25: a DSD stream cannot be faded; it stops at once.
         return stop(state, id, out);
     }
-    let fade_ms = state.config.players.fade_ms;
+    let fade_ms = state.config.players.fade_stop_ms;
     let player = &mut state.players[i];
     // Allowed during a crossfade or segue overlap too: the engine fades every
     // Main source of the player. Only a fade stop already in progress blocks it.
@@ -1079,7 +1079,7 @@ fn start_or_crossfade(
         out.push(EngineAction::StartCurrent { player, request });
         return;
     }
-    let fade_ms = state.config.players.fade_ms;
+    let fade_ms = state.config.players.crossfade_ms;
     out.push(EngineAction::Crossfade {
         player,
         request,

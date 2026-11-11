@@ -110,6 +110,29 @@ fn rule6_pause_toggles_and_is_ignored_during_a_fade() {
 }
 
 #[test]
+fn rule5_and_rule8_crossfade_and_fade_stop_have_their_own_lengths() {
+    let mut state = fixture(3);
+    let p = p0(&state);
+    state.config.players.crossfade_ms = 700;
+    state.config.players.fade_stop_ms = 3500;
+    apply(&mut state, Command::Play(p)).unwrap();
+    let actions = apply(&mut state, Command::Play(p)).unwrap();
+    assert!(matches!(
+        actions.first(),
+        Some(EngineAction::Crossfade { fade_ms: 700, .. })
+    ));
+    let actions = apply(&mut state, Command::FadeStop(p)).unwrap();
+    assert_eq!(
+        actions.first(),
+        Some(&EngineAction::FadeOutAndStop {
+            player: p,
+            fade_ms: 3500
+        })
+    );
+    assert_eq!(state.player(p).unwrap().fade_ms, 3500);
+}
+
+#[test]
 fn rule8_a_crossfade_and_a_fade_stop_during_it_are_numbered_fades() {
     let mut state = fixture(3);
     let p = p0(&state);
@@ -118,8 +141,8 @@ fn rule8_a_crossfade_and_a_fade_stop_during_it_are_numbered_fades() {
     apply(&mut state, Command::Play(p)).unwrap(); // crossfade
     let crossfade = state.player(p).unwrap().clone();
     assert!(crossfade.fading);
-    assert_eq!(crossfade.fade_ms, state.config.players.fade_ms);
-    state.config.players.fade_ms = 2500;
+    assert_eq!(crossfade.fade_ms, state.config.players.crossfade_ms);
+    state.config.players.fade_stop_ms = 2500;
     apply(&mut state, Command::FadeStop(p)).unwrap();
     let stopping = state.player(p).unwrap();
     assert!(stopping.fading);
@@ -169,7 +192,7 @@ fn rule8_fade_stop_fades_then_stops_when_the_engine_reports_the_end() {
         actions.first(),
         Some(&EngineAction::FadeOutAndStop {
             player: p,
-            fade_ms: 1000
+            fade_ms: 2000
         })
     );
     assert!(state.player(p).unwrap().fading);

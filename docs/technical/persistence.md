@@ -279,7 +279,12 @@ starts. The import uses it for the old documents.
 `config.json` is read **leniently** (`lenient.rs`): each field is taken on its
 own, so one bad value falls back to its default instead of discarding the
 file. `Config::validate` then clamps every value into range and returns
-warnings, which are logged.
+warnings, which are logged. A field that was renamed is listed in
+`lenient::RENAMED` (section, old name, new name): its old name is read into
+the new one when the new one is absent (`players.fade_ms` →
+`players.crossfade_ms`). A rename needs no schema upgrade, so an older
+version can still read the file. It ignores the new name and uses its
+default.
 
 ## Playlist and cart page files (`playlist_io.rs`)
 
@@ -346,7 +351,8 @@ Every value has a default in `fp-model/src/config.rs` and a valid range in
 |---|---|---|
 | `count` | 4 | 1 … `limits.max_players` |
 | `default_mode` | `Continuous` | `Single`, `Continuous` |
-| `fade_ms` | 1000 | 50 … 10000 |
+| `crossfade_ms` | 1000 | 50 … 10000 (Play while on air and Previous; earlier versions wrote it as `fade_ms`, which the lenient loader reads into this field) |
+| `fade_stop_ms` | 2000 | 50 … 10000 (Fade stop) |
 | `auto_segue` | true | |
 | `use_cue_markers` | true | Players honour cue-in and cue-out; off plays 0 to the end of the file. No range; a wrong type loads as the default |
 | `end_warning_secs` | 10 | 0 … 120 |

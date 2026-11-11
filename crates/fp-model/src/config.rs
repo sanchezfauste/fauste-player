@@ -351,7 +351,12 @@ impl Default for CartwallConfig {
 pub struct PlayersConfig {
     pub count: usize,
     pub default_mode: PlayMode,
-    pub fade_ms: u32,
+    /// Length of a manual crossfade: Play (next) while a track is on air,
+    /// and Previous. Stored as `fade_ms` before the fade stop got
+    /// its own length; the lenient loader maps the old name here.
+    pub crossfade_ms: u32,
+    /// Length of a fade stop (rule 8), longer than a crossfade by default.
+    pub fade_stop_ms: u32,
     pub auto_segue: bool,
     /// Players honour each track's cue-in and cue-out. Off, every player
     /// entry plays from 0 to the end of the file; the markers are kept.
@@ -367,7 +372,8 @@ impl Default for PlayersConfig {
         Self {
             count: 4,
             default_mode: PlayMode::Continuous,
-            fade_ms: 1000,
+            crossfade_ms: 1000,
+            fade_stop_ms: 2000,
             auto_segue: true,
             use_cue_markers: true,
             end_warning_secs: 10.0,
@@ -1169,7 +1175,20 @@ impl Config {
         let max_players = self.limits.max_players;
         let p = &mut self.players;
         clamp_to(&mut p.count, 1, max_players, "players.count", &mut w);
-        clamp_to(&mut p.fade_ms, 50, 10_000, "players.fade_ms", &mut w);
+        clamp_to(
+            &mut p.crossfade_ms,
+            50,
+            10_000,
+            "players.crossfade_ms",
+            &mut w,
+        );
+        clamp_to(
+            &mut p.fade_stop_ms,
+            50,
+            10_000,
+            "players.fade_stop_ms",
+            &mut w,
+        );
         clamp_to(
             &mut p.end_warning_secs,
             0.0,
@@ -1635,11 +1654,23 @@ mod tests {
     }
 
     #[test]
+    fn fade_lengths_are_clamped() {
+        let mut c = Config::default();
+        c.players.crossfade_ms = 10;
+        c.players.fade_stop_ms = 60_000;
+        let warnings = c.validate();
+        assert_eq!(c.players.crossfade_ms, 50);
+        assert_eq!(c.players.fade_stop_ms, 10_000);
+        assert_eq!(warnings.len(), 2);
+    }
+
+    #[test]
     fn defaults_are_valid() {
         let mut c = Config::default();
         assert!(c.validate().is_empty());
         assert_eq!(c.players.count, 4);
-        assert_eq!(c.players.fade_ms, 1000);
+        assert_eq!(c.players.crossfade_ms, 1000);
+        assert_eq!(c.players.fade_stop_ms, 2000);
         assert_eq!(c.analysis.segue_drop_db, 15.0);
         assert_eq!(c.analysis.segue_max_secs, 4.0);
         assert_eq!(c.limits.max_players, 16);
@@ -1668,8 +1699,9 @@ mod tests {
 
     #[test]
     fn missing_fields_take_defaults() {
-        let c: Config = serde_json::from_str(r#"{"players":{"fade_ms":2000}}"#).unwrap();
-        assert_eq!(c.players.fade_ms, 2000);
+        let c: Config = serde_json::from_str(r#"{"players":{"crossfade_ms":2000}}"#).unwrap();
+        assert_eq!(c.players.crossfade_ms, 2000);
+        assert_eq!(c.players.fade_stop_ms, 2000);
         assert_eq!(c.players.count, 4);
         assert_eq!(c.tuning, Tuning::default());
     }
