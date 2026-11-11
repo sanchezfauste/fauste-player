@@ -539,7 +539,7 @@ plus the mixer's DSD mode.
 | `StartCue`, `StopCue` | a separate source on the player's Cue route. The model sends `StartCue` only for a player with a Cue route (`OutputsConfig::player_has_cue`); a Cue route on the Main output is placed there like any holder (on-air pre-listen spec CA8), and the model decides when such a pre-listen may sound (CA3–CA5). A Cue route to a backend this machine does not have (`cue_target`) ends the CUE at once with `CueEnded`. A pre-listen that shares a channel with a Main (`Engine::cue_on_air`) never reopens a bit-perfect bus at its file's rate (CA7). Its meters never reach a player's or the cartwall's readings (CA9), and over a DSD stream it follows the device's DSD mix policy like a cart (CA10) |
 | `SeekCue` | replace the CUE source by one at the target (the CUE plays whole files); it starts idle when the CUE is held, so a held CUE stays held |
 | `SetCuePaused` | `BusCommand::Pause`/`Resume` with the pause ramp for an audible source; a source that has not started yet is held idle and started on release. `PlayerRuntime::cue_paused` remembers the state and a new CUE clears it |
-| `StartLibraryCue`, `StopLibraryCue`, `SeekLibraryCue`, `SetLibraryCuePaused` | the library window's pre-listen, and the phone's Library tab's (see "Library CUE"). The model sends `StartLibraryCue` only when the library has a Cue output (`OutputsConfig::library_has_cue`: a usable route, or no route with `outputs.library.default_output`); a route to a missing backend ends it at once with `LibraryCueEnded { track }` |
+| `StartLibraryCue`, `StopLibraryCue`, `SeekLibraryCue`, `SetLibraryCuePaused`, `SetLibraryCueVolume` | the library window's pre-listen, and the phone's Library tab's (see "Library CUE"). The model sends `StartLibraryCue` only when the library has a Cue output (`OutputsConfig::library_has_cue`: a usable route, or no route with `outputs.library.default_output`); a route to a missing backend ends it at once with `LibraryCueEnded { track }` |
 | `AddPlayer`, `RemovePlayer` | create or retire a worker and its bookkeeping |
 | `LoadPaused` | restore a session: load the source at a position, paused |
 | `UpdateSettings` | take a new configuration for new buses and holders, and the tuning (see "Live settings") |
@@ -649,6 +649,11 @@ real-time code is added.
   fixed normalization gain. `SeekLibraryCue` replaces the source by one at
   the target, and a held preview stays held; `SetLibraryCuePaused` pauses
   with the pause ramp, or holds a source that has not started yet.
+- **Listening level:** the slot's volume (`LibraryCueRuntime::volume`) is
+  the operator's listening level (LB59, LB60). `SetLibraryCueVolume`
+  stores it (smoothed by the mixer like a fader), also before the worker
+  exists (`Engine::library_volume`), and every `StartLibraryCue` sets it
+  from `request.volume`. The meter reads after it.
 - **De-click:** every tail (a stop, a seek, a replacement) ramps down over `declick_ms` and is released when the mixer
   finishes it, because the preview may share a channel with a Main.
 - **Forced rate change:** a source on a bus whose rate is forced is opened

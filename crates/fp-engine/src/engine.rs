@@ -397,6 +397,9 @@ pub struct Engine {
     cartwall: Option<carts::CartwallRuntime>,
     /// The library CUE (library plan 4); created on its first preview.
     library: Option<library::LibraryCueRuntime>,
+    /// The library CUE's listening level (LB59), kept before its runtime
+    /// exists.
+    library_volume: f32,
     /// The latest time `execute` or `tick` was given, for bus reopens made
     /// deep inside an action.
     now: Instant,
@@ -571,6 +574,7 @@ impl Engine {
             tones: Vec::new(),
             cartwall: None,
             library: None,
+            library_volume: 1.0,
             now: Instant::now(),
             true_peak: false,
             integration: (0.0, 0.0, 0.0),
@@ -2223,7 +2227,7 @@ impl Engine {
             EngineAction::StopLibraryCue => self.stop_library_cue(),
             EngineAction::SeekLibraryCue { secs } => self.seek_library_cue(secs),
             EngineAction::SetLibraryCuePaused { paused } => self.set_library_cue_paused(paused),
-            EngineAction::SetLibraryCueVolume { .. } => {}
+            EngineAction::SetLibraryCueVolume { volume } => self.set_library_cue_volume(volume),
             EngineAction::AddPlayer { player } => self.add_player(player, now),
             EngineAction::RemovePlayer { player } => self.remove_player(player),
             EngineAction::Preload { player, request } => self.preload(player, request),

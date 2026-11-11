@@ -798,3 +798,52 @@ fn lb46_the_library_cue_without_a_route_plays_on_the_default_output() {
     assert!(r.ends().is_empty(), "{:?}", r.events);
     assert!(r.engine.library_cue_position().is_some());
 }
+
+// Track library spec §8.5 (LB59, LB60): the listening level.
+
+/// The gain of `left`'s last sample against track 1's tag at that frame.
+fn last_gain(left: &[f32]) -> f32 {
+    let first = left.iter().position(|v| *v != 0.0).unwrap();
+    let last = left.len() - 1;
+    left[last] / (100_000.0 + (last - first) as f32)
+}
+
+#[test]
+fn lb59_the_library_cue_volume_scales_its_output() {
+    let mut r = play_rig(2, Some(on("card", 0)), 48_000);
+    r.act(start(preview(1)));
+    r.settle();
+    r.run(5);
+    assert!((last_gain(&r.channel(0)) - 1.0).abs() < 1e-3);
+    r.act(EngineAction::SetLibraryCueVolume { volume: 0.5 });
+    r.run(10);
+    let g = last_gain(&r.channel(0));
+    assert!((g - 0.5).abs() < 1e-3, "{g}");
+}
+
+#[test]
+fn lb60_a_level_set_before_the_first_preview_applies_to_it() {
+    let mut r = play_rig(2, Some(on("card", 0)), 48_000);
+    r.act(EngineAction::SetLibraryCueVolume { volume: 0.5 });
+    r.act(start(LibraryCueRequest {
+        volume: 0.5,
+        ..preview(1)
+    }));
+    r.settle();
+    r.run(10);
+    let g = last_gain(&r.channel(0));
+    assert!((g - 0.5).abs() < 1e-3, "{g}");
+}
+
+#[test]
+fn lb60_a_new_preview_takes_its_requests_level() {
+    let mut r = play_rig(2, Some(on("card", 0)), 48_000);
+    r.act(start(LibraryCueRequest {
+        volume: 0.25,
+        ..preview(1)
+    }));
+    r.settle();
+    r.run(10);
+    let g = last_gain(&r.channel(0));
+    assert!((g - 0.25).abs() < 1e-3, "{g}");
+}
