@@ -923,7 +923,7 @@ impl Services {
             // Order is kept: once one is refused, the rest wait with it.
             if !unsent.is_empty() {
                 unsent.push(command);
-            } else if let Err(refused) = self.conductor.offer(command) {
+            } else if let Err(refused) = self.conductor.offer_background(command) {
                 unsent.push(refused);
             }
         }
@@ -1163,7 +1163,11 @@ impl Services {
                     .get(track)
                     .is_some_and(|t| t.file_stamp.is_none());
                 // Not queued: the next start stores it.
-                if needed && !self.conductor.send(Command::SetFileStamp { track, stamp }) {
+                if needed
+                    && !self
+                        .conductor
+                        .send_background(Command::SetFileStamp { track, stamp })
+                {
                     tracing::debug!(?track, "the stamp of a file could not be queued");
                 }
             }
@@ -1620,7 +1624,7 @@ impl Services {
                             self.gone_reports += 1;
                         }
                         // Not queued: the next look reports it again.
-                        if self.conductor.send(Command::SetFileState {
+                        if self.conductor.send_background(Command::SetFileState {
                             track: id,
                             state: FileState::Missing,
                         }) {
@@ -1864,7 +1868,7 @@ impl Services {
                     // track still needs its read, so the next round asks
                     // again.
                     self.tags_in_flight.remove(&track);
-                    if self.conductor.send(Command::ApplyTags {
+                    if self.conductor.send_background(Command::ApplyTags {
                         track,
                         tags: Box::new(tags),
                     }) {
@@ -1875,7 +1879,7 @@ impl Services {
                     self.bitrate_in_flight.remove(&track);
                     if self
                         .conductor
-                        .send(Command::ApplyBitrate { track, bitrate })
+                        .send_background(Command::ApplyBitrate { track, bitrate })
                     {
                         self.bitrate_answered.insert(track);
                     }
@@ -1939,7 +1943,7 @@ impl Services {
             };
             // If the command is not queued the track still needs the pass,
             // so a later round measures it again.
-            if self.conductor.send(command) {
+            if self.conductor.send_background(command) {
                 self.loudness_answered.insert(answer.track);
             }
         }
@@ -2022,7 +2026,7 @@ impl Services {
                 .library
                 .get(*track)
                 .is_some_and(|t| t.needs_header_duration())
-                && !conductor.send(Command::SetDuration {
+                && !conductor.send_background(Command::SetDuration {
                     track: *track,
                     secs: *secs,
                 })
@@ -2043,7 +2047,9 @@ impl Services {
                 .is_some_and(|t| t.needs_header_duration());
             if let Some(secs) = secs
                 && needed
-                && !self.conductor.send(Command::SetDuration { track, secs })
+                && !self
+                    .conductor
+                    .send_background(Command::SetDuration { track, secs })
             {
                 // The queue is full: keep the length for a later round.
                 self.headers_unsent.insert(track, secs);
@@ -2322,7 +2328,7 @@ impl Services {
         {
             return;
         }
-        if !self.conductor.send(command) {
+        if !self.conductor.send_background(command) {
             // The queue is full: try again on a later round.
             self.done.remove(&result.track);
             self.forced.insert(result.track);

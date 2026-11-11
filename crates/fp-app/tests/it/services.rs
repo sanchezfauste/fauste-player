@@ -2977,3 +2977,28 @@ fn an_analysed_unsettled_track_coming_into_use_is_analysed() {
     select_in_library(&mut r, &b);
     r.run_until("analysed once in use", |r| reads_of(r, &b) == 3);
 }
+
+/// The analysis results go on the background queue: an operator queue
+/// kept full (a burst of operator commands) never refuses them, and they
+/// never take the operator's room.
+#[test]
+fn analysis_results_never_use_the_operators_queue() {
+    let dir = tempfile::tempdir().unwrap();
+    let a = wav(dir.path(), "Band - One.wav", 2);
+    let mut r = rig(&[a], dir);
+    let p = r.handle.model.load().players[0].id;
+    // Only bounds a hang: a loaded CI runner can take well over 15 s.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    while !r.handle.model.load().library.iter().all(|t| t.analyzed) {
+        assert!(
+            Instant::now() < deadline,
+            "the result never reached the model"
+        );
+        // Full whenever the services send anything.
+        while r.handle.send(Command::SetVolume(p, 1.0)) {}
+        r.services.step(r.now);
+        r.conductor.tick(r.now);
+        r.now += Duration::from_millis(10);
+        std::thread::sleep(Duration::from_millis(2));
+    }
+}

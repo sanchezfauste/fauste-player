@@ -146,7 +146,11 @@ pub enum EngineRequest {
 pub struct Conductor {
     state: AppState,
     engine: Engine,
+    /// The operator's commands: the interface, the remote API, MIDI.
     commands: Receiver<Command>,
+    /// Background work (the analysis, the folder watch): a queue of its
+    /// own, so a burst of it never refuses an operator's command.
+    background: Receiver<Command>,
     requests: Receiver<EngineRequest>,
     rejected: Sender<ModelError>,
     model: Arc<ArcSwap<AppState>>,
@@ -180,6 +184,7 @@ type WakerSlot = Arc<Mutex<Option<Waker>>>;
 /// The UI's side of the conductor.
 pub struct ConductorHandle {
     commands: Sender<Command>,
+    background: Sender<Command>,
     requests: Sender<EngineRequest>,
     pub model: Arc<ArcSwap<AppState>>,
     pub telemetry: Arc<ArcSwap<Telemetry>>,
@@ -224,6 +229,22 @@ impl ConductorHandle {
             }
             Err(TrySendError::Disconnected(c)) => Err(c),
         }
+    }
+
+    /// Queues background work (the analysis, the folder watch) on its own
+    /// queue; never blocks. `false` if that queue is full: the operator's
+    /// queue is never touched.
+    pub fn send_background(&self, command: Command) -> bool {
+        self.offer_background(command).is_ok()
+    }
+
+    /// As [`Self::offer`], on the background queue. A full queue is the
+    /// expected back-pressure of a large pass, so it is not logged; the
+    /// sender keeps the command for later.
+    pub fn offer_background(&self, command: Command) -> Result<(), Command> {
+        self.background.try_send(command).map_err(|e| match e {
+            TrySendError::Full(c) | TrySendError::Disconnected(c) => c,
+        })
     }
 
     /// Plays a test tone on `route`; never blocks. `false` if the queue is full.
@@ -288,6 +309,7 @@ impl Conductor {
             engine.execute(action, now);
         }
         let (tx, rx) = crossbeam_channel::bounded(1024);
+        let (background_tx, background_rx) = crossbeam_channel::bounded(1024);
         let (req_tx, req_rx) = crossbeam_channel::bounded(16);
         let (rejected_tx, rejected_rx) = crossbeam_channel::bounded(64);
         let model = Arc::new(ArcSwap::from_pointee(state.clone()));
@@ -297,6 +319,7 @@ impl Conductor {
             state,
             engine,
             commands: rx,
+            background: background_rx,
             requests: req_rx,
             rejected: rejected_tx,
             model: model.clone(),
@@ -314,6 +337,7 @@ impl Conductor {
         };
         let handle = ConductorHandle {
             commands: tx,
+            background: background_tx,
             requests: req_tx,
             model,
             telemetry,
@@ -349,7 +373,12 @@ impl Conductor {
     pub fn tick(&mut self, now: Instant) {
         let mut changed = false;
         let mut refused = false;
-        let commands: Vec<Command> = self.commands.try_iter().collect();
+        // The operator's commands first, then the background work waiting.
+        let commands: Vec<Command> = self
+            .commands
+            .try_iter()
+            .chain(self.background.try_iter())
+            .collect();
         for command in commands {
             match apply(&mut self.state, command) {
                 Ok(actions) => {
