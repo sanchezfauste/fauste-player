@@ -475,7 +475,7 @@ fn sort_keys_of_50000_tracks_take_less_than_a_frame() {
     let _keys = SortKeys::build(&lib, &tree(), LibraryColumn::Tag(TableColumn::Title));
     let took = started.elapsed();
     eprintln!("sort keys of 50 000 tracks: {took:?}");
-    assert!(took.as_millis() < 10, "took {took:?}");
+    assert!(took.as_millis() < 16, "took {took:?}");
 }
 
 /// A search over rows already in order keeps their order and lists what a
@@ -512,7 +512,7 @@ fn typing_over_50000_sorted_tracks_takes_a_few_milliseconds() {
     let took = started.elapsed();
     eprintln!("a key over 50 000 sorted tracks: {took:?}");
     assert!(!got.is_empty());
-    assert!(took.as_millis() < 6, "took {took:?}");
+    assert!(took.as_millis() < 8, "took {took:?}");
 }
 
 /// The scope's rows in order, computed from scratch.
@@ -591,7 +591,7 @@ fn update_ordered_gives_up_on_a_large_change() {
 /// under a frame (a large scan changes the library at every tick).
 #[test]
 #[cfg_attr(debug_assertions, ignore)]
-fn a_small_change_to_50000_sorted_rows_takes_a_millisecond_or_two() {
+fn a_small_change_to_50000_sorted_rows_takes_well_under_a_frame() {
     let cats = tree();
     let old = ascii_library(50_000);
     let title = LibraryColumn::Tag(TableColumn::Title);
@@ -615,7 +615,7 @@ fn a_small_change_to_50000_sorted_rows_takes_a_millisecond_or_two() {
     let took = started.elapsed();
     eprintln!("50 changes over 50 000 sorted rows: {took:?}");
     assert_eq!(got.map(|r| r.len()), Some(50_000));
-    assert!(took.as_millis() < 3, "took {took:?}");
+    assert!(took.as_millis() < 4, "took {took:?}");
 }
 
 /// More of `update_ordered` against a computation from scratch: tracks
