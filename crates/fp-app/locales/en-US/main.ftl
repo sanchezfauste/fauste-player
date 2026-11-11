@@ -249,6 +249,7 @@ error-rotation-step = A step plays from 1 to 99 tracks, the first number not abo
 error-rotation-name-empty = A rotation needs a name.
 error-rotation-empty = A rotation needs at least one step.
 error-last-rotation = The last rotation cannot be deleted.
+error-filler-playlist = That list belongs to the Music column.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall
 cartwall-title = CARTWALL

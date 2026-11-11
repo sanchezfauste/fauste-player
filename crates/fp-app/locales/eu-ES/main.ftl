@@ -249,6 +249,7 @@ error-rotation-step = Urrats batek 1 eta 99 pista artean jotzen ditu, eta lehen 
 error-rotation-name-empty = Errotazioak izena behar du.
 error-rotation-empty = Errotazioak urrats bat behar du gutxienez.
 error-last-rotation = Ezin da azken errotazioa ezabatu.
+error-filler-playlist = Zerrenda hori Musika zutabearena da.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Kartutxoak
 cartwall-title = KARTUTXOAK

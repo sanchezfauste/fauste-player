@@ -2271,6 +2271,7 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError, categories: &Categorie
         ModelError::EmptyRotationName => i18n.tr("error-rotation-name-empty"),
         ModelError::EmptyRotation => i18n.tr("error-rotation-empty"),
         ModelError::LastRotation => i18n.tr("error-last-rotation"),
+        ModelError::FillerPlaylist(_) => i18n.tr("error-filler-playlist"),
     }
 }
 

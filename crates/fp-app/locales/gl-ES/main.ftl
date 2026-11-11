@@ -249,6 +249,7 @@ error-rotation-step = Un paso reproduce de 1 a 99 pistas, e o primeiro número n
 error-rotation-name-empty = A rotación necesita un nome.
 error-rotation-empty = A rotación necesita polo menos un paso.
 error-last-rotation = Non se pode borrar a última rotación.
+error-filler-playlist = Esa lista pertence á columna Música.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartucheira
 cartwall-title = CARTUCHEIRA

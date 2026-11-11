@@ -128,3 +128,18 @@ operator inserts or moves is not in it, and `SetFillerRotation` replaces
 only generated rows after the current one (keeping the next of a playing
 filler, already loaded for the hand-over). A removed row was never aired,
 so it does not count for separation.
+
+The filler's list is not an operator playlist. The reducer refuses with
+`ModelError::FillerPlaylist`:
+- renaming or deleting it;
+- showing it on another player, or another list on the filler;
+- a next for the filler from another list (top-up and trim count from
+  where its next stands in its own list).
+
+Deleting a playlist never leaves the operator without one of their own
+(`LastPlaylist`) and never falls back to the filler's list. A lower
+`limits.max_players` in `UpdateConfig` counts only the numbered players.
+After `DeleteRotation` or `SetDefaultRotation`, `filler::retarget` moves a
+filler whose rotation was deleted, or that follows the default, to the
+default as `SetFillerRotation(None)` would. Settings → Playlists lists
+the playlists without the filler's.

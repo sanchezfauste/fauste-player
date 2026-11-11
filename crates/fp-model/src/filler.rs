@@ -243,6 +243,26 @@ pub(crate) fn set_rotation(
     Ok(())
 }
 
+/// AU4, AU28: after a rotation is deleted or another becomes the default,
+/// a filler on a deleted rotation falls back to the default, and one on
+/// the default follows the new default; its queued rows are replaced as
+/// when the operator picks a rotation.
+pub(crate) fn retarget(
+    state: &mut AppState,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), crate::error::ModelError> {
+    let Some(f) = state.filler.as_ref() else {
+        return Ok(());
+    };
+    let gone = f.rotation.is_some_and(|r| state.rotations.get(r).is_none());
+    let stale = f.rotation.is_none() && Some(f.cursor.rotation) != state.rotations.default_id();
+    if gone || stale {
+        set_rotation(state, None, out)
+    } else {
+        Ok(())
+    }
+}
+
 /// AU28: a row the operator moved becomes theirs.
 pub(crate) fn claim(state: &mut AppState, entry: EntryId) {
     if let Some(f) = state.filler.as_mut() {

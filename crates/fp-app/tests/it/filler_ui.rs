@@ -107,3 +107,15 @@ fn a_manual_row_carries_the_hand_marker() {
     let (h, _fake) = harness(s);
     assert_eq!(h.get_all_by_label("Added by hand").count(), 1);
 }
+
+#[test]
+fn settings_playlists_leaves_the_filler_list_out() {
+    let s = with_filler(3);
+    let (mut h, _) = harness(s);
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(egui::accesskit::Role::Button, "Playlists")
+        .click();
+    h.run_steps(3);
+    assert!(h.query_by_value("Music filler").is_none());
+}

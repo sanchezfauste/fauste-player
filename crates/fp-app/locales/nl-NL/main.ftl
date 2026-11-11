@@ -249,6 +249,7 @@ error-rotation-step = Een stap speelt 1 tot 99 nummers, het eerste getal niet gr
 error-rotation-name-empty = De rotatie heeft een naam nodig.
 error-rotation-empty = De rotatie heeft minstens één stap nodig.
 error-last-rotation = De laatste rotatie kan niet worden verwijderd.
+error-filler-playlist = Die lijst hoort bij de kolom Muziek.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall
 cartwall-title = CARTWALL

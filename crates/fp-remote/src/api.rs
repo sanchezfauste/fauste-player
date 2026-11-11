@@ -140,10 +140,34 @@ pub fn plan(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiError> {
     Ok(commands)
 }
 
+/// A playlist the API shows: the music filler's is not one.
+fn visible_list(state: &AppState, id: PlaylistId) -> Result<&fp_model::Playlist, ApiError> {
+    if state.is_filler_playlist(id) {
+        return Err(ApiError::NotFound);
+    }
+    state.playlists.get(id).ok_or(ApiError::NotFound)
+}
+
+/// An entry the API shows: the rows of the music filler's list are not.
+fn visible_entry(state: &AppState, id: EntryId) -> Result<&fp_model::PlaylistEntry, ApiError> {
+    match state.playlists.find(id) {
+        Some((list, _)) if !state.is_filler_playlist(list) => {
+            state.playlists.entry(id).ok_or(ApiError::NotFound)
+        }
+        _ => Err(ApiError::NotFound),
+    }
+}
+
 fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiError> {
     use Operation as O;
-    let player = |id: PlayerId| state.player(id).map_err(|_| ApiError::NotFound);
-    let entry = |id: EntryId| state.playlists.entry(id).ok_or(ApiError::NotFound);
+    // The music filler, its list and its rows are not part of the API.
+    let player = |id: PlayerId| {
+        if state.is_filler(id) {
+            return Err(ApiError::NotFound);
+        }
+        state.player(id).map_err(|_| ApiError::NotFound)
+    };
+    let entry = |id: EntryId| visible_entry(state, id);
     let cart = |id: CartId| state.cartwall.cart(id).ok_or(ApiError::NotFound);
     // A value already in place sends nothing. Otherwise the toggle's
     // availability decides, and the idempotent `Set…` command is sent, so
@@ -246,7 +270,7 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
         }
         O::ShowPlaylist(p, list) => {
             player(p)?;
-            state.playlists.get(list).ok_or(ApiError::NotFound)?;
+            visible_list(state, list)?;
             Ok(vec![Command::ShowPlaylist(p, list)])
         }
         O::SetEntryRepeat(e, on) => toggle(
@@ -380,13 +404,7 @@ fn name(raw: &str) -> Result<String, ApiError> {
 }
 
 fn edit_commands(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError> {
-    let list_len = |id: PlaylistId| {
-        state
-            .playlists
-            .get(id)
-            .map(|l| l.entries.len())
-            .ok_or(ApiError::NotFound)
-    };
+    let list_len = |id: PlaylistId| visible_list(state, id).map(|l| l.entries.len());
     let track = |id: TrackId| state.library.get(id).ok_or(ApiError::NotFound);
     let page = |id: CartPageId| state.cartwall.page(id).ok_or(ApiError::NotFound);
     Ok(match edit {
@@ -416,7 +434,7 @@ fn edit_commands(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError>
             }]
         }
         Edit::RemoveEntry(entry) => {
-            state.playlists.entry(entry).ok_or(ApiError::NotFound)?;
+            visible_entry(state, entry)?;
             vec![Command::RemoveEntry(entry)]
         }
         Edit::MoveEntry {
@@ -424,7 +442,7 @@ fn edit_commands(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError>
             playlist,
             index,
         } => {
-            state.playlists.entry(entry).ok_or(ApiError::NotFound)?;
+            visible_entry(state, entry)?;
             let len = list_len(playlist)?;
             vec![Command::MoveEntry {
                 entry,
@@ -433,7 +451,7 @@ fn edit_commands(state: &AppState, edit: Edit) -> Result<Vec<Command>, ApiError>
             }]
         }
         Edit::DuplicateEntry(entry) => {
-            state.playlists.entry(entry).ok_or(ApiError::NotFound)?;
+            visible_entry(state, entry)?;
             vec![Command::DuplicateEntry(entry)]
         }
         Edit::CreateCartPage(n) => vec![Command::CreateCartPage { name: name(&n)? }],

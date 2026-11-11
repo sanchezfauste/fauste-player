@@ -249,6 +249,7 @@ error-rotation-step = Une étape joue de 1 à 99 pistes, le premier nombre ne d�
 error-rotation-name-empty = La rotation a besoin d'un nom.
 error-rotation-empty = La rotation a besoin d'au moins une étape.
 error-last-rotation = La dernière rotation ne peut pas être supprimée.
+error-filler-playlist = Cette liste appartient à la colonne Musique.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartouches
 cartwall-title = CARTOUCHES

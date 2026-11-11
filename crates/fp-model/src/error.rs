@@ -85,4 +85,9 @@ pub enum ModelError {
     /// AU4: there is always a rotation to fall back on.
     #[error("the last rotation cannot be deleted")]
     LastRotation,
+    /// Automation spec §8.1: the music filler's list belongs to the filler;
+    /// it is not renamed, deleted or shown on another player, and the
+    /// filler shows no other list.
+    #[error("{0:?} is the music filler's list")]
+    FillerPlaylist(crate::ids::PlaylistId),
 }

@@ -184,6 +184,9 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             if state.playlists.get(playlist).is_none() {
                 return Err(ModelError::UnknownPlaylist(playlist));
             }
+            if state.is_filler(id) != state.is_filler_playlist(playlist) {
+                return Err(ModelError::FillerPlaylist(playlist));
+            }
             state.players[i].playlist = playlist;
         }
         Command::SetColumnWidths(id, widths) => {
@@ -338,8 +341,14 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::SetFillerRotation(rotation) => {
             crate::filler::set_rotation(state, rotation, &mut out)?
         }
-        Command::DeleteRotation(id) => crate::rotation::delete(state, id)?,
-        Command::SetDefaultRotation(id) => crate::rotation::set_default(state, id)?,
+        Command::DeleteRotation(id) => {
+            crate::rotation::delete(state, id)?;
+            crate::filler::retarget(state, &mut out)?;
+        }
+        Command::SetDefaultRotation(id) => {
+            crate::rotation::set_default(state, id)?;
+            crate::filler::retarget(state, &mut out)?;
+        }
         Command::RemoveTracks(tracks) => {
             crate::library_rules::remove_tracks(state, &tracks, &mut out)?
         }
@@ -450,7 +459,10 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             let max = state.config.library.max_category_depth;
             state.categories.move_to(category, parent, index, max)?;
         }
-        Command::RenamePlaylist { playlist, name } => state.playlists.rename(playlist, name)?,
+        Command::RenamePlaylist { playlist, name } => {
+            not_filler_playlist(state, playlist)?;
+            state.playlists.rename(playlist, name)?
+        }
         Command::DeletePlaylist(playlist) => delete_playlist(state, playlist, &mut out)?,
         Command::SetPlayerCount(count) => set_player_count(state, count, &mut out)?,
         Command::UpdateConfig(config) => update_config(state, *config, &mut out)?,
@@ -859,8 +871,13 @@ fn fade_stop(
 /// O37: the entry on air is accepted; it plays once more.
 fn set_next(state: &mut AppState, id: PlayerId, entry: EntryId) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
-    if state.playlists.entry(entry).is_none() {
+    let Some((list, _)) = state.playlists.find(entry) else {
         return Err(ModelError::UnknownEntry(entry));
+    };
+    // The filler plays from its own list only: its top-up and trim count
+    // from where its next stands in that list.
+    if state.is_filler(id) && !state.is_filler_playlist(list) {
+        return Err(ModelError::FillerPlaylist(list));
     }
     state.players[i].next = Some(entry);
     state.players[i].next_explicit = true;
@@ -1465,6 +1482,16 @@ pub(crate) fn take_out_entries(
     refresh_next(state);
 }
 
+/// Automation spec §8.1: the music filler's list is not the operator's to
+/// rename or delete.
+fn not_filler_playlist(state: &AppState, playlist: PlaylistId) -> Result<(), ModelError> {
+    if state.is_filler_playlist(playlist) {
+        Err(ModelError::FillerPlaylist(playlist))
+    } else {
+        Ok(())
+    }
+}
+
 fn delete_playlist(
     state: &mut AppState,
     playlist: PlaylistId,
@@ -1474,11 +1501,19 @@ fn delete_playlist(
         .playlists
         .get(playlist)
         .ok_or(ModelError::UnknownPlaylist(playlist))?;
+    not_filler_playlist(state, playlist)?;
     if list.entries.iter().any(|e| state.is_on_air(e.id)) {
         return Err(ModelError::PlaylistOnAir(playlist));
     }
+    // The operator keeps at least one playlist of their own, and a player
+    // never falls back to the filler's.
+    let first = state
+        .playlists
+        .iter()
+        .map(|l| l.id)
+        .find(|id| *id != playlist && !state.is_filler_playlist(*id))
+        .ok_or(ModelError::LastPlaylist)?;
     let removed = state.playlists.remove(playlist)?;
-    let first = state.playlists.first_id().ok_or(ModelError::NoPlaylists)?;
     for p in &mut state.players {
         if p.playlist == playlist {
             p.playlist = first;
@@ -1503,9 +1538,12 @@ fn update_config(
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
     let _ = config.validate();
-    let count = state.players.len().min(config.limits.max_players);
-    if let Some(busy) = state.players[count..]
-        .iter()
+    // The music filler is not one of the numbered players the limit counts.
+    let aux = state.aux_players().count();
+    let count = aux.min(config.limits.max_players);
+    if let Some(busy) = state
+        .aux_players()
+        .skip(count)
         .find(|p| p.transport != Transport::Stopped || p.cue.is_some())
     {
         return Err(ModelError::PlayerBusy(busy.id));
@@ -1515,7 +1553,7 @@ fn update_config(
         out.push(EngineAction::UpdateSettings(Box::new(config.clone())));
     }
     state.config = config;
-    if count < state.players.len() {
+    if count < aux {
         set_player_count(state, count, out)?;
     }
     Ok(())

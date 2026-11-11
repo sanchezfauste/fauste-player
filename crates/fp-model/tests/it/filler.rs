@@ -292,3 +292,155 @@ fn the_filler_comes_first_in_display_order_and_starts_hidden() {
     assert!(s.layout.hidden_players.contains(&f));
     assert_eq!(s.aux_player_ids(), ids[1..].to_vec());
 }
+
+// --- Final review: the filler's list is not an operator playlist ---
+
+fn other_rotation(s: &mut AppState, name: &str) -> fp_model::RotationId {
+    apply(
+        s,
+        Command::CreateRotation {
+            name: name.into(),
+            steps: vec![fp_model::RotationStep {
+                source: fp_model::StepSource::Kind(fp_model::TrackKind::Music),
+                min: 1,
+                max: 1,
+            }],
+        },
+    )
+    .unwrap();
+    s.rotations.iter().last().unwrap().id
+}
+
+#[test]
+fn the_filler_playlist_cannot_be_renamed_or_deleted() {
+    let mut s = filled(5, 180.0);
+    let (_, list) = filler(&s);
+    assert_eq!(
+        apply(
+            &mut s,
+            Command::RenamePlaylist {
+                playlist: list,
+                name: "Mine".into()
+            }
+        ),
+        Err(fp_model::ModelError::FillerPlaylist(list))
+    );
+    assert_eq!(
+        apply(&mut s, Command::DeletePlaylist(list)),
+        Err(fp_model::ModelError::FillerPlaylist(list))
+    );
+}
+
+#[test]
+fn the_last_operator_playlist_cannot_be_deleted_with_the_filler_present() {
+    let mut s = filled(5, 180.0);
+    let (_, filler_list) = filler(&s);
+    let mine: Vec<PlaylistId> = s
+        .playlists
+        .iter()
+        .map(|l| l.id)
+        .filter(|id| *id != filler_list)
+        .collect();
+    assert_eq!(mine.len(), 1, "a new state has one operator playlist");
+    assert_eq!(
+        apply(&mut s, Command::DeletePlaylist(mine[0])),
+        Err(fp_model::ModelError::LastPlaylist)
+    );
+}
+
+#[test]
+fn deleting_a_playlist_never_shows_the_filler_list_on_a_player() {
+    let mut s = filled(5, 180.0);
+    let (_, filler_list) = filler(&s);
+    apply(
+        &mut s,
+        Command::CreatePlaylist {
+            name: "Second".into(),
+        },
+    )
+    .unwrap();
+    let first = s.aux_players().next().unwrap().playlist;
+    apply(&mut s, Command::DeletePlaylist(first)).unwrap();
+    assert!(s.aux_players().all(|p| p.playlist != filler_list));
+}
+
+#[test]
+fn players_cannot_swap_lists_with_the_filler() {
+    let mut s = filled(5, 180.0);
+    let (player, filler_list) = filler(&s);
+    let aux = s.aux_players().next().unwrap();
+    let (aux_id, aux_list) = (aux.id, aux.playlist);
+    assert_eq!(
+        apply(&mut s, Command::ShowPlaylist(player, aux_list)),
+        Err(fp_model::ModelError::FillerPlaylist(aux_list))
+    );
+    assert_eq!(
+        apply(&mut s, Command::ShowPlaylist(aux_id, filler_list)),
+        Err(fp_model::ModelError::FillerPlaylist(filler_list))
+    );
+}
+
+#[test]
+fn the_filler_next_stays_in_its_own_list() {
+    let mut s = filled(5, 180.0);
+    let (player, _) = filler(&s);
+    let aux_list = s.aux_players().next().unwrap().playlist;
+    apply(
+        &mut s,
+        Command::InsertTracks {
+            playlist: aux_list,
+            index: 0,
+            tracks: vec![TrackId(10_001)],
+        },
+    )
+    .unwrap();
+    let elsewhere = s.playlists.get(aux_list).unwrap().entries[0].id;
+    assert_eq!(
+        apply(&mut s, Command::SetNext(player, elsewhere)),
+        Err(fp_model::ModelError::FillerPlaylist(aux_list))
+    );
+}
+
+#[test]
+fn settings_changes_ignore_the_filler_at_the_player_maximum() {
+    let mut s = filled(5, 180.0);
+    let max = s.config.limits.max_players;
+    apply(&mut s, Command::SetPlayerCount(max)).unwrap();
+    let (player, _) = filler(&s);
+    apply(&mut s, Command::Play(player)).unwrap();
+    let mut c = s.config.clone();
+    c.automation.filler_lookahead_mins = 60;
+    apply(&mut s, Command::UpdateConfig(Box::new(c))).unwrap();
+    assert_eq!(s.config.automation.filler_lookahead_mins, 60);
+    assert_eq!(s.aux_players().count(), max);
+}
+
+#[test]
+fn a_new_default_rotation_retargets_a_filler_on_the_default() {
+    let mut s = filled(5, 180.0);
+    let other = other_rotation(&mut s, "Other");
+    apply(&mut s, Command::SetDefaultRotation(other)).unwrap();
+    assert_eq!(s.filler.as_ref().unwrap().cursor.rotation, other);
+}
+
+#[test]
+fn deleting_the_filler_rotation_falls_back_to_the_default() {
+    let mut s = filled(5, 180.0);
+    let other = other_rotation(&mut s, "Other");
+    apply(&mut s, Command::SetFillerRotation(Some(other))).unwrap();
+    apply(&mut s, Command::DeleteRotation(other)).unwrap();
+    let f = s.filler.as_ref().unwrap();
+    assert_eq!(f.rotation, None);
+    assert_eq!(Some(f.cursor.rotation), s.rotations.default_id());
+}
+
+#[test]
+fn deleting_the_default_retargets_a_filler_on_the_default() {
+    let mut s = filled(5, 180.0);
+    let old = s.rotations.default_id().unwrap();
+    other_rotation(&mut s, "Other");
+    apply(&mut s, Command::DeleteRotation(old)).unwrap();
+    let f = s.filler.as_ref().unwrap();
+    assert_eq!(Some(f.cursor.rotation), s.rotations.default_id());
+    assert_ne!(f.cursor.rotation, old);
+}
