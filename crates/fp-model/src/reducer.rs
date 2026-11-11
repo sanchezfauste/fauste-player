@@ -332,6 +332,10 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::SetTracksKind { tracks, kind } => {
             crate::library_rules::set_tracks_kind(state, tracks, kind)?
         }
+        Command::CreateRotation { name, steps } => crate::rotation::create(state, &name, steps)?,
+        Command::UpdateRotation(rotation) => crate::rotation::update(state, rotation)?,
+        Command::DeleteRotation(id) => crate::rotation::delete(state, id)?,
+        Command::SetDefaultRotation(id) => crate::rotation::set_default(state, id)?,
         Command::RemoveTracks(tracks) => {
             crate::library_rules::remove_tracks(state, &tracks, &mut out)?
         }

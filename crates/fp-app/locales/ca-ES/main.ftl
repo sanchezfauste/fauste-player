@@ -104,6 +104,7 @@ alert-underruns = { $player }: talls d'àudio ({ $count })
 alert-xruns = { $device }: talls del dispositiu d'àudio ({ $count })
 unknown-artist = Artista desconegut
 default-playlist-name = Llista 1
+rotation-default-name = Música
 settings-title = Configuració
 settings-close = Tancar
 settings-back = Tornar a les seccions
@@ -238,6 +239,9 @@ error-invalid-trim = L'ajust ha de ser un nombre dins de l'ajust màxim.
 error-bad-layout = Aquest canvi de disposició no és possible.
 error-last-panel = Com a mínim un panell ha de quedar visible.
 error-layout-locked = La disposició està bloquejada.
+error-rotation-step = Un pas reprodueix d'1 a 99 pistes, i el primer número no pot ser més gran que el segon.
+error-rotation-name-empty = La rotació necessita un nom.
+error-last-rotation = No es pot esborrar l'última rotació.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartutxera
 cartwall-title = CARTUTXERA

@@ -72,4 +72,14 @@ pub enum ModelError {
     /// RL9: the layout is locked.
     #[error("the layout is locked")]
     LayoutLocked,
+    #[error("unknown rotation {0:?}")]
+    UnknownRotation(crate::ids::RotationId),
+    /// AU1: a step's counts must lie in 1–99 with min ≤ max.
+    #[error("a rotation step's counts must lie in 1–99, the first not above the second")]
+    InvalidRotationStep,
+    #[error("a rotation name must not be empty")]
+    EmptyRotationName,
+    /// AU4: there is always a rotation to fall back on.
+    #[error("the last rotation cannot be deleted")]
+    LastRotation,
 }

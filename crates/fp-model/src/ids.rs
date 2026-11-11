@@ -42,6 +42,10 @@ id_type!(
     /// Identifies a cart (one button of the cartwall), stable across edits.
     CartId
 );
+id_type!(
+    /// Identifies a rotation of the music filler (automation spec AU1).
+    RotationId
+);
 
 /// Monotonic id generator shared by every id kind, so ids never collide
 /// even across kinds. It is persisted with the playlists.
@@ -88,6 +92,10 @@ impl IdGen {
 
     pub fn cart(&mut self) -> CartId {
         CartId(self.next_raw())
+    }
+
+    pub fn rotation(&mut self) -> RotationId {
+        RotationId(self.next_raw())
     }
 }
 

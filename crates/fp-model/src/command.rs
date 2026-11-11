@@ -189,6 +189,19 @@ pub enum Command {
         name: String,
         paths: Vec<PathBuf>,
     },
+    /// Automation spec AU1: a new rotation, after the others; the first
+    /// one is the default (AU4).
+    CreateRotation {
+        name: String,
+        steps: Vec<crate::rotation::RotationStep>,
+    },
+    /// Replaces the name and steps of the rotation with that id.
+    UpdateRotation(crate::rotation::Rotation),
+    /// The last rotation cannot be deleted; deleting the default makes the
+    /// first remaining one the default.
+    DeleteRotation(crate::ids::RotationId),
+    /// AU4: the rotation the filler falls back on.
+    SetDefaultRotation(crate::ids::RotationId),
     /// Puts files in the library, filed under `category` when given: a new
     /// track takes the category and its kind, an uncategorised one joins it,
     /// one already in a category keeps it (LB16).

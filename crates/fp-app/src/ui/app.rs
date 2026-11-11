@@ -2235,6 +2235,7 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError, categories: &Categorie
         | ModelError::UnknownCartPage(_)
         | ModelError::UnknownCartPosition(_)
         | ModelError::UnknownCategory(_)
+        | ModelError::UnknownRotation(_)
         | ModelError::UnknownTrack(_) => i18n.tr("error-not-found"),
         ModelError::FolderAlreadyWatched(other) => match categories.get(*other) {
             Some(category) => i18n.tr_args(
@@ -2265,6 +2266,9 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError, categories: &Categorie
         ModelError::BadLayout => i18n.tr("error-bad-layout"),
         ModelError::LastPanel => i18n.tr("error-last-panel"),
         ModelError::LayoutLocked => i18n.tr("error-layout-locked"),
+        ModelError::InvalidRotationStep => i18n.tr("error-rotation-step"),
+        ModelError::EmptyRotationName => i18n.tr("error-rotation-name-empty"),
+        ModelError::LastRotation => i18n.tr("error-last-rotation"),
     }
 }
 

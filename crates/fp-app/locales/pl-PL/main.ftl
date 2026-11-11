@@ -106,6 +106,7 @@ alert-underruns = { $player }: przerwy w dźwięku ({ $count })
 alert-xruns = { $device }: przerwy urządzenia audio ({ $count })
 unknown-artist = Nieznany wykonawca
 default-playlist-name = Playlista 1
+rotation-default-name = Muzyka
 settings-title = Ustawienia
 settings-close = Zamknij
 settings-back = Wróć do sekcji
@@ -244,6 +245,9 @@ error-invalid-trim = Korekta musi być liczbą w granicach maksymalnej korekty.
 error-bad-layout = Ta zmiana układu nie jest możliwa.
 error-last-panel = Co najmniej jeden panel musi pozostać widoczny.
 error-layout-locked = Układ jest zablokowany.
+error-rotation-step = Krok odtwarza od 1 do 99 utworów, a pierwsza liczba nie może być większa od drugiej.
+error-rotation-name-empty = Rotacja musi mieć nazwę.
+error-last-rotation = Nie można usunąć ostatniej rotacji.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall
 cartwall-title = CARTWALL

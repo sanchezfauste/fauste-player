@@ -104,6 +104,7 @@ alert-underruns = { $player }: audio-etenak ({ $count })
 alert-xruns = { $device }: audio-gailuaren etenak ({ $count })
 unknown-artist = Artista ezezaguna
 default-playlist-name = Zerrenda 1
+rotation-default-name = Musika
 settings-title = Ezarpenak
 settings-close = Itxi
 settings-back = Itzuli ataletara
@@ -238,6 +239,9 @@ error-invalid-trim = Doikuntzak gehieneko doikuntzaren barruko zenbaki bat izan 
 error-bad-layout = Diseinu-aldaketa hori ezin da egin.
 error-last-panel = Gutxienez panel batek ikusgai egon behar du.
 error-layout-locked = Diseinua blokeatuta dago.
+error-rotation-step = Urrats batek 1 eta 99 pista artean jotzen ditu, eta lehen zenbakiak ezin du bigarrena gainditu.
+error-rotation-name-empty = Errotazioak izena behar du.
+error-last-rotation = Ezin da azken errotazioa ezabatu.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Kartutxoak
 cartwall-title = KARTUTXOAK

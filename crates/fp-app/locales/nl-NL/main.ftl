@@ -104,6 +104,7 @@ alert-underruns = { $player }: audio-onderbrekingen ({ $count })
 alert-xruns = { $device }: onderbrekingen van het audioapparaat ({ $count })
 unknown-artist = Onbekende artiest
 default-playlist-name = Playlist 1
+rotation-default-name = Muziek
 settings-title = Instellingen
 settings-close = Sluiten
 settings-back = Terug naar de onderdelen
@@ -238,6 +239,9 @@ error-invalid-trim = De trim moet een getal binnen de maximale trim zijn.
 error-bad-layout = Die indelingswijziging is niet mogelijk.
 error-last-panel = Er moet minstens één paneel zichtbaar blijven.
 error-layout-locked = De indeling is vergrendeld.
+error-rotation-step = Een stap speelt 1 tot 99 nummers, het eerste getal niet groter dan het tweede.
+error-rotation-name-empty = De rotatie heeft een naam nodig.
+error-last-rotation = De laatste rotatie kan niet worden verwijderd.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall
 cartwall-title = CARTWALL

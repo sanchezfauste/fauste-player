@@ -504,6 +504,17 @@ A source on a bit-perfect device gets no gain (N8). The meter's own
 | `max_category_depth` | 8 | the deepest category tree a new category or a move may build; restore repairs anything deeper than 32 levels |
 | `watch_debounce_ms` | 1000 | quiet time a path of a watched folder needs after its last event before it is read (100–60000); read while the application runs |
 
+### `automation` (config file only)
+
+The music filler's selection rules ([automation](automation.md)); 0 turns
+a criterion off.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `track_separation_mins` | 180 | a track may air again once this many minutes have passed since it last aired (0–10080) |
+| `track_separation_percent` | 50 | …or once this percentage of the other tracks of its step's source have aired since (0–95) |
+| `artist_separation_mins` | 30 | no track of an artist that aired less than this many minutes ago (0–1440; the artist compared trimmed and case-insensitively) |
+
 ### `limits` (config file only)
 
 Changed while the application runs (live settings spec §6, §15): new cover

@@ -104,6 +104,7 @@ alert-underruns = { $player }: audio dropouts ({ $count })
 alert-xruns = { $device }: audio device dropouts ({ $count })
 unknown-artist = Unknown artist
 default-playlist-name = Playlist 1
+rotation-default-name = Music
 settings-title = Settings
 settings-close = Close
 settings-back = Back to the sections
@@ -238,6 +239,9 @@ error-invalid-trim = The manual trim must be a number within the maximum.
 error-bad-layout = That layout change is not possible.
 error-last-panel = At least one panel must stay shown.
 error-layout-locked = The layout is locked.
+error-rotation-step = A step plays from 1 to 99 tracks, the first number not above the second.
+error-rotation-name-empty = A rotation needs a name.
+error-last-rotation = The last rotation cannot be deleted.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall
 cartwall-title = CARTWALL

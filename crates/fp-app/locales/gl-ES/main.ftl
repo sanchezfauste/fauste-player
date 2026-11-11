@@ -104,6 +104,7 @@ alert-underruns = { $player }: cortes de audio ({ $count })
 alert-xruns = { $device }: cortes do dispositivo de audio ({ $count })
 unknown-artist = Artista descoñecido
 default-playlist-name = Lista 1
+rotation-default-name = Música
 settings-title = Configuración
 settings-close = Pechar
 settings-back = Volver ás seccións
@@ -238,6 +239,9 @@ error-invalid-trim = O axuste debe ser un número dentro do axuste máximo.
 error-bad-layout = Ese cambio de disposición non é posible.
 error-last-panel = Polo menos un panel debe quedar visible.
 error-layout-locked = A disposición está bloqueada.
+error-rotation-step = Un paso reproduce de 1 a 99 pistas, e o primeiro número non pode ser maior que o segundo.
+error-rotation-name-empty = A rotación necesita un nome.
+error-last-rotation = Non se pode borrar a última rotación.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartucheira
 cartwall-title = CARTUCHEIRA

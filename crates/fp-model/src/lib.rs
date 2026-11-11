@@ -37,6 +37,7 @@ pub mod reducer;
 pub mod remote;
 pub mod reset_played;
 pub mod restore;
+pub mod rotation;
 pub mod session;
 pub mod shortcuts;
 pub mod sounding;
@@ -83,7 +84,9 @@ pub use dsd::{
 pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;
 pub use external_edit::{ExternalEditBlock, external_edit_block};
-pub use ids::{CartId, CartPageId, CategoryId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
+pub use ids::{
+    CartId, CartPageId, CategoryId, EntryId, IdGen, PlayerId, PlaylistId, RotationId, TrackId,
+};
 pub use insertion::after_next;
 pub use layout::{
     CartwallLayout, DEFAULT_SIDE_SHARE, Dock, Layout, MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE,
@@ -115,6 +118,7 @@ pub use reducer::{apply, on_event, plan_for};
 pub use remote::{HttpRemoteConfig, OscRemoteConfig, RemoteConfig, RemoteEventsConfig};
 pub use reset_played::{can_reset_played, resettable_entries};
 pub use restore::{SettingsSection, restore_defaults};
+pub use rotation::{Rotation, RotationStep, Rotations, StepSource};
 pub use session::{PlayerSession, RestoreParts};
 pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts, player_command};
 pub use sounding::track_sounding;

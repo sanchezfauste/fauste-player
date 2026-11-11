@@ -104,6 +104,7 @@ alert-underruns = { $player }: Audioaussetzer ({ $count })
 alert-xruns = { $device }: Aussetzer des Audiogeräts ({ $count })
 unknown-artist = Unbekannter Interpret
 default-playlist-name = Playlist 1
+rotation-default-name = Musik
 settings-title = Einstellungen
 settings-close = Schließen
 settings-back = Zurück zu den Bereichen
@@ -238,6 +239,9 @@ error-invalid-trim = Der Trim muss eine Zahl innerhalb des maximalen Trims sein.
 error-bad-layout = Diese Layoutänderung ist nicht möglich.
 error-last-panel = Mindestens ein Bereich muss sichtbar bleiben.
 error-layout-locked = Das Layout ist gesperrt.
+error-rotation-step = Ein Schritt spielt 1 bis 99 Titel, die erste Zahl nicht größer als die zweite.
+error-rotation-name-empty = Die Rotation braucht einen Namen.
+error-last-rotation = Die letzte Rotation kann nicht gelöscht werden.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall
 cartwall-title = CARTWALL
