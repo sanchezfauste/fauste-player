@@ -120,3 +120,52 @@ fn a_lenient_view_keeps_the_good_fields() {
     assert!(v.whole_library);
     assert!(lenient_library_view(serde_json::json!(7)).is_none());
 }
+
+// Track library spec §8.5 (LB60): the library CUE's listening level.
+
+#[test]
+fn lb60_a_default_view_has_full_cue_volume() {
+    assert_eq!(LibraryView::default().cue_volume, 1.0);
+}
+
+#[test]
+fn lb60_a_saved_view_without_cue_volume_loads_full() {
+    let v = lenient_library_view(serde_json::json!({"open": true})).unwrap();
+    assert_eq!(v.cue_volume, 1.0);
+    assert!(v.open);
+}
+
+#[test]
+fn lb60_a_bad_cue_volume_loads_full_and_keeps_the_rest() {
+    let v = lenient_library_view(serde_json::json!({"open": true, "cue_volume": "loud"})).unwrap();
+    assert_eq!(v.cue_volume, 1.0);
+    assert!(v.open);
+}
+
+#[test]
+fn lb60_a_saved_cue_volume_round_trips() {
+    let v = LibraryView {
+        cue_volume: 0.4,
+        ..LibraryView::default()
+    };
+    let back = lenient_library_view(serde_json::to_value(&v).unwrap()).unwrap();
+    assert_eq!(back.cue_volume, 0.4);
+}
+
+#[test]
+fn lb60_repaired_clamps_the_cue_volume() {
+    let s = state();
+    let fix = |v: f32| {
+        LibraryView {
+            cue_volume: v,
+            ..LibraryView::default()
+        }
+        .repaired(&s.categories)
+        .cue_volume
+    };
+    assert_eq!(fix(1.7), 1.0);
+    assert_eq!(fix(-0.2), 0.0);
+    assert_eq!(fix(f32::NAN), 1.0);
+    assert_eq!(fix(f32::INFINITY), 1.0);
+    assert_eq!(fix(0.3), 0.3);
+}

@@ -105,6 +105,7 @@ fn preview(n: u64) -> LibraryCueRequest {
         from_secs: 0.0,
         format: None,
         normalization: Normalization::default(),
+        volume: 1.0,
     }
 }
 

@@ -930,6 +930,7 @@ fn lb46_a_new_audio_system_moves_the_library_cue_on_the_default_output() {
                     from_secs: 0.0,
                     format: None,
                     normalization: fp_model::Normalization::default(),
+                    volume: 1.0,
                 },
                 paused: true,
             });

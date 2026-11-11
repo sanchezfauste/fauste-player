@@ -2223,6 +2223,7 @@ impl Engine {
             EngineAction::StopLibraryCue => self.stop_library_cue(),
             EngineAction::SeekLibraryCue { secs } => self.seek_library_cue(secs),
             EngineAction::SetLibraryCuePaused { paused } => self.set_library_cue_paused(paused),
+            EngineAction::SetLibraryCueVolume { .. } => {}
             EngineAction::AddPlayer { player } => self.add_player(player, now),
             EngineAction::RemovePlayer { player } => self.remove_player(player),
             EngineAction::Preload { player, request } => self.preload(player, request),

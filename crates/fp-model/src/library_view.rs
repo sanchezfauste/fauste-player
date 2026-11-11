@@ -48,7 +48,7 @@ pub struct LibrarySort {
 
 /// The library window's state. Every field loads leniently: a bad field
 /// takes its default and the rest is kept.
-#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct LibraryView {
     #[serde(deserialize_with = "lenient")]
@@ -74,6 +74,53 @@ pub struct LibraryView {
     pub sort: Option<LibrarySort>,
     #[serde(deserialize_with = "lenient")]
     pub tree_width: Option<f32>,
+    /// The library CUE's listening level, a linear gain 0.0–1.0 (track
+    /// library spec LB59, LB60). Only `Command::SetLibraryCueVolume`
+    /// changes it.
+    #[serde(deserialize_with = "lenient_volume")]
+    pub cue_volume: f32,
+}
+
+impl Default for LibraryView {
+    fn default() -> Self {
+        Self {
+            open: false,
+            rect: None,
+            minimised: false,
+            maximised: false,
+            selection: LibrarySelection::default(),
+            expanded: Vec::new(),
+            whole_library: false,
+            columns: Vec::new(),
+            sort: None,
+            tree_width: None,
+            cue_volume: 1.0,
+        }
+    }
+}
+
+/// A level that is not a number loads as full (LB60).
+fn lenient_volume<'de, D: serde::Deserializer<'de>>(d: D) -> Result<f32, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Lenient {
+        Level(f32),
+        Other(serde::de::IgnoredAny),
+    }
+    Ok(match Lenient::deserialize(d)? {
+        Lenient::Level(v) => v,
+        Lenient::Other(_) => 1.0,
+    })
+}
+
+/// A listening level made usable: not finite is full, anything else is
+/// clamped into 0.0–1.0.
+pub fn usable_volume(v: f32) -> f32 {
+    if v.is_finite() {
+        v.clamp(0.0, 1.0)
+    } else {
+        1.0
+    }
 }
 
 /// Whether `v` is a usable size in points: finite and above zero.
@@ -103,6 +150,7 @@ impl LibraryView {
         }
         self.columns.retain(|c| good_size(c.width));
         self.tree_width = self.tree_width.filter(|w| good_size(*w));
+        self.cue_volume = usable_volume(self.cue_volume);
         self
     }
 }

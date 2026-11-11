@@ -116,6 +116,9 @@ pub enum Command {
     /// Stores the library window's state (placement, selection, columns),
     /// repaired against the category tree. Not a layout command.
     SetLibraryView(Box<crate::library_view::LibraryView>),
+    /// The library CUE's listening level, a linear gain (LB59); NaN is
+    /// ignored and other values are clamped into 0.0–1.0.
+    SetLibraryCueVolume(f32),
     /// RL10: back to the default layout (unlocked only).
     ResetLayout,
     /// Stores an analysis result for a track (ignored if the track is gone).
@@ -611,6 +614,11 @@ pub enum EngineAction {
     SetLibraryCuePaused {
         paused: bool,
     },
+    /// The library CUE's listening level, a linear gain 0.0–1.0 (LB59),
+    /// also before any preview has started.
+    SetLibraryCueVolume {
+        volume: f32,
+    },
     /// L10: the configuration the engine takes for new buses and new
     /// holders, and the tuning it reads live. It changes no open bus.
     UpdateSettings(Box<Config>),
@@ -654,6 +662,8 @@ pub struct LibraryCueRequest {
     pub format: Option<AudioFormat>,
     /// The fixed gain of this preview (loudness normalization spec N9).
     pub normalization: crate::loudness::Normalization,
+    /// The listening level it starts at (LB60).
+    pub volume: f32,
 }
 
 /// Everything the engine needs to play one cart.

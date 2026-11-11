@@ -973,6 +973,7 @@ fn library_preview(n: u64, from_secs: f64) -> fp_model::EngineAction {
             from_secs,
             format: None,
             normalization: fp_model::Normalization::default(),
+            volume: 1.0,
         },
         paused: false,
     }
@@ -1047,6 +1048,7 @@ fn preview_then_stop(
                 from_secs: 0.0,
                 format: None,
                 normalization: fp_model::Normalization::default(),
+                volume: 1.0,
             },
             paused: true,
         },

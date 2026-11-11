@@ -515,3 +515,71 @@ fn lb46_play_is_available_without_a_route_on_the_default_output() {
     s.config.outputs.library.default_output = false;
     assert!(!command_available(&s, &Command::PlayLibraryCue));
 }
+
+// Track library spec §8.5 (LB59, LB60): the listening level.
+
+#[test]
+fn lb59_set_library_cue_volume_stores_and_sends_it() {
+    let mut s = bar();
+    let out = run(&mut s, Command::SetLibraryCueVolume(0.5));
+    assert_eq!(s.library_view.cue_volume, 0.5);
+    assert_eq!(out, vec![EngineAction::SetLibraryCueVolume { volume: 0.5 }]);
+}
+
+#[test]
+fn lb59_set_library_cue_volume_clamps() {
+    let mut s = bar();
+    let out = run(&mut s, Command::SetLibraryCueVolume(2.0));
+    assert_eq!(s.library_view.cue_volume, 1.0);
+    assert_eq!(out, vec![EngineAction::SetLibraryCueVolume { volume: 1.0 }]);
+    let out = run(&mut s, Command::SetLibraryCueVolume(-1.0));
+    assert_eq!(s.library_view.cue_volume, 0.0);
+    assert_eq!(out, vec![EngineAction::SetLibraryCueVolume { volume: 0.0 }]);
+}
+
+#[test]
+fn lb59_a_nan_library_cue_volume_is_ignored() {
+    let mut s = bar();
+    run(&mut s, Command::SetLibraryCueVolume(0.6));
+    let out = run(&mut s, Command::SetLibraryCueVolume(f32::NAN));
+    assert!(out.is_empty(), "{out:?}");
+    assert_eq!(s.library_view.cue_volume, 0.6);
+}
+
+#[test]
+fn lb60_set_library_view_keeps_the_cue_volume() {
+    let mut s = bar();
+    run(&mut s, Command::SetLibraryCueVolume(0.3));
+    let view = fp_model::LibraryView {
+        open: true,
+        cue_volume: 1.0,
+        ..s.library_view.clone()
+    };
+    run(&mut s, Command::SetLibraryView(Box::new(view)));
+    assert!(s.library_view.open);
+    assert_eq!(s.library_view.cue_volume, 0.3);
+}
+
+fn start_volume(out: &[EngineAction]) -> f32 {
+    match out {
+        [EngineAction::StartLibraryCue { request, .. }] => request.volume,
+        other => panic!("not a single start: {other:?}"),
+    }
+}
+
+#[test]
+fn lb60_the_preview_starts_at_the_saved_level() {
+    let mut s = bar();
+    s.library_view.cue_volume = 0.25;
+    let out = run(&mut s, Command::PlayLibraryCue);
+    assert_eq!(start_volume(&out), 0.25);
+}
+
+#[test]
+fn lb60_the_level_survives_a_track_switch() {
+    let mut s = bar();
+    run(&mut s, Command::SetLibraryCueVolume(0.4));
+    run(&mut s, Command::PlayLibraryCue);
+    let out = run(&mut s, Command::SelectLibraryCue(Some(b())));
+    assert_eq!(start_volume(&out), 0.4);
+}
