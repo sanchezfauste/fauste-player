@@ -203,6 +203,7 @@ impl AppState {
             library_cue: crate::library_cue::LibraryCue::default(),
             layout: Layout::default(),
             library_view: crate::library_view::LibraryView::default(),
+            filler: None,
             rotations,
             air_times,
             wall_now: crate::wall_time::WallTime::default(),

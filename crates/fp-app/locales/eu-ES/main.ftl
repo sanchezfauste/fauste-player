@@ -105,6 +105,7 @@ alert-xruns = { $device }: audio-gailuaren etenak ({ $count })
 unknown-artist = Artista ezezaguna
 default-playlist-name = Zerrenda 1
 rotation-default-name = Musika
+filler-playlist-name = Musika-betegarria
 settings-title = Ezarpenak
 settings-close = Itxi
 settings-back = Itzuli ataletara

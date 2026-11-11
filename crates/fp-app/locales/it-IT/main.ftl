@@ -105,6 +105,7 @@ alert-xruns = { $device }: interruzioni del dispositivo audio ({ $count })
 unknown-artist = Artista sconosciuto
 default-playlist-name = Playlist 1
 rotation-default-name = Musica
+filler-playlist-name = Riempitivo musicale
 settings-title = Impostazioni
 settings-close = Chiudi
 settings-back = Torna alle sezioni

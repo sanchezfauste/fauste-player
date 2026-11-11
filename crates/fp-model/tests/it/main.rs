@@ -29,6 +29,7 @@ mod editing;
 mod entry_flags;
 mod entry_notice;
 mod external_edit;
+mod filler;
 mod header_duration;
 mod history;
 mod intro_column;

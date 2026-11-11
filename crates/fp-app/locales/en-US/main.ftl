@@ -105,6 +105,7 @@ alert-xruns = { $device }: audio device dropouts ({ $count })
 unknown-artist = Unknown artist
 default-playlist-name = Playlist 1
 rotation-default-name = Music
+filler-playlist-name = Music filler
 settings-title = Settings
 settings-close = Close
 settings-back = Back to the sections

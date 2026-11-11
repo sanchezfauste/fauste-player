@@ -33,6 +33,9 @@ pub struct AppState {
     pub library_view: crate::library_view::LibraryView,
     /// The library window pre-listen (library plan 4); runtime only.
     pub library_cue: crate::library_cue::LibraryCue,
+    /// The music filler (automation spec AU27–AU29): its player is the
+    /// last of `players`. `None` until `filler::ensure`.
+    pub filler: Option<crate::filler::FillerState>,
     /// The music filler's rotations (automation spec AU1–AU4), saved.
     pub rotations: crate::rotation::Rotations,
     /// When each track last aired (automation spec AU35), saved.
@@ -78,6 +81,7 @@ impl AppState {
             layout: crate::layout::Layout::default(),
             library_view: crate::library_view::LibraryView::default(),
             library_cue: crate::library_cue::LibraryCue::default(),
+            filler: None,
             rotations: crate::rotation::Rotations::default(),
             air_times: crate::air_times::AirTimes::default(),
             wall_now: crate::wall_time::WallTime::default(),
@@ -97,6 +101,21 @@ impl AppState {
             .iter()
             .find(|p| p.id == id)
             .ok_or(ModelError::UnknownPlayer(id))
+    }
+
+    /// The players the operator numbers P1…Pn: every player but the music
+    /// filler.
+    pub fn aux_players(&self) -> impl Iterator<Item = &PlayerState> {
+        let filler = self.filler.as_ref().map(|f| f.player);
+        self.players.iter().filter(move |p| Some(p.id) != filler)
+    }
+
+    pub fn is_filler(&self, player: PlayerId) -> bool {
+        self.filler.as_ref().is_some_and(|f| f.player == player)
+    }
+
+    pub fn is_filler_playlist(&self, playlist: crate::ids::PlaylistId) -> bool {
+        self.filler.as_ref().is_some_and(|f| f.playlist == playlist)
     }
 
     /// The players' ids in display order: what the layout helpers take.

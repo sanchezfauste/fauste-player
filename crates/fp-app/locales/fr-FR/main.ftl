@@ -105,6 +105,7 @@ alert-xruns = { $device } : coupures du périphérique audio ({ $count })
 unknown-artist = Artiste inconnu
 default-playlist-name = Playlist 1
 rotation-default-name = Musique
+filler-playlist-name = Remplissage musical
 settings-title = Paramètres
 settings-close = Fermer
 settings-back = Retour aux sections

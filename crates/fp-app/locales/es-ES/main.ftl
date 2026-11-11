@@ -105,6 +105,7 @@ alert-xruns = { $device }: cortes del dispositivo de audio ({ $count })
 unknown-artist = Artista desconocido
 default-playlist-name = Playlist 1
 rotation-default-name = Música
+filler-playlist-name = Musicalizador
 settings-title = Configuración
 settings-close = Cerrar
 settings-back = Volver a las secciones
