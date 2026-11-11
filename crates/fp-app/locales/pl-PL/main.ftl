@@ -51,6 +51,7 @@ tip-cue-waveform = Przebieg CUE: kliknij, aby przejść
 tip-library-waveform = Przebieg fali CUE biblioteki: kliknij, aby przewinąć
 tip-volume = Głośność: { $db }
 tip-volume-locked = Głośność zablokowana na 100 %: wyjście tego odtwarzacza jest bit-perfect.
+tip-library-volume = Poziom odsłuchu: { $db }
 no-track = Nic nie gra
 remaining = Pozostało
 intro-badge = INTRO { $secs }

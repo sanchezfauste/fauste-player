@@ -51,6 +51,7 @@ tip-cue-waveform = CUE-golfvorm: klik om te springen
 tip-library-waveform = Golfvorm van de bibliotheek-CUE: klik om te springen
 tip-volume = Volume: { $db }
 tip-volume-locked = Volume vast op 100 %: de uitgang van deze speler is bit-perfect.
+tip-library-volume = Voorbeluisterniveau: { $db }
 no-track = Er speelt niets
 remaining = Resterend
 intro-badge = INTRO { $secs }

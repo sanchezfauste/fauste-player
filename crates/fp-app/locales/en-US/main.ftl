@@ -51,6 +51,7 @@ tip-cue-waveform = CUE waveform: click to seek
 tip-library-waveform = Library CUE waveform: click to seek
 tip-volume = Volume: { $db }
 tip-volume-locked = Volume held at 100 %: this player's output is bit-perfect.
+tip-library-volume = Pre-listen level: { $db }
 no-track = Nothing playing
 remaining = Remaining
 intro-badge = INTRO { $secs }

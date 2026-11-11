@@ -51,6 +51,7 @@ tip-cue-waveform = CUEaren uhin-forma: egin klik jauzi egiteko
 tip-library-waveform = Liburutegiko CUEaren uhin-forma: egin klik joateko
 tip-volume = Bolumena: { $db }
 tip-volume-locked = Bolumena % 100ean finkatuta: erreproduzigailu honen irteera bit-perfect da.
+tip-library-volume = Aurrez entzuteko maila: { $db }
 no-track = Ez da ezer entzuten
 remaining = Falta dena
 intro-badge = INTRO { $secs }

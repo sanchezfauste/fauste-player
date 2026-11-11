@@ -51,6 +51,7 @@ tip-cue-waveform = Forma de onda do CUE: clic para saltar
 tip-library-waveform = Forma de onda do CUE da biblioteca: clic para saltar
 tip-volume = Volume: { $db }
 tip-volume-locked = Volume fixo ao 100 %: a saída deste reprodutor é bit-perfect.
+tip-library-volume = Nivel de preescoita: { $db }
 no-track = Non soa nada
 remaining = Restante
 intro-badge = INTRO { $secs }

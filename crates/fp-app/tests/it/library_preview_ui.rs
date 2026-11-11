@@ -516,3 +516,127 @@ fn the_open_settings_link_is_in_the_accent_colour() {
         vec![fp_app::ui::theme::ACCENT_400]
     );
 }
+
+// Track library spec §8.5 (LB58, LB59): the listening level fader and the
+// full meter.
+
+const LEVEL: &str = "Pre-listen level";
+
+/// The texts the last frame painted, with where.
+fn painted_texts(h: &H) -> Vec<(String, Rect)> {
+    fn walk(shape: &egui::Shape, out: &mut Vec<(String, Rect)>) {
+        match shape {
+            egui::Shape::Text(t) => out.push((
+                t.galley.text().to_owned(),
+                t.galley.rect.translate(t.pos.to_vec2()),
+            )),
+            egui::Shape::Vec(v) => v.iter().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut out = Vec::new();
+    for clipped in &h.output().shapes {
+        walk(&clipped.shape, &mut out);
+    }
+    out
+}
+
+fn level_fader(h: &H) -> Rect {
+    h.get_by_label_contains(LEVEL).rect()
+}
+
+#[test]
+fn lb58_the_bar_has_a_listening_level_fader() {
+    let (mut h, _fake) = open(base(true));
+    click_row(&mut h, "Bravo");
+    let fader = h.get_by_label_contains(LEVEL);
+    assert_eq!(fader.accesskit_node().role(), Role::Slider);
+    assert!(bar(&h).expand(1.0).contains_rect(fader.rect()));
+    assert!(in_bar(&h, "Pre-listen level: 0.0 dB"));
+}
+
+#[test]
+fn lb59_dragging_the_fader_sends_set_library_cue_volume() {
+    let (mut h, fake) = open(base(true));
+    click_row(&mut h, "Bravo");
+    fake.take_sent();
+    let r = level_fader(&h);
+    let from = pos2(r.center().x, r.top() + 6.0);
+    let to = pos2(from.x, r.center().y);
+    h.event(Event::PointerMoved(from));
+    h.run_steps(1);
+    h.event(Event::PointerButton {
+        pos: from,
+        button: PointerButton::Primary,
+        pressed: true,
+        modifiers: Modifiers::NONE,
+    });
+    h.run_steps(1);
+    for i in 1..=10 {
+        h.event(Event::PointerMoved(from + (to - from) * (i as f32 / 10.0)));
+        h.run_steps(1);
+    }
+    h.event(Event::PointerButton {
+        pos: to,
+        button: PointerButton::Primary,
+        pressed: false,
+        modifiers: Modifiers::NONE,
+    });
+    h.run_steps(2);
+    let sent = fake.take_sent();
+    let levels: Vec<f32> = sent
+        .iter()
+        .filter_map(|c| match c {
+            Command::SetLibraryCueVolume(v) => Some(*v),
+            _ => None,
+        })
+        .collect();
+    assert!(levels.last().is_some_and(|v| *v < 1.0), "{sent:?}");
+    assert!(
+        !sent.iter().any(|c| matches!(c, Command::SetVolume(..))),
+        "{sent:?}"
+    );
+}
+
+#[test]
+fn lb60_the_fader_shows_the_saved_level() {
+    let mut s = base(true);
+    s.library_view.cue_volume = 0.5;
+    let (mut h, _fake) = open(s);
+    click_row(&mut h, "Bravo");
+    let db = fp_app::ui::view::volume_db(0.5).unwrap();
+    assert!(
+        in_bar(&h, &format!("Pre-listen level: {db:.1} dB")),
+        "the tooltip names the level"
+    );
+    let readout = fp_app::ui::view::volume_readout(0.5).unwrap();
+    let b = bar(&h);
+    assert!(
+        painted_texts(&h)
+            .iter()
+            .any(|(t, r)| *t == readout && b.contains_rect(*r)),
+        "the readout under the fader"
+    );
+}
+
+#[test]
+fn lb58_the_bar_meter_has_its_scale() {
+    let (mut h, _fake) = open(base(true));
+    click_row(&mut h, "Bravo");
+    let b = bar(&h);
+    let texts = painted_texts(&h);
+    for mark in ["0", "-20"] {
+        assert!(
+            texts.iter().any(|(t, r)| t == mark && b.contains_rect(*r)),
+            "{mark}: {texts:?}"
+        );
+    }
+}
+
+#[test]
+fn lb58_without_a_route_neither_meter_nor_fader_shows() {
+    let (mut h, _fake) = open(base(false));
+    click_row(&mut h, "Bravo");
+    assert!(h.query_by_label_contains(LEVEL).is_none());
+    assert!(in_bar(&h, NO_ROUTE));
+}

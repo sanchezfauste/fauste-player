@@ -51,6 +51,7 @@ tip-cue-waveform = Forme d'onde du CUE : cliquer pour se déplacer
 tip-library-waveform = Forme d'onde du CUE de la bibliothèque : cliquer pour se déplacer
 tip-volume = Volume : { $db }
 tip-volume-locked = Volume bloqué à 100 % : la sortie de ce lecteur est bit-perfect.
+tip-library-volume = Niveau de pré-écoute : { $db }
 no-track = Aucune lecture
 remaining = Restant
 intro-badge = INTRO { $secs }
