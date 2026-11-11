@@ -7,7 +7,7 @@ The window has one size (900 × 640, smaller on a small screen) whatever the
 section, and the section scrolls inside it. Every section lines its labels up
 in one column.
 
-The Players, Meters, Analysis, Loudness and Keyboard shortcuts sections have a
+The Players, Meters, Analysis, Loudness, Automation and Keyboard shortcuts sections have a
 **Restore defaults** button in their header. It asks for confirmation and then
 resets only that section (Players keeps the number of players and the
 language; Shortcuts has no other reset button). Audio outputs, Playlists,
@@ -271,6 +271,26 @@ and **Clear** to remove it. On macOS an application bundle (`.app`) can be
 chosen. If the program cannot be started, a notice says so. The row is not
 shown on Android, nor in the Flatpak and snap builds. See [When a file
 changes](library.md#when-a-file-changes).
+
+## Automation
+
+The [music filler's](automation.md) rotations and rules (not on Android).
+
+- **Rotations:** the list, the default marked. **New rotation** adds one
+  that plays all music, **Make default** makes the selected one the
+  default, **Delete rotation** removes it (the last one cannot be deleted).
+- **The selected rotation:** its **Name**, then one row per **step**: where
+  its tracks come from (a category with its subcategories, or *All* of a
+  kind), how many it plays each time (**at least** and **at most**, 1–99),
+  **Up**, **Down** and **Remove**. **Add step** adds one at the end. A step
+  whose category was deleted says so; the filler skips it.
+- **Music filler:** how long before the same track may play again (3 hours,
+  or once half of the other tracks of its step have aired, whichever comes
+  first; 0 turns either off), the same artist (30 minutes), the
+  **look-ahead** (30 minutes of music queued) and the **played tracks kept**
+  in its list (50).
+
+**Restore defaults** resets the rules; the rotations stay.
 
 ## Keyboard shortcuts
 

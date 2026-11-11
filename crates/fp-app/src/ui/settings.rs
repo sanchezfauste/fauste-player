@@ -17,6 +17,8 @@ use fp_model::{
 
 use super::app::{Scene, ViewState};
 
+#[cfg(not(target_os = "android"))]
+mod automation;
 pub(crate) mod carts;
 mod columns;
 mod devices;
@@ -68,6 +70,8 @@ pub(crate) enum Section {
     Playlists,
     Cartwall,
     Library,
+    #[cfg(not(target_os = "android"))]
+    Automation,
     Shortcuts,
     #[cfg(not(target_os = "android"))]
     Midi,
@@ -92,6 +96,9 @@ pub(crate) struct SettingsState {
     pub(super) midi_learning: Option<fp_model::MidiAction>,
     #[cfg(not(target_os = "android"))]
     pub(super) remote: remote::RemoteState,
+    /// Settings → Automation: the rotation being edited and its name draft.
+    #[cfg(not(target_os = "android"))]
+    pub(super) automation: automation::AutomationState,
     /// The section whose "Restore defaults" waits for an answer.
     pub(super) confirm_restore: Option<SettingsSection>,
     backends: Option<Vec<BackendChoice>>,
@@ -482,6 +489,8 @@ fn body(
                             Section::Playlists => playlists(ui, scene, st),
                             Section::Cartwall => carts::section(ui, scene, st),
                             Section::Library => library::section(ui, scene, view_state, st),
+                            #[cfg(not(target_os = "android"))]
+                            Section::Automation => automation::section(ui, scene, st),
                             Section::Shortcuts => keys::section(ui, scene, st),
                             #[cfg(not(target_os = "android"))]
                             Section::Midi => midi::section(ui, scene, st, deps.midi),
@@ -632,6 +641,12 @@ const SECTIONS: &[(Section, &str, &str)] = &[
         "settings-tab-cartwall",
     ),
     (Section::Library, icon::BOOKS, "settings-tab-library"),
+    #[cfg(not(target_os = "android"))]
+    (
+        Section::Automation,
+        icon::SHUFFLE,
+        "settings-tab-automation",
+    ),
     (Section::Shortcuts, icon::KEYBOARD, "settings-tab-shortcuts"),
     #[cfg(not(target_os = "android"))]
     (Section::Midi, icon::PIANO_KEYS, "settings-tab-midi"),
@@ -650,6 +665,8 @@ fn restorable(section: Section) -> Option<SettingsSection> {
         Section::Analysis => Some(SettingsSection::Analysis),
         Section::Loudness => Some(SettingsSection::Loudness),
         Section::Shortcuts => Some(SettingsSection::Shortcuts),
+        #[cfg(not(target_os = "android"))]
+        Section::Automation => Some(SettingsSection::Automation),
         Section::Outputs | Section::Playlists | Section::Cartwall | Section::Library => None,
         #[cfg(not(target_os = "android"))]
         Section::Midi | Section::Remote => None,
@@ -1057,7 +1074,7 @@ fn view_selector(ui: &mut Ui, scene: &Scene<'_>, view: OutputsView) {
 }
 
 /// A slider whose accessible name is `label` (the row shows the same text).
-fn slider<T: egui::emath::Numeric>(
+pub(super) fn slider<T: egui::emath::Numeric>(
     ui: &mut Ui,
     value: &mut T,
     range: std::ops::RangeInclusive<T>,

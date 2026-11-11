@@ -63,6 +63,7 @@ mod playlist_tabs_ui;
 mod reanalyse_ui;
 mod remote_settings;
 mod reset_played_ui;
+mod rotation_editor_ui;
 mod row_double_click;
 mod selection_outline_ui;
 mod services;

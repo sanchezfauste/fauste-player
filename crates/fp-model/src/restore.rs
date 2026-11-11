@@ -13,6 +13,9 @@ pub enum SettingsSection {
     Analysis,
     Loudness,
     Shortcuts,
+    /// Automation's rules (automation spec §11); rotations are data, not
+    /// settings, and stay.
+    Automation,
 }
 
 /// Resets the whole configuration group behind `section` (`players`,
@@ -34,5 +37,6 @@ pub fn restore_defaults(config: &mut Config, section: SettingsSection) {
         SettingsSection::Analysis => config.analysis = defaults.analysis,
         SettingsSection::Loudness => config.loudness = defaults.loudness,
         SettingsSection::Shortcuts => config.shortcuts = defaults.shortcuts,
+        SettingsSection::Automation => config.automation = defaults.automation,
     }
 }

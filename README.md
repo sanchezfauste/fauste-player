@@ -84,7 +84,7 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   the info button next to Settings opens the author, the copyright, the
   licence, a short disclaimer and the licence notices of the bundled
   components.
-- **Restore defaults:** Players, Meters, Analysis, Loudness and Shortcuts can each be
+- **Restore defaults:** Players, Meters, Analysis, Loudness, Automation and Shortcuts can each be
   reset to their defaults.
 - **Live settings:** every setting applies while the application runs. A
   change to the outputs waits until nothing plays on what it affects (a

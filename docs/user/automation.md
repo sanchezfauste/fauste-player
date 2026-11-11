@@ -64,7 +64,9 @@ a fixed cycle. It also keeps apart:
 Everything that went on air counts, from the filler, a player or the
 cartwall; pre-listening does not. When a small category cannot keep the
 rules, the filler gives way rather than fall silent: first on the artist,
-then on the track. Settings → Automation has every value.
+then on the track. Settings → Automation has every value, and is where
+you make, rename and change rotations (see
+[Settings](settings.md#automation)).
 
 An **Hourly ID** is a track kind of its own (Library → Kind ▸ Hourly ID),
 for the station's identification at the top of the hour.
