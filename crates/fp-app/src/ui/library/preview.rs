@@ -89,7 +89,7 @@ pub(crate) fn preview_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewS
     let meter_config = &scene.state.config.meter;
     // Without a route the notes take the meter's place.
     let meter_width = if v.has_route {
-        widgets::compact_meter_width(meter_config, false)
+        super::super::player::meter_column_width(meter_config)
     } else {
         0.0
     };
@@ -135,7 +135,7 @@ pub(crate) fn preview_bar(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewS
         let mut meter_ui = ui.new_child(
             UiBuilder::new()
                 .max_rect(meter)
-                .layout(Layout::top_down(Align::Min)),
+                .layout(Layout::left_to_right(Align::Min)),
         );
         let reading = telemetry.map(|t| t.meter).unwrap_or_default();
         meter_column(&mut meter_ui, scene, &reading, inner.height());
@@ -363,28 +363,32 @@ fn wave(
     }
 }
 
-/// The library CUE's own meter, without a ruler; a click on its maximum
-/// restarts it.
+/// The library CUE's meter and its listening level fader, drawn as a
+/// desktop player's (LB58): a click on the meter's maximum restarts it,
+/// and the fader sets the level (LB59).
 fn meter_column(
     ui: &mut Ui,
     scene: &Scene<'_>,
     reading: &fp_engine::meter::MeterReading,
     height: f32,
 ) {
-    let t = scene.i18n;
-    let meter = &scene.state.config.meter;
-    let name = widgets::loudness_line(reading, meter)
-        .map(|(value, _)| t.tr_args("meter-loudness", &[("value", value.into())]))
-        .unwrap_or_else(|| t.tr("meter-label"));
-    let labels = widgets::MeterLabels {
-        meter: name,
-        max: t.tr_args(
-            "meter-max",
-            &[("value", widgets::max_readout(reading.max_db).into())],
-        ),
-        max_tip: t.tr("tip-meter-max"),
-    };
-    if widgets::vu_compact(ui, height, reading, meter, &labels, false) {
+    let out = super::super::player::meter_fader(
+        ui,
+        scene,
+        reading,
+        height,
+        super::super::player::FaderView {
+            gain: scene.state.library_view.cue_volume,
+            locked: false,
+            enabled: true,
+            tip: "tip-library-volume",
+        },
+        None,
+    );
+    if out.reset_max {
         scene.ctl.reset_library_cue_meter_max();
+    }
+    if let Some(gain) = out.moved {
+        scene.ctl.send(Command::SetLibraryCueVolume(gain));
     }
 }

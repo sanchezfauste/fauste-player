@@ -117,3 +117,37 @@ fn a_library_view_with_an_unusable_size_names_the_field() {
         loaded.warnings
     );
 }
+
+/// LB60: the listening level is saved with the view and comes back.
+#[test]
+fn the_library_cue_volume_survives_a_reload() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let mut state = AppState::new(Config::default(), "Main");
+    apply(&mut state, Command::SetLibraryCueVolume(0.4)).unwrap();
+    save_all(&mut s, &state, 0.0);
+    let loaded = store(&dir).load("Main");
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    assert_eq!(loaded.state.library_view.cue_volume, 0.4);
+}
+
+/// LB60: a saved level out of range loads repaired, named in a warning.
+#[test]
+fn a_library_cue_volume_out_of_range_names_the_field() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = AppState::new(Config::default(), "Main");
+    save_all(&mut s, &state, 0.0);
+    edit_kv(&s, "library_view", |v| {
+        *v = serde_json::json!({"open": true, "cue_volume": 3.0});
+    });
+    let loaded = store(&dir).load("Main");
+    assert!(loaded.state.library_view.open);
+    assert_eq!(loaded.state.library_view.cue_volume, 1.0);
+    assert_eq!(loaded.warnings.len(), 1, "{:?}", loaded.warnings);
+    assert!(
+        loaded.warnings[0].contains("`cue_volume`"),
+        "{:?}",
+        loaded.warnings
+    );
+}

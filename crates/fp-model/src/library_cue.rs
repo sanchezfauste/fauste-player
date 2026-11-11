@@ -50,6 +50,7 @@ pub fn request(state: &AppState, track: TrackId, at: Option<f64>) -> Option<Libr
         from_secs,
         format: t.format,
         normalization: crate::loudness::normalization_for(state, Holder::LibraryCue, t),
+        volume: state.library_view.cue_volume,
     })
 }
 

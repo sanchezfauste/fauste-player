@@ -496,6 +496,9 @@ fn library_view_field_kept(key: &str, saved: &Value, view: &LibraryView) -> bool
         }
         "sort" => parses_to(saved, &view.sort),
         "tree_width" => parses_to(saved, &view.tree_width) && view.tree_width.is_none_or(good_size),
+        "cue_volume" => {
+            parses_to(saved, &view.cue_volume) && (0.0..=1.0).contains(&view.cue_volume)
+        }
         // A key the view does not have is not kept.
         _ => false,
     }

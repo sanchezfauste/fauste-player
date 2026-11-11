@@ -263,8 +263,16 @@ The bar shows:
 
 - **Play**, **Pause** and **Stop**;
 - the big remaining time of the track, its title, artist and category;
-- a small meter at the right. It reads only this pre-listen, never a player's
-  or the cartwall's meter; click it to restart its maximum;
+- at the right, a meter and a volume fader drawn as on a player. The meter
+  reads only this pre-listen, never a player's or the cartwall's meter;
+  click it to restart its maximum. The fader is your **listening level** in
+  the headphones or monitors: it sets how loud the pre-listen sounds and
+  never changes a track (its file, its loudness gain or its markers), a
+  player or the cartwall. It stays as you left it when the preview moves to
+  another track and is saved for the next start; its tooltip and the
+  readout under it show the level in dB. If the Library output shares
+  channels with an on-air output, the fader also sets how loud the
+  pre-listen is there. A phone's pre-listen card has no fader;
 - the whole file's waveform, as tall as a player's, with its markers, and
   an `elapsed / total` line under it.
 

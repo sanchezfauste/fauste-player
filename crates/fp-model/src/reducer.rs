@@ -345,12 +345,22 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         }
         Command::SetLibraryView(view) => {
             let was_open = state.library_view.open;
+            // LB60: a whole view copied before a fader move never undoes it.
+            let cue_volume = state.library_view.cue_volume;
             state.library_view = view.repaired(&state.categories);
+            state.library_view.cue_volume = cue_volume;
             // LB35: closing the window ends the preview (minimising keeps
             // it); a change while it is closed (the phone's Library tab,
             // LB45) does not.
             if was_open && !state.library_view.open {
                 crate::library_cue::stop(state, &mut out);
+            }
+        }
+        Command::SetLibraryCueVolume(volume) => {
+            if !volume.is_nan() {
+                let volume = volume.clamp(0.0, 1.0);
+                state.library_view.cue_volume = volume;
+                out.push(EngineAction::SetLibraryCueVolume { volume });
             }
         }
         Command::AddToLibrary { paths, category } => {

@@ -83,7 +83,7 @@ impl Engine {
                 worker,
                 cue,
                 route,
-                volume: Arc::new(AtomicF32::new(1.0)),
+                volume: Arc::new(AtomicF32::new(self.library_volume)),
                 source: None,
                 outgoing: Vec::new(),
                 paused: false,
@@ -220,6 +220,7 @@ impl Engine {
             return;
         }
         self.stop_library_source();
+        self.set_library_cue_volume(request.volume);
         if let Some(l) = self.library.as_mut() {
             l.paused = paused;
         }
@@ -246,6 +247,20 @@ impl Engine {
             Err(_) => self.events.push(EngineEvent::LibraryCueEnded {
                 track: request.track,
             }),
+        }
+    }
+
+    /// The listening level (LB59): kept for a runtime not created yet, and
+    /// stored where the mixer reads it (smoothed there) when it exists.
+    pub(super) fn set_library_cue_volume(&mut self, volume: f32) {
+        let volume = if volume.is_nan() {
+            self.library_volume
+        } else {
+            volume.clamp(0.0, 1.0)
+        };
+        self.library_volume = volume;
+        if let Some(l) = self.library.as_ref() {
+            l.volume.store(volume);
         }
     }
 

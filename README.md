@@ -66,7 +66,8 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   while the application runs and rescanned at start, and **Remove missing
   tracks…** cleans up. A preview bar
   pre-listens the selected track on its own Library output (Play, Pause and
-  Stop, a waveform to seek and edit markers on, a meter), following the
+  Stop, a waveform to seek and edit markers on, a meter and a listening
+  level fader on the desktop), following the
   selection and asking first on an on-air output like any CUE. Its place and
   state are saved with the session. On an Android phone the **Library** tab
   shows the categories, then a category's tracks with search, ticks to add

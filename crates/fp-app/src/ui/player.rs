@@ -1016,7 +1016,7 @@ fn cover(
 }
 
 /// Width of the meter and fader column for meter `c`.
-fn meter_column_width(c: &fp_model::MeterConfig) -> f32 {
+pub(crate) fn meter_column_width(c: &fp_model::MeterConfig) -> f32 {
     widgets::meter_width(c) + METER_FADER_GAP + widgets::FADER_WIDTH
 }
 /// The gap between the meter and the fader, which holds their divider with
@@ -1059,7 +1059,7 @@ fn phone_transport_width(button: f32) -> f32 {
 /// How a phone card shares its width (PL39): the transport, and right of
 /// it the meter and fader column, with the scales that fit.
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct PhoneSplit {
+pub(crate) struct PhoneSplit {
     /// The small buttons' size; Play is two of them and a gap.
     button: f32,
     /// The meter's ruler and the fader's numbers.
@@ -1212,29 +1212,83 @@ fn meter_column(
     fader: bool,
     phone: Option<PhoneSplit>,
 ) {
+    // BF7: a bit-perfect output holds the volume at 100 %; the fader is
+    // drawn at the top (whatever a state not caught up yet says) and
+    // disabled.
+    let locked = fp_model::fader_locked(scene.state, id);
+    let out = meter_fader(
+        ui,
+        scene,
+        &telemetry.meter,
+        height,
+        FaderView {
+            gain: scene.state.player(id).map_or(1.0, |p| p.volume),
+            locked,
+            enabled: !locked && fader,
+            tip: "tip-volume",
+        },
+        phone,
+    );
+    if out.reset_max {
+        scene.ctl.reset_meter_max(id);
+    }
+    if let Some(gain) = out.moved {
+        scene.ctl.send(Command::SetVolume(id, gain));
+    }
+}
+
+/// What a meter and fader column's fader shows.
+pub(crate) struct FaderView {
+    /// The level, a linear gain.
+    pub gain: f32,
+    /// Held at 100 % (BF7): drawn at the top, with its own tooltip.
+    pub locked: bool,
+    pub enabled: bool,
+    /// The tooltip's message, with the level as `$db`.
+    pub tip: &'static str,
+}
+
+/// What the operator did on a meter and fader column.
+pub(crate) struct MeterFaderInput {
+    /// The meter's maximum was clicked.
+    pub reset_max: bool,
+    /// The fader moved to this gain.
+    pub moved: Option<f32>,
+}
+
+/// A player's meter and fader column, `height` tall: the meter reading
+/// `reading`, the hairline, and the fader with its readout; a phone's
+/// narrow form with `phone`. The library's preview bar draws the desktop
+/// form too (track library spec LB58). [`meter_column_width`] wide on the
+/// desktop.
+pub(crate) fn meter_fader(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    reading: &fp_engine::meter::MeterReading,
+    height: f32,
+    f: FaderView,
+    phone: Option<PhoneSplit>,
+) -> MeterFaderInput {
     let t = scene.i18n;
     let gap = phone.map_or(METER_FADER_GAP, |p| p.gap);
     ui.spacing_mut().item_spacing = vec2(gap, 0.0);
     let meter = &scene.state.config.meter;
-    let name = widgets::loudness_line(&telemetry.meter, meter)
+    let name = widgets::loudness_line(reading, meter)
         .map(|(value, _)| t.tr_args("meter-loudness", &[("value", value.into())]))
         .unwrap_or_else(|| t.tr("meter-label"));
     let labels = widgets::MeterLabels {
         meter: name,
         max: t.tr_args(
             "meter-max",
-            &[("value", widgets::max_readout(telemetry.meter.max_db).into())],
+            &[("value", widgets::max_readout(reading.max_db).into())],
         ),
         max_tip: t.tr("tip-meter-max"),
     };
     let meter_top = ui.cursor().top();
-    let reset = match phone {
-        Some(p) => widgets::vu_compact(ui, height, &telemetry.meter, meter, &labels, p.meter_scale),
-        None => widgets::vu(ui, height, &telemetry.meter, meter, &labels),
+    let reset_max = match phone {
+        Some(p) => widgets::vu_compact(ui, height, reading, meter, &labels, p.meter_scale),
+        None => widgets::vu(ui, height, reading, meter, &labels),
     };
-    if reset {
-        scene.ctl.reset_meter_max(id);
-    }
     // A hairline in the gap between the meter and the fader, so the two
     // read as separate instruments (itr07 J5).
     // Centred on what shows between the two: from the meter's right edge
@@ -1262,62 +1316,58 @@ fn meter_column(
         0.0,
         theme::DIVIDER,
     );
-    let volume = scene.state.player(id).map_or(1.0, |p| p.volume);
-    let db = match view::volume_db(volume) {
+    let db = match view::volume_db(f.gain) {
         Some(db) => t.tr_args("unit-db", &[("value", format!("{db:.1}").into())]),
         None => t.tr("volume-silent"),
     };
-    // BF7: a bit-perfect output holds the volume at 100 %; the fader is
-    // drawn at the top (whatever a state not caught up yet says) and
-    // disabled.
-    let locked = fp_model::fader_locked(scene.state, id);
-    let tip = if locked {
+    let tip = if f.locked {
         t.tr("tip-volume-locked")
     } else {
-        t.tr_args("tip-volume", &[("db", db.into())])
+        t.tr_args(f.tip, &[("db", db.into())])
     };
-    let position = if locked {
+    let position = if f.locked {
         1.0
     } else {
-        view::fader_from_gain(volume)
+        view::fader_from_gain(f.gain)
     };
     // The level in dB under the fader, on the row of the meter's loudness
     // line; a locked fader shows 0.0, dimmed.
-    let readout = if locked {
+    let readout = if f.locked {
         view::volume_readout(1.0)
     } else {
-        view::volume_readout(volume)
+        view::volume_readout(f.gain)
     }
     .unwrap_or_else(|| t.tr("volume-readout-silent"));
-    ui.vertical(|ui| {
-        ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
-        let enabled = !locked && fader;
-        let fader_height = (height - widgets::FADER_READOUT_HEIGHT).max(0.0);
-        let moved = match phone {
-            Some(p) => {
-                let moved = widgets::fader_compact(
-                    ui,
-                    fader_height,
-                    position,
-                    &tip,
-                    enabled,
-                    p.fader_scale,
-                );
-                widgets::fader_readout_compact(ui, &readout, enabled, p.fader_scale);
-                moved
+    let enabled = f.enabled && !f.locked;
+    let moved = ui
+        .vertical(|ui| {
+            ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
+            let fader_height = (height - widgets::FADER_READOUT_HEIGHT).max(0.0);
+            match phone {
+                Some(p) => {
+                    let moved = widgets::fader_compact(
+                        ui,
+                        fader_height,
+                        position,
+                        &tip,
+                        enabled,
+                        p.fader_scale,
+                    );
+                    widgets::fader_readout_compact(ui, &readout, enabled, p.fader_scale);
+                    moved
+                }
+                None => {
+                    let moved = widgets::fader(ui, fader_height, position, &tip, enabled);
+                    widgets::fader_readout(ui, &readout, enabled);
+                    moved
+                }
             }
-            None => {
-                let moved = widgets::fader(ui, fader_height, position, &tip, enabled);
-                widgets::fader_readout(ui, &readout, enabled);
-                moved
-            }
-        };
-        if let Some(pos) = moved {
-            scene
-                .ctl
-                .send(Command::SetVolume(id, view::gain_from_fader(pos)));
-        }
-    });
+        })
+        .inner;
+    MeterFaderInput {
+        reset_max,
+        moved: moved.map(view::gain_from_fader),
+    }
 }
 
 /// `elapsed / total` under the waveform, right-aligned, close to it.
