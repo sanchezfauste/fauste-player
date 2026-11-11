@@ -32,7 +32,8 @@ concrete folders.
 `data/fauste.db` holds the library (tracks with their manual markers, tags
 and loudness), the playlists and their entries, the cart pages and the
 session (players, history, pending start, the cartwall's state, the
-layout). Only `config.json` (hand-edited, read leniently) and
+layout), and automation's rotations, default rotation and last-aired times
+(schema 3). Only `config.json` (hand-edited, read leniently) and
 `window.ron` stay outside it. The model and the interface do not know about
 SQL: `Store::load` returns the state the model restores from, and
 `Store::save_state` takes the `AppState`.
@@ -78,6 +79,13 @@ Schema 2 (track library, plan 2) adds the `categories` table, the
 migrates in place: every track is uncategorised and nothing is lost. A build
 that only knows schema 1 sees a `user_version` above its own, so it sets the
 file aside as `.newer-<stamp>` (see below).
+
+Schema 3 (automation, plan 1) adds the `rotations` and `air_times` tables;
+the default rotation is the `kv` value `default_rotation`. A schema 2
+database migrates in place with no rotations and no air times; at every
+start the app calls `rotation::ensure_default` (`crates/fp-app/src/session.rs`),
+which creates the rotation named by `rotation-default-name` when there is
+none. A schema 2 build sets a schema 3 file aside as `.newer-<stamp>`.
 
 **The path rule.** The library holds one track per file (LB14). Uniqueness is
 enforced by the model (`Library::track_at`, a path index; `track_for_path`
