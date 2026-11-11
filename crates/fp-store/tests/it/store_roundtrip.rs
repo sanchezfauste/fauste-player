@@ -176,7 +176,10 @@ fn hand_edited_values_of_the_wrong_type_are_repaired_not_discarded() {
     let loaded = s.load("Main");
     let c = &loaded.state.config;
     assert_eq!(c.players.count, 1, "negative count clamps to the minimum");
-    assert_eq!(c.players.fade_ms, 1501, "fractional values are rounded");
+    assert_eq!(
+        c.players.crossfade_ms, 1501,
+        "fractional values are rounded"
+    );
     assert_eq!(
         c.players.end_warning_secs, 10.0,
         "an invalid value falls back to its default"

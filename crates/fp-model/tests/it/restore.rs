@@ -13,7 +13,7 @@ use fp_model::{
 fn altered() -> Config {
     let mut c = Config::default();
     c.players.count = 6;
-    c.players.fade_ms = 3000;
+    c.players.crossfade_ms = 3000;
     c.players.auto_segue = false;
     c.players.use_cue_markers = false;
     c.players.history_len = 10;
@@ -82,12 +82,14 @@ fn the_command_keeps_the_player_count() {
     let mut s = fixture(1);
     apply(&mut s, Command::SetPlayerCount(2)).unwrap();
     let mut config = s.config.clone();
-    config.players.fade_ms = 3000;
+    config.players.crossfade_ms = 3000;
+    config.players.fade_stop_ms = 5000;
     config.ui.language = Some("es-ES".into());
     apply(&mut s, Command::UpdateConfig(Box::new(config))).unwrap();
 
     apply(&mut s, Command::RestoreDefaults(SettingsSection::Players)).unwrap();
-    assert_eq!(s.config.players.fade_ms, 1000);
+    assert_eq!(s.config.players.crossfade_ms, 1000);
+    assert_eq!(s.config.players.fade_stop_ms, 2000);
     assert_eq!(s.config.ui.language.as_deref(), Some("es-ES"));
     assert_eq!(s.players.len(), 2);
     assert_eq!(s.config.players.count, 2);

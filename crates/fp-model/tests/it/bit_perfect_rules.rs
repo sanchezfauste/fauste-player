@@ -575,7 +575,7 @@ fn br7_another_player_still_crossfades() {
 #[test]
 fn br9_fade_stop_pause_and_restart_are_unchanged() {
     let (mut s, p, _) = on_air();
-    let fade_ms = s.config.players.fade_ms;
+    let fade_ms = s.config.players.fade_stop_ms;
     let out = apply(&mut s, Command::Pause(p)).unwrap();
     assert!(out.contains(&EngineAction::Pause { player: p }));
     apply(&mut s, Command::Play(p)).unwrap(); // resume

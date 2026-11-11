@@ -125,7 +125,7 @@ fn playing_b() -> (AppState, PlayerId, [EntryId; 3]) {
 #[test]
 fn r24_previous_crossfades_back_and_queues_the_entry_it_left() {
     let (mut s, p, [a, b, _]) = playing_b();
-    let fade_ms = s.config.players.fade_ms;
+    let fade_ms = s.config.players.crossfade_ms;
     let out = apply(&mut s, Command::Previous(p)).unwrap();
     assert!(
         out.iter().any(|x| matches!(x,

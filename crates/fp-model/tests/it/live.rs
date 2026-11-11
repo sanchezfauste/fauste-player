@@ -606,7 +606,7 @@ fn l9_the_audio_system_goes_first_then_routes_then_devices() {
 #[test]
 fn l10_update_config_tells_the_engine_only_when_outputs_or_tuning_change() {
     let mut s = fixture(1);
-    let actions = update(&mut s, |c| c.players.fade_ms = 2500);
+    let actions = update(&mut s, |c| c.players.crossfade_ms = 2500);
     assert!(
         !actions
             .iter()

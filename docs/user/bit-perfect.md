@@ -38,7 +38,7 @@ bit-perfect device plays differently from the others:
   the top: on screen, on [MIDI](midi.md) controllers and over the
   [remote API and OSC](remote-control.md). It goes to 100 % when bit-perfect
   is turned on for the device, and stays there when it is turned off.
-- **What still works:** **Fade stop** (it fades out over the fade time),
+- **What still works:** **Fade stop** (it fades out over the fade stop time),
   **Pause**, **Stop**, **Restart**, the repeat and stop-after marks, Single
   and Continuous modes, Cue (pre-listen, which has no fader and is not affected), carts,
   [DSD output](#dsd), and every player whose Main output is on another

@@ -80,7 +80,7 @@ tracks are analysed again automatically.
   track starts exactly at cue-out, with no gap.
 - **Single mode**, or **Stop after**: the player stops at cue-out.
 - **Pressing Play while on air:** the next track starts at once and the
-  current one fades out over the *fade time* (1 s by default).
+  current one fades out over the *crossfade time* (1 s by default).
 - **A player whose Main output is bit-perfect** ignores the MIX point and
   automatic mix: each track plays to its cue-out, then the next one starts,
   and Play while on air switches at once, without a fade. See

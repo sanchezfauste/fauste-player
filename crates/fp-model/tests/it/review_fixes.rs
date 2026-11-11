@@ -252,7 +252,7 @@ fn fade_stop_works_during_a_segue_overlap() {
     let actions = apply(&mut state, Command::FadeStop(p)).unwrap();
     assert!(actions.contains(&EngineAction::FadeOutAndStop {
         player: p,
-        fade_ms: 1000
+        fade_ms: 2000
     }));
 }
 
