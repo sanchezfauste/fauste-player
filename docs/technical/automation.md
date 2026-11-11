@@ -98,3 +98,33 @@ stands in its rotation; it is plain data, saved with the filler.
   empty falls back on the default rotation through a cursor of its own, so
   the caller's cursor keeps its place (`used_default`, AU34). With nothing
   playable anywhere the result is `None`.
+
+## The music filler (`filler.rs`)
+
+The filler (AU27–AU29) is an ordinary `PlayerState`, kept **last** in
+`AppState::players`, with a playlist of its own; `AppState::filler`
+(`FillerState`) names both. Fades, segues, routes, preloading and the engine
+are the players' own. `AppState::aux_players()` is every player but the
+filler: the player count, the numbered shortcuts and MIDI controls, the
+saved player sessions, the remote API and the phone count and number only
+those. Rules about sound (on air, playout, pre-listen) see the filler too.
+
+`filler::settle` runs at the end of every command and engine event, before
+`reconcile`:
+
+- **trim:** the rows before the current one (or before the next, when
+  stopped) beyond `automation.filler_played_kept` leave the list, through
+  `take_out_entries`, so the list never grows;
+- **top up:** while the rows ahead play for less than
+  `automation.filler_lookahead_mins`, it asks the rotation cursor for the
+  next track (`next_track`, with every row ahead passed as `planned` at its
+  expected start) and appends it. A row whose track has no known length
+  counts `UNKNOWN_LENGTH_SECS` (180 s), and one settle adds at most
+  `MAX_ADDED_PER_SETTLE` (50) rows. When nothing can be added and nothing is
+  ahead, `starved` is set for the column's alert.
+
+`FillerState::generated` holds the rows the filler added. A row the
+operator inserts or moves is not in it, and `SetFillerRotation` replaces
+only generated rows after the current one (keeping the next of a playing
+filler, already loaded for the hand-over). A removed row was never aired,
+so it does not count for separation.

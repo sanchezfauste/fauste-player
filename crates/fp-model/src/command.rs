@@ -200,6 +200,9 @@ pub enum Command {
     /// The last rotation cannot be deleted; deleting the default makes the
     /// first remaining one the default.
     DeleteRotation(crate::ids::RotationId),
+    /// AU28: the rotation the music filler plays (`None`: the default);
+    /// its generated rows not yet played are replaced.
+    SetFillerRotation(Option<crate::ids::RotationId>),
     /// AU4: the rotation the filler falls back on.
     SetDefaultRotation(crate::ids::RotationId),
     /// Puts files in the library, filed under `category` when given: a new

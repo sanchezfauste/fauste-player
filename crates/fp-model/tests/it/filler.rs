@@ -90,3 +90,191 @@ fn sessions_leave_the_filler_out() {
     assert_eq!(sessions.len(), 4);
     assert!(sessions.iter().all(|p| p.id != filler));
 }
+
+// --- Task 3: topping up and trimming (AU27, AU28) ---
+
+use std::path::PathBuf;
+
+use fp_model::filler::MAX_ADDED_PER_SETTLE;
+use fp_model::{Command, PlayerId, PlaylistId, Track, TrackId, apply};
+
+/// A state with `n` music tracks of `secs` seconds, the rules off and the
+/// filler in place (its first settle done by a harmless command).
+fn filled(n: u64, secs: f64) -> AppState {
+    let mut s = state();
+    s.config.automation.track_separation_mins = 0;
+    s.config.automation.track_separation_percent = 0;
+    s.config.automation.artist_separation_mins = 0;
+    for id in 1..=n {
+        let mut t = Track::new(TrackId(10_000 + id), PathBuf::from(format!("/m/{id}.flac")));
+        t.duration_secs = secs;
+        s.library.insert(t);
+    }
+    ensure(&mut s, "Music filler");
+    settle(&mut s);
+    s
+}
+
+/// Any command runs the filler's settle; this one changes nothing.
+fn settle(s: &mut AppState) {
+    let _ = apply(s, Command::SetLayoutLocked(false));
+}
+
+/// Next on the filler, and the engine reporting the crossfade done.
+fn next(s: &mut AppState, player: PlayerId) {
+    apply(s, Command::Play(player)).unwrap();
+    fp_model::on_event(s, fp_model::EngineEvent::FadeCompleted { player });
+}
+
+fn filler(s: &AppState) -> (PlayerId, PlaylistId) {
+    let f = s.filler.as_ref().unwrap();
+    (f.player, f.playlist)
+}
+
+fn rows(s: &AppState) -> Vec<fp_model::EntryId> {
+    let (_, list) = filler(s);
+    s.playlists
+        .get(list)
+        .unwrap()
+        .entries
+        .iter()
+        .map(|e| e.id)
+        .collect()
+}
+
+#[test]
+fn settle_fills_up_to_the_lookahead() {
+    let s = filled(20, 180.0);
+    let r = rows(&s);
+    assert_eq!(r.len(), 10, "30 min of 180 s tracks");
+    let f = s.filler.as_ref().unwrap();
+    assert!(r.iter().all(|e| f.generated.contains(e)));
+    assert!(!f.starved);
+    assert_eq!(s.players.last().unwrap().next, Some(r[0]));
+}
+
+#[test]
+fn played_rows_beyond_the_kept_count_are_trimmed() {
+    let mut s = filled(20, 180.0);
+    s.config.automation.filler_played_kept = 10;
+    let (player, list) = filler(&s);
+    for _ in 0..25 {
+        next(&mut s, player);
+    }
+    let current = s.players.last().unwrap().current.unwrap();
+    let position = s.playlists.get(list).unwrap().position(current).unwrap();
+    assert_eq!(position, 10, "ten played rows kept before the current one");
+    let r = rows(&s);
+    assert!(
+        s.filler
+            .as_ref()
+            .unwrap()
+            .generated
+            .iter()
+            .all(|e| r.contains(e))
+    );
+}
+
+#[test]
+fn an_operator_row_is_never_replaced() {
+    let mut s = filled(20, 180.0);
+    let (player, list) = filler(&s);
+    apply(&mut s, Command::Play(player)).unwrap();
+    let operator_track = TrackId(10_005);
+    apply(
+        &mut s,
+        Command::InsertTracks {
+            playlist: list,
+            index: 3,
+            tracks: vec![operator_track],
+        },
+    )
+    .unwrap();
+    let operator_row = rows(&s)[3];
+    assert!(!s.filler.as_ref().unwrap().generated.contains(&operator_row));
+    let rotation = s.rotations.default_id();
+    apply(&mut s, Command::SetFillerRotation(rotation)).unwrap();
+    assert!(rows(&s).contains(&operator_row));
+    assert!(!s.filler.as_ref().unwrap().generated.contains(&operator_row));
+}
+
+#[test]
+fn a_removed_row_does_not_count_as_aired() {
+    let mut s = filled(20, 180.0);
+    let victim = rows(&s)[4];
+    apply(&mut s, Command::RemoveEntry(victim)).unwrap();
+    assert!(s.air_times.is_empty());
+    assert!(!rows(&s).contains(&victim));
+}
+
+#[test]
+fn an_empty_library_adds_nothing_and_flags_it() {
+    let mut s = state();
+    ensure(&mut s, "Music filler");
+    settle(&mut s);
+    assert!(rows(&s).is_empty());
+    assert!(s.filler.as_ref().unwrap().starved);
+    let mut t = Track::new(TrackId(1), PathBuf::from("/m/a.flac"));
+    t.duration_secs = 180.0;
+    s.library.insert(t);
+    settle(&mut s);
+    assert!(!rows(&s).is_empty());
+    assert!(!s.filler.as_ref().unwrap().starved);
+}
+
+#[test]
+fn unknown_durations_do_not_fill_without_end() {
+    let s = filled(20, 0.0);
+    let r = rows(&s);
+    assert!(r.len() <= MAX_ADDED_PER_SETTLE);
+    assert_eq!(r.len(), 10, "UNKNOWN_LENGTH_SECS x 10 = 30 min");
+}
+
+#[test]
+fn the_list_stays_bounded_over_a_day() {
+    let mut s = filled(40, 180.0);
+    let (player, _) = filler(&s);
+    let kept = s.config.automation.filler_played_kept as usize;
+    for _ in 0..500 {
+        next(&mut s, player);
+        assert!(rows(&s).len() <= kept + 10 + 1, "{}", rows(&s).len());
+    }
+}
+
+#[test]
+fn set_filler_rotation_regenerates_only_generated_rows() {
+    let mut s = filled(20, 180.0);
+    let before = rows(&s);
+    let other = {
+        apply(
+            &mut s,
+            Command::CreateRotation {
+                name: "Other".into(),
+                steps: vec![fp_model::RotationStep {
+                    source: fp_model::StepSource::Kind(fp_model::TrackKind::Music),
+                    min: 1,
+                    max: 1,
+                }],
+            },
+        )
+        .unwrap();
+        s.rotations.iter().last().unwrap().id
+    };
+    apply(&mut s, Command::SetFillerRotation(Some(other))).unwrap();
+    let after = rows(&s);
+    assert_eq!(after.len(), 10);
+    assert!(
+        after.iter().all(|e| !before.contains(e)),
+        "a stopped filler regenerates all"
+    );
+    assert_eq!(s.filler.as_ref().unwrap().rotation, Some(other));
+    assert_eq!(
+        apply(
+            &mut s,
+            Command::SetFillerRotation(Some(fp_model::RotationId(99_999)))
+        ),
+        Err(fp_model::ModelError::UnknownRotation(fp_model::RotationId(
+            99_999
+        )))
+    );
+}

@@ -266,6 +266,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::RemoveEntry(entry) => remove_entry(state, entry, &mut out)?,
         Command::MoveEntry { entry, to, index } => {
             state.playlists.move_entry(entry, to, index)?;
+            crate::filler::claim(state, entry);
             // Q8.4: a moved entry loses the start chosen for it.
             for p in &mut state.players {
                 if p.pending_start.is_some_and(|(e, _)| e == entry) {
@@ -334,6 +335,9 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         }
         Command::CreateRotation { name, steps } => crate::rotation::create(state, &name, steps)?,
         Command::UpdateRotation(rotation) => crate::rotation::update(state, rotation)?,
+        Command::SetFillerRotation(rotation) => {
+            crate::filler::set_rotation(state, rotation, &mut out)?
+        }
         Command::DeleteRotation(id) => crate::rotation::delete(state, id)?,
         Command::SetDefaultRotation(id) => crate::rotation::set_default(state, id)?,
         Command::RemoveTracks(tracks) => {
@@ -553,6 +557,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         }
     }
     fill_empty_next(state);
+    crate::filler::settle(state, &mut out);
     reconcile(state, &mut out);
     crate::live::dispatch_due(state, &mut out);
     Ok(out)
@@ -711,6 +716,7 @@ fn on_engine_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction
         } => crate::live::stream_rate(state, device, rate, refused),
     }
     fill_empty_next(state);
+    crate::filler::settle(state, &mut out);
     reconcile(state, &mut out);
     crate::live::dispatch_due(state, &mut out);
     out
