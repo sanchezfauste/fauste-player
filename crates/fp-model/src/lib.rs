@@ -62,10 +62,11 @@ pub use command::{
     SourceRequest, TransitionPlan,
 };
 pub use config::{
-    AnalysisSettings, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes, Config, ConfigWarning,
-    DeviceOverride, LibraryConfig, LibraryRoutes, Limits, LoudnessConfig, LoudnessReadout,
-    MeterBallistics, MeterConfig, MeterSettings, OutputDevice, OutputsConfig, OutputsView,
-    PlayerRoutes, PlayersConfig, Route, SAMPLE_RATE_RANGE, Tuning, UiConfig, WindowSystem,
+    AnalysisSettings, AutomationConfig, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes,
+    Config, ConfigWarning, DeviceOverride, LibraryConfig, LibraryRoutes, Limits, LoudnessConfig,
+    LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings, OutputDevice, OutputsConfig,
+    OutputsView, PlayerRoutes, PlayersConfig, Route, SAMPLE_RATE_RANGE, Tuning, UiConfig,
+    WindowSystem,
 };
 pub use cue_on_air::{CueConfirmation, CueOnAir, CueStopped, needs_confirmation};
 pub use device_offer::{
