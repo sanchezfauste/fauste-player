@@ -570,6 +570,40 @@ look follows the Nocturne design system):
 - The preview stops when the window closes (not when minimised), and a
   preview never runs after a restart (nothing goes on air by itself).
 
+### 8.5 Listening level (plan 11, desktop only)
+
+The operator sets how loud the preview sounds in their headphones or
+monitors from the app, without reaching for the hardware. It is a
+listening level only: it never changes a track (its file, its loudness
+normalization gain, its markers), a player, a player's CUE or the
+cartwall.
+
+- **LB58.** The preview bar ends, on its right, with the meter and a
+  volume fader drawn exactly as a desktop player's: the full meter with its
+  dB scale and loudness line, the hairline between them, and the fader with
+  its dB readout under it, its tooltip and its wheel. They replace the
+  small meter without a ruler (§8.4). The bar keeps its height; the
+  waveform gives up the width. Without a route (LB32) neither shows, as the
+  small meter today.
+- **LB59.** The fader sets the library CUE's volume, a linear gain in
+  0.0–1.0 with the players' fader law (`view::fader_from_gain`,
+  `view::gain_from_fader`); NaN is ignored and other values are clamped.
+  The change applies at once, also to a playing or paused preview, through
+  the library CUE's existing volume (§8.4 engine note). The meter reads the
+  preview after the fader, as a player's meter reads after its fader.
+- **LB60.** The level is the operator's, not a track's: it stays when the
+  preview switches track (LB34), stops or restarts, and it is saved with
+  the library window's state (`LibraryView`, lenient, default 1.0 = 0 dB)
+  and restored at start-up. A preview started after a restart plays at the
+  restored level.
+- **LB61.** Desktop only: the phone's pre-listen card (§11.3) has no fader
+  and keeps its meter as it is; the saved level still applies there. The
+  remote API and MIDI do not expose it (not built now).
+
+When the library CUE's route overlaps a Main (CA7, LB37), the fader also
+sets the level of that pre-listen on the on-air output: it is the same
+signal.
+
 ## 9. Settings (plan 3)
 
 - **Settings → Library:** the category tree with the same actions as the
@@ -926,6 +960,8 @@ agents work in parallel; expect rebases on `track.rs`, `playlist.rs` and
 7. **Phone follow-ups and device folders** — §11.2 (LB49–LB53).
 8. **Performance carry-overs** — no new rules (LB21 on re-read, LB53).
 9. **Phone pre-listen card** — §11.3 (LB54–LB57).
+10. **Carry-overs** — no new rules.
+11. **Library listening level** — §8.5 (LB58–LB61).
 
 ## 17. Documentation
 
