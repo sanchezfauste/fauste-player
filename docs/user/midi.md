@@ -24,7 +24,7 @@ sequencer (`/dev/snd/seq`, usually by being in the `audio` group).
 
 ## Binding a control
 
-For every player there is a row per action: **Play / Next**, **Pause**,
+For every player (P1 … Pn; the **Music** column has no bindings) there is a row per action: **Play / Next**, **Pause**,
 **Stop**, **Fade stop**, **Restart**, **Previous**, **CUE** and **Volume**.
 
 1. Click **Learn** on the row.

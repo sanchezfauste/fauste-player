@@ -24,6 +24,10 @@ list:
   with a hand and is never replaced; a row you remove does not count as
   played.
 
+Its outputs are set in Settings → Audio outputs, on the **Music** row, as
+for any player. It has no number, no keyboard shortcuts or MIDI bindings,
+and remote control does not see it.
+
 Press **Play** to start it and **Stop after current** to let the song on air
 end and stop. Like every player, it never starts by itself, not even after
 a restart.
