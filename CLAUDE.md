@@ -124,6 +124,33 @@ Progress ledgers live in `.superpowers/sdd/<plan>/progress.md` (git-ignored).
 Record every deviation from a plan as
 `Ruling: <decision> — <why> — <cost if wrong>`.
 
+### Hooks and project agents (`.claude/`)
+
+`.claude/settings.json` runs three hooks (bash and `jq`) in every Claude Code
+session in this repository:
+
+- `rustfmt-on-edit.sh` formats each `.rs` file an agent edits (not
+  `vendor/`), so `cargo fmt --all --check` stays clean.
+- `guard-protected-files.sh` refuses edits to `CHANGELOG.md` and
+  `.release-please-manifest.json` (release-please owns them), and asks before
+  an edit under `docs/i18n/` or `vendor/`.
+- `guard-confidential-names.sh` enforces rule 2: before a commit, a push, or
+  `gh` text goes out, it looks for the product names listed in a local file
+  (`$FAUSTE_FORBIDDEN_NAMES`, else `~/.config/fauste-player/forbidden-names.txt`;
+  one name per line, whole words, case-insensitive, `=` for case-sensitive).
+  That list is never committed; without it the hook does nothing.
+
+The guards see the edit tools and the commands named above, not files changed
+through a shell command. Personal hooks (such as the `target/` pruning) go in
+the git-ignored `.claude/settings.local.json`.
+
+Two read-only review agents live in `.claude/agents/`:
+
+| When | Agent |
+|---|---|
+| A diff touches code the device callback runs (mixer, sources, buses, meters, backend render) | `rt-safety-reviewer`: checks rule 5 on the callback's path |
+| Before opening a PR, and at the end of a plan | `docs-sync-checker`: checks the diff against "Documentation is part of every change" |
+
 ### Finding code
 
 When a local CodeGraph index exists (`.codegraph/` at the repo root,
@@ -217,6 +244,7 @@ hand: release-please writes it from the commits.
 | `packaging/`, `scripts/package/` | Icons, desktop entry, AppStream, Flatpak, WiX, MSIX and Info.plist, the AUR PKGBUILD template, the Google Play listing (`packaging/android/play`) and the fastlane that uploads it (`packaging/android/fastlane`); the per-format package scripts |
 | `snap/` | The snap recipe (`snapcraft.yaml`, where snapcraft looks for it) |
 | `site/`, `scripts/site/` | The landing page and privacy policy templates with their texts in `site/locales/<lang>.toml` (rendered by `scripts/site/landing.py`), and the scripts that build the website with the user guide (mdBook, pinned in `scripts/site/mdbook.sh`) |
+| `.claude/` | Claude Code project settings: the hooks (`settings.json`, `hooks/`) and the review agents (`agents/`); see "Hooks and project agents" |
 | `.github/workflows` | CI (with the SonarQube Cloud analysis and coverage; `sonar-project.properties`), Dependabot (`dependabot.yml`), release-please, release builds and packages, store publishing (`stores.yml`: Microsoft Store, Snap Store, Google Play, Flathub, WinGet, AUR), GitHub Pages, commit checks, screenshot retakes (`screenshots.yml` for `docs/images`, `play-screenshots.yml` for the Google Play listing); `.github/actions/apt-install`, the Ubuntu package install with its archives cached, used by every workflow that checks out its own commit |
 
 ## Design source
