@@ -55,6 +55,7 @@ mod reset_played;
 mod restore;
 mod reuse_tracks;
 mod review_fixes;
+mod rotation_cursor;
 mod rotations;
 mod selection;
 mod session;

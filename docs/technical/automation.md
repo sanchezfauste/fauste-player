@@ -75,3 +75,20 @@ The counts behind the percentage come from the pool's sorted air times
 (a binary search), so one choice is O(n log n) in the pool's size.
 `eligible` returns the tracks that meet both rules, in that order, for
 tests and for the editor.
+
+## Walking a rotation (`rotation_cursor.rs`)
+
+A `RotationCursor` (rotation, step, `left`, `fresh`) is where the filler
+stands in its rotation; it is plain data, saved with the filler.
+`next_track` moves it on and returns a `CursorPick`:
+
+- a fresh cursor starts at step 0; when a step has played its count, the
+  next step comes up (after the last, the first again), with a count drawn
+  afresh in its `min..=max` (AU2);
+- a step whose source yields nothing (a deleted or empty category, every
+  file missing) is skipped and listed in `skipped_steps` for the caller's
+  log; one call tries every step at most once;
+- an unknown rotation, one without steps, or one whose steps all came up
+  empty falls back on the default rotation through a cursor of its own, so
+  the caller's cursor keeps its place (`used_default`, AU34). With nothing
+  playable anywhere the result is `None`.
