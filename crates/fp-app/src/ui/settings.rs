@@ -1665,7 +1665,7 @@ fn players(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     let t = scene.i18n;
     let config = &scene.state.config;
     let max = config.limits.max_players;
-    let count = scene.state.players.len();
+    let count = scene.state.aux_players().count();
     let label = t.tr("settings-player-count");
     row(
         ui,

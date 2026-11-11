@@ -204,27 +204,32 @@ pub fn state(model: &AppState, playback: &Playback) -> StateDto {
 }
 
 pub fn players(model: &AppState, playback: &Playback) -> Vec<PlayerDto> {
+    // The music filler is not one of the numbered players.
     model
-        .players
-        .iter()
+        .aux_players()
         .enumerate()
         .map(|(i, p)| player_dto(model, playback, i, p))
         .collect()
 }
 
 pub fn player(model: &AppState, playback: &Playback, id: PlayerId) -> Option<PlayerDto> {
-    let i = model.player_index(id).ok()?;
-    model
-        .players
-        .get(i)
-        .map(|p| player_dto(model, playback, i, p))
+    let (i, p) = model.aux_players().enumerate().find(|(_, p)| p.id == id)?;
+    Some(player_dto(model, playback, i, p))
 }
 
 pub fn playlists(model: &AppState) -> Vec<PlaylistSummaryDto> {
-    model.playlists.iter().map(summary).collect()
+    model
+        .playlists
+        .iter()
+        .filter(|p| !model.is_filler_playlist(p.id))
+        .map(summary)
+        .collect()
 }
 
 pub fn playlist(model: &AppState, id: PlaylistId) -> Option<PlaylistDto> {
+    if model.is_filler_playlist(id) {
+        return None;
+    }
     let list = model.playlists.get(id)?;
     let entries = list
         .entries

@@ -124,7 +124,7 @@ pub(super) fn section(
             let _ = midi.requests.send(MidiRequest::Reconnect);
         }
     }
-    let players = scene.state.players.len() as u16;
+    let players = scene.state.aux_players().count() as u16;
     for n in 1..=players {
         ui.add_space(12.0);
         text(

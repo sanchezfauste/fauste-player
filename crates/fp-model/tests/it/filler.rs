@@ -49,3 +49,44 @@ fn filler_settings_defaults_and_ranges() {
     assert_eq!(c.automation.filler_lookahead_mins, 5);
     assert_eq!(c.automation.filler_played_kept, 1_000);
 }
+
+#[test]
+fn player_count_changes_leave_the_filler_last() {
+    let mut s = state();
+    ensure(&mut s, "Music filler");
+    let filler = s.filler.as_ref().unwrap().player;
+    fp_model::apply(&mut s, fp_model::Command::SetPlayerCount(2)).unwrap();
+    assert_eq!(s.players.last().unwrap().id, filler);
+    assert_eq!(s.aux_players().count(), 2);
+    assert_eq!(s.players.len(), 3);
+    fp_model::apply(&mut s, fp_model::Command::SetPlayerCount(5)).unwrap();
+    assert_eq!(s.players.last().unwrap().id, filler);
+    assert_eq!(s.aux_players().count(), 5);
+    assert_eq!(s.config.players.count, 5);
+}
+
+#[test]
+fn numbered_shortcuts_never_reach_the_filler() {
+    let mut s = state();
+    ensure(&mut s, "Music filler");
+    assert_eq!(s.aux_players().count(), 4);
+    assert_eq!(
+        fp_model::player_command(&s, fp_model::ShortcutAction::PlayPlayer(5)),
+        None
+    );
+    let first = s.players[0].id;
+    assert_eq!(
+        fp_model::player_command(&s, fp_model::ShortcutAction::PlayPlayer(1)),
+        Some(fp_model::Command::Play(first))
+    );
+}
+
+#[test]
+fn sessions_leave_the_filler_out() {
+    let mut s = state();
+    ensure(&mut s, "Music filler");
+    let filler = s.filler.as_ref().unwrap().player;
+    let sessions = s.sessions(|_| 0.0);
+    assert_eq!(sessions.len(), 4);
+    assert!(sessions.iter().all(|p| p.id != filler));
+}

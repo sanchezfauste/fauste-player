@@ -115,9 +115,9 @@ pub struct RestoreParts {
 }
 
 impl AppState {
+    /// The auxiliary players' sessions; the music filler is saved apart.
     pub fn sessions(&self, position_of: impl Fn(PlayerId) -> f64) -> Vec<PlayerSession> {
-        self.players
-            .iter()
+        self.aux_players()
             .map(|p| PlayerSession {
                 id: p.id,
                 playlist: p.playlist,

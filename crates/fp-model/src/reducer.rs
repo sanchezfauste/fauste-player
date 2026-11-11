@@ -1527,22 +1527,34 @@ fn set_player_count(
             max,
         });
     }
-    if count < state.players.len() {
-        if let Some(busy) = state.players[count..]
+    // Only the auxiliary players are counted; the music filler stays last.
+    let aux: Vec<PlayerId> = state.aux_players().map(|p| p.id).collect();
+    if count < aux.len() {
+        let leaving: Vec<PlayerId> = aux.get(count..).unwrap_or_default().to_vec();
+        if let Some(busy) = state
+            .players
             .iter()
+            .filter(|p| leaving.contains(&p.id))
             .find(|p| p.transport != Transport::Stopped || p.cue.is_some())
         {
             return Err(ModelError::PlayerBusy(busy.id));
         }
-        for p in state.players.drain(count..) {
-            out.push(EngineAction::RemovePlayer { player: p.id });
+        state.players.retain(|p| !leaving.contains(&p.id));
+        for player in leaving {
+            out.push(EngineAction::RemovePlayer { player });
         }
     } else {
-        let first = state.playlists.first_id().ok_or(ModelError::NoPlaylists)?;
+        let first = state
+            .playlists
+            .iter()
+            .map(|p| p.id)
+            .find(|id| !state.is_filler_playlist(*id))
+            .ok_or(ModelError::NoPlaylists)?;
         let mode = state.config.players.default_mode;
-        while state.players.len() < count {
+        for _ in aux.len()..count {
             let id = state.ids.player();
-            state.players.push(PlayerState::new(id, first, mode));
+            let at = state.players.len() - usize::from(state.filler.is_some());
+            state.players.insert(at, PlayerState::new(id, first, mode));
             out.push(EngineAction::AddPlayer { player: id });
         }
         fill_empty_next(state);
