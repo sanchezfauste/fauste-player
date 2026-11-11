@@ -119,8 +119,16 @@ impl AppState {
     }
 
     /// The players' ids in display order: what the layout helpers take.
+    /// The music filler's column comes first, left of P1 (automation spec
+    /// §8.1); it is last in `players`, so positional code is unchanged.
     pub fn player_ids(&self) -> Vec<PlayerId> {
-        self.players.iter().map(|p| p.id).collect()
+        let filler = self.filler.as_ref().map(|f| f.player);
+        filler.into_iter().chain(self.aux_player_ids()).collect()
+    }
+
+    /// The auxiliary players' ids, P1 first.
+    pub fn aux_player_ids(&self) -> Vec<PlayerId> {
+        self.aux_players().map(|p| p.id).collect()
     }
 
     pub fn track_for_entry(&self, entry: EntryId) -> Option<&Track> {

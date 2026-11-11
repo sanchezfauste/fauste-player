@@ -278,3 +278,17 @@ fn set_filler_rotation_regenerates_only_generated_rows() {
         )))
     );
 }
+
+// --- Task 5: display order and the hidden column ---
+
+#[test]
+fn the_filler_comes_first_in_display_order_and_starts_hidden() {
+    let mut s = state();
+    ensure(&mut s, "Music filler");
+    let f = s.filler.as_ref().unwrap().player;
+    let ids = s.player_ids();
+    assert_eq!(ids[0], f, "the Music column is left of P1");
+    assert_eq!(ids.len(), 5);
+    assert!(s.layout.hidden_players.contains(&f));
+    assert_eq!(s.aux_player_ids(), ids[1..].to_vec());
+}

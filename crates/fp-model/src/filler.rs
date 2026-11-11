@@ -40,6 +40,10 @@ pub fn ensure(state: &mut AppState, playlist_name: &str) -> Vec<EngineAction> {
         .players
         .push(PlayerState::new(player, playlist, PlayMode::Continuous));
     let cursor = RotationCursor::new(state.rotations.default_id().unwrap_or(RotationId(0)));
+    // A station that never automates never sees the Music column.
+    if !state.layout.hidden_players.contains(&player) {
+        state.layout.hidden_players.push(player);
+    }
     state.filler = Some(FillerState {
         player,
         playlist,

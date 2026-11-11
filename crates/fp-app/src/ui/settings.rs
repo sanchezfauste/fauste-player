@@ -1225,14 +1225,14 @@ fn outputs(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
     ui.add_space(12.0);
     caption(ui, &t.tr("settings-player-routes"));
     ui.add_space(4.0);
-    for (n, player) in scene.state.players.iter().enumerate() {
+    for player in scene.state.players.iter() {
         let routes = config
             .outputs
             .routes
             .iter()
             .find(|r| r.player == player.id)
             .cloned();
-        let label = t.tr_args("player-label", &[("n", (n + 1).into())]);
+        let label = super::player_name(t, scene.state, player.id);
         row(ui, &label, None, |ui| {
             ui.vertical(|ui| {
                 route_picker(

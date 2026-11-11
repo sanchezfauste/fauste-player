@@ -447,7 +447,7 @@ pub(crate) fn screen(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState)
             view_state.phone_library.back();
         }
     } else if bar {
-        let shown = view_state.phone.shown_player(&scene.state.player_ids());
+        let shown = view_state.phone.shown_player(&scene.state.aux_player_ids());
         let view = &mut view_state.music;
         let picked = Picked::Files(&mut view.ticked);
         selection_bar(ui, scene, picked, &mut view.target, shown, wide);
@@ -665,7 +665,7 @@ pub(crate) fn paint_lines(ui: &Ui, rect: Rect, right: f32, title: &str, artist: 
 fn target_name(scene: &Scene<'_>, player: PlayerId, playlist: PlaylistId) -> String {
     let index = scene
         .state
-        .player_ids()
+        .aux_player_ids()
         .iter()
         .position(|p| *p == player)
         .unwrap_or_default();
@@ -767,7 +767,7 @@ pub(crate) fn selection_bar(
         );
         let name = target_name(scene, player, playlist);
         ui.menu_button(egui::RichText::new(&name).font(font(13.0)), |ui| {
-            for p in state.player_ids() {
+            for p in state.aux_player_ids() {
                 for list in state.playlists.iter() {
                     let item = target_name(scene, p, list.id);
                     let on = (p, list.id) == (player, playlist);

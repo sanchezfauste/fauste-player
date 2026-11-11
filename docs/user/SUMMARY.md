@@ -8,6 +8,7 @@
 - [Cartwall](cartwall.md)
 - [Library](library.md)
 - [Layout](layout.md)
+- [Automation](automation.md)
 - [Markers and mixing](markers-and-mixing.md)
 - [Settings](settings.md)
 - [Loudness normalization](loudness.md)

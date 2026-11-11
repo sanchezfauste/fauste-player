@@ -22,6 +22,7 @@ mod external_editor;
 mod fade_countdown_ui;
 mod fader_readout_ui;
 mod fader_ui;
+mod filler_ui;
 mod frame_rate;
 mod glyphs;
 mod header_layout;

@@ -9,7 +9,7 @@ under them.
 
 ## Show and hide panels
 
-The tiles on the left of the top bar, **P1** … **Pn** and **Cartwall**, show
+The tiles on the left of the top bar, **Music** (the [music filler](automation.md), hidden until you show it), **P1** … **Pn** and **Cartwall**, show
 which panels are on screen: a lit tile is shown. Click a tile to hide or
 show its panel. With many players, the tiles scroll sideways (scroll the
 mouse wheel over them) and the layout button stays in view. The other panels take the room it leaves, and a player

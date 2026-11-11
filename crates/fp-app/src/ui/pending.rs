@@ -17,16 +17,18 @@ use crate::i18n::I18n;
 /// Names a device as the Settings pickers do; an unknown id as is.
 pub(crate) type DeviceNames<'a> = &'a dyn Fn(&OutputDevice) -> String;
 
+/// The 1-based number of an auxiliary player (0 for the music filler).
 pub(crate) fn player_number(state: &AppState, id: PlayerId) -> usize {
     state
-        .players
-        .iter()
+        .aux_players()
         .position(|p| p.id == id)
         .map_or(0, |i| i + 1)
 }
 
 fn holder_label(t: &I18n, state: &AppState, holder: Holder) -> String {
     match holder {
+        Holder::PlayerMain(p) if state.is_filler(p) => t.tr("holder-filler-main"),
+        Holder::PlayerCue(p) if state.is_filler(p) => t.tr("holder-filler-cue"),
         Holder::PlayerMain(p) => t.tr_args(
             "holder-player-main",
             &[("n", player_number(state, p).into())],
@@ -377,7 +379,7 @@ pub(crate) fn show_confirm(
     let interruptions = fp_model::interruptions(state);
     let faders_reset = fp_model::faders_reset_by(state)
         .into_iter()
-        .map(|p| t.tr_args("player-label", &[("n", player_number(state, p).into())]))
+        .map(|p| super::player_name(t, state, p))
         .collect::<Vec<_>>()
         .join(", ");
     let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 440.0);

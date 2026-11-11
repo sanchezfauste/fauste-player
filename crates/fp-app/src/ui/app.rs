@@ -313,7 +313,7 @@ impl Dropouts {
     }
 
     /// The alerts to show at `time`, players first, in a fixed order.
-    fn alerts(&self, time: f64, players: &[PlayerId], t: &I18n) -> Vec<String> {
+    fn alerts(&self, time: f64, state: &AppState, t: &I18n) -> Vec<String> {
         let mut active: Vec<_> = self
             .0
             .iter()
@@ -324,8 +324,9 @@ impl Dropouts {
             .into_iter()
             .filter_map(|(source, (count, _))| match source {
                 DropoutSource::Player(id) => {
-                    let n = players.iter().position(|p| p == id)? + 1;
-                    let player = t.tr_args("player-label", &[("n", n.into())]);
+                    // A player removed meanwhile has no alert.
+                    state.player(*id).ok()?;
+                    let player = super::player_name(t, state, *id);
                     Some(t.tr_args(
                         "alert-underruns",
                         &[("player", player.into()), ("count", (*count).into())],
@@ -2538,8 +2539,7 @@ fn status_alerts(scene: &Scene<'_>, view_state: &ViewState, faults: u64) -> Vec<
             )
         })
         .collect();
-    let ids: Vec<PlayerId> = scene.state.players.iter().map(|p| p.id).collect();
-    alerts.extend(view_state.dropouts.alerts(scene.time, &ids, t));
+    alerts.extend(view_state.dropouts.alerts(scene.time, scene.state, t));
     // MB4: playout goes on; the operator only learns why the phone may
     // be mixing another app in.
     if scene.platform.audio_focus_lost() {

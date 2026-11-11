@@ -633,7 +633,7 @@ fn tracks_page(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
         ui.ctx().request_repaint();
     }
     if bar && !tab.ticked.is_empty() {
-        let shown = view_state.phone.shown_player(&scene.state.player_ids());
+        let shown = view_state.phone.shown_player(&scene.state.aux_player_ids());
         let tab = &mut view_state.phone_library;
         let picked = music::Picked::Tracks(&mut tab.ticked);
         music::selection_bar(ui, scene, picked, &mut tab.target, shown, wide);

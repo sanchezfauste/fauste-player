@@ -266,7 +266,7 @@ pub(crate) fn screen_tiles(
 ) {
     let t = scene.i18n;
     ui.spacing_mut().item_spacing = vec2(TAB_GAP, 0.0);
-    let players = scene.state.player_ids();
+    let players = scene.state.aux_player_ids();
     let chips = landscape && phone.screen == PhoneScreen::Playlists && !players.is_empty();
     let icons = TABS.len() as f32 * (TARGET + TAB_GAP);
     // The chips keep room for two of them before the name takes any.
@@ -503,7 +503,7 @@ pub(crate) fn phone_middle(
     covers: &mut HashMap<TrackId, TextureHandle>,
     landscape: bool,
 ) {
-    let players = scene.state.player_ids();
+    let players = scene.state.aux_player_ids();
     view_state.phone.settle(&players);
     super::music::follow_request(view_state);
     super::phone_library::follow_screen(scene, view_state);
