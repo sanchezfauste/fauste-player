@@ -212,13 +212,7 @@ pub(crate) struct RowsCache {
 impl RowsCache {
     /// Whether the rows still hold for `state` and `query`.
     fn holds(&self, state: &AppState, query: &str) -> bool {
-        let view = &state.library_view;
-        self.library.shares_storage(&state.library)
-            && self.categories == state.categories
-            && self.selection == view.selection
-            && self.whole_library == view.whole_library
-            && self.sort == view.sort
-            && self.query == query
+        self.scope_holds(state) && self.query == query
     }
 
     /// Whether `ordered` still holds for `state`: all but the search.

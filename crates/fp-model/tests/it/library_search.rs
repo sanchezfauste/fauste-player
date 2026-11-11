@@ -617,3 +617,66 @@ fn a_small_change_to_50000_sorted_rows_takes_a_millisecond_or_two() {
     assert_eq!(got.map(|r| r.len()), Some(50_000));
     assert!(took.as_millis() < 3, "took {took:?}");
 }
+
+/// More of `update_ordered` against a computation from scratch: tracks
+/// without a value (an empty title sorts last both ways), the whole
+/// library, *Markers to review* when a flag comes and goes, and the
+/// Category column.
+#[test]
+fn update_ordered_matches_from_scratch_for_empty_values_scopes_and_columns() {
+    let cats = tree();
+    let mut old = ascii_library(300);
+    old.get_mut(TrackId(20)).unwrap().title = String::new();
+    old.get_mut(TrackId(21)).unwrap().markers_review = Some(fp_model::MarkersReview {
+        dropped: Vec::new(),
+    });
+    let mut new = old.clone();
+    new.get_mut(TrackId(22)).unwrap().title = String::new();
+    new.get_mut(TrackId(20)).unwrap().title = "Back again".into();
+    new.get_mut(TrackId(21)).unwrap().markers_review = None;
+    new.get_mut(TrackId(23)).unwrap().markers_review = Some(fp_model::MarkersReview {
+        dropped: Vec::new(),
+    });
+    new.get_mut(TrackId(24)).unwrap().category = None;
+    new.insert(track(900, "/m/untitled.mp3", "", "", Some(100)));
+    let columns = [
+        LibraryColumn::Tag(TableColumn::Title),
+        LibraryColumn::Category,
+    ];
+    let scopes = [
+        (LibrarySelection::All, false),
+        (LibrarySelection::Category(CategoryId(102)), true),
+        (LibrarySelection::MarkersToReview, false),
+        (LibrarySelection::Uncategorised, false),
+    ];
+    for column in columns {
+        for (selection, whole) in scopes {
+            for ascending in [true, false] {
+                let scratch = |lib: &Library, keys: &SortKeys| {
+                    let mut rows =
+                        library_rows(lib, &cats, &SearchIndex::default(), selection, whole, "");
+                    sort_rows_by(&mut rows, keys, ascending);
+                    rows
+                };
+                let mut keys = SortKeys::build(&old, &cats, column);
+                let before = scratch(&old, &keys);
+                keys.update(&old, &new, &cats);
+                let got = update_ordered(
+                    &before,
+                    &old,
+                    &new,
+                    &cats,
+                    selection,
+                    whole,
+                    Some((&keys, ascending)),
+                );
+                let want = scratch(&new, &keys);
+                assert_eq!(
+                    got,
+                    Some(want),
+                    "{column:?} {selection:?} {whole} {ascending}"
+                );
+            }
+        }
+    }
+}
