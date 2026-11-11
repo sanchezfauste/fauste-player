@@ -844,6 +844,7 @@ kind-jingle = Jingle
 kind-effect = Effect
 kind-ad = Ad
 kind-voice = Voice
+kind-hourly-id = Hourly ID
 library-dialog-new-title = New category
 library-dialog-new-sub-title = New subcategory of “{ $parent }”
 library-dialog-rename-title = Rename “{ $name }”

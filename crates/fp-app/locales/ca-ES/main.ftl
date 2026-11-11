@@ -844,6 +844,7 @@ kind-jingle = Jingle
 kind-effect = Efecte
 kind-ad = Anunci
 kind-voice = Veu
+kind-hourly-id = Indicatiu horari
 library-dialog-new-title = Nova categoria
 library-dialog-new-sub-title = Nova subcategoria de «{ $parent }»
 library-dialog-rename-title = Canvia el nom de «{ $name }»

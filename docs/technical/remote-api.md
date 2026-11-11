@@ -80,7 +80,7 @@ next) and `cued_on` (players pre-listening it).
 | Field | Meaning |
 |---|---|
 | `id`, `title`, `artist`, `album`, `duration_secs` | |
-| `kind` | `music`, `jingle`, `effect`, `ad` or `voice` |
+| `kind` | `music`, `jingle`, `effect`, `ad`, `voice` or `hourly_id` |
 | `file_state` | `ok`, `missing` or `unreadable` |
 | `analyzed` | Whether background analysis has finished |
 | `format` | `null` or `{sample_rate, channels, bits, bitrate}`; `bitrate` is the average bit rate in bit/s, `null` when unknown (an older analysis until the bit-rate-only pass reads it, or a file that reports none) and for DSD |

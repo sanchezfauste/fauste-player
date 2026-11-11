@@ -844,6 +844,7 @@ kind-jingle = Jingle
 kind-effect = Efektua
 kind-ad = Iragarkia
 kind-voice = Ahotsa
+kind-hourly-id = Orduko identifikazioa
 library-dialog-new-title = Kategoria berria
 library-dialog-new-sub-title = «{ $parent }» kategoriaren azpikategoria berria
 library-dialog-rename-title = Aldatu «{ $name }» kategoriaren izena

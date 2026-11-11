@@ -250,6 +250,7 @@ fn kind_rank(kind: TrackKind) -> u64 {
         TrackKind::Effect => 2,
         TrackKind::Ad => 3,
         TrackKind::Voice => 4,
+        TrackKind::HourlyId => 5,
     }
 }
 

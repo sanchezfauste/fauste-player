@@ -844,6 +844,7 @@ kind-jingle = Jingle
 kind-effect = Effect
 kind-ad = Reclame
 kind-voice = Stem
+kind-hourly-id = Uurmelding
 library-dialog-new-title = Nieuwe categorie
 library-dialog-new-sub-title = Nieuwe subcategorie van ‘{ $parent }’
 library-dialog-rename-title = Naam van ‘{ $name }’ wijzigen

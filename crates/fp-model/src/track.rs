@@ -19,6 +19,9 @@ pub enum TrackKind {
     Effect,
     Ad,
     Voice,
+    /// The station's hourly identification: automation treats an item of
+    /// this kind as time-critical (automation spec AU7, AU30).
+    HourlyId,
 }
 
 /// Whether the file behind a track can currently be played.

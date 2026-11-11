@@ -463,6 +463,7 @@ fn track_kind_name(k: TrackKind) -> &'static str {
         TrackKind::Effect => "effect",
         TrackKind::Ad => "ad",
         TrackKind::Voice => "voice",
+        TrackKind::HourlyId => "hourly_id",
     }
 }
 
