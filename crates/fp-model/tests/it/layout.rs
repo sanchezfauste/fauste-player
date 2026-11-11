@@ -607,6 +607,7 @@ fn restore_with(state: &AppState, layout: Layout) -> AppState {
     let parts = RestoreParts {
         rotations: Default::default(),
         air_times: Default::default(),
+        filler: None,
         library_view: Default::default(),
         config: state.config.clone(),
         library: state.library.clone(),

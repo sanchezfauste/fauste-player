@@ -400,6 +400,7 @@ fn read_documents(paths: &AppPaths, limits: &Limits, warnings: &mut Vec<String>)
             rotations: Vec::new(),
             default_rotation: None,
             air_times: Default::default(),
+            filler: None,
         },
         any_read,
         unread,

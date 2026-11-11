@@ -245,3 +245,32 @@ pub(crate) fn claim(state: &mut AppState, entry: EntryId) {
         f.generated.remove(&entry);
     }
 }
+
+/// What is saved of the filler (`kv` value `filler`).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct FillerSession {
+    pub player: crate::session::PlayerSession,
+    pub playlist: PlaylistId,
+    #[serde(default)]
+    pub rotation: Option<RotationId>,
+    pub cursor: RotationCursor,
+    #[serde(default)]
+    pub generated: Vec<EntryId>,
+}
+
+impl AppState {
+    /// The filler as saved; `position_of` gives its playback position.
+    pub fn filler_session(&self, position_of: impl Fn(PlayerId) -> f64) -> Option<FillerSession> {
+        let f = self.filler.as_ref()?;
+        let player = self.players.iter().find(|p| p.id == f.player)?;
+        let mut generated: Vec<EntryId> = f.generated.iter().copied().collect();
+        generated.sort();
+        Some(FillerSession {
+            player: crate::session::session_of(player, &position_of),
+            playlist: f.playlist,
+            rotation: f.rotation,
+            cursor: f.cursor.clone(),
+            generated,
+        })
+    }
+}

@@ -960,6 +960,7 @@ fn n13_crash_recovery_computes_the_gain_again() {
     let parts = fp_model::RestoreParts {
         rotations: Default::default(),
         air_times: Default::default(),
+        filler: None,
         library_view: Default::default(),
         config: s.config.clone(),
         library: s.library.clone(),

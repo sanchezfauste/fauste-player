@@ -324,6 +324,7 @@ fn restore(
         rotations,
         default_rotation,
         air_times,
+        filler,
     } = snap;
     // RL19: the restore repairs the layout; a copy says what it repaired.
     let saved_layout = layout.clone();
@@ -358,6 +359,7 @@ fn restore(
             ids,
             rotations: fp_model::Rotations::from_parts(rotations, default_rotation),
             air_times,
+            filler,
         },
         &sessions,
         default_playlist_name,

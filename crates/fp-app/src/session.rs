@@ -59,6 +59,12 @@ impl AppSession {
             &mut loaded.state,
             &I18n::new(None).tr("rotation-default-name"),
         );
+        // AU27: the music filler's player, added to the engine with the
+        // others by `Conductor::new`.
+        let _ = fp_model::filler::ensure(
+            &mut loaded.state,
+            &I18n::new(None).tr("filler-playlist-name"),
+        );
         for warning in &loaded.warnings {
             tracing::warn!(%warning, "while loading the saved state");
         }

@@ -114,6 +114,7 @@ fn rich() -> Snapshot {
         rotations: Vec::new(),
         default_rotation: None,
         air_times: Default::default(),
+        filler: None,
     }
 }
 

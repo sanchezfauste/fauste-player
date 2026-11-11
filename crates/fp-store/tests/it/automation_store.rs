@@ -143,3 +143,73 @@ fn a_schema_2_database_migrates_to_3_with_no_rotations() {
     );
     assert_eq!(count(&s, "PRAGMA user_version"), 3);
 }
+
+/// A state with the default rotation, music tracks and a filler that has
+/// played two rows.
+fn with_filler() -> AppState {
+    let mut state = AppState::new(Config::default(), "Main");
+    ensure_default(&mut state, "Music");
+    state.config.automation.track_separation_mins = 0;
+    state.config.automation.track_separation_percent = 0;
+    state.config.automation.artist_separation_mins = 0;
+    for n in 0..20 {
+        let id = state.ids.track();
+        let mut t = Track::new(id, PathBuf::from(format!("/m/{n}.wav")));
+        t.duration_secs = 180.0;
+        state.library.insert(t);
+    }
+    fp_model::filler::ensure(&mut state, "Music filler");
+    let player = state.filler.as_ref().unwrap().player;
+    for _ in 0..2 {
+        apply(&mut state, Command::Play(player)).unwrap();
+        fp_model::on_event(&mut state, fp_model::EngineEvent::FadeCompleted { player });
+    }
+    state
+}
+
+#[test]
+fn the_filler_round_trips_not_playing_with_its_list() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = with_filler();
+    let saved = state.filler.clone().unwrap();
+    let saved_rows = state.playlists.get(saved.playlist).unwrap().entries.clone();
+    save_all(&mut s, &state, 0.0);
+    let loaded = store(&dir).load("Main");
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    let back = loaded.state.filler.clone().unwrap();
+    assert_eq!(back.player, saved.player);
+    assert_eq!(back.playlist, saved.playlist);
+    assert_eq!(back.generated, saved.generated);
+    assert_eq!(back.rotation, saved.rotation);
+    assert_eq!(back.cursor, saved.cursor);
+    let player = loaded.state.players.last().unwrap();
+    assert_eq!(player.id, saved.player);
+    assert_ne!(player.transport, fp_model::Transport::Playing);
+    assert_eq!(
+        loaded.state.playlists.get(saved.playlist).unwrap().entries,
+        saved_rows
+    );
+    assert_eq!(loaded.state.aux_players().count(), 4);
+}
+
+#[test]
+fn a_lost_filler_record_degrades_to_an_ordinary_playlist() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let state = with_filler();
+    let old = state.filler.clone().unwrap();
+    save_all(&mut s, &state, 0.0);
+    edit_db(&s, |db| {
+        db.conn()
+            .execute("DELETE FROM kv WHERE key = 'filler'", [])
+            .unwrap();
+    });
+    let mut loaded = store(&dir).load("Main");
+    assert!(loaded.state.filler.is_none());
+    assert!(loaded.state.playlists.get(old.playlist).is_some());
+    fp_model::filler::ensure(&mut loaded.state, "Music filler");
+    let new = loaded.state.filler.clone().unwrap();
+    assert_ne!(new.playlist, old.playlist);
+    assert!(!loaded.state.is_filler_playlist(old.playlist));
+}

@@ -48,6 +48,7 @@ fn state_of_fixtures() -> AppState {
         RestoreParts {
             rotations: Default::default(),
             air_times: Default::default(),
+            filler: None,
             library_view: Default::default(),
             config: Config::default(),
             library: lists.library,

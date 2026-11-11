@@ -112,30 +112,15 @@ pub struct RestoreParts {
     /// When each track last aired (AU35); times of tracks not in `library`
     /// are dropped.
     pub air_times: crate::air_times::AirTimes,
+    /// The music filler as saved (AU27); restored last, not playing.
+    pub filler: Option<crate::filler::FillerSession>,
 }
 
 impl AppState {
     /// The auxiliary players' sessions; the music filler is saved apart.
     pub fn sessions(&self, position_of: impl Fn(PlayerId) -> f64) -> Vec<PlayerSession> {
         self.aux_players()
-            .map(|p| PlayerSession {
-                id: p.id,
-                playlist: p.playlist,
-                current: p.current,
-                next: p.next,
-                next_explicit: p.next_explicit,
-                mode: p.mode,
-                stop_after_current: p.stop_after_current,
-                position_secs: if p.current.is_some() {
-                    position_of(p.id)
-                } else {
-                    0.0
-                },
-                volume: p.volume,
-                columns: p.columns.clone(),
-                history: p.history.clone(),
-                pending_start: p.pending_start,
-            })
+            .map(|p| session_of(p, &position_of))
             .collect()
     }
 
@@ -158,6 +143,7 @@ impl AppState {
             mut ids,
             rotations,
             mut air_times,
+            filler,
         } = parts;
         ids.observe(library.max_raw_id());
         ids.observe(rotations.max_raw_id());
@@ -220,6 +206,7 @@ impl AppState {
             };
             state.players.push(player);
         }
+        restore_filler(&mut state, filler);
         // RL19: the saved layout, repaired for the players this start has
         // (`fp-store` reports the repairs).
         state.layout = layout;
@@ -275,6 +262,61 @@ impl AppState {
         reconcile(&mut state, &mut out);
         (state, out)
     }
+}
+
+/// What is saved of `p`.
+pub(crate) fn session_of(p: &PlayerState, position_of: &impl Fn(PlayerId) -> f64) -> PlayerSession {
+    PlayerSession {
+        id: p.id,
+        playlist: p.playlist,
+        current: p.current,
+        next: p.next,
+        next_explicit: p.next_explicit,
+        mode: p.mode,
+        stop_after_current: p.stop_after_current,
+        position_secs: if p.current.is_some() {
+            position_of(p.id)
+        } else {
+            0.0
+        },
+        volume: p.volume,
+        columns: p.columns.clone(),
+        history: p.history.clone(),
+        pending_start: p.pending_start,
+    }
+}
+
+/// AU27: the saved filler, last of the players. A record whose playlist is
+/// gone, or whose player id is already taken, is dropped: `filler::ensure`
+/// then makes a new one.
+fn restore_filler(state: &mut AppState, saved: Option<crate::filler::FillerSession>) {
+    let Some(saved) = saved else {
+        return;
+    };
+    let Some(list) = state.playlists.get(saved.playlist) else {
+        return;
+    };
+    if state.players.iter().any(|p| p.id == saved.player.id) {
+        return;
+    }
+    let rows: std::collections::HashSet<EntryId> = list.entries.iter().map(|e| e.id).collect();
+    let mut player = restore_player(state, &saved.player);
+    player.playlist = saved.playlist;
+    player.mode = PlayMode::Continuous;
+    state.ids.observe(player.id.0);
+    state.players.push(player.clone());
+    state.filler = Some(crate::filler::FillerState {
+        player: player.id,
+        playlist: saved.playlist,
+        rotation: saved.rotation.filter(|r| state.rotations.get(*r).is_some()),
+        cursor: saved.cursor,
+        generated: saved
+            .generated
+            .into_iter()
+            .filter(|e| rows.contains(e))
+            .collect(),
+        starved: false,
+    });
 }
 
 fn first_playlist(state: &AppState) -> PlaylistId {

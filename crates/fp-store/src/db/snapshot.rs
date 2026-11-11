@@ -25,6 +25,7 @@ const KV_CARTWALL: &str = "cartwall_session";
 const KV_LAYOUT: &str = "layout";
 const KV_LIBRARY_VIEW: &str = "library_view";
 const KV_DEFAULT_ROTATION: &str = "default_rotation";
+const KV_FILLER: &str = "filler";
 
 /// Everything the database holds, as plain model values.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -44,6 +45,8 @@ pub struct Snapshot {
     pub default_rotation: Option<RotationId>,
     /// When each track last aired (schema 3).
     pub air_times: AirTimes,
+    /// The music filler (`kv` value `filler`); `None` before it exists.
+    pub filler: Option<fp_model::filler::FillerSession>,
 }
 
 impl Snapshot {
@@ -55,7 +58,7 @@ impl Snapshot {
             categories: state.categories.clone().into_vec(),
             playlists: state.playlists.clone(),
             ids: state.ids.clone(),
-            players: state.sessions(position_of),
+            players: state.sessions(&position_of),
             cartwall: state.cartwall.session(),
             layout: state.layout.clone(),
             library_view: state.library_view.clone(),
@@ -63,6 +66,7 @@ impl Snapshot {
             rotations: state.rotations.iter().cloned().collect(),
             default_rotation: state.rotations.default_id(),
             air_times: state.air_times.clone(),
+            filler: state.filler_session(&position_of),
         }
     }
 }
@@ -130,6 +134,7 @@ pub fn read_checked(db: &Db) -> Read {
         rotations: read_rotations(conn, &mut warnings),
         default_rotation: read_kv(conn, KV_DEFAULT_ROTATION, "default rotation", &mut warnings),
         air_times: AirTimes::default(),
+        filler: read_kv(conn, KV_FILLER, "music filler", &mut warnings),
     };
     let mut snapshot = snapshot;
     snapshot.air_times = read_air_times(conn, &snapshot.library, &mut warnings);
@@ -755,6 +760,7 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
     }
     write_kv(&tx, KV_DEFAULT_ROTATION, &snap.default_rotation)?;
     write_air_times(&tx, &AirTimes::default(), &snap.air_times)?;
+    write_kv(&tx, KV_FILLER, &snap.filler)?;
     tx.commit().map_err(db_error)
 }
 
@@ -888,6 +894,9 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
         write_kv(&tx, KV_DEFAULT_ROTATION, &new.default_rotation)?;
     }
     write_air_times(&tx, &old.air_times, &new.air_times)?;
+    if old.filler != new.filler {
+        write_kv(&tx, KV_FILLER, &new.filler)?;
+    }
     tx.commit().map_err(db_error)
 }
 

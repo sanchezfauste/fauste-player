@@ -56,7 +56,12 @@ transaction. The tables:
 | `air_times` | `track` and `at` (schema 3): when each track last aired, UTC Unix milliseconds. A row of a track not in the library is dropped on load |
 
 The default rotation is the `kv` value `default_rotation` (a rotation id,
-or null); one that names no rotation falls back on the first. The session's cartwall state and its layout (`player_shares`,
+or null); one that names no rotation falls back on the first. The music filler is the `kv` value `filler`: its player's session (as a
+`players` row would hold it), its playlist (an ordinary `playlists` row,
+listed nowhere), its rotation, its rotation cursor and the rows it
+generated. It comes back last of the players and not playing; a record
+whose playlist is gone is dropped, its playlist then shows as an ordinary
+one, and a new filler is made at start. The session's cartwall state and its layout (`player_shares`,
 `hidden_players`, the cartwall's dock and size, `locked`, `touch_locked`,
 and `cue_window`, the CUE windows' content size) are JSON values
 in `kv`. A `doc` column holds the model value's JSON, and the key columns

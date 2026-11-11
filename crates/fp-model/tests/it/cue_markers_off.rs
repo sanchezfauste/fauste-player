@@ -264,6 +264,7 @@ fn a_restored_position_past_the_end_comes_back_at_the_start_of_the_range() {
         let parts = RestoreParts {
             rotations: Default::default(),
             air_times: Default::default(),
+            filler: None,
             library_view: Default::default(),
             config: state.config.clone(),
             library: state.library.clone(),
