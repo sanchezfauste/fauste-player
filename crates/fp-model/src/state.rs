@@ -33,6 +33,14 @@ pub struct AppState {
     pub library_view: crate::library_view::LibraryView,
     /// The library window pre-listen (library plan 4); runtime only.
     pub library_cue: crate::library_cue::LibraryCue,
+    /// When each track last aired (automation spec AU35), saved.
+    pub air_times: crate::air_times::AirTimes,
+    /// The wall clock, set by the conductor every tick (by tests directly);
+    /// runtime only.
+    pub wall_now: crate::wall_time::WallTime,
+    /// The random generator of automation's choices, seeded by the
+    /// conductor; runtime only.
+    pub rng: crate::wall_time::SplitMix64,
 }
 
 impl AppState {
@@ -68,6 +76,9 @@ impl AppState {
             layout: crate::layout::Layout::default(),
             library_view: crate::library_view::LibraryView::default(),
             library_cue: crate::library_cue::LibraryCue::default(),
+            air_times: crate::air_times::AirTimes::default(),
+            wall_now: crate::wall_time::WallTime::default(),
+            rng: crate::wall_time::SplitMix64::default(),
         }
     }
 

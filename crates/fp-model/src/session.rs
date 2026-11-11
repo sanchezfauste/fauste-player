@@ -194,6 +194,9 @@ impl AppState {
             library_cue: crate::library_cue::LibraryCue::default(),
             layout: Layout::default(),
             library_view: crate::library_view::LibraryView::default(),
+            air_times: crate::air_times::AirTimes::default(),
+            wall_now: crate::wall_time::WallTime::default(),
+            rng: crate::wall_time::SplitMix64::default(),
         };
         // One track per file (LB14): a library saved before that rule, or
         // by a buggy build, may hold several. Unreferenced tracks stay (LB15).

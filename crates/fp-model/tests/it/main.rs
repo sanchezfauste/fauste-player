@@ -4,6 +4,7 @@
 //! tracing subscriber) keep their own binary next to this directory.
 
 mod after_next;
+mod air_times;
 mod analysis;
 mod audio_change;
 mod automation_config;

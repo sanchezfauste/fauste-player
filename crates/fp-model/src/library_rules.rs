@@ -38,6 +38,7 @@ pub(crate) fn release_tracks(
             && !state.playlists.references_track(id)
             && !state.cartwall.references_track(id);
         if leaves && let Some(track) = state.library.remove(id) {
+            state.air_times.remove(id);
             out.push(EngineAction::TrackLeftLibrary {
                 track: id,
                 path: track.path,
@@ -139,8 +140,13 @@ pub(crate) fn merge_duplicate_paths(state: &mut AppState) -> usize {
             cart.track = Some(*to);
         }
     }
-    for id in replaced.keys() {
+    for (id, to) in &replaced {
         state.library.remove(*id);
+        // The survivor keeps the later of the two air times (AU35).
+        if let Some(at) = state.air_times.get(*id) {
+            state.air_times.remove(*id);
+            state.air_times.record(*to, at);
+        }
     }
     // `remove` unindexed only the paths it owned: index the survivors again.
     let survivors: Vec<_> = replaced.values().copied().collect();
@@ -307,6 +313,7 @@ pub(crate) fn remove_tracks(
     crate::cart_rules::empty_carts_of(state, &set, out);
     for id in set {
         state.library.remove(id);
+        state.air_times.remove(id);
     }
     crate::reducer::refresh_next(state);
     Ok(())

@@ -2,6 +2,7 @@
 //! and the pure state machine that implements the player behaviour rules.
 //! This crate performs no I/O and spawns no threads.
 
+pub mod air_times;
 pub mod audio_change;
 pub mod availability;
 pub mod bit_perfect;
@@ -44,7 +45,9 @@ mod tag_edit;
 mod tag_sheet;
 pub mod track;
 pub mod volume;
+pub mod wall_time;
 
+pub use air_times::AirTimes;
 pub use audio_change::{AudioChange, audio_change};
 pub use availability::{Availability, availability, command_available};
 pub use bit_perfect::{bit_perfect_player, fader_locked, faders_reset_by, rate_cut};
@@ -126,3 +129,4 @@ pub use track::{
     MarkerKind, MarkerSource, Markers, MarkersReview, PlayRange, Track, TrackAnalysis, TrackKind,
     TrackTags, parse_tag_date,
 };
+pub use wall_time::{SplitMix64, WallTime};

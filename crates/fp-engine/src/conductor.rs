@@ -13,7 +13,7 @@ use arc_swap::ArcSwap;
 use crossbeam_channel::{Receiver, Sender, TrySendError};
 use fp_model::{
     AppState, CartId, Command, EngineAction, EngineEvent, EntryId, ModelError, PlayerId, Route,
-    TrackId, apply, on_event,
+    SplitMix64, TrackId, WallTime, apply, on_event,
 };
 
 use crate::bus::BusKey;
@@ -293,15 +293,28 @@ impl Drop for ConductorHandle {
     }
 }
 
+/// A seed for automation's random generator: the clock's nanoseconds,
+/// never 0.
+fn random_seed() -> u64 {
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0);
+    nanos | 1
+}
+
 impl Conductor {
     /// Takes over `state` (typically restored from disk) and runs the
     /// `initial` actions that came with it (e.g. `LoadPaused`).
     pub fn new(
-        state: AppState,
+        mut state: AppState,
         initial: Vec<EngineAction>,
         mut engine: Engine,
         now: Instant,
     ) -> (Conductor, ConductorHandle) {
+        // Automation's choices differ from one run to the next.
+        state.wall_now = WallTime::now();
+        state.rng = SplitMix64(random_seed());
         for player in &state.players {
             engine.execute(EngineAction::AddPlayer { player: player.id }, now);
         }
@@ -371,6 +384,8 @@ impl Conductor {
 
     /// One iteration: commands, engine, events, snapshots.
     pub fn tick(&mut self, now: Instant) {
+        // The model never reads the clock: it is told the time here.
+        self.state.wall_now = WallTime::now();
         let mut changed = false;
         let mut refused = false;
         // The operator's commands first, then the background work waiting.

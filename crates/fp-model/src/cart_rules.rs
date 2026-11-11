@@ -66,6 +66,7 @@ pub(crate) fn fire(
             stop_playing(state, other, out);
         }
     }
+    crate::air_times::record_track(state, request.track);
     state.cartwall.playing.push(PlayingCart {
         cart: id,
         looped: cart.looped,

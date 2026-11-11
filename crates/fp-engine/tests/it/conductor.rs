@@ -1152,3 +1152,22 @@ fn operator_commands_go_before_background_work() {
     let volume = handle.model.load().player(p).unwrap().volume;
     assert_eq!(volume, 0.5, "the background command came second");
 }
+
+#[test]
+fn every_tick_sets_the_wall_clock() {
+    let (mut conductor, _handle, _device, now) = offline_conductor(model(1, 1));
+    let before = fp_model::WallTime::now();
+    conductor.tick(now);
+    let after = fp_model::WallTime::now();
+    let wall = conductor.state().wall_now;
+    assert!(
+        before <= wall && wall <= after,
+        "{before:?} <= {wall:?} <= {after:?}"
+    );
+}
+
+#[test]
+fn the_conductor_seeds_the_random_generator() {
+    let (conductor, _handle, _device, _now) = offline_conductor(model(1, 1));
+    assert_ne!(conductor.state().rng, fp_model::SplitMix64::default());
+}

@@ -1580,6 +1580,7 @@ pub(crate) fn advance_to(
 ) -> Option<SourceRequest> {
     let holder = Holder::PlayerMain(state.players[i].id);
     let request = state.request_from_cue_in(target, holder)?;
+    crate::air_times::record_track(state, request.track);
     if let Some(current) = state.players[i].current {
         let player = state.players[i].id;
         state.playlists.mark_played(current, player);
