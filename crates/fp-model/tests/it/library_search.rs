@@ -5,8 +5,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 
 use fp_model::library_search::{
-    SearchIndex, SortKeys, category_counts, fold, library_rows, query_words, sort_rows,
-    sort_rows_by,
+    SearchIndex, SortKeys, category_counts, filter_rows, fold, library_rows, query_words,
+    sort_rows, sort_rows_by, update_ordered,
 };
 use fp_model::{
     Categories, Category, CategoryId, Library, LibraryColumn, LibrarySelection, LibrarySort,
@@ -476,4 +476,144 @@ fn sort_keys_of_50000_tracks_take_less_than_a_frame() {
     let took = started.elapsed();
     eprintln!("sort keys of 50 000 tracks: {took:?}");
     assert!(took.as_millis() < 10, "took {took:?}");
+}
+
+/// A search over rows already in order keeps their order and lists what a
+/// search from scratch lists.
+#[test]
+fn filter_rows_keeps_the_order_and_lists_what_library_rows_lists() {
+    let lib = ascii_library(500);
+    let cats = tree();
+    let index = SearchIndex::build(&lib);
+    let keys = SortKeys::build(&lib, &cats, LibraryColumn::Tag(TableColumn::Title));
+    let mut ordered = library_rows(&lib, &cats, &index, LibrarySelection::All, true, "");
+    sort_rows_by(&mut ordered, &keys, false);
+    for query in ["", "song 1", "ARTIST 9", "nothing", "folder 3 song"] {
+        let got = filter_rows(&ordered, &index, query);
+        let mut want = library_rows(&lib, &cats, &index, LibrarySelection::All, true, query);
+        sort_rows_by(&mut want, &keys, false);
+        assert_eq!(got, want, "{query:?}");
+    }
+}
+
+/// A key typed in the search of 50 000 sorted tracks costs a few
+/// milliseconds: the rows in order are filtered, not sorted again.
+#[test]
+#[cfg_attr(debug_assertions, ignore)]
+fn typing_over_50000_sorted_tracks_takes_a_few_milliseconds() {
+    let lib = ascii_library(50_000);
+    let cats = tree();
+    let index = SearchIndex::build(&lib);
+    let keys = SortKeys::build(&lib, &cats, LibraryColumn::Tag(TableColumn::Title));
+    let mut ordered = library_rows(&lib, &cats, &index, LibrarySelection::All, true, "");
+    sort_rows_by(&mut ordered, &keys, true);
+    let started = Instant::now();
+    let got = filter_rows(&ordered, &index, "song 1");
+    let took = started.elapsed();
+    eprintln!("a key over 50 000 sorted tracks: {took:?}");
+    assert!(!got.is_empty());
+    assert!(took.as_millis() < 6, "took {took:?}");
+}
+
+/// The scope's rows in order, computed from scratch.
+fn ordered_from_scratch(
+    lib: &Library,
+    cats: &Categories,
+    selection: LibrarySelection,
+    sort: Option<(&SortKeys, bool)>,
+) -> Vec<TrackId> {
+    let mut rows = library_rows(lib, cats, &SearchIndex::default(), selection, false, "");
+    if let Some((keys, ascending)) = sort {
+        sort_rows_by(&mut rows, keys, ascending);
+    }
+    rows
+}
+
+/// LB31 at scale: after a small library change the rows in order are
+/// patched, and they are the rows a computation from scratch gives, for
+/// every kind of change, with and without a sort.
+#[test]
+fn update_ordered_matches_a_computation_from_scratch() {
+    let cats = tree();
+    let old = ascii_library(400);
+    let title = LibraryColumn::Tag(TableColumn::Title);
+    let mut new = old.clone();
+    // Retitled (moves), moved into and out of the scope, added, removed.
+    new.get_mut(TrackId(7)).unwrap().title = "Aaa first".into();
+    new.get_mut(TrackId(8)).unwrap().title = "Zzz last".into();
+    new.get_mut(TrackId(9)).unwrap().category = Some(CategoryId(102));
+    new.get_mut(TrackId(10)).unwrap().category = Some(CategoryId(101));
+    new.insert(track(1000, "/m/new.mp3", "Middle song", "", Some(101)));
+    new.insert(track(1001, "/m/out.mp3", "Out of scope", "", Some(102)));
+    new.remove(TrackId(11));
+    new.remove(TrackId(12));
+    for selection in [
+        LibrarySelection::All,
+        LibrarySelection::Category(CategoryId(100)),
+        LibrarySelection::Uncategorised,
+    ] {
+        for ascending in [None, Some(true), Some(false)] {
+            let mut keys = SortKeys::build(&old, &cats, title);
+            let before =
+                ordered_from_scratch(&old, &cats, selection, ascending.map(|a| (&keys, a)));
+            keys.update(&old, &new, &cats);
+            let sort = ascending.map(|a| (&keys, a));
+            let got = update_ordered(&before, &old, &new, &cats, selection, false, sort);
+            let want = ordered_from_scratch(&new, &cats, selection, sort);
+            assert_eq!(got, Some(want), "{selection:?} {ascending:?}");
+        }
+    }
+}
+
+/// A change to most of the library is computed from scratch instead.
+#[test]
+fn update_ordered_gives_up_on_a_large_change() {
+    let cats = tree();
+    let old = ascii_library(400);
+    let mut new = old.clone();
+    for i in 1..=300 {
+        new.get_mut(TrackId(i)).unwrap().title = format!("Retitled {i}");
+    }
+    let before = ordered_from_scratch(&old, &cats, LibrarySelection::All, None);
+    let got = update_ordered(
+        &before,
+        &old,
+        &new,
+        &cats,
+        LibrarySelection::All,
+        false,
+        None,
+    );
+    assert_eq!(got, None);
+}
+
+/// A few tracks analysed while 50 000 sorted rows are shown cost well
+/// under a frame (a large scan changes the library at every tick).
+#[test]
+#[cfg_attr(debug_assertions, ignore)]
+fn a_small_change_to_50000_sorted_rows_takes_a_millisecond_or_two() {
+    let cats = tree();
+    let old = ascii_library(50_000);
+    let title = LibraryColumn::Tag(TableColumn::Title);
+    let mut keys = SortKeys::build(&old, &cats, title);
+    let before = ordered_from_scratch(&old, &cats, LibrarySelection::All, Some((&keys, true)));
+    let mut new = old.clone();
+    for i in 1..=50u64 {
+        new.get_mut(TrackId(i * 997)).unwrap().title = format!("Analysed {i}");
+    }
+    let started = Instant::now();
+    keys.update(&old, &new, &cats);
+    let got = update_ordered(
+        &before,
+        &old,
+        &new,
+        &cats,
+        LibrarySelection::All,
+        false,
+        Some((&keys, true)),
+    );
+    let took = started.elapsed();
+    eprintln!("50 changes over 50 000 sorted rows: {took:?}");
+    assert_eq!(got.map(|r| r.len()), Some(50_000));
+    assert!(took.as_millis() < 3, "took {took:?}");
 }

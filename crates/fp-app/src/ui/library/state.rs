@@ -7,7 +7,9 @@ use std::collections::HashSet;
 use std::rc::Rc;
 
 use egui::{Pos2, Rect};
-use fp_model::library_search::{CategoryCounts, SearchIndex, SortKeys, library_rows, sort_rows_by};
+use fp_model::library_search::{
+    CategoryCounts, SearchIndex, SortKeys, filter_rows, library_rows, sort_rows_by, update_ordered,
+};
 use fp_model::library_view::{
     LibraryColumn, LibraryColumnWidth, LibrarySelection, LibrarySort, LibraryView,
 };
@@ -198,6 +200,10 @@ pub(crate) struct RowsCache {
     pub index: Option<SearchIndex>,
     /// The folded keys of the sort column, for every track of `library`.
     pub sort_keys: Option<SortKeys>,
+    /// Every track of the scope (the selection or the whole library) in the
+    /// saved order, before the search: a key typed filters it instead of
+    /// sorting again.
+    pub ordered: Vec<TrackId>,
     pub rows: Vec<TrackId>,
     /// Which computation of the rows this is (`LibraryUi::rows_built`).
     pub revision: u64,
@@ -213,6 +219,16 @@ impl RowsCache {
             && self.whole_library == view.whole_library
             && self.sort == view.sort
             && self.query == query
+    }
+
+    /// Whether `ordered` still holds for `state`: all but the search.
+    fn scope_holds(&self, state: &AppState) -> bool {
+        let view = &state.library_view;
+        self.library.shares_storage(&state.library)
+            && self.categories == state.categories
+            && self.selection == view.selection
+            && self.whole_library == view.whole_library
+            && self.sort == view.sort
     }
 }
 
@@ -231,13 +247,30 @@ impl LibraryUi {
         if !fresh {
             let view = &state.library_view;
             let column = view.sort.map(|sort| sort.column);
+            // Only the search changed: the scope's rows in order still hold.
+            let kept = self
+                .rows
+                .as_ref()
+                .filter(|c| c.scope_holds(state))
+                .is_some();
             // The index and the sort keys follow the library's changes:
             // only the tracks a change touched are folded again.
-            let (mut index, sort_keys) = match self.rows.take() {
+            let (mut index, sort_keys, ordered) = match self.rows.take() {
+                Some(RowsCache {
+                    index,
+                    sort_keys,
+                    ordered,
+                    ..
+                }) if kept => (index, sort_keys, Some(ordered)),
                 Some(RowsCache {
                     library,
+                    categories,
+                    selection,
+                    whole_library,
+                    sort,
                     mut index,
                     sort_keys,
+                    ordered,
                     ..
                 }) => {
                     if let Some(index) = index.as_mut() {
@@ -252,11 +285,32 @@ impl LibraryUi {
                             column.map(|c| SortKeys::build(&state.library, &state.categories, c))
                         }
                     };
-                    (index, sort_keys)
+                    // Only the library changed (a scan analyses tracks while
+                    // the window is open): the rows in order are patched.
+                    let patched = (categories == state.categories
+                        && selection == view.selection
+                        && whole_library == view.whole_library
+                        && sort == view.sort)
+                        .then(|| {
+                            update_ordered(
+                                &ordered,
+                                &library,
+                                &state.library,
+                                &state.categories,
+                                view.selection,
+                                view.whole_library,
+                                view.sort
+                                    .zip(sort_keys.as_ref())
+                                    .map(|(sort, keys)| (keys, sort.ascending)),
+                            )
+                        })
+                        .flatten();
+                    (index, sort_keys, patched)
                 }
                 None => (
                     None,
                     column.map(|c| SortKeys::build(&state.library, &state.categories, c)),
+                    None,
                 ),
             };
             // No words, no index needed: every track matches.
@@ -264,17 +318,22 @@ impl LibraryUi {
                 index = Some(SearchIndex::build(&state.library));
             }
             let empty = SearchIndex::default();
-            let mut rows = library_rows(
-                &state.library,
-                &state.categories,
-                index.as_ref().unwrap_or(&empty),
-                view.selection,
-                view.whole_library,
-                &self.search,
-            );
-            if let (Some(sort), Some(keys)) = (view.sort, sort_keys.as_ref()) {
-                sort_rows_by(&mut rows, keys, sort.ascending);
-            }
+            let ordered = ordered.unwrap_or_else(|| {
+                // Without a search, no track needs the index.
+                let mut ordered = library_rows(
+                    &state.library,
+                    &state.categories,
+                    &empty,
+                    view.selection,
+                    view.whole_library,
+                    "",
+                );
+                if let (Some(sort), Some(keys)) = (view.sort, sort_keys.as_ref()) {
+                    sort_rows_by(&mut ordered, keys, sort.ascending);
+                }
+                ordered
+            });
+            let rows = filter_rows(&ordered, index.as_ref().unwrap_or(&empty), &self.search);
             // The selection keeps only the rows listed: what a category,
             // scope or search change hides, or the library lost, leaves it
             // (a menu or a drag acts on what the operator sees).
@@ -297,6 +356,7 @@ impl LibraryUi {
                 sort: view.sort,
                 index,
                 sort_keys,
+                ordered,
                 rows,
                 revision: self.rows_built,
             });

@@ -104,6 +104,43 @@ impl SearchIndex {
     }
 }
 
+/// Which tracks the table's scope holds: the selection, or the whole
+/// library when `whole_library`.
+struct Scope {
+    selection: LibrarySelection,
+    whole_library: bool,
+    /// The selected category and its subcategories.
+    categories: Option<HashSet<CategoryId>>,
+}
+
+impl Scope {
+    fn new(categories: &Categories, selection: LibrarySelection, whole_library: bool) -> Self {
+        let subtree = match selection {
+            LibrarySelection::Category(id) if !whole_library => {
+                Some(categories.subtree(id).into_iter().collect())
+            }
+            _ => None,
+        };
+        Scope {
+            selection,
+            whole_library,
+            categories: subtree,
+        }
+    }
+
+    fn contains(&self, t: &Track) -> bool {
+        self.whole_library
+            || match self.selection {
+                LibrarySelection::All => true,
+                LibrarySelection::Uncategorised => t.category.is_none(),
+                LibrarySelection::MarkersToReview => t.markers_review.is_some(),
+                LibrarySelection::Category(_) => t
+                    .category
+                    .is_some_and(|c| self.categories.as_ref().is_some_and(|s| s.contains(&c))),
+            }
+    }
+}
+
 /// The tracks the table lists, in id order: those of the selection (or the
 /// whole library when `whole_library`) whose text has every word of `query`.
 pub fn library_rows(
@@ -115,27 +152,83 @@ pub fn library_rows(
     query: &str,
 ) -> Vec<TrackId> {
     let words = query_words(query);
-    let scope: Option<HashSet<CategoryId>> = match selection {
-        LibrarySelection::Category(id) if !whole_library => {
-            Some(categories.subtree(id).into_iter().collect())
-        }
-        _ => None,
-    };
+    let scope = Scope::new(categories, selection, whole_library);
     library
         .iter()
-        .filter(|t| {
-            whole_library
-                || match selection {
-                    LibrarySelection::All => true,
-                    LibrarySelection::Uncategorised => t.category.is_none(),
-                    LibrarySelection::MarkersToReview => t.markers_review.is_some(),
-                    LibrarySelection::Category(_) => t
-                        .category
-                        .is_some_and(|c| scope.as_ref().is_some_and(|s| s.contains(&c))),
-                }
-        })
+        .filter(|t| scope.contains(t))
         .filter(|t| index.matches(t.id, &words))
         .map(|t| t.id)
+        .collect()
+}
+
+/// The scope's rows in order (`library_rows` without a search, sorted by
+/// `sort` when given, else in id order) after the library went from `old`
+/// to `new`, patched from `ordered` instead of computed again: the tracks
+/// the change touched are taken out and those still in the scope merged
+/// back in place. `sort`'s keys must already follow `new`. `None` when the
+/// change touches more than an eighth of the rows: computing them again
+/// is as cheap.
+pub fn update_ordered(
+    ordered: &[TrackId],
+    old: &Library,
+    new: &Library,
+    categories: &Categories,
+    selection: LibrarySelection,
+    whole_library: bool,
+    sort: Option<(&SortKeys, bool)>,
+) -> Option<Vec<TrackId>> {
+    let changes = new.changes_since(old);
+    let touched = changes.upserted.len() + changes.removed.len();
+    if touched > ordered.len() / 8 + 16 {
+        return None;
+    }
+    let gone: HashSet<TrackId> = changes
+        .removed
+        .iter()
+        .copied()
+        .chain(changes.upserted.iter().map(|t| t.id))
+        .collect();
+    let scope = Scope::new(categories, selection, whole_library);
+    let key = |id: TrackId| sort.and_then(|(keys, _)| keys.keys.get(&id).and_then(Option::as_ref));
+    let ascending = sort.is_none_or(|(_, ascending)| ascending);
+    let order = |a: TrackId, b: TrackId| compare((key(a), a), (key(b), b), ascending);
+    let mut back: Vec<TrackId> = changes
+        .upserted
+        .iter()
+        .filter(|t| scope.contains(t))
+        .map(|t| t.id)
+        .collect();
+    back.sort_unstable_by(|a, b| order(*a, *b));
+    let kept = ordered.iter().copied().filter(|id| !gone.contains(id));
+    let mut out = Vec::with_capacity(ordered.len() + back.len());
+    let mut back = back.into_iter().peekable();
+    for id in kept {
+        while let Some(&b) = back.peek() {
+            if order(b, id) == Ordering::Less {
+                out.push(b);
+                back.next();
+            } else {
+                break;
+            }
+        }
+        out.push(id);
+    }
+    out.extend(back);
+    Some(out)
+}
+
+/// The rows of `ordered` whose text has every word of `query`, in the
+/// order of `ordered`: a search over rows already listed and sorted, so a
+/// key typed costs a filter, not a sort.
+pub fn filter_rows(ordered: &[TrackId], index: &SearchIndex, query: &str) -> Vec<TrackId> {
+    let words = query_words(query);
+    if words.is_empty() {
+        return ordered.to_vec();
+    }
+    ordered
+        .iter()
+        .copied()
+        .filter(|id| index.matches(*id, &words))
         .collect()
 }
 
