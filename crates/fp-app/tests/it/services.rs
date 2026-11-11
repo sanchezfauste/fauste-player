@@ -2978,31 +2978,27 @@ fn an_analysed_unsettled_track_coming_into_use_is_analysed() {
     r.run_until("analysed once in use", |r| reads_of(r, &b) == 3);
 }
 
-/// The analysis results go on the background queue: a full operator queue
-/// (a burst of operator commands not taken yet) never refuses them, and
-/// they never take the operator's room.
+/// The analysis results go on the background queue: an operator queue
+/// kept full (a burst of operator commands) never refuses them, and they
+/// never take the operator's room.
 #[test]
 fn analysis_results_never_use_the_operators_queue() {
     let dir = tempfile::tempdir().unwrap();
     let a = wav(dir.path(), "Band - One.wav", 2);
     let mut r = rig(&[a], dir);
     let p = r.handle.model.load().players[0].id;
-    while r.handle.send(Command::SetVolume(p, 1.0)) {}
-    // Only the services run: the conductor takes nothing meanwhile.
+    // Only bounds a hang: a loaded CI runner can take well over 15 s.
     let deadline = Instant::now() + Duration::from_secs(60);
-    while r.analyses.load(Ordering::SeqCst) == 0 {
-        assert!(Instant::now() < deadline, "the analysis never ran");
+    while !r.handle.model.load().library.iter().all(|t| t.analyzed) {
+        assert!(
+            Instant::now() < deadline,
+            "the result never reached the model"
+        );
+        // Full whenever the services send anything.
+        while r.handle.send(Command::SetVolume(p, 1.0)) {}
         r.services.step(r.now);
+        r.conductor.tick(r.now);
+        r.now += Duration::from_millis(10);
         std::thread::sleep(Duration::from_millis(2));
     }
-    for _ in 0..100 {
-        r.services.step(r.now);
-        std::thread::sleep(Duration::from_millis(2));
-    }
-    r.conductor.tick(r.now);
-    let model = r.handle.model.load();
-    assert!(
-        model.library.iter().all(|t| t.analyzed),
-        "the result waited on its own queue"
-    );
 }
