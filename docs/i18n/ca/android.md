@@ -287,6 +287,7 @@ sonar alhora depèn del mòbil.
 ## No és a Android {#not-on-android}
 
 Les superfícies de control MIDI, el control remot, l'edició d'etiquetes i
-caràtules, i els fitxers de llistes i de pàgines de cartutxos són, de moment,
-funcions de l'escriptori. Un teclat connectat a una tauleta funciona com a
+caràtules, els fitxers de llistes i de pàgines de cartutxos, i l'automatització
+(el musicalitzador i Configuració → Automatització) són, de moment, funcions
+de l'escriptori. Un teclat connectat a una tauleta funciona com a
 l'escriptori (vegeu [Teclat](keyboard.md)).

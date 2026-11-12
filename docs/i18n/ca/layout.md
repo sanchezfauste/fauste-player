@@ -9,13 +9,15 @@ sota ells.
 
 ## Mostrar i amagar panells {#show-and-hide-panels}
 
-Els mosaics de l'esquerra de la barra superior, **P1** … **Pn** i
-**Cartutxera**, mostren quins panells hi ha a la pantalla: un mosaic
-il·luminat és mostrat. Fes clic en un mosaic per amagar o mostrar el seu
-panell. Amb molts reproductors, els mosaics es desplacen lateralment (fes
-girar la roda del ratolí sobre ells) i el botó de disposició continua a la
-vista. Els altres panells ocupen l'espai que deixa, i un reproductor que es
-torna a mostrar torna a la seva amplada.
+Els mosaics de l'esquerra de la barra superior, **Graella** i **Música** (la
+[graella](automation.md#the-schedule-column) i el
+[musicalitzador](automation.md#the-music-filler), tots dos amagats fins que
+els mostres), **P1** … **Pn** i **Cartutxera**, mostren quins panells hi ha a
+la pantalla: un mosaic il·luminat és mostrat. Fes clic en un mosaic per
+amagar o mostrar el seu panell. Amb molts reproductors, els mosaics es
+desplacen lateralment (fes girar la roda del ratolí sobre ells) i el botó de
+disposició continua a la vista. Els altres panells ocupen l'espai que deixa,
+i un reproductor que es torna a mostrar torna a la seva amplada.
 
 Amagar només treu un panell de la pantalla. Un reproductor amagat continua
 sonant, i la seva tecla numèrica, el MIDI, l'API remota, la seva finestra CUE

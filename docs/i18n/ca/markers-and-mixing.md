@@ -89,7 +89,7 @@ les pistes s'analitzen de nou automàticament.
   pista següent comença exactament al cue-out, sense pausa.
 - **Mode single**, o **Stop al final**: el reproductor s'atura al cue-out.
 - **Prémer Play en antena:** la pista següent comença a l'instant i l'actual
-  fa un fos de sortida durant la *durada del fos* (1 s per defecte).
+  fa un fos de sortida durant la *durada del fos entre pistes* (1 s per defecte).
 - **Un reproductor la sortida Main del qual és bit perfect** ignora el punt
   MIX i la mescla automàtica: cada pista es reprodueix fins al seu cue-out, i
   després comença la següent, i Play en antena canvia a l'instant, sense fos.

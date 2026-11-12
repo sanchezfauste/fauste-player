@@ -152,8 +152,10 @@ llista-ne les adreces o subxarxes a `remote.osc.allowed_sources` (per exemple
 `"192.168.1.0/24"`). OSC no té contrasenya, de manera que mantén-lo en una
 xarxa d'estudi de confiança.
 
-Els reproductors es numeren 1, 2, 3… tal com apareixen a la pantalla. Els
-cartutxos es numeren a la pàgina mostrada.
+Els reproductors es numeren 1, 2, 3… tal com apareixen a la pantalla. La
+columna **Música** (el musicalitzador, vegeu [Automatització](automation.md))
+no té número i no forma part del control remot. Els cartutxos es numeren a la
+pàgina mostrada.
 
     oscsend localhost 7381 /fauste/player/1/play
     oscsend localhost 7381 /fauste/player/2/volume f 0.8

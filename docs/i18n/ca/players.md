@@ -133,9 +133,9 @@ un moment; els mateixos dos són al menú d'un clic dret al fons de la capçaler
 
 | Botó | Acció |
 |---|---|
-| **Play / Següent** (gran) | Aturat: inicia la pista següent. En antena: fos cap a la pista següent (el temps del fos es defineix a [Configuració](settings.md)); mentre fa un fos per a un fos encadenat iniciat per Següent o per un segue, una banda verda es buida a través del botó durant la durada del fos, amb la vora movent-se d'esquerra a dreta com la d'un cartutx (un fos encadenat iniciat per Anterior es buida al botó Anterior). En pausa: reprèn. Amb la pista en antena com a següent, Play reinicia aquesta pista amb el fos habitual. En una sortida bit perfect canvia a l'instant, sense fos, i la seva informació emergent ho diu (vegeu [Què costa](bit-perfect.md#what-it-costs)). |
+| **Play / Següent** (gran) | Aturat: inicia la pista següent. En antena: fos cap a la pista següent (la durada del fos entre pistes es defineix a [Configuració](settings.md)); mentre fa un fos per a un fos encadenat iniciat per Següent o per un segue, una banda verda es buida a través del botó durant la durada del fos, amb la vora movent-se d'esquerra a dreta com la d'un cartutx (un fos encadenat iniciat per Anterior es buida al botó Anterior). En pausa: reprèn. Amb la pista en antena com a següent, Play reinicia aquesta pista amb el fos habitual. En una sortida bit perfect canvia a l'instant, sense fos, i la seva informació emergent ho diu (vegeu [Què costa](bit-perfect.md#what-it-costs)). |
 | **Stop** | Atura a l'instant (amb una breu rampa antiespetec) |
-| **Stop amb fos** | Fa un fos de sortida i atura. Mentre un stop amb fos és en marxa, una banda es buida a través del botó durant la durada del fos, amb la vora movent-se d'esquerra a dreta |
+| **Stop amb fos** | Fa un fos de sortida durant la durada de l'stop amb fos (2 s per defecte, es defineix a [Configuració](settings.md)) i atura. Mentre un stop amb fos és en marxa, una banda es buida a través del botó durant la durada del fos, amb la vora movent-se d'esquerra a dreta |
 | **Pausa** | Posa en pausa o reprèn; parpelleja en ambre mentre és en pausa |
 | **Stop al final** (un triangle de reproducció i després un quadrat) | Atura quan acaba la pista actual, una sola vegada. En mode SINGLE només està disponible mentre la pista actual es repeteix: acaba la repetició quan acaba la passada que està sonant. Per aturar després d'una pista cada vegada que es reprodueix, o per repetir una pista, usa el seu menú a la llista (vegeu [Llistes de reproducció](playlists.md)) |
 | **Pista anterior** (una barra i dos triangles) | En antena: fos de tornada cap a la pista que aquest reproductor va reproduir abans, com ho fa Següent. Prem de nou per continuar enrere. La pista que has deixat passa a ser la següent. En una sortida bit perfect canvia a l'instant, sense fos (vegeu [Què costa](bit-perfect.md#what-it-costs)). |
@@ -267,6 +267,12 @@ La finestra mostra:
 
 Mentre el CUE és en pausa, el seu botó de pausa (que mostra **Reprendre el
 CUE**) parpelleja en ambre, com el del propi reproductor.
+
+Arrossega una vora o una cantonada de la finestra per fer-la més gran: la
+forma d'ona ocupa l'amplada i l'alçada addicionals, cosa que ajuda a
+col·locar marcadors. La pots tornar a fer més petita, fins a la mida
+inicial. La finestra de CUE següent, de qualsevol reproductor, s'obre amb
+l'última mida que n'hagis donat a una, també després d'un reinici.
 
 Un salt en un CUE en pausa el manté en pausa. El botó de tancar de la
 finestra, o **Aturar el CUE**, atura el CUE.

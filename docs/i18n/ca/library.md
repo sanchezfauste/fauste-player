@@ -8,7 +8,7 @@ envia a les llistes i a la cartutxera. A l'escriptori i a una tauleta és una
 finestra; un mòbil mostra la biblioteca a la pestanya **Biblioteca** (vegeu
 [En un mòbil](#on-a-phone)).
 
-![La finestra de la biblioteca: la franja de preescolta amb la forma d'ona de la pista seleccionada, l'arbre de categories amb Music (i les seves subcategories Pop i Evening) seleccionada, i la taula de les seves pistes amb la categoria i el tipus](../../images/guide/library.png)
+![La finestra de la biblioteca: la franja de preescolta amb la forma d'ona de la pista seleccionada, el mesurador i el fader d'escolta, l'arbre de categories amb Music (i les seves subcategories Pop i Evening) seleccionada i Marcadors per revisar al final, i la taula de les seves pistes amb la categoria i el tipus; Coastline porta l'indicador ambre de marcadors per revisar](../../images/guide/library.png)
 
 ## Obrir la finestra {#opening-the-window}
 
@@ -36,8 +36,10 @@ es desa.
 ## Categories {#categories}
 
 L'arbre de l'esquerra agrupa les pistes. A dalt, **Totes les pistes**; després
-les teves categories, que poden contenir subcategories; al final, **Sense
-categoria**, les pistes que no pertanyen a cap categoria. Cada element mostra
+les teves categories, que poden contenir subcategories; després **Sense
+categoria**, les pistes que no pertanyen a cap categoria; i, només mentre
+alguna pista ho necessita, **Marcadors per revisar** (vegeu [Quan un fitxer
+canvia](#when-a-file-changes)). Cada element mostra
 el seu color i un recompte: una categoria compta les seves pistes i les de les
 seves subcategories. Una pista pertany com a màxim a una categoria.
 
@@ -193,13 +195,80 @@ quantes pistes hi ha seleccionades quan és per a diverses.
 | Afegeix a ▸ | Una llista: les pistes s'afegeixen al seu final |
 | Afegeix a un cartutx ▸ | Un cartutx de la pàgina que mostra la cartutxera: les pistes omplen el cartutx triat i els propers cartutxos buits de la pàgina, en l'ordre de la graella. Les pistes que no hi caben es deixen fora i un avís les compta |
 | Mou a la categoria ▸ | Una categoria, o Sense categoria |
-| Tipus ▸ | Música, Jingle, Efecte, Anunci o Veu |
+| Tipus ▸ | Música, Jingle, Efecte, Anunci, Veu o Indicatiu horari |
 | Editar les etiquetes… | L'editor d'etiquetes (una pista) |
+| Obrir a l'editor extern | Inicia el teu editor d'àudio amb el fitxer de la pista (una pista; vegeu [Quan un fitxer canvia](#when-a-file-changes)) |
+| Marcar com a revisada | Treu l'indicador *els marcadors cal revisar-los* (es mostra quan una pista seleccionada el té) |
 | Sonoritat… | La finestra de sonoritat (una pista) |
 | Tornar a analitzar | Analitza de nou les pistes |
 | Tornar als marcadors automàtics | Descarta els marcadors manuals |
 | Mostra la ubicació del fitxer | Obre la carpeta del fitxer (una pista) |
 | Treu de la biblioteca… | Treu les pistes de la biblioteca, després de preguntar (més avall) |
+
+## Quan un fitxer canvia {#when-a-file-changes}
+
+Preparar el material sovint vol dir retallar o arreglar un fitxer en un editor
+d'àudio. Fauste Player ajuda amb les dues meitats.
+
+**Obrir a l'editor extern** (al menú de fila de la biblioteca i de les files
+de les llistes) inicia el programa que has triat a [Configuració →
+Biblioteca](settings.md#library) amb el fitxer de la pista. Actua sobre una
+sola pista. L'entrada apareix atenuada, amb el motiu com a informació
+emergent, quan no hi ha cap editor definit, quan el fitxer falta o no es pot
+llegir, o quan la pista està *sonant*: la pista actual d'un reproductor (en
+marxa o en pausa), una pista que espera per començar o que és al CUE, la pista
+sortint d'un fos, un cartutx que sona o el cartutx al CUE de la cartutxera, o
+la preescolta de la biblioteca mentre sona o és en pausa. L'editor no s'ofereix
+a Android, ni a les compilacions Flatpak i snap, que no poden iniciar altres
+programes; la resta d'aquesta secció s'hi aplica igualment.
+
+Fauste Player s'adona que un fitxer que coneix ha canviat (la mida o l'hora de
+modificació difereixen de l'última anàlisi), sigui qui sigui que l'hagi
+canviat, i el torna a analitzar per si sol: durada, marcadors, sonoritat,
+forma d'ona, format i etiquetes. Ho comprova:
+
+- una vegada a l'inici, per a totes les pistes de la biblioteca;
+- quan una carpeta vigilada informa d'un canvi en una pista coneguda;
+- a la carpeta de qualsevol fitxer que hagis obert a l'editor, fins que
+  surtis, de manera que un desament es nota a l'instant;
+- quan una pista es carrega en un reproductor, un cartutx o la preescolta, i
+  quan s'obren els seus marcadors per editar-los o s'arrosseguen a la forma
+  d'ona;
+- quan prems **Cercar fitxers canviats** a [Configuració →
+  Anàlisi](settings.md#analysis), que revisa tota la biblioteca i diu en un
+  avís quants fitxers han canviat.
+
+No hi ha cap sondeig periòdic. Un fitxer fora de les carpetes vigilades,
+canviat per un altre programa mentre Fauste Player s'executa i no utilitzat
+des d'aleshores, es troba en el seu proper ús o amb **Cercar fitxers
+canviats**.
+
+Una pista canviada mai no es torna a analitzar mentre sona: espera que
+s'aturi, i els seus marcadors i la seva sonoritat mai no es mouen sota una font
+que sona. (**Tornar a analitzar totes les pistes** és una petició explícita teva
+i no espera.) Els editors sovint desen esborrant i tornant a crear el fitxer,
+de manera que un fitxer que desapareix es mira dues vegades abans de marcar-lo
+com a absent. Un fitxer que canvia mentre s'analitza (un editor que encara
+el desa) no s'utilitza: es torna a analitzar poc després, o en el seu proper
+canvi, ús o comprovació. Una pista absent el fitxer de la qual torna en una
+carpeta que només es segueix per l'editor no es restaura per si sola.
+
+**Marcadors per revisar.** Si l'*àudio* d'un fitxer ha canviat i la pista té
+marcadors que has posat a mà, la pista mostra una icona d'avís ambre a la
+seva fila (la informació emergent anomena els marcadors que s'han descartat).
+Els marcadors manuals que ara queden més enllà del final de l'àudio es
+descarten i el valor automàtic en pren el lloc; els altres es queden tal com
+són (quan s'ha descartat el cue-in o el cue-out, els marcadors d'intro, outro
+i MIX es mouen dins del nou interval de cue). L'indicador mai no impedeix que
+la pista es carregui, es posi al CUE o soni. S'esborra quan tries **Marcar com
+a revisada** al menú de la pista (en diverses files seleccionades, les esborra
+totes) o canvies qualsevol marcador de la pista. L'element **Marcadors per
+revisar** de l'arbre, després de *Sense categoria*, llista les pistes marcades
+mentre n'hi ha (no en un mòbil). Un canvi només a les etiquetes o a la caràtula
+actualitza les etiquetes i no aixeca cap indicador, que és també el que passa
+quan edites etiquetes a Fauste Player. La primera anàlisi després d'una
+actualització aixeca l'indicador només si ha hagut de descartar un marcador més
+enllà del final de l'àudio.
 
 ## Preescolta {#pre-listening}
 
@@ -213,11 +282,20 @@ La barra mostra:
 
 - **Preescolta**, **Posa en pausa la preescolta** i **Atura la preescolta**;
 - el temps restant de la pista en gran, el seu títol, artista i categoria;
-- un petit mesurador a la dreta. Només llegeix aquesta preescolta, mai el
+- a la dreta, un mesurador i un fader de volum dibuixats com en un
+  reproductor. El mesurador només llegeix aquesta preescolta, mai el
   mesurador d'un reproductor ni el de la cartutxera; fes-hi clic per
-  reiniciar-ne el màxim;
-- la forma d'ona de tot el fitxer, amb els seus marcadors, i una línia
-  `transcorregut / total` a sota.
+  reiniciar-ne el màxim. El fader és el teu **nivell d'escolta** als
+  auriculars o als monitors: defineix com de fort sona la preescolta i mai
+  canvia una pista (el seu fitxer, el seu guany de sonoritat o els seus
+  marcadors), un reproductor ni la cartutxera. Es queda com l'has deixat quan
+  la previsualització passa a una altra pista i es desa per al proper inici; la
+  seva informació emergent i la lectura de sota mostren el nivell en dB. Si la
+  sortida Biblioteca comparteix canals amb una sortida en antena, el fader
+  també defineix com de fort sona la preescolta allà. La targeta de preescolta
+  d'un mòbil no té fader;
+- la forma d'ona de tot el fitxer, tan alta com la d'un reproductor, amb els
+  seus marcadors, i una línia `transcorregut / total` a sota.
 
 Preescolta inicia la pista seleccionada des del seu cue-in i la reprodueix
 fins al final del fitxer. Preescolta en una preescolta en pausa la reprèn, i
