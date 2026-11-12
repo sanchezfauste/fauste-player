@@ -36,6 +36,9 @@ pub struct AppState {
     /// The music filler (automation spec AU27–AU29): its player is the
     /// last of `players`. `None` until `filler::ensure`.
     pub filler: Option<crate::filler::FillerState>,
+    /// Running the schedule (automation spec AU15–AU24): its player is just
+    /// before the filler's. `None` until `automation::ensure`.
+    pub automation: Option<crate::automation::AutomationState>,
     /// The music filler's rotations (automation spec AU1–AU4), saved.
     pub rotations: crate::rotation::Rotations,
     /// When each track last aired (automation spec AU35), saved.
@@ -46,6 +49,9 @@ pub struct AppState {
     /// The wall clock, set by the conductor every tick (by tests directly);
     /// runtime only.
     pub wall_now: crate::wall_time::WallTime,
+    /// The local date and time, set with `wall_now`; the schedule compares
+    /// block starts with it. Runtime only.
+    pub local_now: chrono::NaiveDateTime,
     /// The random generator of automation's choices, seeded by the
     /// conductor; runtime only.
     pub rng: crate::wall_time::SplitMix64,
@@ -85,10 +91,12 @@ impl AppState {
             library_view: crate::library_view::LibraryView::default(),
             library_cue: crate::library_cue::LibraryCue::default(),
             filler: None,
+            automation: None,
             rotations: crate::rotation::Rotations::default(),
             air_times: crate::air_times::AirTimes::default(),
             schedule: crate::schedule::Schedule::default(),
             wall_now: crate::wall_time::WallTime::default(),
+            local_now: chrono::NaiveDateTime::default(),
             rng: crate::wall_time::SplitMix64::default(),
         }
     }
@@ -110,8 +118,42 @@ impl AppState {
     /// The players the operator numbers P1…Pn: every player but the music
     /// filler.
     pub fn aux_players(&self) -> impl Iterator<Item = &PlayerState> {
-        let filler = self.filler.as_ref().map(|f| f.player);
-        self.players.iter().filter(move |p| Some(p.id) != filler)
+        self.players
+            .iter()
+            .filter(move |p| !self.is_automation(p.id))
+    }
+
+    /// The schedule's player or the music filler's: not an operator player.
+    pub fn is_automation(&self, player: PlayerId) -> bool {
+        self.is_filler(player) || self.automation.as_ref().is_some_and(|a| a.player == player)
+    }
+
+    /// The list of an automation player: not an operator playlist.
+    pub fn is_automation_playlist(&self, playlist: crate::ids::PlaylistId) -> bool {
+        self.is_filler_playlist(playlist)
+            || self
+                .automation
+                .as_ref()
+                .is_some_and(|a| a.playlist == playlist)
+    }
+
+    /// The list an automation player shows, the only one it may show.
+    pub fn automation_list_of(&self, player: PlayerId) -> Option<crate::ids::PlaylistId> {
+        if let Some(f) = self.filler.as_ref().filter(|f| f.player == player) {
+            return Some(f.playlist);
+        }
+        self.automation
+            .as_ref()
+            .filter(|a| a.player == player)
+            .map(|a| a.playlist)
+    }
+
+    /// Where the automation players start in `players` (they are last).
+    pub(crate) fn first_automation_index(&self) -> usize {
+        self.players
+            .iter()
+            .position(|p| self.is_automation(p.id))
+            .unwrap_or(self.players.len())
     }
 
     pub fn is_filler(&self, player: PlayerId) -> bool {
@@ -123,11 +165,17 @@ impl AppState {
     }
 
     /// The players' ids in display order: what the layout helpers take.
-    /// The music filler's column comes first, left of P1 (automation spec
-    /// §8.1); it is last in `players`, so positional code is unchanged.
+    /// The Schedule column comes first, then the Music column (the filler),
+    /// left of P1 (automation spec §8.1); in `players` they are last, so
+    /// positional code is unchanged.
     pub fn player_ids(&self) -> Vec<PlayerId> {
+        let schedule = self.automation.as_ref().map(|a| a.player);
         let filler = self.filler.as_ref().map(|f| f.player);
-        filler.into_iter().chain(self.aux_player_ids()).collect()
+        schedule
+            .into_iter()
+            .chain(filler)
+            .chain(self.aux_player_ids())
+            .collect()
     }
 
     /// The auxiliary players' ids, P1 first.

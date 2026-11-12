@@ -1880,7 +1880,7 @@ fn tabs(
         .state
         .playlists
         .iter()
-        .filter(|pl| !scene.state.is_filler_playlist(pl.id))
+        .filter(|pl| !scene.state.is_automation_playlist(pl.id))
         .collect();
     let count = lists.len();
     // The tabs and their arrows share the strip with the "+" at its end.

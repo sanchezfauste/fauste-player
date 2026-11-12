@@ -17,7 +17,7 @@ use crate::i18n::I18n;
 /// Names a device as the Settings pickers do; an unknown id as is.
 pub(crate) type DeviceNames<'a> = &'a dyn Fn(&OutputDevice) -> String;
 
-/// The 1-based number of an auxiliary player (0 for the music filler).
+/// The 1-based number of an auxiliary player (0 for an automation player).
 pub(crate) fn player_number(state: &AppState, id: PlayerId) -> usize {
     state
         .aux_players()
@@ -29,6 +29,8 @@ fn holder_label(t: &I18n, state: &AppState, holder: Holder) -> String {
     match holder {
         Holder::PlayerMain(p) if state.is_filler(p) => t.tr("holder-filler-main"),
         Holder::PlayerCue(p) if state.is_filler(p) => t.tr("holder-filler-cue"),
+        Holder::PlayerMain(p) if state.is_automation(p) => t.tr("holder-schedule-main"),
+        Holder::PlayerCue(p) if state.is_automation(p) => t.tr("holder-schedule-cue"),
         Holder::PlayerMain(p) => t.tr_args(
             "holder-player-main",
             &[("n", player_number(state, p).into())],

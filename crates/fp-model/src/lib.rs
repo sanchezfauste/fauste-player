@@ -4,6 +4,7 @@
 
 pub mod air_times;
 pub mod audio_change;
+pub mod automation;
 pub mod availability;
 pub mod bit_perfect;
 mod cart_rules;

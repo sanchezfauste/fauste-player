@@ -184,7 +184,13 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             if state.playlists.get(playlist).is_none() {
                 return Err(ModelError::UnknownPlaylist(playlist));
             }
-            if state.is_filler(id) != state.is_filler_playlist(playlist) {
+            // An automation player shows its own list only, and an
+            // operator player never shows one of theirs.
+            let allowed = match state.automation_list_of(id) {
+                Some(own) => own == playlist,
+                None => !state.is_automation_playlist(playlist),
+            };
+            if !allowed {
                 return Err(ModelError::FillerPlaylist(playlist));
             }
             state.players[i].playlist = playlist;
@@ -909,9 +915,10 @@ fn set_next(state: &mut AppState, id: PlayerId, entry: EntryId) -> Result<(), Mo
     let Some((list, _)) = state.playlists.find(entry) else {
         return Err(ModelError::UnknownEntry(entry));
     };
-    // The filler plays from its own list only: its top-up and trim count
-    // from where its next stands in that list.
-    if state.is_filler(id) && !state.is_filler_playlist(list) {
+    // An automation player plays from its own list only: the filler's
+    // top-up and trim, and the schedule's rows, count from where its next
+    // stands in that list.
+    if state.automation_list_of(id).is_some_and(|own| own != list) {
         return Err(ModelError::FillerPlaylist(list));
     }
     state.players[i].next = Some(entry);
@@ -1517,10 +1524,10 @@ pub(crate) fn take_out_entries(
     refresh_next(state);
 }
 
-/// Automation spec §8.1: the music filler's list is not the operator's to
-/// rename or delete.
+/// Automation spec §8.1: the lists of the schedule and the music filler are
+/// not the operator's to rename or delete.
 fn not_filler_playlist(state: &AppState, playlist: PlaylistId) -> Result<(), ModelError> {
-    if state.is_filler_playlist(playlist) {
+    if state.is_automation_playlist(playlist) {
         Err(ModelError::FillerPlaylist(playlist))
     } else {
         Ok(())
@@ -1546,7 +1553,7 @@ fn delete_playlist(
         .playlists
         .iter()
         .map(|l| l.id)
-        .find(|id| *id != playlist && !state.is_filler_playlist(*id))
+        .find(|id| *id != playlist && !state.is_automation_playlist(*id))
         .ok_or(ModelError::LastPlaylist)?;
     let removed = state.playlists.remove(playlist)?;
     for p in &mut state.players {
@@ -1606,7 +1613,8 @@ fn set_player_count(
             max,
         });
     }
-    // Only the auxiliary players are counted; the music filler stays last.
+    // Only the auxiliary players are counted; the automation players stay
+    // last.
     let aux: Vec<PlayerId> = state.aux_players().map(|p| p.id).collect();
     if count < aux.len() {
         let leaving: Vec<PlayerId> = aux.get(count..).unwrap_or_default().to_vec();
@@ -1627,12 +1635,12 @@ fn set_player_count(
             .playlists
             .iter()
             .map(|p| p.id)
-            .find(|id| !state.is_filler_playlist(*id))
+            .find(|id| !state.is_automation_playlist(*id))
             .ok_or(ModelError::NoPlaylists)?;
         let mode = state.config.players.default_mode;
         for _ in aux.len()..count {
             let id = state.ids.player();
-            let at = state.players.len() - usize::from(state.filler.is_some());
+            let at = state.first_automation_index();
             state.players.insert(at, PlayerState::new(id, first, mode));
             out.push(EngineAction::AddPlayer { player: id });
         }

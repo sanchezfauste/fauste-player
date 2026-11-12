@@ -142,7 +142,7 @@ pub fn plan(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiError> {
 
 /// A playlist the API shows: the music filler's is not one.
 fn visible_list(state: &AppState, id: PlaylistId) -> Result<&fp_model::Playlist, ApiError> {
-    if state.is_filler_playlist(id) {
+    if state.is_automation_playlist(id) {
         return Err(ApiError::NotFound);
     }
     state.playlists.get(id).ok_or(ApiError::NotFound)
@@ -151,7 +151,7 @@ fn visible_list(state: &AppState, id: PlaylistId) -> Result<&fp_model::Playlist,
 /// An entry the API shows: the rows of the music filler's list are not.
 fn visible_entry(state: &AppState, id: EntryId) -> Result<&fp_model::PlaylistEntry, ApiError> {
     match state.playlists.find(id) {
-        Some((list, _)) if !state.is_filler_playlist(list) => {
+        Some((list, _)) if !state.is_automation_playlist(list) => {
             state.playlists.entry(id).ok_or(ApiError::NotFound)
         }
         _ => Err(ApiError::NotFound),
@@ -162,7 +162,7 @@ fn commands_for(state: &AppState, op: Operation) -> Result<Vec<Command>, ApiErro
     use Operation as O;
     // The music filler, its list and its rows are not part of the API.
     let player = |id: PlayerId| {
-        if state.is_filler(id) {
+        if state.is_automation(id) {
             return Err(ApiError::NotFound);
         }
         state.player(id).map_err(|_| ApiError::NotFound)

@@ -2102,7 +2102,7 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
         .state
         .playlists
         .iter()
-        .filter(|p| !scene.state.is_filler_playlist(p.id))
+        .filter(|p| !scene.state.is_automation_playlist(p.id))
         .map(|p| {
             let total: f64 = p
                 .entries
@@ -2191,7 +2191,7 @@ fn playlists(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
                 .state
                 .playlists
                 .iter()
-                .filter(|p| !scene.state.is_filler_playlist(p.id))
+                .filter(|p| !scene.state.is_automation_playlist(p.id))
                 .count()
                 <= 1;
             let style = TileStyle {

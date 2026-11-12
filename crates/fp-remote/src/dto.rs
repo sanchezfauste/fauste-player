@@ -221,13 +221,13 @@ pub fn playlists(model: &AppState) -> Vec<PlaylistSummaryDto> {
     model
         .playlists
         .iter()
-        .filter(|p| !model.is_filler_playlist(p.id))
+        .filter(|p| !model.is_automation_playlist(p.id))
         .map(summary)
         .collect()
 }
 
 pub fn playlist(model: &AppState, id: PlaylistId) -> Option<PlaylistDto> {
-    if model.is_filler_playlist(id) {
+    if model.is_automation_playlist(id) {
         return None;
     }
     let list = model.playlists.get(id)?;

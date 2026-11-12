@@ -194,10 +194,12 @@ impl AppState {
             layout: Layout::default(),
             library_view: crate::library_view::LibraryView::default(),
             filler: None,
+            automation: None,
             rotations,
             air_times,
             schedule,
             wall_now: crate::wall_time::WallTime::default(),
+            local_now: chrono::NaiveDateTime::default(),
             rng: crate::wall_time::SplitMix64::default(),
         };
         // One track per file (LB14): a library saved before that rule, or
