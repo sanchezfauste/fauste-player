@@ -2,9 +2,9 @@
 
 The design is the [automation spec](../superpowers/specs/2026-11-11-automation-design.md)
 (rules `AU<n>`). This page describes what is implemented so far: the music
-filler's selection rules and player, the schedule's data model, and
-running the schedule, pure functions in `fp-model`. The schedule's screens
-come in a later plan.
+filler's selection rules and player, the schedule's data model, running
+the schedule and its as-run log, pure functions in `fp-model`. The
+Schedule column and the schedule editor are described in [ui](ui.md).
 
 ## Time and randomness (`wall_time.rs`)
 
@@ -358,4 +358,35 @@ known lengths, a classic method.
   nothing closes), and the top-up chooses again. The current row, the loaded next and
   the operator's rows are never touched, so a next loaded before
   automation started may still be cut.
+
+## The as-run log (`as_run.rs`)
+
+`AppState::as_run` (an `AsRunLog`) records what aired and what was missed
+(AU36). `reducer::settle_all` ends with `as_run::record`, which compares
+what the two automation players have on air (playing or paused: a pause
+and its resume are one airing) and the
+`missed` set with what it saw last:
+
+- a new row on air on the schedule's player that maps to an `ItemRef`
+  is an `Aired` entry from the `Schedule`, with the block's start and the
+  local time it started;
+- a new row on air on the filler's player is an `Aired` entry from the
+  `Filler`, with no scheduled time;
+- each item newly in `missed` is a `Missed` entry, with no start.
+
+A missed item played by hand later has both entries. Each entry takes the
+next sequence number, which only grows (`resume_at` never goes back), so
+the store appends exactly what it has not saved, whatever the clock did.
+The model keeps only yesterday's and today's entries; the store keeps
+`automation.as_run_keep_days` (AU38; see [persistence](persistence.md)).
+Viewing the log beyond the Schedule column and exporting it are non-goals.
+
+AU39's long-run test (`fp-store/tests/it/automation_long_run.rs`) runs
+thirty simulated days with a week plan, a date override, the filler and a
+save every hour, through the model and the store with a small fake engine,
+and checks that the lists, marks, in-memory log and `as_run` table stay
+bounded and that every block started on time. It also restarts the store
+half way, checks that the database holds exactly the logged entries since
+the cutoff (each sequence once), that the filler played every day, and
+that the `entries` and `air_times` tables stay bounded.
 

@@ -2,7 +2,7 @@
 //! to *n*.
 
 /// The schema version this build writes and the newest it can read.
-pub const SCHEMA_VERSION: u32 = 4;
+pub const SCHEMA_VERSION: u32 = 5;
 
 /// The migrations, in order; `MIGRATIONS[n - 1]` is migration *n*.
 pub(crate) const MIGRATIONS: &[&str] = &[
@@ -45,5 +45,12 @@ CREATE TABLE air_times (track INTEGER PRIMARY KEY, at INTEGER NOT NULL) WITHOUT 
     "
 CREATE TABLE day_templates (id INTEGER PRIMARY KEY, position INTEGER NOT NULL, doc TEXT NOT NULL);
 CREATE TABLE date_plans (id INTEGER PRIMARY KEY, position INTEGER NOT NULL, doc TEXT NOT NULL);
+",
+    // 5: the as-run log (automation spec AU36): one row per entry, keyed
+    // by its sequence number, with its date's day number from the common
+    // era for pruning (AU38). Appended, never rewritten.
+    "
+CREATE TABLE as_run (seq INTEGER PRIMARY KEY, date INTEGER NOT NULL, doc TEXT NOT NULL);
+CREATE INDEX as_run_by_date ON as_run(date);
 ",
 ];

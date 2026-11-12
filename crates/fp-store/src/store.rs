@@ -48,10 +48,31 @@ pub struct Store {
     disk: DiskState,
     /// When the last backup of the database was made.
     last_backup: Option<Instant>,
+    /// The as-run cutoff (a day number) of this session's first save, and
+    /// when it was made: later cutoffs move no faster than real time, so a
+    /// clock that jumps ahead does not delete the log (AU38, AU40).
+    as_run_base: Option<(i32, Instant)>,
     /// Test hook: makes the step of the JSON import that renames the files
     /// fail, like an interrupted import.
     #[doc(hidden)]
     pub fail_import_rename: bool,
+}
+
+/// `wanted`, held to the session's first cutoff (`base`) plus the whole
+/// days that really passed since, and one more so midnight is not late.
+fn bound_as_run_cutoff(
+    base: &mut Option<(i32, Instant)>,
+    wanted: Option<i32>,
+    now: Instant,
+) -> Option<i32> {
+    let wanted = wanted?;
+    let Some((first, since)) = *base else {
+        *base = Some((wanted, now));
+        return Some(wanted);
+    };
+    let days = now.saturating_duration_since(since).as_secs() / 86_400;
+    let most = first.saturating_add(i32::try_from(days).unwrap_or(i32::MAX).saturating_add(1));
+    Some(wanted.min(most))
 }
 
 pub(crate) fn parse_config(bytes: &[u8]) -> Result<(fp_model::Config, Vec<String>), ParseError> {
@@ -75,6 +96,7 @@ impl Store {
             saved: None,
             disk: DiskState::Unopened,
             last_backup: None,
+            as_run_base: None,
             fail_import_rename: false,
         }
     }
@@ -93,6 +115,7 @@ impl Store {
         let mut warnings = Vec::new();
         self.db = None;
         self.saved = None;
+        self.as_run_base = None;
         self.disk = DiskState::Unopened;
 
         // Read leniently: a hand-edited value of the wrong type falls back to its
@@ -281,7 +304,8 @@ impl Store {
                 "the database is not open",
             )));
         };
-        let new = Snapshot::of(state, position_of);
+        let mut new = Snapshot::of(state, position_of);
+        new.as_run_before = bound_as_run_cutoff(&mut self.as_run_base, new.as_run_before, now);
         match &self.saved {
             Some(old) => snapshot::write_changes(db, old, &new)?,
             None => snapshot::write_full(db, &new)?,
@@ -329,6 +353,9 @@ fn restore(
         week_plan,
         date_plans,
         automation,
+        as_run: _,
+        as_run_next,
+        as_run_before: _,
     } = snap;
     let (schedule, notes) =
         fp_model::schedule::Schedule::from_parts(templates, week_plan, date_plans);
@@ -373,6 +400,7 @@ fn restore(
         &sessions,
         default_playlist_name,
     );
+    state.as_run.resume_at(as_run_next);
     // The restore ran the same repair for the same players.
     let mut probe = saved_layout;
     warnings.extend(

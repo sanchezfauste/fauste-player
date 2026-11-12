@@ -33,15 +33,15 @@ concrete folders.
 and loudness), the playlists and their entries, the cart pages and the
 session (players, history, pending start, the cartwall's state, the
 layout), and automation's rotations, default rotation and last-aired times
-(schema 3) and its schedule: day templates, the week plan and date plans
-(schema 4). Only `config.json` (hand-edited, read leniently) and
+(schema 3), its schedule: day templates, the week plan and date plans
+(schema 4), and its as-run log (schema 5). Only `config.json` (hand-edited, read leniently) and
 `window.ron` stay outside it. The model and the interface do not know about
 SQL: `Store::load` returns the state the model restores from, and
 `Store::save_state` takes the `AppState`.
 
 ### Schema (`db/schema.rs`)
 
-`PRAGMA user_version` is the schema version (`SCHEMA_VERSION`, 4), and
+`PRAGMA user_version` is the schema version (`SCHEMA_VERSION`, 5), and
 `MIGRATIONS[n - 1]` takes it from *n − 1* to *n*, each in its own
 transaction. The tables:
 
@@ -57,6 +57,7 @@ transaction. The tables:
 | `air_times` | `track` and `at` (schema 3): when each track last aired, UTC Unix milliseconds. A row of a track not in the library is dropped on load |
 | `day_templates` | `id`, `position` and `doc` (schema 4): a day template of the schedule (`name`, `blocks`: each an `id`, a `start` in seconds after local midnight and `items`, each `{"Track": {"track", "time_critical"}}`, `{"Category": {"category", "time_critical"}}` or `{"Rotation": {"rotation"}}`). An unreadable record is dropped; `Schedule::from_parts` drops a block out of the day or at a start an earlier block has, and items after a rotation ([automation](automation.md)) |
 | `date_plans` | `id` (the date's day number from the common era, `NaiveDate::num_days_from_ce`), `position` and `doc` (schema 4): what one date changes (`date`, `template`, `changes`: `Changed {block, own_time}`, `Removed(id)`, `Added(block)`). A record whose date is not its key's is dropped; a missing template is cleared |
+| `as_run` | `seq` (the entry's sequence number), `date` (its date's day number from the common era, indexed) and `doc` (schema 5): one as-run entry (`seq`, `date`, `scheduled`, `started`, `track`, `item`, `source` `Schedule` or `Filler`, `outcome` `Aired` or `Missed`; [automation](automation.md)). Appended only (`INSERT OR IGNORE`), never rewritten; `write_full` does not clear it. Rows dated before `as_run_keep_days` ago are deleted when a save's cutoff day changes. Loading reads only `MAX(seq) + 1`; `read_as_run` reads a range and skips a damaged row with a warning |
 
 The default rotation is the `kv` value `default_rotation` (a rotation id,
 or null); one that names no rotation falls back on the first. The schedule's player is the `kv` value `automation` (its player's
@@ -104,6 +105,17 @@ database migrates in place with no templates; at every start the app calls
 `schedule::ensure_default`, which creates the template named by
 `schedule-template-default-name` for all seven days when there is none,
 then `schedule::prune_dates` with today's local date.
+
+Schema 5 (automation, plan 8) adds the `as_run` table. A save appends the
+`Snapshot::as_run` entries from the last save's `as_run_next` on, and
+deletes the rows older than `automation.as_run_keep_days` counted from the
+local date (`as_run_before`). `Store::save_state` holds that cutoff to its
+first one of the session plus the whole days of real (`Instant`) time
+since, plus one, so a clock that jumps ahead does not delete the log
+(AU40); loading resumes the model's numbering at one
+past the highest saved sequence (`AsRunLog::resume_at`). A schema 4
+database migrates in place with an empty `as_run`; a schema 4 build sets
+a schema 5 file aside as `.newer-<stamp>`.
 
 **The path rule.** The library holds one track per file (LB14). Uniqueness is
 enforced by the model (`Library::track_at`, a path index; `track_for_path`
@@ -545,6 +557,7 @@ a criterion off.
 | `filler_lookahead_mins` | 30 | the music filler keeps this many minutes of tracks queued ahead (5–240) |
 | `filler_played_kept` | 50 | the music filler keeps this many played rows in its list; older ones are removed (10–1000) |
 | `artist_separation_mins` | 30 | no track of an artist that aired less than this many minutes ago (0–1440; the artist compared trimmed and case-insensitively) |
+| `as_run_keep_days` | 90 | the as-run log keeps this many days in the database (1–3650; config file only for now) |
 | `overrides_keep_days` | 30 | the schedule's date overrides older than this many days are deleted at start-up (1–3650; config file only for now) |
 | `late_tolerance_secs` | 120 | a block that started less than this many seconds ago is still next by the clock, and a time-critical item may start this late (0–1800; config file only for now) |
 | `block_fade_ms` | 2000 | the music filler fades out over this many milliseconds, ending at a block's start (0–10000; config file only for now) |

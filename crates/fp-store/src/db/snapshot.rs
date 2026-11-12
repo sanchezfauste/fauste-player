@@ -60,6 +60,14 @@ pub struct Snapshot {
     /// The schedule's player (`kv` value `automation`); `None` before it
     /// exists.
     pub automation: Option<fp_model::automation::AutomationSession>,
+    /// The as-run entries the model holds (yesterday and today); only the
+    /// ones from `as_run_next` of the last save are written (schema 5).
+    pub as_run: Vec<fp_model::as_run::AsRunEntry>,
+    /// The next sequence number: on load, one past the highest saved.
+    pub as_run_next: u64,
+    /// Rows dated before this day (its number from the common era) are
+    /// deleted (AU38); `None` keeps them.
+    pub as_run_before: Option<i32>,
 }
 
 impl Snapshot {
@@ -84,6 +92,15 @@ impl Snapshot {
             week_plan: *state.schedule.week(),
             date_plans: state.schedule.date_plans().cloned().collect(),
             automation: state.automation_session(&position_of),
+            as_run: state.as_run.entries().cloned().collect(),
+            as_run_next: state.as_run.next_seq(),
+            as_run_before: state
+                .local_now
+                .date()
+                .checked_sub_days(chrono::Days::new(u64::from(
+                    state.config.automation.as_run_keep_days.saturating_sub(1),
+                )))
+                .map(|d| chrono::Datelike::num_days_from_ce(&d)),
         }
     }
 }
@@ -156,6 +173,9 @@ pub fn read_checked(db: &Db) -> Read {
         week_plan: read_kv(conn, KV_WEEK_PLAN, "week plan", &mut warnings),
         date_plans: read_date_plans(conn, &mut warnings),
         automation: read_kv(conn, KV_AUTOMATION, "schedule player", &mut warnings),
+        as_run: Vec::new(),
+        as_run_next: read_as_run_next(conn, &mut warnings),
+        as_run_before: None,
     };
     let mut snapshot = snapshot;
     snapshot.air_times = read_air_times(conn, &snapshot.library, &mut warnings);
@@ -865,7 +885,81 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
     for (index, plan) in snap.date_plans.iter().enumerate() {
         upsert_doc(&tx, "date_plans", date_key(plan.date), index, plan)?;
     }
+    // The as-run log is history: it is never cleared, only appended to.
+    write_as_run(&tx, snap.as_run.iter(), snap.as_run_before)?;
     tx.commit().map_err(db_error)
+}
+
+/// Appends `entries` (a row already there is kept) and deletes the rows
+/// dated before `before` (AU36, AU38).
+fn write_as_run<'a>(
+    tx: &Transaction<'_>,
+    entries: impl Iterator<Item = &'a fp_model::as_run::AsRunEntry>,
+    before: Option<i32>,
+) -> Result<(), StoreError> {
+    let mut insert = tx
+        .prepare_cached("INSERT OR IGNORE INTO as_run (seq, date, doc) VALUES (?1, ?2, ?3)")
+        .map_err(db_error)?;
+    for entry in entries {
+        insert
+            .execute(params![
+                key(entry.seq),
+                chrono::Datelike::num_days_from_ce(&entry.date),
+                doc(entry)?
+            ])
+            .map_err(db_error)?;
+    }
+    if let Some(before) = before {
+        tx.prepare_cached("DELETE FROM as_run WHERE date < ?1")
+            .map_err(db_error)?
+            .execute([before])
+            .map_err(db_error)?;
+    }
+    Ok(())
+}
+
+/// One past the highest saved sequence number (0 for an empty log).
+fn read_as_run_next(conn: &Connection, warnings: &mut Notes) -> u64 {
+    match conn.query_row("SELECT MAX(seq) FROM as_run", [], |r| {
+        r.get::<_, Option<i64>>(0)
+    }) {
+        Ok(max) => max.map_or(0, |m| raw(m).saturating_add(1)),
+        Err(e) => {
+            warnings.lines.push(format!("as-run log: {e}"));
+            0
+        }
+    }
+}
+
+/// The as-run entries dated `from` on, in sequence order; a row that
+/// cannot be read is skipped with a warning (rule 9).
+pub fn read_as_run(
+    db: &Db,
+    from: chrono::NaiveDate,
+) -> (Vec<fp_model::as_run::AsRunEntry>, Vec<String>) {
+    let mut warnings = Vec::new();
+    let mut entries = Vec::new();
+    let rows = db
+        .conn
+        .prepare("SELECT seq, doc FROM as_run WHERE date >= ?1 ORDER BY seq")
+        .and_then(|mut stmt| {
+            stmt.query_map([chrono::Datelike::num_days_from_ce(&from)], |r| {
+                Ok((r.get::<_, i64>(0)?, r.get::<_, String>(1)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()
+        });
+    match rows {
+        Ok(rows) => {
+            for (seq, text) in rows {
+                match serde_json::from_str::<fp_model::as_run::AsRunEntry>(&text) {
+                    Ok(entry) => entries.push(entry),
+                    Err(e) => warnings.push(format!("as-run log: row {seq} skipped: {e}")),
+                }
+            }
+        }
+        Err(e) => warnings.push(format!("as-run log: {e}")),
+    }
+    (entries, warnings)
 }
 
 /// Writes the air times that differ between `old` and `new`, and deletes
@@ -1013,6 +1107,9 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
     sync_docs(&tx, "date_plans", &old.date_plans, &new.date_plans, |p| {
         date_key(p.date)
     })?;
+    let fresh = new.as_run.iter().filter(|e| e.seq >= old.as_run_next);
+    let before = new.as_run_before.filter(|b| Some(*b) != old.as_run_before);
+    write_as_run(&tx, fresh, before)?;
     tx.commit().map_err(db_error)
 }
 

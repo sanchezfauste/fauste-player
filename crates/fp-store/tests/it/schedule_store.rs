@@ -193,7 +193,7 @@ fn a_schema_3_database_migrates_to_4_with_no_templates() {
     edit_db(&s, |db| {
         db.conn()
             .execute_batch(
-                "DROP TABLE day_templates; DROP TABLE date_plans; \
+                "DROP TABLE day_templates; DROP TABLE date_plans; DROP TABLE as_run; \
                  DELETE FROM kv WHERE key = 'week_plan'; PRAGMA user_version = 3;",
             )
             .unwrap();
@@ -203,7 +203,10 @@ fn a_schema_3_database_migrates_to_4_with_no_templates() {
     assert!(loaded.state.schedule.templates().is_empty());
     ensure_default(&mut loaded.state, "Base");
     assert_eq!(loaded.state.schedule.templates()[0].name, "Base");
-    assert_eq!(count(&s, "PRAGMA user_version"), 4);
+    assert_eq!(
+        count(&s, "PRAGMA user_version"),
+        i64::from(fp_store::SCHEMA_VERSION)
+    );
 }
 
 #[test]

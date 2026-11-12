@@ -199,6 +199,7 @@ impl AppState {
             library_view: crate::library_view::LibraryView::default(),
             filler: None,
             automation: None,
+            as_run: crate::as_run::AsRunLog::default(),
             rotations,
             air_times,
             schedule,

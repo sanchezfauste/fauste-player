@@ -3,6 +3,7 @@
 //! This crate performs no I/O and spawns no threads.
 
 pub mod air_times;
+pub mod as_run;
 pub mod audio_change;
 pub mod automation;
 pub mod availability;
