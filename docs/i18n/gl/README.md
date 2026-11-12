@@ -23,6 +23,9 @@ por si sos.
 | [Reprodutores](players.md) | A columna do reprodutor: transporte, modos, conta atrás, forma de onda, CUE |
 | [Listas](playlists.md) | Lapelas, a táboa de pistas, arrastrar e soltar, o menú contextual, ficheiros M3U/PLS |
 | [Cartucheira](cartwall.md) | Cartuchos instantáneos: disparo, páxinas, bucles, cartuchos exclusivos, configuración |
+| [Biblioteca](library.md) | A xanela da biblioteca: categorías, tipos, busca, preaudición, o editor externo e os ficheiros cambiados |
+| [Disposición](layout.md) | Amosar e agochar paneis, o ancho dos reprodutores, mover e redimensionar a cartucheira, maximizar un panel, o menú de disposición |
+| [Automatización](automation.md) | A columna Grella, o seu editor, o musicalizador e as súas rotacións |
 | [Marcadores e mestura](markers-and-mixing.md) | Cue-in/cue-out, o punto MIX, intro e outro, análise automática |
 | [Configuración](settings.md) | Saídas de audio, reprodutores, análise, listas, MIDI, control remoto |
 | [Normalización de sonoridade](loudness.md) | Todas as pistas e cartuchos á mesma sonoridade cunha ganancia fixa por pista: o distintivo de ganancia, excluír e axustar unha pista, saídas bit-perfect |
@@ -31,6 +34,7 @@ por si sos.
 | [Superficies de control MIDI](midi.md) | Botóns, faders e luces en controladores MIDI |
 | [Control remoto](remote-control.md) | Manexar Fauste Player pola rede: API HTTP, seguranza |
 | [Datos e copias de seguranza](data-and-backups.md) | Onde se gardan os ficheiros, gardado automático, recuperación tras un fallo, modo portátil |
+| [Android](android.md) | A aplicación en teléfonos e tabletas: instalación, a interface táctil, a música do dispositivo |
 | [Resolución de problemas](troubleshooting.md) | Sen son, dispositivo perdido, ficheiros marcados como non dispoñibles, rexistros |
 
 A interface está dispoñible en inglés, español, catalán, neerlandés,

@@ -90,7 +90,7 @@ cambialos, as pistas analízanse de novo automaticamente.
   pista seguinte comeza exactamente no cue-out, sen pausa.
 - **Modo single**, ou **Stop ao final**: o reprodutor detense no cue-out.
 - **Premer Play en antena:** a pista seguinte comeza ao instante e a actual
-  esvaécese durante a *duración do fundido* (1 s de forma predeterminada).
+  esvaécese durante a *duración do fundido entre pistas* (1 s de forma predeterminada).
 - **Un reprodutor cuxa saída Principal é bit-perfect** ignora o punto MIX e
   a mestura automática: cada pista reprodúcese ata o seu cue-out, despois
   comeza a seguinte, e Play en antena cambia ao instante, sen fundido. Ver

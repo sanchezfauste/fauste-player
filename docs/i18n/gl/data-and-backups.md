@@ -30,7 +30,7 @@ USB, ou para manter configuracións separadas ao carón.
 | Ficheiro | Contido |
 |---|---|
 | `config.json` | Configuración, saídas, limiares de análise, axustes avanzados |
-| `fauste.db` | A biblioteca (pistas, as súas categorías, marcadores manuais, etiquetas, sonoridade), as listas coas súas marcas de reproducida, as páxinas de cartuchos e a sesión: para cada reprodutor a lista que mostra, as pistas actual e seguinte, o modo, a posición, o volume e os anchos das columnas (por columna), e a disposición da xanela |
+| `fauste.db` | A biblioteca (pistas, as súas categorías, marcadores manuais, etiquetas, sonoridade), as listas coas súas marcas de reproducida, as páxinas de cartuchos, as rotacións da automatización, a grella e o rexistro de emisión (conservado `automation.as_run_keep_days` días, 90 de forma predeterminada), e a sesión: para cada reprodutor a lista que mostra, as pistas actual e seguinte, o modo, a posición, o volume e os anchos das columnas (por columna), e a disposición da xanela |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Copias da base de datos (ver abaixo) |
 | `window.ron` | O tamaño e a posición da xanela principal e se estaba maximizada (só no computador; en Wayland o sistema escolle a posición) |
 

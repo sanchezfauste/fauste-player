@@ -131,9 +131,9 @@ cabeceira (non sobre un dos seus botóns) (ver
 
 | Botón | Acción |
 |---|---|
-| **Play / Seguinte** (grande) | Detido: inicia a pista seguinte. En antena: pasa con fundido á pista seguinte (o tempo de fundido axústase en [Configuración](settings.md)); mentres dura o fundido dun fundido cruzado iniciado por Seguinte ou por un segue, unha banda verde baleira o botón durante a duración do fundido, co bordo movéndose de esquerda a dereita coma o dun cartucho (un fundido cruzado iniciado por Anterior baleira o botón Anterior). En pausa: retoma. Se a pista en antena é tamén a seguinte, Play reiníciaa co fundido habitual. Nunha saída bit-perfect cambia ao instante, sen fundido, e a súa dica dío (ver [O que custa](bit-perfect.md#what-it-costs)). |
+| **Play / Seguinte** (grande) | Detido: inicia a pista seguinte. En antena: pasa con fundido á pista seguinte (a duración do fundido entre pistas axústase en [Configuración](settings.md)); mentres dura o fundido dun fundido cruzado iniciado por Seguinte ou por un segue, unha banda verde baleira o botón durante a duración do fundido, co bordo movéndose de esquerda a dereita coma o dun cartucho (un fundido cruzado iniciado por Anterior baleira o botón Anterior). En pausa: retoma. Se a pista en antena é tamén a seguinte, Play reiníciaa co fundido habitual. Nunha saída bit-perfect cambia ao instante, sen fundido, e a súa dica dío (ver [O que custa](bit-perfect.md#what-it-costs)). |
 | **Stop** | Detén ao instante (cunha rampla curta contra os chasquidos) |
-| **Stop con fundido** | Fundido de saída e stop. Mentres dura un stop con fundido, unha banda baleira o botón durante a duración do fundido, co bordo movéndose de esquerda a dereita |
+| **Stop con fundido** | Fundido de saída durante a duración do stop con fundido (2 s de forma predeterminada, axustada en [Configuración](settings.md)) e stop. Mentres dura un stop con fundido, unha banda baleira o botón durante a duración do fundido, co bordo movéndose de esquerda a dereita |
 | **Pausa** | Pausa ou retoma; pestanexa en ámbar mentres está en pausa |
 | **Stop ao final** (un triángulo de play e despois un cadrado) | Detén cando remata a pista actual, unha vez. No modo SINGLE só está dispoñible mentres a pista actual se repite: pon fin á repetición cando remata a pasada que está soando. Para parar despois dunha pista cada vez que se reproduce, ou para repetir unha pista, usa o seu menú na lista (consulta [Listas](playlists.md)) |
 | **Anterior** (unha barra e dous triángulos) | En antena: volve con fundido á pista que este reprodutor reproduciu antes, como fai Seguinte. Prémeo de novo para seguir retrocedendo. A pista que deixaches pasa a ser a seguinte. Nunha saída bit-perfect cambia ao instante, sen fundido (ver [O que custa](bit-perfect.md#what-it-costs)). |
@@ -263,6 +263,12 @@ A xanela mostra:
 
 Mentres o CUE está en pausa, o seu botón **Pausar o CUE** (que se mostra como
 **Retomar o CUE**) pestanexa en ámbar, como o propio do reprodutor.
+
+Arrastra un bordo ou unha esquina da xanela para facela máis grande: a forma
+de onda toma o ancho e o alto extra, o que axuda a colocar marcadores. Podes
+facela máis pequena de novo, ata o seu primeiro tamaño. A seguinte xanela
+CUE, de calquera reprodutor, ábrese co último tamaño que lle deches a unha,
+tamén despois de reiniciar.
 
 Un salto nun CUE en pausa mantéñeo en pausa. O botón de pechar da xanela, ou
 **Parar o CUE**, detén o CUE.

@@ -33,7 +33,8 @@ tecla (con Ctrl, Alt, Shift ou Cmd se queres). Se outra acción xa usa esa
 tecla, móstrase o seu nome. Escolle **Asignar** para mover a tecla, ou
 **Cancelar**. **Quitar** elimina un atallo e **Restaurar os valores
 predeterminados** (arriba á dereita da sección) restablece a táboa de arriba.
-Accións dispoñibles, para cada reprodutor e cartucho:
+Accións dispoñibles, para cada reprodutor (P1 … Pn; a columna **Música** non ten
+atallos) e cartucho:
 
 - play, anterior, reiniciar, pausa, stop, stop con fundido e CUE nun
   reprodutor (anterior e reiniciar non teñen tecla predeterminada);
