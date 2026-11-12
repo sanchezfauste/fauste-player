@@ -9,7 +9,7 @@ bidaltzen ditu. Mahaigainean eta tableta batean leiho bat da; telefono batek
 liburutegia bere **Liburutegia** fitxan erakusten du horren ordez (ikus
 [Telefono batean](#on-a-phone)).
 
-![Liburutegiaren leihoa: aurrez entzuteko zerrenda hautatutako pistaren uhin-formarekin, neurgailuarekin eta entzute-faderrarekin, kategorien zuhaitza Music hautatuta (bere Pop eta Evening azpikategoriekin) eta amaieran Berrikusteko markatzaileak, eta bere pisten taula kategoria eta motarekin; Coastline pistak berrikusteko markatzaileen ikur anbarra darama](../../images/guide/library.png)
+![Liburutegiaren leihoa: aurrez entzuteko zerrenda hautatutako pistaren uhin-formarekin, neurgailuarekin eta entzute-faderrarekin, kategorien zuhaitza Music hautatuta (bere Pop eta Evening azpikategoriekin) eta amaieran Berrikusteko markatzaileak, eta bere pisten taula kategoria eta motarekin](../../images/guide/library.png)
 
 ## Leihoa irekitzea {#opening-the-window}
 

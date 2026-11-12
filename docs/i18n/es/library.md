@@ -8,7 +8,7 @@ encuentra por texto y las envía a las playlists y a la cartuchera. Es una
 ventana en el escritorio y en una tableta; un teléfono muestra la
 biblioteca en su pestaña **Biblioteca** (véase [En un teléfono](#on-a-phone)).
 
-![La ventana de la biblioteca: la franja de preescucha con la forma de onda, el vúmetro y el fader de escucha de la pista seleccionada, el árbol de categorías con Music (y sus subcategorías Pop y Evening) seleccionada y Marcadores por revisar al final, y la tabla de sus pistas con su categoría y su tipo; Coastline lleva la marca ámbar de marcadores por revisar](../../images/guide/library.png)
+![La ventana de la biblioteca: la franja de preescucha con la forma de onda, el vúmetro y el fader de escucha de la pista seleccionada, el árbol de categorías con Music (y sus subcategorías Pop y Evening) seleccionada y Marcadores por revisar al final, y la tabla de sus pistas con su categoría y su tipo](../../images/guide/library.png)
 
 ## Abrir la ventana {#opening-the-window}
 

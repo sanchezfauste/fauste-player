@@ -8,7 +8,7 @@ envia a les llistes i a la cartutxera. A l'escriptori i a una tauleta és una
 finestra; un mòbil mostra la biblioteca a la pestanya **Biblioteca** (vegeu
 [En un mòbil](#on-a-phone)).
 
-![La finestra de la biblioteca: la franja de preescolta amb la forma d'ona de la pista seleccionada, el mesurador i el fader d'escolta, l'arbre de categories amb Music (i les seves subcategories Pop i Evening) seleccionada i Marcadors per revisar al final, i la taula de les seves pistes amb la categoria i el tipus; Coastline porta l'indicador ambre de marcadors per revisar](../../images/guide/library.png)
+![La finestra de la biblioteca: la franja de preescolta amb la forma d'ona de la pista seleccionada, el mesurador i el fader d'escolta, l'arbre de categories amb Music (i les seves subcategories Pop i Evening) seleccionada i Marcadors per revisar al final, i la taula de les seves pistes amb la categoria i el tipus](../../images/guide/library.png)
 
 ## Obrir la finestra {#opening-the-window}
 

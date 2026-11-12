@@ -8,7 +8,7 @@ envia-as para as listas e para a cartucheira. É uma janela no computador e
 num tablet; um telemóvel mostra a biblioteca no seu separador **Biblioteca**
 (ver [Num telemóvel](#on-a-phone)).
 
-![A janela da biblioteca: a faixa de pré-escuta com a forma de onda, o medidor e o fader de escuta da faixa selecionada, a árvore de categorias com Music (e as suas subcategorias Pop e Evening) selecionada e Marcadores a rever no fim, e a tabela das suas faixas com a categoria e o tipo; Coastline tem o indicador âmbar de marcadores a rever](../../images/guide/library.png)
+![A janela da biblioteca: a faixa de pré-escuta com a forma de onda, o medidor e o fader de escuta da faixa selecionada, a árvore de categorias com Music (e as suas subcategorias Pop e Evening) selecionada e Marcadores a rever no fim, e a tabela das suas faixas com a categoria e o tipo](../../images/guide/library.png)
 
 ## Abrir a janela {#opening-the-window}
 

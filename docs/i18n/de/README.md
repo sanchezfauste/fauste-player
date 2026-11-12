@@ -1,6 +1,6 @@
 # Fauste Player — Benutzerhandbuch
 
-<div class="ai-notice" role="note">Dieses Handbuch wurde mit KI aus dem englischen Handbuch übersetzt (v0.14.0-142-g86653d97, Commit 86653d9) und kann Fehler enthalten. Bei Abweichungen gilt die englische Fassung. <a href="../index.html" hreflang="en">Das englische Original lesen</a></div>
+<div class="ai-notice" role="note">Dieses Handbuch wurde mit KI aus dem englischen Handbuch übersetzt (v0.14.0-144-g8517d951, Commit 8517d95) und kann Fehler enthalten. Bei Abweichungen gilt die englische Fassung. <a href="../index.html" hreflang="en">Das englische Original lesen</a></div>
 
 Fauste Player ist eine Playout-Anwendung für Radiostudios. Sie betreibt
 mehrere unabhängige **Player** nebeneinander. Jeder Player hat seine eigenen

@@ -9,7 +9,7 @@ auf einem Tablet ist sie ein Fenster; ein Telefon zeigt die Bibliothek
 stattdessen in seinem Tab **Bibliothek** (siehe [Auf einem
 Telefon](#on-a-phone)).
 
-![Das Bibliotheksfenster: der Vorhör-Streifen mit der Wellenform des gewählten Tracks, Pegelmesser und Hörpegel-Fader, der Kategoriebaum mit Music (mit den Unterkategorien Pop und Evening) ausgewählt und Zu prüfende Marker am Ende, und die Tabelle ihrer Tracks mit Kategorie und Art; Coastline trägt die bernsteinfarbene Markierung für zu prüfende Marker](../../images/guide/library.png)
+![Das Bibliotheksfenster: der Vorhör-Streifen mit der Wellenform des gewählten Tracks, Pegelmesser und Hörpegel-Fader, der Kategoriebaum mit Music (mit den Unterkategorien Pop und Evening) ausgewählt und Zu prüfende Marker am Ende, und die Tabelle ihrer Tracks mit Kategorie und Art](../../images/guide/library.png)
 
 ## Das Fenster öffnen {#opening-the-window}
 

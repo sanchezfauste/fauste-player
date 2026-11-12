@@ -1,6 +1,6 @@
 # Fauste Player — Erabiltzailearen gida
 
-<div class="ai-notice" role="note">Gida hau AArekin itzuli da ingelesezko gidatik abiatuta (v0.14.0-142-g86653d97, 86653d9 commita), eta akatsak izan ditzake. Desberdintasunik badago, ingelesezko bertsioa da baliozkoa. <a href="../index.html" hreflang="en">Irakurri jatorrizkoa ingelesez</a></div>
+<div class="ai-notice" role="note">Gida hau AArekin itzuli da ingelesezko gidatik abiatuta (v0.14.0-144-g8517d951, 8517d95 commita), eta akatsak izan ditzake. Desberdintasunik badago, ingelesezko bertsioa da baliozkoa. <a href="../index.html" hreflang="en">Irakurri jatorrizkoa ingelesez</a></div>
 
 Fauste Player irrati-estudioetarako emisio-aplikazio (playout) bat da.
 Hainbat **erreproduzitzaile** independente exekutatzen ditu, bata bestearen

@@ -8,7 +8,7 @@ stuurt ze naar de playlists en de cartwall. Het is een venster op de desktop en
 op een tablet; een telefoon toont de bibliotheek in plaats daarvan in zijn
 tabblad **Bibliotheek** (zie [Op een telefoon](#on-a-phone)).
 
-![Het bibliotheekvenster: de voorbeluisterstrook met de golfvorm van het geselecteerde nummer, de meter en de luisterfader, de categorieboom met Music (met de subcategorieën Pop en Evening) geselecteerd en Te controleren markers aan het eind, en de tabel van zijn nummers met hun categorie en soort; Coastline draagt de oranje vlag voor te controleren markers](../../images/guide/library.png)
+![Het bibliotheekvenster: de voorbeluisterstrook met de golfvorm van het geselecteerde nummer, de meter en de luisterfader, de categorieboom met Music (met de subcategorieën Pop en Evening) geselecteerd en Te controleren markers aan het eind, en de tabel van zijn nummers met hun categorie en soort](../../images/guide/library.png)
 
 ## Het venster openen {#opening-the-window}
 

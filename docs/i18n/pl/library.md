@@ -7,7 +7,7 @@ markerami i ustawieniami głośności. Okno biblioteki wymienia je, grupuje w
 komputerze i tablecie to okno; telefon pokazuje bibliotekę w swojej karcie
 **Biblioteka** (zob. [Na telefonie](#on-a-phone)).
 
-![Okno biblioteki: pasek odsłuchu z przebiegiem wybranego utworu, miernikiem i suwakiem poziomu odsłuchu, drzewo kategorii z zaznaczoną kategorią Music (z jej podkategoriami Pop i Evening) i Znaczniki do sprawdzenia na końcu, oraz tabela jej utworów z kategorią i rodzajem; Coastline ma bursztynową flagę znaczników do sprawdzenia](../../images/guide/library.png)
+![Okno biblioteki: pasek odsłuchu z przebiegiem wybranego utworu, miernikiem i suwakiem poziomu odsłuchu, drzewo kategorii z zaznaczoną kategorią Music (z jej podkategoriami Pop i Evening) i Znaczniki do sprawdzenia na końcu, oraz tabela jej utworów z kategorią i rodzajem](../../images/guide/library.png)
 
 ## Otwieranie okna {#opening-the-window}
 

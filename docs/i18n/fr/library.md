@@ -9,7 +9,7 @@ de cartouches. C'est une fenêtre sur l'ordinateur et sur une tablette ; un
 téléphone montre la bibliothèque dans son onglet **Bibliothèque** à la place
 (voir [Sur un téléphone](#on-a-phone)).
 
-![La fenêtre de la bibliothèque : le bandeau de pré-écoute avec la forme d'onde de la piste sélectionnée, son vumètre et son fader d'écoute, l'arbre des catégories avec Music (et ses sous-catégories Pop et Evening) sélectionnée et Marqueurs à vérifier à la fin, et le tableau de ses pistes avec leur catégorie et leur type ; Coastline porte le drapeau ambre des marqueurs à vérifier](../../images/guide/library.png)
+![La fenêtre de la bibliothèque : le bandeau de pré-écoute avec la forme d'onde de la piste sélectionnée, son vumètre et son fader d'écoute, l'arbre des catégories avec Music (et ses sous-catégories Pop et Evening) sélectionnée et Marqueurs à vérifier à la fin, et le tableau de ses pistes avec leur catégorie et leur type ](../../images/guide/library.png)
 
 ## Ouvrir la fenêtre {#opening-the-window}
 

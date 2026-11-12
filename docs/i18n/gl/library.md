@@ -8,7 +8,7 @@ listas e á cartucheira. É unha xanela no escritorio e nunha tablet; un
 teléfono mostra a biblioteca na súa lapela **Biblioteca** (consulta [Nun
 teléfono](#on-a-phone)).
 
-![A xanela da biblioteca: a franxa de preescoita coa forma de onda, o vúmetro e o fader de escoita da pista seleccionada, a árbore de categorías con Music (e as súas subcategorías Pop e Evening) seleccionada e Marcadores por revisar ao final, e a táboa das súas pistas coa súa categoría e o seu tipo; Coastline leva a marca ámbar de marcadores por revisar](../../images/guide/library.png)
+![A xanela da biblioteca: a franxa de preescoita coa forma de onda, o vúmetro e o fader de escoita da pista seleccionada, a árbore de categorías con Music (e as súas subcategorías Pop e Evening) seleccionada e Marcadores por revisar ao final, e a táboa das súas pistas coa súa categoría e o seu tipo](../../images/guide/library.png)
 
 ## Abrir a xanela {#opening-the-window}
 

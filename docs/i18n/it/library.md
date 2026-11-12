@@ -8,7 +8,7 @@ testo e li invia alle playlist e alla cartwall. È una finestra sul desktop e
 su un tablet; un telefono mostra invece la libreria nella sua scheda
 **Libreria** (vedi [Su un telefono](#on-a-phone)).
 
-![La finestra della libreria: la striscia di preascolto con la forma d'onda, il meter e il fader di ascolto del brano selezionato, l'albero delle categorie con Music (e le sue sottocategorie Pop ed Evening) selezionata e Marker da verificare in fondo, e la tabella dei suoi brani con categoria e tipo; Coastline porta il segno ambra dei marker da verificare](../../images/guide/library.png)
+![La finestra della libreria: la striscia di preascolto con la forma d'onda, il meter e il fader di ascolto del brano selezionato, l'albero delle categorie con Music (e le sue sottocategorie Pop ed Evening) selezionata e Marker da verificare in fondo, e la tabella dei suoi brani con categoria e tipo](../../images/guide/library.png)
 
 ## Aprire la finestra {#opening-the-window}
 
