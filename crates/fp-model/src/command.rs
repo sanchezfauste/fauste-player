@@ -205,6 +205,41 @@ pub enum Command {
     SetFillerRotation(Option<crate::ids::RotationId>),
     /// AU4: the rotation the filler falls back on.
     SetDefaultRotation(crate::ids::RotationId),
+    /// Automation spec AU9: a new day template with no blocks, after the
+    /// others.
+    CreateTemplate {
+        name: String,
+    },
+    /// A copy of a template under `name`; its blocks get fresh ids.
+    DuplicateTemplate {
+        template: crate::ids::TemplateId,
+        name: String,
+    },
+    RenameTemplate {
+        template: crate::ids::TemplateId,
+        name: String,
+    },
+    /// Refused for the last template and for one the week plan uses.
+    DeleteTemplate(crate::ids::TemplateId),
+    /// AU5: a block with no items; refused at a start another block has.
+    AddBlock {
+        template: crate::ids::TemplateId,
+        start: crate::local_time::TimeOfDay,
+    },
+    /// Replaces the start and items of the template block with that id.
+    UpdateBlock {
+        template: crate::ids::TemplateId,
+        block: crate::schedule::Block,
+    },
+    RemoveBlock {
+        template: crate::ids::TemplateId,
+        block: crate::ids::BlockId,
+    },
+    /// AU9: the template a weekday uses.
+    SetWeekTemplate {
+        weekday: chrono::Weekday,
+        template: crate::ids::TemplateId,
+    },
     /// Puts files in the library, filed under `category` when given: a new
     /// track takes the category and its kind, an uncategorised one joins it,
     /// one already in a category keeps it (LB16).

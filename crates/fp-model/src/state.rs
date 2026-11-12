@@ -40,6 +40,9 @@ pub struct AppState {
     pub rotations: crate::rotation::Rotations,
     /// When each track last aired (automation spec AU35), saved.
     pub air_times: crate::air_times::AirTimes,
+    /// The schedule's templates, week plan and date plans (automation spec
+    /// AU9–AU12), saved.
+    pub schedule: crate::schedule::Schedule,
     /// The wall clock, set by the conductor every tick (by tests directly);
     /// runtime only.
     pub wall_now: crate::wall_time::WallTime,
@@ -84,6 +87,7 @@ impl AppState {
             filler: None,
             rotations: crate::rotation::Rotations::default(),
             air_times: crate::air_times::AirTimes::default(),
+            schedule: crate::schedule::Schedule::default(),
             wall_now: crate::wall_time::WallTime::default(),
             rng: crate::wall_time::SplitMix64::default(),
         }

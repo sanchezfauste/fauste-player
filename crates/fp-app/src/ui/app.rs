@@ -2237,6 +2237,8 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError, categories: &Categorie
         | ModelError::UnknownCartPosition(_)
         | ModelError::UnknownCategory(_)
         | ModelError::UnknownRotation(_)
+        | ModelError::UnknownTemplate(_)
+        | ModelError::UnknownBlock(_)
         | ModelError::UnknownTrack(_) => i18n.tr("error-not-found"),
         ModelError::FolderAlreadyWatched(other) => match categories.get(*other) {
             Some(category) => i18n.tr_args(
@@ -2272,6 +2274,10 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError, categories: &Categorie
         ModelError::EmptyRotation => i18n.tr("error-rotation-empty"),
         ModelError::LastRotation => i18n.tr("error-last-rotation"),
         ModelError::RotationNotLast => i18n.tr("error-schedule-rotation-last"),
+        ModelError::EmptyTemplateName => i18n.tr("error-template-name-empty"),
+        ModelError::LastTemplate => i18n.tr("error-last-template"),
+        ModelError::TemplateInUse => i18n.tr("error-template-in-use"),
+        ModelError::BlockTimeTaken => i18n.tr("error-block-time-taken"),
         ModelError::FillerPlaylist(_) => i18n.tr("error-filler-playlist"),
     }
 }

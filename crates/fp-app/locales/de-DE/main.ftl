@@ -250,6 +250,10 @@ error-rotation-name-empty = Die Rotation braucht einen Namen.
 error-rotation-empty = Die Rotation braucht mindestens einen Schritt.
 error-last-rotation = Die letzte Rotation kann nicht gelöscht werden.
 error-schedule-rotation-last = Eine Rotation muss das letzte Element eines Blocks sein.
+error-template-name-empty = Eine Vorlage braucht einen Namen.
+error-last-template = Die letzte Vorlage kann nicht gelöscht werden.
+error-template-in-use = Der Wochenplan verwendet diese Vorlage.
+error-block-time-taken = Zu dieser Zeit beginnt bereits ein anderer Block.
 error-filler-playlist = Diese Liste gehört zur Spalte Musik.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall

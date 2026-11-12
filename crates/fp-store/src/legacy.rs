@@ -133,6 +133,7 @@ pub fn fuzz_documents(bytes: &[u8]) {
     let _ = AppState::restore(
         RestoreParts {
             rotations: Default::default(),
+            schedule: Default::default(),
             air_times: Default::default(),
             filler: None,
             config,

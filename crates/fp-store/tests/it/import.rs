@@ -49,6 +49,7 @@ fn state_of_fixtures() -> AppState {
             rotations: Default::default(),
             air_times: Default::default(),
             filler: None,
+            schedule: Default::default(),
             library_view: Default::default(),
             config: Config::default(),
             library: lists.library,

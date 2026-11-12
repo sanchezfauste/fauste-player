@@ -359,6 +359,7 @@ fn restore(
             ids,
             rotations: fp_model::Rotations::from_parts(rotations, default_rotation),
             air_times,
+            schedule: fp_model::schedule::Schedule::default(),
             filler,
         },
         &sessions,

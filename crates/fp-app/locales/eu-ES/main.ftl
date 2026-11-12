@@ -250,6 +250,10 @@ error-rotation-name-empty = Errotazioak izena behar du.
 error-rotation-empty = Errotazioak urrats bat behar du gutxienez.
 error-last-rotation = Ezin da azken errotazioa ezabatu.
 error-schedule-rotation-last = Errotazioak blokearen azken elementua izan behar du.
+error-template-name-empty = Txantiloiak izen bat behar du.
+error-last-template = Ezin da azken txantiloia ezabatu.
+error-template-in-use = Aste ereduak txantiloi hau erabiltzen du.
+error-block-time-taken = Beste bloke bat hasten da ordu horretan.
 error-filler-playlist = Zerrenda hori Musika zutabearena da.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Kartutxoak

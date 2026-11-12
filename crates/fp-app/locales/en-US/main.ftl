@@ -250,6 +250,10 @@ error-rotation-name-empty = A rotation needs a name.
 error-rotation-empty = A rotation needs at least one step.
 error-last-rotation = The last rotation cannot be deleted.
 error-schedule-rotation-last = A rotation must be the last item of a block.
+error-template-name-empty = A template needs a name.
+error-last-template = The last template cannot be deleted.
+error-template-in-use = The week plan uses this template.
+error-block-time-taken = Another block starts at that time.
 error-filler-playlist = That list belongs to the Music column.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartwall

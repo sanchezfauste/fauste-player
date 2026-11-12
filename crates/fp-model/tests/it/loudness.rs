@@ -961,6 +961,7 @@ fn n13_crash_recovery_computes_the_gain_again() {
         rotations: Default::default(),
         air_times: Default::default(),
         filler: None,
+        schedule: Default::default(),
         library_view: Default::default(),
         config: s.config.clone(),
         library: s.library.clone(),

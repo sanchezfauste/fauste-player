@@ -319,6 +319,7 @@ fn restore(state: &AppState, sessions: &[PlayerSession]) -> (AppState, Vec<Engin
         rotations: Default::default(),
         air_times: Default::default(),
         filler: None,
+        schedule: Default::default(),
         library_view: Default::default(),
         config: state.config.clone(),
         library: state.library.clone(),
