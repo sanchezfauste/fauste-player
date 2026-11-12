@@ -338,6 +338,8 @@ pub struct AutomationConfig {
     /// The filler never starts a song that would play less than this many
     /// seconds before its fade at a block's start (0 ..= 600, AU25).
     pub min_song_play_secs: u32,
+    /// The as-run log keeps this many days (1 ..= 3 650, AU36, AU38).
+    pub as_run_keep_days: u32,
 }
 
 impl Default for AutomationConfig {
@@ -353,6 +355,7 @@ impl Default for AutomationConfig {
             block_fade_ms: 2_000,
             max_fade_cut_secs: 30,
             min_song_play_secs: 45,
+            as_run_keep_days: 90,
         }
     }
 }
@@ -1695,6 +1698,13 @@ impl Config {
             0,
             600,
             "automation.min_song_play_secs",
+            &mut w,
+        );
+        clamp_to(
+            &mut a.as_run_keep_days,
+            1,
+            3_650,
+            "automation.as_run_keep_days",
             &mut w,
         );
         if self

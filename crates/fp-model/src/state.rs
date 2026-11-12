@@ -39,6 +39,9 @@ pub struct AppState {
     /// Running the schedule (automation spec AU15–AU24): its player is just
     /// before the filler's. `None` until `automation::ensure`.
     pub automation: Option<crate::automation::AutomationState>,
+    /// What aired and what was missed, yesterday and today (automation
+    /// spec AU36); the store keeps the rest.
+    pub as_run: crate::as_run::AsRunLog,
     /// The music filler's rotations (automation spec AU1–AU4), saved.
     pub rotations: crate::rotation::Rotations,
     /// When each track last aired (automation spec AU35), saved.
@@ -92,6 +95,7 @@ impl AppState {
             library_cue: crate::library_cue::LibraryCue::default(),
             filler: None,
             automation: None,
+            as_run: crate::as_run::AsRunLog::default(),
             rotations: crate::rotation::Rotations::default(),
             air_times: crate::air_times::AirTimes::default(),
             schedule: crate::schedule::Schedule::default(),

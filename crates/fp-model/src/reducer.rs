@@ -782,6 +782,7 @@ pub(crate) fn settle_all(state: &mut AppState, out: &mut Vec<EngineAction>) {
     crate::automation::settle_next(state);
     reconcile(state, out);
     crate::live::dispatch_due(state, out);
+    crate::as_run::record(state);
 }
 
 pub(crate) fn play(

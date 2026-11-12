@@ -6,6 +6,7 @@
 mod after_next;
 mod air_times;
 mod analysis;
+mod as_run;
 mod audio_change;
 mod automation_blocks;
 mod automation_clock;
