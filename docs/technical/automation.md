@@ -2,9 +2,9 @@
 
 The design is the [automation spec](../superpowers/specs/2026-11-11-automation-design.md)
 (rules `AU<n>`). This page describes what is implemented so far: the music
-filler's selection rules and player, the schedule's data model, and
-running the schedule, pure functions in `fp-model`. The schedule's screens
-come in a later plan.
+filler's selection rules and player, the schedule's data model, running
+the schedule and its as-run log, pure functions in `fp-model`. The
+Schedule column and the schedule editor are described in [ui](ui.md).
 
 ## Time and randomness (`wall_time.rs`)
 

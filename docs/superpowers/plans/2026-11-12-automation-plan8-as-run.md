@@ -167,3 +167,18 @@ Commit: `test: thirty days of automation (AU39)`.
 - The README roadmap: automation is complete for its first release.
 
 Then the final review, test-first fixes, and the PR.
+
+## Rulings made while building
+
+- **Pruning happens on save, not at start-up.** The store deletes the old
+  rows in the save whose cutoff day changes (the first save of a session
+  included), so a session that runs for weeks prunes every day. It logs
+  no count. `fp-app` is not touched. After review, the cutoff moves no
+  faster than real time since the session's first save, so a clock that
+  jumps ahead does not delete the log.
+- **One long-run test.** AU39 is one test at store level,
+  `fp-store/tests/it/automation_long_run.rs`, with a small fake engine:
+  the store half needs the model half's run anyway.
+- **The README roadmap stays "in progress".** Calling automation complete
+  is the maintainer's decision after real use; the roadmap line lists
+  the as-run log as built.

@@ -30,7 +30,7 @@ a USB stick, or to keep separate setups side by side.
 | File | Content |
 |---|---|
 | `config.json` | Settings, outputs, analysis thresholds, advanced tuning |
-| `fauste.db` | The library (tracks, their categories, manual markers, tags, loudness), the playlists with their played flags, the cart pages and the session: for each player the playlist shown, current and next tracks, mode, position, volume and column widths (by column), and the window layout |
+| `fauste.db` | The library (tracks, their categories, manual markers, tags, loudness), the playlists with their played flags, the cart pages, the automation's rotations, schedule and as-run log (kept `automation.as_run_keep_days` days, 90 by default), and the session: for each player the playlist shown, current and next tracks, mode, position, volume and column widths (by column), and the window layout |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Copies of the database (see below) |
 | `window.ron` | The main window's size, position and whether it was maximized (computer only; on Wayland the system chooses the position) |
 
