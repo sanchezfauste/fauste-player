@@ -135,20 +135,10 @@ fn note_current(state: &mut AppState, f: &FillerState) {
 /// strictly inside its play range (as the player's own plan), else to the
 /// end; an unknown length counts as `UNKNOWN_LENGTH_SECS`.
 pub(crate) fn lead_secs(state: &AppState, entry: EntryId) -> f64 {
-    let Some(track) = state.track_for_entry(entry) else {
-        return UNKNOWN_LENGTH_SECS;
-    };
-    let range = track.play_range(state.config.players.use_cue_markers);
-    let Some(end) = range
-        .known_end()
-        .filter(|e| e.is_finite() && *e > range.cue_in)
-    else {
-        return UNKNOWN_LENGTH_SECS;
-    };
-    let segue = track
-        .segue_start_secs()
-        .filter(|s| state.config.players.auto_segue && *s >= range.cue_in && *s < end);
-    segue.unwrap_or(end) - range.cue_in
+    state
+        .track_for_entry(entry)
+        .and_then(|t| crate::selection::timing(state, t.id))
+        .map_or(UNKNOWN_LENGTH_SECS, |(_, lead)| lead)
 }
 
 /// When each row of the filler's list from its anchor on is expected to

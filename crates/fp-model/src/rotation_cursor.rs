@@ -7,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::ids::RotationId;
 use crate::rotation::Rotation;
-use crate::selection::{Picked, Planned, pick};
+use crate::selection::{Fit, Picked, Planned, pick_fitted};
 use crate::state::AppState;
 use crate::wall_time::{SplitMix64, WallTime};
 
@@ -55,6 +55,18 @@ pub fn next_track(
     planned: Planned<'_>,
     rng: &mut SplitMix64,
 ) -> CursorPick {
+    next_track_fitted(state, cursor, at, planned, rng, None)
+}
+
+/// `next_track`, each step's choice preferring tracks that `fit` (AU25).
+pub fn next_track_fitted(
+    state: &AppState,
+    cursor: &mut RotationCursor,
+    at: WallTime,
+    planned: Planned<'_>,
+    rng: &mut SplitMix64,
+    fit: Option<&Fit>,
+) -> CursorPick {
     let mut out = CursorPick {
         picked: None,
         skipped_steps: Vec::new(),
@@ -70,6 +82,7 @@ pub fn next_track(
             at,
             planned,
             rng,
+            fit,
             &mut out.skipped_steps,
         );
         if out.picked.is_some() {
@@ -88,6 +101,7 @@ pub fn next_track(
             at,
             planned,
             rng,
+            fit,
             &mut ignored,
         );
         out.used_default = true;
@@ -98,6 +112,7 @@ pub fn next_track(
 }
 
 /// One pass at most over `rotation`'s steps from where `cursor` stands.
+#[allow(clippy::too_many_arguments)]
 fn walk(
     state: &AppState,
     rotation: &Rotation,
@@ -105,6 +120,7 @@ fn walk(
     at: WallTime,
     planned: Planned<'_>,
     rng: &mut SplitMix64,
+    fit: Option<&Fit>,
     skipped: &mut Vec<usize>,
 ) -> Option<Picked> {
     let len = rotation.steps.len();
@@ -121,7 +137,7 @@ fn walk(
             cursor.left = draw(rotation, cursor.step, rng);
         }
         let step = rotation.steps.get(cursor.step)?;
-        match pick(state, &step.source, at, planned, rng) {
+        match pick_fitted(state, &step.source, at, planned, rng, fit) {
             Some(picked) => {
                 cursor.left = cursor.left.saturating_sub(1);
                 return Some(picked);
