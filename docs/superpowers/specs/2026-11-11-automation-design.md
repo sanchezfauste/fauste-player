@@ -264,7 +264,9 @@ rename it before the plans.
 - **AU27.** The filler is a **list** like a player's playlist. It generates
   tracks ahead of what plays, enough to cover
   `automation.filler_lookahead_mins` or the next block, whichever comes first
-  *(my call)*, and keeps only the last `automation.filler_played_kept` played
+  *(my call)*; before a block it queues up to the start of its fade, and a
+  song still audible when the fade starts is the last one (AU25, plan 5),
+  and keeps only the last `automation.filler_played_kept` played
   rows; older played rows are removed from the list (they stay in the as-run
   log, AU35) *(maintainer)*.
 - **AU28.** The operator may **remove, reorder and add** tracks (drag from

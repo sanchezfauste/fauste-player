@@ -19,6 +19,9 @@ list:
   hour ahead (*look-ahead*, in Settings → Automation);
 - it **trims itself**: it keeps the last 50 tracks it played and removes
   older ones, so it can run for weeks;
+- before a block of the schedule it may **swap songs it chose itself**
+  for others whose length fits the time left (see below); the songs you
+  added are never touched;
 - you can still **change it by hand**: drag tracks from the library,
   reorder rows, remove a song you do not want. A row you add is marked
   with a hand and is never replaced; a row you remove does not count as
@@ -76,7 +79,9 @@ Before a block of the schedule, the filler also chooses its last songs by
 their length, so the music ends cleanly: the song that fades out when the
 block starts loses at most 30 seconds, and no song starts that would play
 for less than 45 seconds. When no song in the rotation can do both, the
-one that loses least plays.
+one that loses least plays. Both values can be changed for now only in the
+configuration file (`automation.max_fade_cut_secs` and
+`automation.min_song_play_secs`).
 
 An **Hourly ID** is a track kind of its own (Library → Kind ▸ Hourly ID),
 for the station's identification at the top of the hour.
