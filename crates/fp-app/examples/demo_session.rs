@@ -216,15 +216,17 @@ fn library(state: &mut AppState, songs: &[PathBuf], carts: &[PathBuf]) {
             },
         );
     }
-    // One song whose audio changed under its manual outro: the library
-    // shows it under "Markers to review" with the amber flag on its row.
+    // One effect whose audio changed under its manual outro: the library
+    // tree shows "Markers to review". An effect, not a song: the songs are
+    // on every playlist of the README and Google Play screenshots, and the
+    // flag would show on their rows.
     let flagged = state
         .library
         .iter()
         .find(|t| {
             t.path
                 .file_stem()
-                .is_some_and(|s| s.to_string_lossy().ends_with("Coastline"))
+                .is_some_and(|s| s.to_string_lossy() == "Effect – Applause")
         })
         .map(|t| t.id);
     if let Some(track) = flagged.and_then(|id| state.library.get_mut(id)) {
