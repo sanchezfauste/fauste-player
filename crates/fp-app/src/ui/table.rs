@@ -524,6 +524,23 @@ pub(crate) fn track_table(
                             }
                             TableColumn::Title => {
                                 track_cells::title_cell(ui, scene, track, &row_font, text, |ui| {
+                                    // AU28: a music filler row the operator added
+                                    // is never replaced; say which ones they are.
+                                    if scene.state.is_filler(player)
+                                        && scene
+                                            .state
+                                            .filler
+                                            .as_ref()
+                                            .is_some_and(|f| !f.generated.contains(&entry.id))
+                                    {
+                                        track_cells::flag(
+                                            ui,
+                                            &t.tr("filler-row-manual"),
+                                            |p, r| {
+                                                widgets::glyph(p, r, icon::HAND, 13.0, text, false);
+                                            },
+                                        );
+                                    }
                                     if entry.repeat {
                                         track_cells::flag(ui, &t.tr("flag-repeat"), |p, r| {
                                             widgets::glyph(p, r, icon::REPEAT, 13.0, text, false);
@@ -1065,17 +1082,11 @@ fn phone_moves(
     }
     let targets: Vec<(String, PlaylistId, usize)> = scene
         .state
-        .players
-        .iter()
-        .enumerate()
-        .filter(|(_, p)| p.id != player)
-        .filter_map(|(n, p)| {
+        .aux_players()
+        .filter(|p| p.id != player)
+        .filter_map(|p| {
             let (to, index) = fp_model::after_next(scene.state, p.id)?;
-            Some((
-                t.tr_args("player-label", &[("n", (n + 1).into())]),
-                to,
-                index,
-            ))
+            Some((super::player_name(t, scene.state, p.id), to, index))
         })
         .collect();
     if targets.is_empty() {

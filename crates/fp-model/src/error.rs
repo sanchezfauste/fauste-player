@@ -72,4 +72,22 @@ pub enum ModelError {
     /// RL9: the layout is locked.
     #[error("the layout is locked")]
     LayoutLocked,
+    #[error("unknown rotation {0:?}")]
+    UnknownRotation(crate::ids::RotationId),
+    /// AU1: a step's counts must lie in 1–99 with min ≤ max.
+    #[error("a rotation step's counts must lie in 1–99, the first not above the second")]
+    InvalidRotationStep,
+    #[error("a rotation name must not be empty")]
+    EmptyRotationName,
+    /// A rotation with no step would give the filler nothing to play.
+    #[error("a rotation needs at least one step")]
+    EmptyRotation,
+    /// AU4: there is always a rotation to fall back on.
+    #[error("the last rotation cannot be deleted")]
+    LastRotation,
+    /// Automation spec §8.1: the music filler's list belongs to the filler;
+    /// it is not renamed, deleted or shown on another player, and the
+    /// filler shows no other list.
+    #[error("{0:?} is the music filler's list")]
+    FillerPlaylist(crate::ids::PlaylistId),
 }

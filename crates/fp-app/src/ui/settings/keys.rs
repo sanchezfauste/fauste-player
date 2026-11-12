@@ -51,7 +51,7 @@ pub(crate) fn action_name(scene: &Scene<'_>, action: ShortcutAction) -> String {
 
 /// Every action the current setup offers.
 fn actions(scene: &Scene<'_>) -> Vec<ShortcutAction> {
-    let players = scene.state.players.len() as u16;
+    let players = scene.state.aux_players().count() as u16;
     let carts = scene
         .state
         .cartwall

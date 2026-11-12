@@ -157,7 +157,7 @@ impl Router {
                 let position = position.ok_or(Ignored::NoPosition)?;
                 let player = usize::from(n)
                     .checked_sub(1)
-                    .and_then(|i| state.players.get(i))
+                    .and_then(|i| state.aux_players().nth(i))
                     .ok_or(Ignored::NoSuchPlayer)?;
                 let travel = fp_model::volume::fader_from_gain(player.volume);
                 let pickup = self

@@ -5,9 +5,11 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+use fp_model::rotation::{Rotation, STEP_COUNT_RANGE};
 use fp_model::{
-    AppState, CartPage, CartwallSession, Categories, Category, CategoryId, IdGen, Layout, Library,
-    LibraryView, PlayerId, PlayerSession, Playlist, PlaylistEntry, Playlists, Track,
+    AirTimes, AppState, CartPage, CartwallSession, Categories, Category, CategoryId, IdGen, Layout,
+    Library, LibraryView, PlayerId, PlayerSession, Playlist, PlaylistEntry, Playlists, RotationId,
+    Track, TrackId, WallTime,
 };
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
@@ -22,6 +24,8 @@ const KV_IDS: &str = "ids";
 const KV_CARTWALL: &str = "cartwall_session";
 const KV_LAYOUT: &str = "layout";
 const KV_LIBRARY_VIEW: &str = "library_view";
+const KV_DEFAULT_ROTATION: &str = "default_rotation";
+const KV_FILLER: &str = "filler";
 
 /// Everything the database holds, as plain model values.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -36,6 +40,13 @@ pub struct Snapshot {
     pub layout: Layout,
     pub library_view: LibraryView,
     pub cart_pages: Vec<CartPage>,
+    /// The music filler's rotations, in display order (schema 3).
+    pub rotations: Vec<Rotation>,
+    pub default_rotation: Option<RotationId>,
+    /// When each track last aired (schema 3).
+    pub air_times: AirTimes,
+    /// The music filler (`kv` value `filler`); `None` before it exists.
+    pub filler: Option<fp_model::filler::FillerSession>,
 }
 
 impl Snapshot {
@@ -47,11 +58,15 @@ impl Snapshot {
             categories: state.categories.clone().into_vec(),
             playlists: state.playlists.clone(),
             ids: state.ids.clone(),
-            players: state.sessions(position_of),
+            players: state.sessions(&position_of),
             cartwall: state.cartwall.session(),
             layout: state.layout.clone(),
             library_view: state.library_view.clone(),
             cart_pages: state.cartwall.pages.clone(),
+            rotations: state.rotations.iter().cloned().collect(),
+            default_rotation: state.rotations.default_id(),
+            air_times: state.air_times.clone(),
+            filler: state.filler_session(&position_of),
         }
     }
 }
@@ -116,7 +131,13 @@ pub fn read_checked(db: &Db) -> Read {
         layout: read_layout(conn, &mut warnings),
         library_view: read_library_view(conn, &mut warnings),
         cart_pages: read_cart_pages(conn, &mut warnings),
+        rotations: read_rotations(conn, &mut warnings),
+        default_rotation: read_kv(conn, KV_DEFAULT_ROTATION, "default rotation", &mut warnings),
+        air_times: AirTimes::default(),
+        filler: read_kv(conn, KV_FILLER, "music filler", &mut warnings),
     };
+    let mut snapshot = snapshot;
+    snapshot.air_times = read_air_times(conn, &snapshot.library, &mut warnings);
     Read {
         snapshot,
         complete: !warnings.unreadable,
@@ -225,6 +246,77 @@ fn read_categories(conn: &Connection, warnings: &mut Notes) -> Vec<Category> {
     let (fixed, notes) = Categories::from(list).repaired();
     warnings.extend(notes);
     fixed.into_vec()
+}
+
+/// Reads the rotations in `position` order. An unparsable record is
+/// dropped; a step's counts are brought into `STEP_COUNT_RANGE` with
+/// `min <= max`.
+fn read_rotations(conn: &Connection, warnings: &mut Notes) -> Vec<Rotation> {
+    let rows = rows(
+        conn,
+        "SELECT id, doc FROM rotations ORDER BY position, id",
+        2,
+        "the rotations",
+        warnings,
+    );
+    let mut list = Vec::with_capacity(rows.len());
+    for row in rows {
+        let [id, doc] = row.as_slice() else {
+            continue;
+        };
+        let Some(id) = int(id).map(|i| RotationId(raw(i))) else {
+            warnings.push(format!(
+                "rotations: a rotation record with an unusable id was dropped ({})",
+                id_text(id)
+            ));
+            continue;
+        };
+        let mut rotation = match parse_doc::<Rotation>(doc) {
+            Ok(rotation) => rotation,
+            Err(e) => {
+                warnings.push(format!(
+                    "rotations: the record of rotation {} is not valid ({e}); dropped",
+                    id.0
+                ));
+                continue;
+            }
+        };
+        rotation.id = id;
+        for step in &mut rotation.steps {
+            let (lo, hi) = (*STEP_COUNT_RANGE.start(), *STEP_COUNT_RANGE.end());
+            let (min, max) = (step.min.clamp(lo, hi), step.max.clamp(lo, hi));
+            let (min, max) = (min.min(max), min.max(max));
+            if (min, max) != (step.min, step.max) {
+                warnings.push(format!(
+                    "rotations: a step of rotation {} counted {}–{}; now {min}–{max}",
+                    id.0, step.min, step.max
+                ));
+                step.min = min;
+                step.max = max;
+            }
+        }
+        list.push(rotation);
+    }
+    list
+}
+
+/// Reads the air times of the tracks in `library`; a row of another track
+/// is dropped, like the time of a removed track.
+fn read_air_times(conn: &Connection, library: &Library, warnings: &mut Notes) -> AirTimes {
+    rows(
+        conn,
+        "SELECT track, at FROM air_times",
+        2,
+        "the air times",
+        warnings,
+    )
+    .into_iter()
+    .filter_map(|row| match row.as_slice() {
+        [track, at] => Some((TrackId(raw(int(track)?)), WallTime(int(at)?))),
+        _ => None,
+    })
+    .filter(|(track, _)| library.get(*track).is_some())
+    .collect()
 }
 
 fn read_library(conn: &Connection, categories: &[Category], warnings: &mut Notes) -> Library {
@@ -636,6 +728,8 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
         "categories",
         "cart_pages",
         "players",
+        "rotations",
+        "air_times",
         "kv",
     ] {
         tx.execute(&format!("DELETE FROM {table}"), [])
@@ -661,7 +755,40 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
     write_kv(&tx, KV_CARTWALL, &snap.cartwall)?;
     write_kv(&tx, KV_LAYOUT, &snap.layout)?;
     write_kv(&tx, KV_LIBRARY_VIEW, &snap.library_view)?;
+    for (index, rotation) in snap.rotations.iter().enumerate() {
+        upsert_doc(&tx, "rotations", rotation.id.0, index, rotation)?;
+    }
+    write_kv(&tx, KV_DEFAULT_ROTATION, &snap.default_rotation)?;
+    write_air_times(&tx, &AirTimes::default(), &snap.air_times)?;
+    write_kv(&tx, KV_FILLER, &snap.filler)?;
     tx.commit().map_err(db_error)
+}
+
+/// Writes the air times that differ between `old` and `new`, and deletes
+/// the tracks `new` no longer has.
+fn write_air_times(tx: &Transaction<'_>, old: &AirTimes, new: &AirTimes) -> Result<(), StoreError> {
+    let mut upsert = tx
+        .prepare_cached(
+            "INSERT INTO air_times (track, at) VALUES (?1, ?2) \
+             ON CONFLICT(track) DO UPDATE SET at = excluded.at",
+        )
+        .map_err(db_error)?;
+    for (track, at) in new.iter() {
+        if old.get(track) != Some(at) {
+            upsert
+                .execute(params![key(track.0), at.0])
+                .map_err(db_error)?;
+        }
+    }
+    let mut delete = tx
+        .prepare_cached("DELETE FROM air_times WHERE track = ?1")
+        .map_err(db_error)?;
+    for (track, _) in old.iter() {
+        if new.get(track).is_none() {
+            delete.execute([key(track.0)]).map_err(db_error)?;
+        }
+    }
+    Ok(())
 }
 
 /// Brings the database from `old` to `new` writing only the rows that
@@ -761,6 +888,14 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
     }
     if old.layout != new.layout {
         write_kv(&tx, KV_LAYOUT, &new.layout)?;
+    }
+    sync_docs(&tx, "rotations", &old.rotations, &new.rotations, |r| r.id.0)?;
+    if old.default_rotation != new.default_rotation {
+        write_kv(&tx, KV_DEFAULT_ROTATION, &new.default_rotation)?;
+    }
+    write_air_times(&tx, &old.air_times, &new.air_times)?;
+    if old.filler != new.filler {
+        write_kv(&tx, KV_FILLER, &new.filler)?;
     }
     tx.commit().map_err(db_error)
 }

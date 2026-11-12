@@ -14,12 +14,13 @@ use super::super::widgets::{self, TileStyle, font, font_medium};
 use super::state::{LibraryDialog, LibraryUi};
 
 /// Every track kind, in the menus' order.
-pub(crate) const KINDS: [TrackKind; 5] = [
+pub(crate) const KINDS: [TrackKind; 6] = [
     TrackKind::Music,
     TrackKind::Jingle,
     TrackKind::Effect,
     TrackKind::Ad,
     TrackKind::Voice,
+    TrackKind::HourlyId,
 ];
 
 /// The locale key of a track kind's name.
@@ -30,6 +31,7 @@ pub(crate) fn kind_key(kind: TrackKind) -> &'static str {
         TrackKind::Effect => "kind-effect",
         TrackKind::Ad => "kind-ad",
         TrackKind::Voice => "kind-voice",
+        TrackKind::HourlyId => "kind-hourly-id",
     }
 }
 

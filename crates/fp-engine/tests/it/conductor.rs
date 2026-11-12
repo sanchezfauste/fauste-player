@@ -1152,3 +1152,38 @@ fn operator_commands_go_before_background_work() {
     let volume = handle.model.load().player(p).unwrap().volume;
     assert_eq!(volume, 0.5, "the background command came second");
 }
+
+#[test]
+fn every_tick_sets_the_wall_clock() {
+    let (mut conductor, _handle, _device, now) = offline_conductor(model(1, 1));
+    let before = fp_model::WallTime::now();
+    conductor.tick(now);
+    let after = fp_model::WallTime::now();
+    let wall = conductor.state().wall_now;
+    assert!(
+        before <= wall && wall <= after,
+        "{before:?} <= {wall:?} <= {after:?}"
+    );
+}
+
+#[test]
+fn the_conductor_seeds_the_random_generator() {
+    let (conductor, _handle, _device, _now) = offline_conductor(model(1, 1));
+    assert_ne!(conductor.state().rng, fp_model::SplitMix64::default());
+}
+
+#[test]
+fn air_times_ahead_of_the_clock_are_brought_back_at_start() {
+    // Final review, Important 2: a stamp from a clock that was a year
+    // ahead would otherwise block its track and artist for a year.
+    let mut state = model(1, 1);
+    let track = state.library.ids()[0];
+    let year = 365 * 24 * 3_600 * 1_000;
+    state.air_times.record(
+        track,
+        fp_model::WallTime(fp_model::WallTime::now().0 + year),
+    );
+    let (conductor, _handle, _device, _now) = offline_conductor(state);
+    let after = fp_model::WallTime::now();
+    assert!(conductor.state().air_times.get(track).unwrap() <= after);
+}

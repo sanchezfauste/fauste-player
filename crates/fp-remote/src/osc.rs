@@ -213,8 +213,8 @@ fn index(raw: &str) -> Result<usize, &'static str> {
 
 fn player_at(state: &AppState, raw: &str) -> Result<PlayerId, &'static str> {
     state
-        .players
-        .get(index(raw)?)
+        .aux_players()
+        .nth(index(raw)?)
         .map(|p| p.id)
         .ok_or("no such player")
 }

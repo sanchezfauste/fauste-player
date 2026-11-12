@@ -11,6 +11,9 @@ use fp_model::{
 
 fn parts(state: &AppState) -> RestoreParts {
     RestoreParts {
+        rotations: Default::default(),
+        air_times: Default::default(),
+        filler: None,
         library_view: Default::default(),
         config: state.config.clone(),
         library: state.library.clone(),
@@ -90,6 +93,9 @@ fn dangling_session_references_are_dropped() {
 #[test]
 fn restoring_with_no_playlists_creates_a_default_one_and_moves_ids_forward() {
     let parts = RestoreParts {
+        rotations: Default::default(),
+        air_times: Default::default(),
+        filler: None,
         library_view: Default::default(),
         config: Config::default(),
         library: Library::default(),
@@ -157,6 +163,9 @@ fn restored_cart_pages_are_normalised() {
         carts: vec![cart],
     };
     let parts = RestoreParts {
+        rotations: Default::default(),
+        air_times: Default::default(),
+        filler: None,
         library_view: Default::default(),
         config: state.config.clone(),
         library: state.library.clone(),

@@ -32,14 +32,15 @@ concrete folders.
 `data/fauste.db` holds the library (tracks with their manual markers, tags
 and loudness), the playlists and their entries, the cart pages and the
 session (players, history, pending start, the cartwall's state, the
-layout). Only `config.json` (hand-edited, read leniently) and
+layout), and automation's rotations, default rotation and last-aired times
+(schema 3). Only `config.json` (hand-edited, read leniently) and
 `window.ron` stay outside it. The model and the interface do not know about
 SQL: `Store::load` returns the state the model restores from, and
 `Store::save_state` takes the `AppState`.
 
 ### Schema (`db/schema.rs`)
 
-`PRAGMA user_version` is the schema version (`SCHEMA_VERSION`, 2), and
+`PRAGMA user_version` is the schema version (`SCHEMA_VERSION`, 3), and
 `MIGRATIONS[n - 1]` takes it from *n − 1* to *n*, each in its own
 transaction. The tables:
 
@@ -51,8 +52,16 @@ transaction. The tables:
 | `playlists`, `entries` | A playlist's `position` and `name`; its entries with `playlist`, `position`, `track` and `doc` (`played_by`, `repeat`, `stop_after`). Deleting a playlist deletes its entries |
 | `cart_pages` | `id`, `position`, and `doc`: the page with its carts (`color` is a lower-case name, left out when the cart has none) |
 | `players` | `id`, `position`, and `doc`: playlist, current, next, `next_explicit`, mode, `stop_after_current`, position, volume, columns, history, `pending_start` |
+| `rotations` | `id`, `position` and `doc` (schema 3): a rotation of the music filler (`name`, `steps`: each a `source`, `{"Category": id}` or `{"Kind": "Music"}`, with `min` and `max`). An unreadable record is dropped; a step's counts are brought into 1–99 with `min ≤ max` ([automation](automation.md)) |
+| `air_times` | `track` and `at` (schema 3): when each track last aired, UTC Unix milliseconds. A row of a track not in the library is dropped on load |
 
-The session's cartwall state and its layout (`player_shares`,
+The default rotation is the `kv` value `default_rotation` (a rotation id,
+or null); one that names no rotation falls back on the first. The music filler is the `kv` value `filler`: its player's session (as a
+`players` row would hold it), its playlist (an ordinary `playlists` row,
+listed nowhere), its rotation, its rotation cursor and the rows it
+generated. It comes back last of the players and not playing; a record
+whose playlist is gone is dropped, its playlist then shows as an ordinary
+one, and a new filler is made at start. The session's cartwall state and its layout (`player_shares`,
 `hidden_players`, the cartwall's dock and size, `locked`, `touch_locked`,
 and `cue_window`, the CUE windows' content size) are JSON values
 in `kv`. A `doc` column holds the model value's JSON, and the key columns
@@ -75,6 +84,13 @@ Schema 2 (track library, plan 2) adds the `categories` table, the
 migrates in place: every track is uncategorised and nothing is lost. A build
 that only knows schema 1 sees a `user_version` above its own, so it sets the
 file aside as `.newer-<stamp>` (see below).
+
+Schema 3 (automation, plan 1) adds the `rotations` and `air_times` tables;
+the default rotation is the `kv` value `default_rotation`. A schema 2
+database migrates in place with no rotations and no air times; at every
+start the app calls `rotation::ensure_default` (`crates/fp-app/src/session.rs`),
+which creates the rotation named by `rotation-default-name` when there is
+none. A schema 2 build sets a schema 3 file aside as `.newer-<stamp>`.
 
 **The path rule.** The library holds one track per file (LB14). Uniqueness is
 enforced by the model (`Library::track_at`, a path index; `track_for_path`
@@ -503,6 +519,19 @@ A source on a bit-perfect device gets no gain (N8). The meter's own
 |---|---|---|
 | `max_category_depth` | 8 | the deepest category tree a new category or a move may build; restore repairs anything deeper than 32 levels |
 | `watch_debounce_ms` | 1000 | quiet time a path of a watched folder needs after its last event before it is read (100–60000); read while the application runs |
+
+### `automation` (Settings → Automation, desktop only)
+
+The music filler's selection rules ([automation](automation.md)); 0 turns
+a criterion off.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `track_separation_mins` | 180 | a track may air again once this many minutes have passed since it last aired (0–10080) |
+| `track_separation_percent` | 50 | …or once this percentage of the other tracks of its step's source have aired since (0–95) |
+| `filler_lookahead_mins` | 30 | the music filler keeps this many minutes of tracks queued ahead (5–240) |
+| `filler_played_kept` | 50 | the music filler keeps this many played rows in its list; older ones are removed (10–1000) |
+| `artist_separation_mins` | 30 | no track of an artist that aired less than this many minutes ago (0–1440; the artist compared trimmed and case-insensitively) |
 
 ### `limits` (config file only)
 

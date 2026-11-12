@@ -80,7 +80,7 @@ next) and `cued_on` (players pre-listening it).
 | Field | Meaning |
 |---|---|
 | `id`, `title`, `artist`, `album`, `duration_secs` | |
-| `kind` | `music`, `jingle`, `effect`, `ad` or `voice` |
+| `kind` | `music`, `jingle`, `effect`, `ad`, `voice` or `hourly_id` |
 | `file_state` | `ok`, `missing` or `unreadable` |
 | `analyzed` | Whether background analysis has finished |
 | `format` | `null` or `{sample_rate, channels, bits, bitrate}`; `bitrate` is the average bit rate in bit/s, `null` when unknown (an older analysis until the bit-rate-only pass reads it, or a file that reports none) and for DSD |
@@ -106,7 +106,7 @@ The file path is never exposed.
 | Method and path | Returns |
 |---|---|
 | `GET /state` | State |
-| `GET /players` | Players, in display order |
+| `GET /players` | Players, in display order (the music filler and its playlist are not part of the API: `/players/{id}` and `/playlists/{id}` answer 404 for them, as does every operation or edit on the filler, its list or its rows, and OSC numbers only the other players) |
 | `GET /players/{id}` | Player |
 | `GET /playlists` | Playlist summaries |
 | `GET /playlists/{id}` | Playlist |

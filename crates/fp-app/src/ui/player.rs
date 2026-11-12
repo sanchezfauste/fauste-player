@@ -90,7 +90,7 @@ pub(crate) fn column(
         .inner_margin(10.0)
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(6.0, 8.0);
-            header(ui, scene, view_state, id, index, &pv);
+            header(ui, scene, view_state, id, &pv);
             top_block(
                 ui,
                 scene,
@@ -117,7 +117,11 @@ fn playlist_area(
 ) {
     scroll_to_next_once(scene, view_state, id);
     follow_current(scene, view_state, id, playlist);
-    tabs(ui, scene, view_state, id, playlist);
+    if scene.state.is_filler(id) {
+        filler_bar(ui, scene);
+    } else {
+        tabs(ui, scene, view_state, id, playlist);
+    }
     let footer_top = ui.max_rect().bottom() - footer_look(view_state.phone_active).height;
     let table_rect = Rect::from_min_max(
         ui.available_rect_before_wrap().min,
@@ -272,7 +276,7 @@ fn card_sized(
         .show(ui, |ui| {
             ui.spacing_mut().item_spacing = vec2(GAP, GAP);
             let locked = super::touch::locked(scene, view_state);
-            header(ui, scene, view_state, id, index, &pv);
+            header(ui, scene, view_state, id, &pv);
             info_row(ui, scene, covers, id, &pv, &telemetry, true);
             wave_sized(ui, scene, view_state, id, &pv, wave_height, markers, locked);
             // A drag that starts on the fader moves it (PL14), unless
@@ -426,7 +430,7 @@ pub(crate) fn mini_card(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewSta
     );
     // The rest of the row: name, status and title; a tap opens the player.
     let info = row.available_rect_before_wrap();
-    let name = t.tr_args("player-label", &[("n", (index + 1).into())]);
+    let name = super::player_name(t, scene.state, id);
     let open = row.interact(
         info,
         row.scope_id().with(("mini-card", id.0)),
@@ -642,7 +646,6 @@ fn header(
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     id: PlayerId,
-    index: usize,
     pv: &PlayerView,
 ) {
     const SPACING: f32 = 6.0;
@@ -659,7 +662,7 @@ fn header(
 
     // What the header shows, measured before anything is drawn, so that no
     // two items overlap (the row fits them; the lowest priority collapses).
-    let number = t.tr_args("player-label", &[("n", (index + 1).into())]);
+    let number = super::player_name(t, scene.state, id);
     let (dot, status) = status_look(scene, pv.status);
     let fade_stopping = scene.state.player(id).is_ok_and(|p| p.fade_stopping());
     let fade_text = t.tr(if fade_stopping {
@@ -1872,7 +1875,14 @@ fn tabs(
     let (strip, _) =
         ui.allocate_exact_size(vec2(ui.available_width(), TABS_HEIGHT), Sense::hover());
     ui.painter().rect_filled(strip, 0.0, theme::NEUTRAL_900);
-    let count = scene.state.playlists.len();
+    // The music filler's playlist is never one of the tabs.
+    let lists: Vec<&fp_model::Playlist> = scene
+        .state
+        .playlists
+        .iter()
+        .filter(|pl| !scene.state.is_filler_playlist(pl.id))
+        .collect();
+    let count = lists.len();
     // The tabs and their arrows share the strip with the "+" at its end.
     let tabs_area = Rect::from_min_max(
         strip.min,
@@ -1894,7 +1904,7 @@ fn tabs(
     let st = view_state.tab_scroll.entry(id).or_default();
     let key = (shown, count, l.view_width.to_bits());
     if st.revealed != Some(key) {
-        if let Some(index) = scene.state.playlists.iter().position(|pl| pl.id == shown) {
+        if let Some(index) = lists.iter().position(|pl| pl.id == shown) {
             st.offset = tab_strip::reveal(st.offset, index, &l);
         }
         st.revealed = Some(key);
@@ -1964,7 +1974,7 @@ fn tabs(
         }
     }
     let offset = st.offset;
-    for (i, pl) in scene.state.playlists.iter().enumerate() {
+    for (i, pl) in lists.iter().enumerate() {
         let rect = Rect::from_min_size(
             pos2(view.left() - offset + i as f32 * l.tab_width, strip.top()),
             vec2(l.tab_width, TABS_HEIGHT),
@@ -2085,6 +2095,62 @@ fn tabs(
 /// The "+" at the right end of the tab `strip` and its popup: a name, then
 /// Create (or Enter) makes a playlist and shows it in this player (rule 29);
 /// Escape or a click outside cancels.
+/// The music filler's bar in place of the tab strip (automation spec
+/// §8.1): the rotation it plays and, when nothing can be added, why.
+fn filler_bar(ui: &mut Ui, scene: &Scene<'_>) {
+    let t = scene.i18n;
+    let Some(filler) = scene.state.filler.as_ref() else {
+        return;
+    };
+    let (strip, _) =
+        ui.allocate_exact_size(vec2(ui.available_width(), TABS_HEIGHT), Sense::hover());
+    ui.painter().rect_filled(strip, 0.0, theme::NEUTRAL_900);
+    let mut bar = ui.new_child(
+        UiBuilder::new()
+            .max_rect(strip.shrink2(vec2(8.0, 0.0)))
+            .layout(Layout::left_to_right(Align::Center)),
+    );
+    bar.spacing_mut().item_spacing = vec2(8.0, 0.0);
+    let rotations = &scene.state.rotations;
+    let default_text = t.tr_args(
+        "filler-rotation-default",
+        &[(
+            "name",
+            rotations
+                .default_rotation()
+                .map(|r| r.name.clone())
+                .unwrap_or_default()
+                .into(),
+        )],
+    );
+    let selected = filler
+        .rotation
+        .and_then(|id| rotations.get(id))
+        .map_or_else(|| default_text.clone(), |r| r.name.clone());
+    let mut choice = filler.rotation;
+    egui::ComboBox::from_label(t.tr("filler-rotation"))
+        .selected_text(selected)
+        .show_ui(&mut bar, |ui| {
+            ui.selectable_value(&mut choice, None, default_text.as_str());
+            for r in rotations.iter() {
+                ui.selectable_value(&mut choice, Some(r.id), r.name.as_str());
+            }
+        });
+    if choice != filler.rotation {
+        scene.ctl.send(Command::SetFillerRotation(choice));
+    }
+    if filler.starved {
+        bar.add(
+            egui::Label::new(
+                RichText::new(t.tr("filler-starved"))
+                    .font(font(11.0))
+                    .color(theme::AMBER),
+            )
+            .truncate(),
+        );
+    }
+}
+
 fn new_playlist_button(
     ui: &mut Ui,
     scene: &Scene<'_>,

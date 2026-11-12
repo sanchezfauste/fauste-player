@@ -184,6 +184,9 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             if state.playlists.get(playlist).is_none() {
                 return Err(ModelError::UnknownPlaylist(playlist));
             }
+            if state.is_filler(id) != state.is_filler_playlist(playlist) {
+                return Err(ModelError::FillerPlaylist(playlist));
+            }
             state.players[i].playlist = playlist;
         }
         Command::SetColumnWidths(id, widths) => {
@@ -266,6 +269,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::RemoveEntry(entry) => remove_entry(state, entry, &mut out)?,
         Command::MoveEntry { entry, to, index } => {
             state.playlists.move_entry(entry, to, index)?;
+            crate::filler::claim(state, entry);
             // Q8.4: a moved entry loses the start chosen for it.
             for p in &mut state.players {
                 if p.pending_start.is_some_and(|(e, _)| e == entry) {
@@ -331,6 +335,19 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         }
         Command::SetTracksKind { tracks, kind } => {
             crate::library_rules::set_tracks_kind(state, tracks, kind)?
+        }
+        Command::CreateRotation { name, steps } => crate::rotation::create(state, &name, steps)?,
+        Command::UpdateRotation(rotation) => crate::rotation::update(state, rotation)?,
+        Command::SetFillerRotation(rotation) => {
+            crate::filler::set_rotation(state, rotation, &mut out)?
+        }
+        Command::DeleteRotation(id) => {
+            crate::rotation::delete(state, id)?;
+            crate::filler::retarget(state, &mut out)?;
+        }
+        Command::SetDefaultRotation(id) => {
+            crate::rotation::set_default(state, id)?;
+            crate::filler::retarget(state, &mut out)?;
         }
         Command::RemoveTracks(tracks) => {
             crate::library_rules::remove_tracks(state, &tracks, &mut out)?
@@ -442,7 +459,10 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             let max = state.config.library.max_category_depth;
             state.categories.move_to(category, parent, index, max)?;
         }
-        Command::RenamePlaylist { playlist, name } => state.playlists.rename(playlist, name)?,
+        Command::RenamePlaylist { playlist, name } => {
+            not_filler_playlist(state, playlist)?;
+            state.playlists.rename(playlist, name)?
+        }
         Command::DeletePlaylist(playlist) => delete_playlist(state, playlist, &mut out)?,
         Command::SetPlayerCount(count) => set_player_count(state, count, &mut out)?,
         Command::UpdateConfig(config) => update_config(state, *config, &mut out)?,
@@ -549,6 +569,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         }
     }
     fill_empty_next(state);
+    crate::filler::settle(state, &mut out);
     reconcile(state, &mut out);
     crate::live::dispatch_due(state, &mut out);
     Ok(out)
@@ -707,6 +728,7 @@ fn on_engine_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction
         } => crate::live::stream_rate(state, device, rate, refused),
     }
     fill_empty_next(state);
+    crate::filler::settle(state, &mut out);
     reconcile(state, &mut out);
     crate::live::dispatch_due(state, &mut out);
     out
@@ -849,8 +871,13 @@ fn fade_stop(
 /// O37: the entry on air is accepted; it plays once more.
 fn set_next(state: &mut AppState, id: PlayerId, entry: EntryId) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
-    if state.playlists.entry(entry).is_none() {
+    let Some((list, _)) = state.playlists.find(entry) else {
         return Err(ModelError::UnknownEntry(entry));
+    };
+    // The filler plays from its own list only: its top-up and trim count
+    // from where its next stands in that list.
+    if state.is_filler(id) && !state.is_filler_playlist(list) {
+        return Err(ModelError::FillerPlaylist(list));
     }
     state.players[i].next = Some(entry);
     state.players[i].next_explicit = true;
@@ -1455,6 +1482,16 @@ pub(crate) fn take_out_entries(
     refresh_next(state);
 }
 
+/// Automation spec §8.1: the music filler's list is not the operator's to
+/// rename or delete.
+fn not_filler_playlist(state: &AppState, playlist: PlaylistId) -> Result<(), ModelError> {
+    if state.is_filler_playlist(playlist) {
+        Err(ModelError::FillerPlaylist(playlist))
+    } else {
+        Ok(())
+    }
+}
+
 fn delete_playlist(
     state: &mut AppState,
     playlist: PlaylistId,
@@ -1464,11 +1501,19 @@ fn delete_playlist(
         .playlists
         .get(playlist)
         .ok_or(ModelError::UnknownPlaylist(playlist))?;
+    not_filler_playlist(state, playlist)?;
     if list.entries.iter().any(|e| state.is_on_air(e.id)) {
         return Err(ModelError::PlaylistOnAir(playlist));
     }
+    // The operator keeps at least one playlist of their own, and a player
+    // never falls back to the filler's.
+    let first = state
+        .playlists
+        .iter()
+        .map(|l| l.id)
+        .find(|id| *id != playlist && !state.is_filler_playlist(*id))
+        .ok_or(ModelError::LastPlaylist)?;
     let removed = state.playlists.remove(playlist)?;
-    let first = state.playlists.first_id().ok_or(ModelError::NoPlaylists)?;
     for p in &mut state.players {
         if p.playlist == playlist {
             p.playlist = first;
@@ -1493,9 +1538,12 @@ fn update_config(
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
     let _ = config.validate();
-    let count = state.players.len().min(config.limits.max_players);
-    if let Some(busy) = state.players[count..]
-        .iter()
+    // The music filler is not one of the numbered players the limit counts.
+    let aux = state.aux_players().count();
+    let count = aux.min(config.limits.max_players);
+    if let Some(busy) = state
+        .aux_players()
+        .skip(count)
         .find(|p| p.transport != Transport::Stopped || p.cue.is_some())
     {
         return Err(ModelError::PlayerBusy(busy.id));
@@ -1505,7 +1553,7 @@ fn update_config(
         out.push(EngineAction::UpdateSettings(Box::new(config.clone())));
     }
     state.config = config;
-    if count < state.players.len() {
+    if count < aux {
         set_player_count(state, count, out)?;
     }
     Ok(())
@@ -1523,22 +1571,34 @@ fn set_player_count(
             max,
         });
     }
-    if count < state.players.len() {
-        if let Some(busy) = state.players[count..]
+    // Only the auxiliary players are counted; the music filler stays last.
+    let aux: Vec<PlayerId> = state.aux_players().map(|p| p.id).collect();
+    if count < aux.len() {
+        let leaving: Vec<PlayerId> = aux.get(count..).unwrap_or_default().to_vec();
+        if let Some(busy) = state
+            .players
             .iter()
+            .filter(|p| leaving.contains(&p.id))
             .find(|p| p.transport != Transport::Stopped || p.cue.is_some())
         {
             return Err(ModelError::PlayerBusy(busy.id));
         }
-        for p in state.players.drain(count..) {
-            out.push(EngineAction::RemovePlayer { player: p.id });
+        state.players.retain(|p| !leaving.contains(&p.id));
+        for player in leaving {
+            out.push(EngineAction::RemovePlayer { player });
         }
     } else {
-        let first = state.playlists.first_id().ok_or(ModelError::NoPlaylists)?;
+        let first = state
+            .playlists
+            .iter()
+            .map(|p| p.id)
+            .find(|id| !state.is_filler_playlist(*id))
+            .ok_or(ModelError::NoPlaylists)?;
         let mode = state.config.players.default_mode;
-        while state.players.len() < count {
+        for _ in aux.len()..count {
             let id = state.ids.player();
-            state.players.push(PlayerState::new(id, first, mode));
+            let at = state.players.len() - usize::from(state.filler.is_some());
+            state.players.insert(at, PlayerState::new(id, first, mode));
             out.push(EngineAction::AddPlayer { player: id });
         }
         fill_empty_next(state);
@@ -1580,6 +1640,7 @@ pub(crate) fn advance_to(
 ) -> Option<SourceRequest> {
     let holder = Holder::PlayerMain(state.players[i].id);
     let request = state.request_from_cue_in(target, holder)?;
+    crate::air_times::record_track(state, request.track);
     if let Some(current) = state.players[i].current {
         let player = state.players[i].id;
         state.playlists.mark_played(current, player);

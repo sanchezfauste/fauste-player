@@ -182,7 +182,7 @@ selected when it is for several.
 | Add to ▸ | A playlist: the tracks are added at its end |
 | Add to cart ▸ | A cart of the cartwall's shown page: the tracks fill the chosen cart and the next empty carts of the page, in grid order. The tracks that do not fit are left out and a notice counts them |
 | Move to category ▸ | A category, or Uncategorised |
-| Kind ▸ | Music, Jingle, Effect, Ad or Voice |
+| Kind ▸ | Music, Jingle, Effect, Ad, Voice or Hourly ID |
 | Edit tags… | The tag editor (one track) |
 | Open in external editor | Start your audio editor with the track's file (one track; see [When a file changes](#when-a-file-changes)) |
 | Mark as reviewed | Clear the *markers need review* flag (shown when a selected track has it) |

@@ -460,6 +460,9 @@ fn rule10_a_restored_state_has_the_library_cue_stopped() {
     let mut s = bar();
     run(&mut s, Command::PlayLibraryCue);
     let parts = fp_model::RestoreParts {
+        rotations: Default::default(),
+        air_times: Default::default(),
+        filler: None,
         library_view: LibraryView {
             open: true,
             ..LibraryView::default()

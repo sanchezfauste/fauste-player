@@ -35,6 +35,9 @@ pub struct Config {
     pub loudness: LoudnessConfig,
     /// The track library (track library spec §5).
     pub library: LibraryConfig,
+    /// Automation: the music filler's separation rules (automation spec
+    /// §11).
+    pub automation: AutomationConfig,
 }
 
 impl Default for Config {
@@ -53,6 +56,7 @@ impl Default for Config {
             remote: crate::remote::RemoteConfig::default(),
             loudness: LoudnessConfig::default(),
             library: LibraryConfig::default(),
+            automation: AutomationConfig::default(),
         }
     }
 }
@@ -295,6 +299,40 @@ fn clamp_finite(
             message: format!("{value} is not a number; using {default}"),
         });
         *value = default;
+    }
+}
+
+/// Automation's selection rules (automation spec AU31, AU32). A value of 0
+/// turns its criterion off.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct AutomationConfig {
+    /// A track may air again once this many minutes have passed since it
+    /// last aired (0 ..= 10 080; 0: off).
+    pub track_separation_mins: u32,
+    /// …or once this percentage of the other tracks of its step's source
+    /// have aired since (0 ..= 95; 0: off).
+    pub track_separation_percent: u8,
+    /// No track of an artist aired less than this many minutes ago
+    /// (0 ..= 1 440; 0: off).
+    pub artist_separation_mins: u32,
+    /// The music filler keeps this many minutes of tracks queued ahead
+    /// (5 ..= 240, AU27).
+    pub filler_lookahead_mins: u32,
+    /// The music filler keeps this many played rows in its list; older
+    /// ones are removed (10 ..= 1 000, AU27).
+    pub filler_played_kept: u32,
+}
+
+impl Default for AutomationConfig {
+    fn default() -> Self {
+        Self {
+            track_separation_mins: 180,
+            track_separation_percent: 50,
+            artist_separation_mins: 30,
+            filler_lookahead_mins: 30,
+            filler_played_kept: 50,
+        }
     }
 }
 
@@ -1565,6 +1603,42 @@ impl Config {
             100,
             60_000,
             "library.watch_debounce_ms",
+            &mut w,
+        );
+        let a = &mut self.automation;
+        clamp_to(
+            &mut a.track_separation_mins,
+            0,
+            10_080,
+            "automation.track_separation_mins",
+            &mut w,
+        );
+        clamp_to(
+            &mut a.track_separation_percent,
+            0,
+            95,
+            "automation.track_separation_percent",
+            &mut w,
+        );
+        clamp_to(
+            &mut a.artist_separation_mins,
+            0,
+            1_440,
+            "automation.artist_separation_mins",
+            &mut w,
+        );
+        clamp_to(
+            &mut a.filler_lookahead_mins,
+            5,
+            240,
+            "automation.filler_lookahead_mins",
+            &mut w,
+        );
+        clamp_to(
+            &mut a.filler_played_kept,
+            10,
+            1_000,
+            "automation.filler_played_kept",
             &mut w,
         );
         if self

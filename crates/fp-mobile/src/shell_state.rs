@@ -43,7 +43,8 @@ pub(crate) fn sounding(state: &AppState) -> bool {
 /// or paused with a track, then one line per playing cart; empty when
 /// nothing is on air.
 pub fn on_air_text(state: &AppState) -> String {
-    let players = state.players.iter().enumerate().filter_map(|(i, p)| {
+    // The phone never shows the music filler (Android is a non-goal).
+    let players = state.aux_players().enumerate().filter_map(|(i, p)| {
         if p.transport == Transport::Stopped {
             return None;
         }

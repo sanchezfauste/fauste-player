@@ -4,8 +4,10 @@
 //! tracing subscriber) keep their own binary next to this directory.
 
 mod after_next;
+mod air_times;
 mod analysis;
 mod audio_change;
+mod automation_config;
 mod availability;
 mod bit_perfect_rules;
 mod bitrate_pass;
@@ -27,6 +29,7 @@ mod editing;
 mod entry_flags;
 mod entry_notice;
 mod external_edit;
+mod filler;
 mod header_duration;
 mod history;
 mod intro_column;
@@ -53,6 +56,9 @@ mod reset_played;
 mod restore;
 mod reuse_tracks;
 mod review_fixes;
+mod rotation_cursor;
+mod rotations;
+mod selection;
 mod session;
 mod set_values;
 mod shortcuts;

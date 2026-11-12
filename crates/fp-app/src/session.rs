@@ -53,7 +53,18 @@ impl AppSession {
     ) -> Result<Self, Box<dyn std::error::Error>> {
         let mut store = Store::new(paths.clone(), fp_model::Limits::default());
         let default_name = I18n::new(None).tr("default-playlist-name");
-        let loaded = store.load(&default_name);
+        let mut loaded = store.load(&default_name);
+        // AU4: there is always a rotation for the music filler to fall back on.
+        fp_model::rotation::ensure_default(
+            &mut loaded.state,
+            &I18n::new(None).tr("rotation-default-name"),
+        );
+        // AU27: the music filler's player, added to the engine with the
+        // others by `Conductor::new`.
+        let _ = fp_model::filler::ensure(
+            &mut loaded.state,
+            &I18n::new(None).tr("filler-playlist-name"),
+        );
         for warning in &loaded.warnings {
             tracing::warn!(%warning, "while loading the saved state");
         }

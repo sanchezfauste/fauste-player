@@ -6,7 +6,7 @@
 //! when it ends. Under the title bar, the preview bar pre-listens the
 //! selected row on the library CUE (spec §8, `preview`).
 
-mod category_dialog;
+pub(crate) mod category_dialog;
 pub(crate) mod confirm;
 pub(crate) mod menu;
 pub(crate) use menu::{mark_reviewed, move_to_category, open_in_editor};

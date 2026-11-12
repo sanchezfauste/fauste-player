@@ -2,6 +2,7 @@
 //! and the pure state machine that implements the player behaviour rules.
 //! This crate performs no I/O and spawns no threads.
 
+pub mod air_times;
 pub mod audio_change;
 pub mod availability;
 pub mod bit_perfect;
@@ -17,6 +18,7 @@ pub mod dsd;
 mod entry_notice;
 pub mod error;
 pub mod external_edit;
+pub mod filler;
 pub mod ids;
 pub mod insertion;
 pub mod layout;
@@ -36,6 +38,9 @@ pub mod reducer;
 pub mod remote;
 pub mod reset_played;
 pub mod restore;
+pub mod rotation;
+pub mod rotation_cursor;
+pub mod selection;
 pub mod session;
 pub mod shortcuts;
 pub mod sounding;
@@ -44,7 +49,9 @@ mod tag_edit;
 mod tag_sheet;
 pub mod track;
 pub mod volume;
+pub mod wall_time;
 
+pub use air_times::AirTimes;
 pub use audio_change::{AudioChange, audio_change};
 pub use availability::{Availability, availability, command_available};
 pub use bit_perfect::{bit_perfect_player, fader_locked, faders_reset_by, rate_cut};
@@ -62,10 +69,11 @@ pub use command::{
     SourceRequest, TransitionPlan,
 };
 pub use config::{
-    AnalysisSettings, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes, Config, ConfigWarning,
-    DeviceOverride, LibraryConfig, LibraryRoutes, Limits, LoudnessConfig, LoudnessReadout,
-    MeterBallistics, MeterConfig, MeterSettings, OutputDevice, OutputsConfig, OutputsView,
-    PlayerRoutes, PlayersConfig, Route, SAMPLE_RATE_RANGE, Tuning, UiConfig, WindowSystem,
+    AnalysisSettings, AutomationConfig, BUFFER_FRAMES_RANGE, CartwallConfig, CartwallRoutes,
+    Config, ConfigWarning, DeviceOverride, LibraryConfig, LibraryRoutes, Limits, LoudnessConfig,
+    LoudnessReadout, MeterBallistics, MeterConfig, MeterSettings, OutputDevice, OutputsConfig,
+    OutputsView, PlayerRoutes, PlayersConfig, Route, SAMPLE_RATE_RANGE, Tuning, UiConfig,
+    WindowSystem,
 };
 pub use cue_on_air::{CueConfirmation, CueOnAir, CueStopped, needs_confirmation};
 pub use device_offer::{
@@ -79,7 +87,9 @@ pub use dsd::{
 pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;
 pub use external_edit::{ExternalEditBlock, external_edit_block};
-pub use ids::{CartId, CartPageId, CategoryId, EntryId, IdGen, PlayerId, PlaylistId, TrackId};
+pub use ids::{
+    CartId, CartPageId, CategoryId, EntryId, IdGen, PlayerId, PlaylistId, RotationId, TrackId,
+};
 pub use insertion::after_next;
 pub use layout::{
     CartwallLayout, DEFAULT_SIDE_SHARE, Dock, Layout, MAX_CARTWALL_SHARE, MIN_CARTWALL_SHARE,
@@ -111,6 +121,7 @@ pub use reducer::{apply, on_event, plan_for};
 pub use remote::{HttpRemoteConfig, OscRemoteConfig, RemoteConfig, RemoteEventsConfig};
 pub use reset_played::{can_reset_played, resettable_entries};
 pub use restore::{SettingsSection, restore_defaults};
+pub use rotation::{Rotation, RotationStep, Rotations, StepSource};
 pub use session::{PlayerSession, RestoreParts};
 pub use shortcuts::{KeyChord, Shortcut, ShortcutAction, default_shortcuts, player_command};
 pub use sounding::track_sounding;
@@ -125,3 +136,4 @@ pub use track::{
     MarkerKind, MarkerSource, Markers, MarkersReview, PlayRange, Track, TrackAnalysis, TrackKind,
     TrackTags, parse_tag_date,
 };
+pub use wall_time::{SplitMix64, WallTime};

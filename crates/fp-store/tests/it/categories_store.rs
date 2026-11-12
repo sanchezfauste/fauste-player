@@ -131,7 +131,10 @@ fn a_schema_1_database_opens_with_every_track_uncategorised() {
         1
     );
     save_all(&mut s, &loaded.state, 0.0);
-    assert_eq!(count(&s, "PRAGMA user_version"), 2);
+    assert_eq!(
+        count(&s, "PRAGMA user_version"),
+        i64::from(fp_store::SCHEMA_VERSION)
+    );
 }
 
 #[test]

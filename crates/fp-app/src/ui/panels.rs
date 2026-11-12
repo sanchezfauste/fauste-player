@@ -264,8 +264,8 @@ pub(crate) fn layout_controls(
             .show(ui, |ui| {
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     ui.spacing_mut().item_spacing = vec2(4.0, 0.0);
-                    for (n, id) in players.iter().enumerate() {
-                        let name = t.tr_args("player-label", &[("n", (n + 1).into())]);
+                    for id in &players {
+                        let name = super::player_name(t, scene.state, *id);
                         panel_tile(ui, scene, &context, Panel::Player(*id), &name);
                     }
                     let name = t.tr("layout-panel-carts");

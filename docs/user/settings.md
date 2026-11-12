@@ -7,7 +7,7 @@ The window has one size (900 × 640, smaller on a small screen) whatever the
 section, and the section scrolls inside it. Every section lines its labels up
 in one column.
 
-The Players, Meters, Analysis, Loudness and Keyboard shortcuts sections have a
+The Players, Meters, Analysis, Loudness, Automation and Keyboard shortcuts sections have a
 **Restore defaults** button in their header. It asks for confirmation and then
 resets only that section (Players keeps the number of players and the
 language; Shortcuts has no other reset button). Audio outputs, Playlists,
@@ -78,7 +78,7 @@ choosing it again (for example after swapping two devices) keeps them.
 | Audio system | The last choice, **No output (silent)**, plays nothing: timelines run at real-time pace with no sound card (for a machine without one, or to rehearse). Linux: PipeWire (in builds that include it), PulseAudio, JACK or ALSA. Windows: WASAPI, ASIO (in builds that include it) or JACK. macOS: Core Audio or JACK. Systems missing on this computer, or with no output device (a JACK server that is not running), are shown as unavailable. "System default" uses the first available one in that order. |
 | Sample rate | The rate every output runs at unless a device has its own (Advanced); files are converted to it with high-quality resampling. Bit-perfect devices start at their rate and then follow the files. |
 | Buffer size | Frames per audio block, unless a device has its own; the resulting latency is shown below it. Outputs through a sound server or a system mixer (PulseAudio, the ALSA `default` device) ask for at least 50 ms whatever this size, or as much as the device takes, so that a busy computer is not heard; the latency then says so (`shared_buffer_ms` in the configuration file) |
-| Outputs per player | For each player, a **Main** (on-air) device and a **Cue** (pre-listen) device, each with a channel pair. A sound card that offers several output profiles (ALSA lists front, surround, direct hardware…) shows each as *card — profile*; two entries that would still read the same get their device id in brackets. Multichannel interfaces can carry several players on different pairs. A Cue output that shares an on-air output (any player's Main or the cartwall's) is allowed: a note under it says its pre-listen is heard on air and asks first while something plays there. |
+| Outputs per player | For each player, and for the **Music** column (the [music filler](automation.md)), a **Main** (on-air) device and a **Cue** (pre-listen) device, each with a channel pair. A sound card that offers several output profiles (ALSA lists front, surround, direct hardware…) shows each as *card — profile*; two entries that would still read the same get their device id in brackets. Multichannel interfaces can carry several players on different pairs. A Cue output that shares an on-air output (any player's Main or the cartwall's) is allowed: a note under it says its pre-listen is heard on air and asks first while something plays there. |
 | Test Main / Test Cue | Plays a short tone (1 kHz on Main, 440 Hz on Cue, 1.5 s, −18 dBFS) on the chosen output, so you can check the wiring before going on air |
 | Library | The library's Cue output, with its own **Test Cue**: where the library window's [pre-listen](library.md#pre-listening) (on a phone, the Library tab's) is heard. Without it the preview bar's Play is dimmed. On Android its empty choice reads *System default* instead of *None*: the pre-listen and **Test Cue** then play on the default output (see [Android → Library](android.md#library)). A Library output on an on-air output works as a player's Cue does: a note under it says its pre-listen is heard on air and asks first while something plays there. It is in the Basic and Advanced views, also on a phone |
 | Cartwall | The cartwall's Main and Cue outputs. Main defaults to the system output. Without a Cue there is no cart pre-listen; a Cue on an on-air output works as for players. |
@@ -271,6 +271,26 @@ and **Clear** to remove it. On macOS an application bundle (`.app`) can be
 chosen. If the program cannot be started, a notice says so. The row is not
 shown on Android, nor in the Flatpak and snap builds. See [When a file
 changes](library.md#when-a-file-changes).
+
+## Automation
+
+The [music filler's](automation.md) rotations and rules (not on Android).
+
+- **Rotations:** the list, the default marked. **New rotation** adds one
+  that plays all music, **Make default** makes the selected one the
+  default, **Delete rotation** removes it (the last one cannot be deleted).
+- **The selected rotation:** its **Name**, then one row per **step**: where
+  its tracks come from (a category with its subcategories, or *All* of a
+  kind), how many it plays each time (**at least** and **at most**, 1–99),
+  **Up**, **Down** and **Remove**. **Add step** adds one at the end. A step
+  whose category was deleted says so; the filler skips it.
+- **Music filler:** how long before the same track may play again (3 hours,
+  or once half of the other tracks of its step have aired, whichever comes
+  first; 0 turns either off), the same artist (30 minutes), the
+  **look-ahead** (30 minutes of music queued) and the **played tracks kept**
+  in its list (50).
+
+**Restore defaults** resets the rules; the rotations stay.
 
 ## Keyboard shortcuts
 

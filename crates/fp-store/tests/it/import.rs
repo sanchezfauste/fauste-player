@@ -46,6 +46,9 @@ fn state_of_fixtures() -> AppState {
     let carts: CartsDoc = serde_json::from_slice(&read("carts.json")).unwrap();
     AppState::restore(
         RestoreParts {
+            rotations: Default::default(),
+            air_times: Default::default(),
+            filler: None,
             library_view: Default::default(),
             config: Config::default(),
             library: lists.library,

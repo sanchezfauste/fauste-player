@@ -304,3 +304,34 @@ fn repaired_lifts_categories_deeper_than_32_levels_to_the_root() {
     assert!(s.categories.get(CategoryId(32)).is_none());
     assert!(s.categories.get(CategoryId(33)).is_some());
 }
+
+#[test]
+fn an_hourly_id_category_files_its_tracks_as_hourly_ids() {
+    let mut s = state();
+    apply(
+        &mut s,
+        Command::CreateCategory {
+            parent: None,
+            name: "Hours".into(),
+            color: None,
+            kind: TrackKind::HourlyId,
+        },
+    )
+    .unwrap();
+    let hours = s.categories.iter().map(|c| c.id).max().unwrap();
+    let path = std::path::PathBuf::from("/m/hour-12.wav");
+    apply(
+        &mut s,
+        Command::AddToLibrary {
+            paths: vec![path.clone()],
+            category: Some(hours),
+        },
+    )
+    .unwrap();
+    let id = s.library.track_at(&path).unwrap();
+    assert_eq!(s.library.get(id).unwrap().kind, TrackKind::HourlyId);
+    assert_eq!(
+        serde_json::to_string(&TrackKind::HourlyId).unwrap(),
+        "\"HourlyId\""
+    );
+}

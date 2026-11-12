@@ -16,6 +16,7 @@ the implementation differs from the spec or defers part of it.
 | [Decoding](decoding.md) | Formats, the backends behind `FileDecoder`, DSD to PCM, seeking |
 | [Analysis](analysis.md) | Tags, covers, peaks, markers, the cache and the analysis pool |
 | [Persistence and configuration](persistence.md) | Files, atomic writes, backups, migrations, every configuration field |
+| [Automation](automation.md) | Rotations, last-aired times, how the music filler chooses tracks |
 | [Remote control API](remote-api.md) | The HTTP/JSON API: resources, routes, errors, security, the remote thread |
 | [Mobile (Android)](mobile.md) | The Android app: `fp-mobile`, the Kotlin shell, the activity and the session, the foreground service, the `unsafe` exception, the build |
 | [User interface](ui.md) | The egui app: view model, controller, services, panic isolation, i18n |

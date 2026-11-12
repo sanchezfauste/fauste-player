@@ -33,6 +33,19 @@ pub struct AppState {
     pub library_view: crate::library_view::LibraryView,
     /// The library window pre-listen (library plan 4); runtime only.
     pub library_cue: crate::library_cue::LibraryCue,
+    /// The music filler (automation spec AU27–AU29): its player is the
+    /// last of `players`. `None` until `filler::ensure`.
+    pub filler: Option<crate::filler::FillerState>,
+    /// The music filler's rotations (automation spec AU1–AU4), saved.
+    pub rotations: crate::rotation::Rotations,
+    /// When each track last aired (automation spec AU35), saved.
+    pub air_times: crate::air_times::AirTimes,
+    /// The wall clock, set by the conductor every tick (by tests directly);
+    /// runtime only.
+    pub wall_now: crate::wall_time::WallTime,
+    /// The random generator of automation's choices, seeded by the
+    /// conductor; runtime only.
+    pub rng: crate::wall_time::SplitMix64,
 }
 
 impl AppState {
@@ -68,6 +81,11 @@ impl AppState {
             layout: crate::layout::Layout::default(),
             library_view: crate::library_view::LibraryView::default(),
             library_cue: crate::library_cue::LibraryCue::default(),
+            filler: None,
+            rotations: crate::rotation::Rotations::default(),
+            air_times: crate::air_times::AirTimes::default(),
+            wall_now: crate::wall_time::WallTime::default(),
+            rng: crate::wall_time::SplitMix64::default(),
         }
     }
 
@@ -85,9 +103,32 @@ impl AppState {
             .ok_or(ModelError::UnknownPlayer(id))
     }
 
+    /// The players the operator numbers P1…Pn: every player but the music
+    /// filler.
+    pub fn aux_players(&self) -> impl Iterator<Item = &PlayerState> {
+        let filler = self.filler.as_ref().map(|f| f.player);
+        self.players.iter().filter(move |p| Some(p.id) != filler)
+    }
+
+    pub fn is_filler(&self, player: PlayerId) -> bool {
+        self.filler.as_ref().is_some_and(|f| f.player == player)
+    }
+
+    pub fn is_filler_playlist(&self, playlist: crate::ids::PlaylistId) -> bool {
+        self.filler.as_ref().is_some_and(|f| f.playlist == playlist)
+    }
+
     /// The players' ids in display order: what the layout helpers take.
+    /// The music filler's column comes first, left of P1 (automation spec
+    /// §8.1); it is last in `players`, so positional code is unchanged.
     pub fn player_ids(&self) -> Vec<PlayerId> {
-        self.players.iter().map(|p| p.id).collect()
+        let filler = self.filler.as_ref().map(|f| f.player);
+        filler.into_iter().chain(self.aux_player_ids()).collect()
+    }
+
+    /// The auxiliary players' ids, P1 first.
+    pub fn aux_player_ids(&self) -> Vec<PlayerId> {
+        self.aux_players().map(|p| p.id).collect()
     }
 
     pub fn track_for_entry(&self, entry: EntryId) -> Option<&Track> {

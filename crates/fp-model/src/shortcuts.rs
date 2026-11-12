@@ -134,10 +134,11 @@ pub fn player_command(
     action: ShortcutAction,
 ) -> Option<crate::command::Command> {
     use crate::command::Command;
+    // Numbered among the auxiliary players: never the music filler.
     let player = |n: u16| {
         state
-            .players
-            .get(usize::from(n).checked_sub(1)?)
+            .aux_players()
+            .nth(usize::from(n).checked_sub(1)?)
             .map(|p| p.id)
     };
     Some(match action {

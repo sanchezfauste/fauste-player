@@ -725,3 +725,59 @@ fn ca6_a_quiet_on_air_output_needs_no_force_and_a_stop_never_does() {
         vec![Command::SetCue(p1, false)]
     );
 }
+
+/// A demo state with the music filler and one row in its list.
+fn with_filler() -> (fp_model::AppState, PlayerId, PlaylistId, EntryId) {
+    let mut s = demo_state();
+    fp_model::filler::ensure(&mut s, "Music filler");
+    let f = s.filler.clone().unwrap();
+    let track = s.library.iter().next().unwrap().id;
+    fp_model::apply(
+        &mut s,
+        Command::InsertTracks {
+            playlist: f.playlist,
+            index: 0,
+            tracks: vec![track],
+        },
+    )
+    .unwrap();
+    let row = s.playlists.get(f.playlist).unwrap().entries[0].id;
+    (s, f.player, f.playlist, row)
+}
+
+#[test]
+fn the_filler_is_not_found_for_remote_operations() {
+    let (s, filler, list, row) = with_filler();
+    let aux = s.players[0].id;
+    for op in [
+        O::Play(filler),
+        O::Stop(filler),
+        O::ShowPlaylist(aux, list),
+        O::SetNext(aux, row),
+    ] {
+        assert_eq!(plan(&s, op).unwrap_err(), ApiError::NotFound, "{op:?}");
+    }
+}
+
+#[test]
+fn the_filler_list_is_not_found_for_remote_edits() {
+    let (s, _, list, row) = with_filler();
+    let mine = s.players[0].playlist;
+    for edit in [
+        Edit::RenamePlaylist(list, "Mine".into()),
+        Edit::DeletePlaylist(list),
+        Edit::RemoveEntry(row),
+        Edit::DuplicateEntry(row),
+        Edit::MoveEntry {
+            entry: row,
+            playlist: mine,
+            index: 0,
+        },
+    ] {
+        assert_eq!(
+            plan_edit(&s, edit.clone()).unwrap_err(),
+            ApiError::NotFound,
+            "{edit:?}"
+        );
+    }
+}

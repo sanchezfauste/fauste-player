@@ -2,7 +2,7 @@
 //! to *n*.
 
 /// The schema version this build writes and the newest it can read.
-pub const SCHEMA_VERSION: u32 = 2;
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// The migrations, in order; `MIGRATIONS[n - 1]` is migration *n*.
 pub(crate) const MIGRATIONS: &[&str] = &[
@@ -32,5 +32,11 @@ CREATE TABLE categories (id INTEGER PRIMARY KEY, position INTEGER NOT NULL, doc 
 ALTER TABLE tracks ADD COLUMN category INTEGER;
 CREATE INDEX tracks_by_category ON tracks(category);
 CREATE INDEX tracks_by_path ON tracks(path);
+",
+    // 3: automation (automation spec): the music filler's rotations, and
+    // when each track last aired. The default rotation is a `kv` value.
+    "
+CREATE TABLE rotations (id INTEGER PRIMARY KEY, position INTEGER NOT NULL, doc TEXT NOT NULL);
+CREATE TABLE air_times (track INTEGER PRIMARY KEY, at INTEGER NOT NULL) WITHOUT ROWID;
 ",
 ];

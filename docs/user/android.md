@@ -274,6 +274,7 @@ depends on the phone.
 
 ## Not on Android
 
-MIDI control surfaces, remote control, tag and cover editing, and
-playlist and cart page files are desktop features for now. A keyboard
+MIDI control surfaces, remote control, tag and cover editing,
+playlist and cart page files, and automation (the music filler and
+Settings → Automation) are desktop features for now. A keyboard
 plugged into a tablet works as on the desktop (see [Keyboard](keyboard.md)).

@@ -31,7 +31,7 @@ pub fn desired(config: &MidiConfig, state: &AppState, blink_on: bool) -> Vec<Led
                 return None;
             };
             let n = action.position()?;
-            let player = state.players.get(usize::from(n).checked_sub(1)?)?;
+            let player = state.aux_players().nth(usize::from(n).checked_sub(1)?)?;
             let can = availability(state, player.id);
             let on = match action {
                 ShortcutAction::PlayPlayer(_) => player.transport == Transport::Playing,

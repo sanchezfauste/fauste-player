@@ -111,6 +111,10 @@ fn rich() -> Snapshot {
             ..Default::default()
         },
         cart_pages: vec![page(20, vec![cart]), page(21, Vec::new())],
+        rotations: Vec::new(),
+        default_rotation: None,
+        air_times: Default::default(),
+        filler: None,
     }
 }
 

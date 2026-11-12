@@ -416,3 +416,15 @@ fn a_track_reports_its_bit_rate_in_bit_per_second() {
     let t = dto::track(&s, id).unwrap();
     assert_eq!(t.format.unwrap().bitrate, Some(320_000));
 }
+
+#[test]
+fn the_api_lists_neither_the_filler_nor_its_playlist() {
+    let mut s = demo_state();
+    fp_model::filler::ensure(&mut s, "Music filler");
+    let filler = s.filler.clone().unwrap();
+    let out = dto::state(&s, &Playback::default());
+    assert_eq!(out.players.len(), 4);
+    assert_eq!(out.playlists.len(), 2);
+    assert!(dto::player(&s, &Playback::default(), filler.player).is_none());
+    assert!(dto::playlist(&s, filler.playlist).is_none());
+}
