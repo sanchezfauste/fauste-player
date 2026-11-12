@@ -456,3 +456,72 @@ mod days {
         }));
     }
 }
+
+mod layout {
+    use super::*;
+    use fp_model::local_time::TimeOfDay;
+    use fp_model::schedule::Item;
+
+    #[test]
+    fn two_blocks_each_have_their_own_music_after() {
+        let (mut s, base, first) = with_block((10, 0, 0), 12.0);
+        let start = TimeOfDay::hms(11, 0, 0).unwrap();
+        apply(
+            &mut s,
+            Command::AddBlock {
+                template: base,
+                start,
+            },
+        )
+        .unwrap();
+        let second = s
+            .schedule
+            .template(base)
+            .unwrap()
+            .blocks
+            .iter()
+            .find(|b| b.id != first)
+            .unwrap()
+            .id;
+        let music = s.rotations.default_id().unwrap();
+        let (mut h, fake) = harness(s);
+        open(&mut h);
+        h.get_all_by_label("Music after").nth(1).unwrap().click();
+        h.run_steps(2);
+        h.get_all_by_label("Music").last().unwrap().click();
+        h.run_steps(2);
+        let sent = fake.take_sent();
+        assert!(
+            sent.iter()
+                .any(|c| matches!(c, Command::UpdateBlock { block, .. }
+                if block.id == second
+                    && block.items == vec![Item::Rotation { rotation: music }])),
+            "{sent:?}"
+        );
+        assert!(
+            !sent
+                .iter()
+                .any(|c| matches!(c, Command::UpdateBlock { block, .. } if block.id == first)),
+            "{sent:?}"
+        );
+    }
+
+    const LONG: &str =
+        "A very long title that would run under the buttons of the row if it were not cut short";
+
+    #[test]
+    fn a_long_title_stays_clear_of_the_item_controls() {
+        let (mut s, _, _) = with_block((10, 0, 0), 12.0);
+        s.library.get_mut(fp_model::TrackId(9000)).unwrap().title = LONG.into();
+        let (mut h, _fake) = harness(s);
+        open(&mut h);
+        let check = h.get_by_label("Time-critical").rect();
+        // The editor's row (the Schedule column lists the title too).
+        let title = h
+            .query_all_by_value(LONG)
+            .map(|n| n.rect())
+            .find(|r| (r.center().y - check.center().y).abs() < 10.0)
+            .expect("the title in the editor");
+        assert!(title.right() <= check.left(), "{title:?} vs {check:?}");
+    }
+}

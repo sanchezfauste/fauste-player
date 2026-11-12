@@ -740,37 +740,75 @@ pub fn prune_dates(state: &mut AppState, today: NaiveDate) -> usize {
     before - state.schedule.dates.len()
 }
 
+/// The shortest playable track of each category, its subcategories
+/// included (AU37's estimate for a category item), from one pass over the
+/// library.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CategoryLengths(std::collections::HashMap<CategoryId, f64>);
+
+impl CategoryLengths {
+    pub fn shortest(&self, category: CategoryId) -> Option<f64> {
+        self.0.get(&category).copied()
+    }
+}
+
+/// The track's audible length (cue-in to cue-out) when known.
+fn known_length(state: &AppState, track: &crate::track::Track) -> Option<f64> {
+    let range = track.play_range(state.config.players.use_cue_markers);
+    range.known_end().map(|_| range.length())
+}
+
+pub fn category_lengths(state: &AppState) -> CategoryLengths {
+    let mut own: std::collections::HashMap<CategoryId, f64> = std::collections::HashMap::new();
+    for track in state.library.iter() {
+        let Some(category) = track.category else {
+            continue;
+        };
+        if !track.file_state.is_playable() {
+            continue;
+        }
+        if let Some(length) = known_length(state, track) {
+            own.entry(category)
+                .and_modify(|l| *l = l.min(length))
+                .or_insert(length);
+        }
+    }
+    let lengths = state
+        .categories
+        .iter()
+        .filter_map(|c| {
+            state
+                .categories
+                .subtree(c.id)
+                .into_iter()
+                .filter_map(|id| own.get(&id).copied())
+                .min_by(f64::total_cmp)
+                .map(|l| (c.id, l))
+        })
+        .collect();
+    CategoryLengths(lengths)
+}
+
 /// AU37: by how many seconds `items` overrun the time from `start` to
 /// `next_start` (the next block's start; `None`: midnight; at or before
 /// `start`: the next day's). A track counts its play range when known, a
-/// category its shortest playable track, a rotation nothing. `None` when
-/// the block fits.
+/// category its shortest playable track (`lengths`), a rotation nothing.
+/// `None` when the block fits.
 pub fn overrun_secs(
     state: &AppState,
+    lengths: &CategoryLengths,
     items: &[Item],
     start: TimeOfDay,
     next_start: Option<TimeOfDay>,
 ) -> Option<f64> {
-    let use_markers = state.config.players.use_cue_markers;
-    let length = |track: &crate::track::Track| {
-        let range = track.play_range(use_markers);
-        range.known_end().map(|_| range.length())
-    };
     let total: f64 = items
         .iter()
         .filter_map(|item| match item {
-            Item::Track { track, .. } => state.library.get(*track).and_then(length),
-            Item::Category { category, .. } => {
-                let tree: std::collections::HashSet<_> =
-                    state.categories.subtree(*category).into_iter().collect();
-                state
-                    .library
-                    .iter()
-                    .filter(|t| t.category.is_some_and(|c| tree.contains(&c)))
-                    .filter(|t| t.file_state.is_playable())
-                    .filter_map(length)
-                    .min_by(f64::total_cmp)
-            }
+            Item::Track { track, .. } => state
+                .library
+                .get(*track)
+                .and_then(|t| known_length(state, t)),
+            Item::Category { category, .. } => lengths.shortest(*category),
             Item::Rotation { .. } => None,
         })
         .sum();

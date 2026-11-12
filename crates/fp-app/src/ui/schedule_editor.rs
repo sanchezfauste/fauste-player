@@ -8,7 +8,9 @@ use chrono::{Datelike, Days, Months, NaiveDate, Weekday};
 use egui::{Align, Layout, RichText, Ui, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::local_time::TimeOfDay;
-use fp_model::schedule::{Block, Item, overrun_secs, with_tracks};
+use fp_model::schedule::{
+    Block, CategoryLengths, Item, category_lengths, overrun_secs, with_tracks,
+};
 use fp_model::{BlockId, Command, TemplateId};
 
 use super::app::{DragTracks, Scene, ViewState};
@@ -41,6 +43,43 @@ pub(crate) struct EditorState {
     /// (its first day; `None`: the date's).
     pub date: Option<NaiveDate>,
     pub month: Option<NaiveDate>,
+    /// AU37's category lengths and what they were computed from: worked
+    /// out again only when the library, the categories or the cue-marker
+    /// setting change, never every frame.
+    lengths: Option<LengthsCache>,
+}
+
+#[derive(Debug)]
+struct LengthsCache {
+    library: fp_model::Library,
+    categories: fp_model::Categories,
+    use_markers: bool,
+    lengths: std::sync::Arc<CategoryLengths>,
+}
+
+/// AU37's category lengths, from the cache when nothing they depend on
+/// changed.
+fn category_lengths_for(
+    editor: &mut EditorState,
+    scene: &Scene<'_>,
+) -> std::sync::Arc<CategoryLengths> {
+    let state = scene.state;
+    let use_markers = state.config.players.use_cue_markers;
+    if let Some(cache) = &editor.lengths
+        && cache.library.shares_storage(&state.library)
+        && cache.categories == state.categories
+        && cache.use_markers == use_markers
+    {
+        return cache.lengths.clone();
+    }
+    let lengths = std::sync::Arc::new(category_lengths(state));
+    editor.lengths = Some(LengthsCache {
+        library: state.library.clone(),
+        categories: state.categories.clone(),
+        use_markers,
+        lengths: lengths.clone(),
+    });
+    lengths
 }
 
 /// What the operator did to a block.
@@ -278,6 +317,7 @@ pub(crate) fn block_editor(
 ) -> Option<BlockEdit> {
     let t = scene.i18n;
     let mut edit = None;
+    let lengths = category_lengths_for(editor, scene);
     let dragging = egui::DragAndDrop::has_payload_of_type::<DragTracks>(ui.ctx());
     let frame = egui::Frame::new()
         .fill(theme::NEUTRAL_900)
@@ -293,7 +333,7 @@ pub(crate) fn block_editor(
                     }));
                 }
                 if let Some(excess) =
-                    overrun_secs(scene.state, &block.items, block.start, next_start)
+                    overrun_secs(scene.state, &lengths, &block.items, block.start, next_start)
                 {
                     ui.label(
                         RichText::new(t.tr_args(
@@ -399,18 +439,21 @@ fn adders(ui: &mut Ui, scene: &Scene<'_>, block: &Block) -> Option<Vec<Item>> {
         };
         let default_text = t.tr("schedule-music-after-default");
         let mut choice = current;
-        egui::ComboBox::from_label(t.tr("schedule-music-after"))
-            .selected_text(
-                current
-                    .and_then(|r| state.rotations.get(r))
-                    .map_or_else(|| default_text.clone(), |r| r.name.clone()),
-            )
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut choice, None, default_text.as_str());
-                for r in state.rotations.iter() {
-                    ui.selectable_value(&mut choice, Some(r.id), r.name.as_str());
-                }
-            });
+        egui::ComboBox::new(
+            ("schedule-music-after", block.id.0),
+            t.tr("schedule-music-after"),
+        )
+        .selected_text(
+            current
+                .and_then(|r| state.rotations.get(r))
+                .map_or_else(|| default_text.clone(), |r| r.name.clone()),
+        )
+        .show_ui(ui, |ui| {
+            ui.selectable_value(&mut choice, None, default_text.as_str());
+            for r in state.rotations.iter() {
+                ui.selectable_value(&mut choice, Some(r.id), r.name.as_str());
+            }
+        });
         if choice != current {
             let mut new: Vec<Item> = block
                 .items
@@ -483,9 +526,7 @@ fn item_row(
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
         let text = super::schedule::item_text(scene, item);
-        ui.add(
-            egui::Label::new(RichText::new(text).font(font(12.0)).color(theme::TEXT)).truncate(),
-        );
+        // The controls first, from the right; the title takes what is left.
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             let moved = |ui: &mut Ui, glyph: &str, key: &str, to: Option<usize>| {
                 let tip = t.tr(key);
@@ -552,6 +593,12 @@ fn item_row(
                         .color(theme::NEUTRAL_400),
                 );
             }
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                ui.add(
+                    egui::Label::new(RichText::new(text).font(font(12.0)).color(theme::TEXT))
+                        .truncate(),
+                );
+            });
         });
     });
     items
@@ -630,8 +677,7 @@ fn month_grid(
         .spacing(vec2(2.0, 2.0))
         .show(ui, |ui| {
             for (_, key) in WEEKDAYS {
-                let name = t.tr(key);
-                let short: String = name.chars().take(2).collect();
+                let short = t.tr(&key.replacen("weekday-", "weekday-short-", 1));
                 ui.label(
                     RichText::new(short)
                         .font(font(11.0))
