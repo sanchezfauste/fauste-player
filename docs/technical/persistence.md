@@ -59,7 +59,9 @@ transaction. The tables:
 | `date_plans` | `id` (the date's day number from the common era, `NaiveDate::num_days_from_ce`), `position` and `doc` (schema 4): what one date changes (`date`, `template`, `changes`: `Changed {block, own_time}`, `Removed(id)`, `Added(block)`). A record whose date is not its key's is dropped; a missing template is cleared |
 
 The default rotation is the `kv` value `default_rotation` (a rotation id,
-or null); one that names no rotation falls back on the first. The music filler is the `kv` value `filler`: its player's session (as a
+or null); one that names no rotation falls back on the first. The schedule's player is the `kv` value `automation` (its player's
+session and its playlist id; the list's rows are cleared on restore, and the
+running state, next and missed marks are never saved). The music filler is the `kv` value `filler`: its player's session (as a
 `players` row would hold it), its playlist (an ordinary `playlists` row,
 listed nowhere), its rotation, its rotation cursor and the rows it
 generated. It comes back last of the players and not playing; a record
@@ -544,6 +546,8 @@ a criterion off.
 | `filler_played_kept` | 50 | the music filler keeps this many played rows in its list; older ones are removed (10–1000) |
 | `artist_separation_mins` | 30 | no track of an artist that aired less than this many minutes ago (0–1440; the artist compared trimmed and case-insensitively) |
 | `overrides_keep_days` | 30 | the schedule's date overrides older than this many days are deleted at start-up (1–3650; config file only for now) |
+| `late_tolerance_secs` | 120 | a block that started less than this many seconds ago is still next by the clock, and a time-critical item may start this late (0–1800; config file only for now) |
+| `block_fade_ms` | 2000 | the music filler fades out over this many milliseconds, ending at a block's start (0–10000; config file only for now) |
 
 ### `limits` (config file only)
 

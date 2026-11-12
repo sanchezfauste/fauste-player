@@ -2,9 +2,9 @@
 
 The design is the [automation spec](../superpowers/specs/2026-11-11-automation-design.md)
 (rules `AU<n>`). This page describes what is implemented so far: the music
-filler's selection rules and player, and the schedule's data model, pure
-functions in `fp-model`. Running the schedule and its screens come in later
-plans.
+filler's selection rules and player, the schedule's data model, and
+running the schedule, pure functions in `fp-model`. The schedule's screens
+come in a later plan.
 
 ## Time and randomness (`wall_time.rs`)
 
@@ -204,3 +204,73 @@ occurrence (AU14).
 `prune_dates(state, today)` deletes the date plans older than
 `automation.overrides_keep_days` (AU38). The app calls it at start-up. The
 store saves the schedule in schema 4 ([persistence](persistence.md)).
+
+## Running the schedule (`automation.rs`)
+
+`AppState::automation` (an `AutomationState`) runs the schedule (AU15–AU24,
+AU40). The schedule plays through its own player and list, made by
+`automation::ensure` like the filler's:
+
+- **The players:** `players` holds the schedule's player just before the
+  filler's, both last. `player_ids` shows the schedule first, then the
+  Music column, then P1…. `is_automation` and `is_automation_playlist` keep
+  both players and their lists out of the operator's lists, the remote API
+  and the player count, and the reducer refuses edits to them with
+  `FillerPlaylist`.
+- **Local time:** the model never reads the clock. The conductor sets
+  `local_now` (local date and time) next to `wall_now` on every tick, then
+  calls `automation::tick`. Block starts are local date-times (a date and a
+  `TimeOfDay`), compared with `local_now`. A block in the spring gap is
+  never reached, so it is missed. In the autumn overlap a block plays once
+  (AU14), because `started` keeps it from playing again.
+- **Next** (`ItemRef`: a date, a block and an item index) follows the clock
+  (`clock_next`): the first block of yesterday, today or tomorrow that has
+  not started and starts after `local_now − automation.late_tolerance_secs`.
+  The operator may set it by hand (`SetScheduleNext`), and it stays until
+  Start or `ClearScheduleNext`. `settle_next` runs after every step.
+- **Missed blocks:** a block whose start passes since the last look (`seen`)
+  is marked missed in `missed` when automation is stopped, between blocks,
+  or while a block chosen away from its time plays. A start that passes
+  while a block plays in order waits for it (AU21).
+- **Start** (`StartAutomation`): a next set by hand plays at once, with the
+  filler fading out. A next from the clock plays at its block's start, with
+  the filler until then.
+- **Loading a block:** `load_block` puts the block's items into the
+  schedule's list:
+  - a track item becomes its track;
+  - a category item becomes a track picked by the §6 rules;
+  - a rotation item ends the rows, and the filler plays it after the block;
+  - an item with nothing playable, or a time-critical item already past
+    the late tolerance, is missed.
+
+  The rows play in order with the player's crossfades and segues (AU18).
+- **Each tick** (`drive`):
+  - **A block ends** when its player is idle. The filler takes the block's
+    rotation or the default (AU20). If the block played in order, the
+    earliest block that came due meanwhile plays now (AU21). Otherwise next
+    from the clock plays at its time.
+  - **The hand-over (AU24):** `automation.block_fade_ms` before a block, the
+    filler fades out (`reducer::fade_stop_over`), and `handing_over` keeps
+    it from restarting. At the start the block plays.
+  - **A late time-critical item (AU22):** a next row that is time-critical
+    and would start beyond the block's start plus the tolerance is taken
+    out and missed. When it would start is estimated from when the row on
+    air started (`row_since`) and its length.
+  - **A next set by hand between blocks** follows the filler song on air.
+    Nothing is cut.
+- **Clock jumps (AU40):** a step of `local_now` back, or forward by more
+  than `CLOCK_JUMP_SECS` (60), recomputes next before anything plays.
+  Blocks jumped over are missed, and blocks already started never play
+  again.
+- **The filler's look-ahead (AU27):** while automation runs between blocks,
+  `coming_start` limits it to the coming block, and generated rows that
+  would start after it leave the list.
+- **Stop after current** (`StopAutomationAfterCurrent`) sets
+  `stop_after_current` on whichever of the two players plays, and stops
+  automation. Nothing then plays by itself.
+
+The hand-over is exact to one conductor tick (`tuning.conductor_tick_ms`),
+not to the sample. AU25 (no song fragments before a block) and a start
+exact to the sample come in a later plan. `AutomationSession` (the `kv`
+value `automation`) keeps the schedule's player and list ids across a
+restart. Automation always comes back stopped.
