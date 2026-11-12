@@ -109,7 +109,10 @@ then `schedule::prune_dates` with today's local date.
 Schema 5 (automation, plan 8) adds the `as_run` table. A save appends the
 `Snapshot::as_run` entries from the last save's `as_run_next` on, and
 deletes the rows older than `automation.as_run_keep_days` counted from the
-local date (`as_run_before`); loading resumes the model's numbering at one
+local date (`as_run_before`). `Store::save_state` holds that cutoff to its
+first one of the session plus the whole days of real (`Instant`) time
+since, plus one, so a clock that jumps ahead does not delete the log
+(AU40); loading resumes the model's numbering at one
 past the highest saved sequence (`AsRunLog::resume_at`).
 
 **The path rule.** The library holds one track per file (LB14). Uniqueness is

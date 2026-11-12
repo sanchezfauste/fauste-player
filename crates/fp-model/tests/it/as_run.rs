@@ -128,3 +128,25 @@ fn as_run_keep_days_has_its_default_and_range() {
     c.validate();
     assert_eq!(c.automation.as_run_keep_days, 3_650);
 }
+
+#[test]
+fn a_pause_and_resume_is_one_airing() {
+    let mut r = rig();
+    r.at_hms(8, 0, 0);
+    r.apply(Command::StartAutomation);
+    let fill = r.filler_player();
+    assert!(r.playing(fill).is_some());
+    r.apply(Command::Pause(fill));
+    r.at_hms(8, 0, 5);
+    r.apply(Command::Play(fill));
+    r.at_hms(8, 0, 10);
+    r.at_hms(10, 0, 0);
+    let sched = r.schedule_player();
+    r.apply(Command::Pause(sched));
+    r.at_hms(10, 0, 5);
+    r.apply(Command::Play(sched));
+    r.at_hms(10, 0, 10);
+    let count = |source| entries(&r).iter().filter(|e| e.source == source).count();
+    assert_eq!(count(AsRunSource::Filler), 1, "{:?}", entries(&r));
+    assert_eq!(count(AsRunSource::Schedule), 1, "{:?}", entries(&r));
+}

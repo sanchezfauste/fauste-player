@@ -431,7 +431,13 @@ later is a mapping, not a redesign.
 - AU39's long-run test runs in CI in fast simulated time. *(My call, plan
   8: it drives the model and the store with a small fake engine, not the
   engine's real-time loop: engine timing is covered by the conductor's
-  test, and thirty days at a 5 ms tick cannot run in CI time.)*
+  test, and thirty days at a 5 ms tick cannot run in CI time. "Allocations
+  stay flat" is checked through what holds memory: every list, mark set,
+  the in-memory log and the growing tables are counted and bounded, not
+  the allocator itself.)*
+- A forward jump of the clock does not delete the stored as-run log: the
+  store's prune cutoff moves no faster than the time that really passed
+  since its first save of the session. *(My call, plan 8 review.)*
 
 ## 13. Left to the builder, and open points
 

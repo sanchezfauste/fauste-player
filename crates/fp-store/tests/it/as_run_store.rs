@@ -138,3 +138,27 @@ fn a_damaged_row_is_skipped_with_a_warning() {
     assert_eq!(entries.len(), 1);
     assert_eq!(warnings.len(), 1);
 }
+
+/// A clock that jumps a year ahead while the app runs does not delete the
+/// log: the cutoff moves no faster than real time (AU38, AU40).
+#[test]
+fn a_forward_clock_jump_does_not_prune_the_log() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let mut state = started();
+    state.config.automation.as_run_keep_days = 3;
+    let t0 = std::time::Instant::now();
+    s.save_config(&state).unwrap();
+    s.save_state(&state, |_| 0.0, t0).unwrap();
+    state.local_now = NaiveDate::from_ymd_opt(2027, 11, 17)
+        .unwrap()
+        .and_hms_opt(8, 1, 0)
+        .unwrap();
+    let a_minute = t0 + std::time::Duration::from_secs(60);
+    s.save_state(&state, |_| 0.0, a_minute).unwrap();
+    assert_eq!(count(&s, "SELECT COUNT(*) FROM as_run"), 1);
+    // Once the days have really passed, the old rows go.
+    let five_days = t0 + std::time::Duration::from_secs(5 * 86_400);
+    s.save_state(&state, |_| 0.0, five_days).unwrap();
+    assert_eq!(count(&s, "SELECT COUNT(*) FROM as_run"), 0);
+}

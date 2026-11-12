@@ -363,7 +363,8 @@ known lengths, a classic method.
 
 `AppState::as_run` (an `AsRunLog`) records what aired and what was missed
 (AU36). `reducer::settle_all` ends with `as_run::record`, which compares
-what the two automation players have on air (while playing) and the
+what the two automation players have on air (playing or paused: a pause
+and its resume are one airing) and the
 `missed` set with what it saw last:
 
 - a new row on air on the schedule's player that maps to an `ItemRef`
@@ -384,5 +385,8 @@ AU39's long-run test (`fp-store/tests/it/automation_long_run.rs`) runs
 thirty simulated days with a week plan, a date override, the filler and a
 save every hour, through the model and the store with a small fake engine,
 and checks that the lists, marks, in-memory log and `as_run` table stay
-bounded and that every block started on time.
+bounded and that every block started on time. It also restarts the store
+half way, checks that the database holds exactly the logged entries since
+the cutoff (each sequence once), that the filler played every day, and
+that the `entries` and `air_times` tables stay bounded.
 

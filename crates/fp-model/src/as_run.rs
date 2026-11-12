@@ -79,13 +79,14 @@ impl AsRunLog {
     }
 }
 
-/// The row on air of `player` while it plays.
+/// The row on air of `player` while it plays or is paused: a pause and
+/// its resume are one airing.
 fn playing(state: &AppState, player: crate::ids::PlayerId) -> Option<EntryId> {
     state
         .players
         .iter()
         .find(|p| p.id == player)
-        .filter(|p| p.transport == Transport::Playing)
+        .filter(|p| p.transport != Transport::Stopped)
         .and_then(|p| p.current)
 }
 

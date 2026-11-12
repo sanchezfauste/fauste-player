@@ -17,8 +17,6 @@ use fp_model::{
 };
 use fp_store::{AppPaths, Store};
 
-use crate::support::save_all;
-
 const DAYS: u64 = 30;
 const STEP_SECS: i64 = 10;
 const HOURLY_ID: TrackId = TrackId(100);
@@ -239,8 +237,10 @@ fn count(s: &Store, sql: &str) -> i64 {
 #[test]
 fn thirty_days_of_automation_stay_bounded_and_on_time() {
     let dir = tempfile::tempdir().unwrap();
-    let mut store = Store::new(AppPaths::under(dir.path()), Config::default().limits);
+    let new_store = || Store::new(AppPaths::under(dir.path()), Config::default().limits);
+    let mut store = new_store();
     let mut sim = setup();
+    let instant0 = std::time::Instant::now();
     let begin = start_day().and_hms_opt(0, 0, 0).unwrap();
     sim.tick(begin);
     sim.apply(Command::StartAutomation);
@@ -253,8 +253,23 @@ fn thirty_days_of_automation_stay_bounded_and_on_time() {
         t += TimeDelta::seconds(STEP_SECS);
         sim.tick(t);
         if t.time().second() == 0 && t.time().minute() == 0 {
-            // Every hour: save, and check that nothing grows.
-            save_all(&mut store, &sim.s, 0.0);
+            // Every hour: save, and check that nothing grows. The store
+            // sees simulated time pass (its prune cutoff follows real time).
+            if t == begin + TimeDelta::days(15) {
+                // A restart of the store half way: it writes nothing twice
+                // and loses nothing.
+                store = new_store();
+                let _ = store.load("Main");
+            }
+            let elapsed = u64::try_from((t - begin).num_seconds()).unwrap();
+            store.save_config(&sim.s).unwrap();
+            store
+                .save_state(
+                    &sim.s,
+                    |_| 0.0,
+                    instant0 + std::time::Duration::from_secs(elapsed),
+                )
+                .unwrap();
             log.extend(sim.s.as_run.since(saved_seq).cloned());
             saved_seq = sim.s.as_run.next_seq();
             let s = &sim.s;
@@ -289,7 +304,34 @@ fn thirty_days_of_automation_stay_bounded_and_on_time() {
                 ),
             );
             assert_eq!(old, 0, "rows older than the keep days at {t}");
+            // The other tables that grow with time stay bounded too.
+            let entries = count(&store, "SELECT COUNT(*) FROM entries");
+            assert!(entries <= (kept + 25 + 3) as i64, "entries {t}: {entries}");
+            let tracks = count(&store, "SELECT COUNT(*) FROM tracks");
+            let air = count(&store, "SELECT COUNT(*) FROM air_times");
+            assert!(air <= tracks, "air times {t}: {air}");
         }
+    }
+    // What the database holds is what the model logged since the cutoff:
+    // every sequence number once, none lost.
+    let cutoff = end.date().checked_sub_days(Days::new(2)).unwrap();
+    let db = fp_store::Db::open(&store.paths().database_file()).unwrap();
+    let (stored, warnings) = fp_store::read_as_run(&db, cutoff);
+    assert!(warnings.is_empty(), "{warnings:?}");
+    let expected: Vec<&AsRunEntry> = log.iter().filter(|e| e.date >= cutoff).collect();
+    assert_eq!(
+        stored.iter().map(|e| e.seq).collect::<Vec<_>>(),
+        expected.iter().map(|e| e.seq).collect::<Vec<_>>()
+    );
+    assert!(stored.iter().zip(&expected).all(|(a, b)| a == *b));
+    // The filler played every day of the run.
+    for d in 0..DAYS {
+        let date = start_day().checked_add_days(Days::new(d)).unwrap();
+        let songs = log
+            .iter()
+            .filter(|e| e.date == date && e.source == AsRunSource::Filler)
+            .count();
+        assert!(songs >= 100, "{date}: {songs} filler songs");
     }
     // Four days of entries at most stay in the table, whatever the run.
     let per_day = 23 * 2 + 600;
