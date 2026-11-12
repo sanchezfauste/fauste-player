@@ -174,7 +174,7 @@ fn next_actions(scene: &Scene<'_>, response: &egui::Response, item: ItemRef) {
 }
 
 /// What an item plays, in words.
-fn item_text(scene: &Scene<'_>, what: &Item) -> String {
+pub(crate) fn item_text(scene: &Scene<'_>, what: &Item) -> String {
     let t = scene.i18n;
     let state = scene.state;
     let missing = || t.tr("schedule-item-missing");
