@@ -9,8 +9,10 @@ cartuchera debajo de ellos.
 
 ## Mostrar y ocultar paneles {#show-and-hide-panels}
 
-Los mosaicos de la izquierda de la barra superior, **P1** … **Pn** y
-**Cartuchera**, indican qué paneles hay en pantalla: un mosaico encendido es
+Los mosaicos de la izquierda de la barra superior, **Parrilla** y
+**Música** (la [parrilla](automation.md#the-schedule-column) y el
+[musicalizador](automation.md#the-music-filler), ocultos los dos hasta que
+los muestras), **P1** … **Pn** y **Cartuchera**, indican qué paneles hay en pantalla: un mosaico encendido es
 un panel visible. Haz clic en un mosaico para ocultar o mostrar su panel.
 Con muchos players, los mosaicos se desplazan hacia los lados (mueve la
 rueda del ratón sobre ellos) y el botón de distribución sigue a la vista.

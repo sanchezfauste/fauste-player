@@ -90,8 +90,8 @@ cambiarlos, las pistas se vuelven a analizar automáticamente.
   siguiente pista empieza exactamente en el cue-out, sin hueco.
 - **Modo single**, o **Stop al final**: el player se detiene en el cue-out.
 - **Pulsar Play mientras suena:** la siguiente pista empieza al momento y la
-  actual baja con un fundido durante la *duración del fundido* (1 s por
-  defecto).
+  actual baja con un fundido durante la *duración del fundido entre pistas* (1 s
+  por defecto).
 - **Un player cuya salida Main es bit-perfect** ignora el punto MIX y la
   mezcla automática: cada pista se reproduce hasta su cue-out, luego empieza
   la siguiente, y Play mientras suena cambia al momento, sin fundido. Véase

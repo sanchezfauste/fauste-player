@@ -28,7 +28,7 @@ En Linux, MIDI pasa por ALSA: tu usuario debe poder abrir el secuenciador
 
 ## Asignar un control {#binding-a-control}
 
-Para cada player hay una fila por acción: **Play / Siguiente**, **Pausa**,
+Para cada player (P1 … Pn; la columna **Música** no tiene asignaciones) hay una fila por acción: **Play / Siguiente**, **Pausa**,
 **Stop**, **Stop con fundido**, **Reiniciar**, **Anterior**, **CUE** y
 **Volumen**.
 

@@ -30,7 +30,7 @@ memoria USB, o para tener configuraciones separadas una al lado de otra.
 | Archivo | Contenido |
 |---|---|
 | `config.json` | Configuración, salidas, umbrales de análisis, ajustes avanzados |
-| `fauste.db` | La biblioteca (pistas, sus categorías, marcadores manuales, etiquetas, sonoridad), las playlists con sus marcas de reproducida, las páginas de cartuchos y la sesión: para cada player la playlist que se ve, las pistas actual y siguiente, el modo, la posición, el volumen y los anchos de columna (por columna), y la distribución de la ventana |
+| `fauste.db` | La biblioteca (pistas, sus categorías, marcadores manuales, etiquetas, sonoridad), las playlists con sus marcas de reproducida, las páginas de cartuchos, las rotaciones, la parrilla y el registro de emisión de la automatización (se conserva `automation.as_run_keep_days` días, 90 por defecto), y la sesión: para cada player la playlist que se ve, las pistas actual y siguiente, el modo, la posición, el volumen y los anchos de columna (por columna), y la distribución de la ventana |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Copias de la base de datos (véase más abajo) |
 | `window.ron` | El tamaño y la posición de la ventana principal y si estaba maximizada (solo en el ordenador; en Wayland el sistema elige la posición) |
 

@@ -301,6 +301,7 @@ salidas puedan sonar a la vez depende del teléfono.
 ## Lo que no está en Android {#not-on-android}
 
 Las superficies de control MIDI, el control remoto, la edición de
-etiquetas y carátulas, y los archivos de playlists y de páginas de
-cartuchos son por ahora funciones del escritorio. Un teclado conectado a
+etiquetas y carátulas, los archivos de playlists y de páginas de
+cartuchos, y la automatización (el musicalizador y Configuración →
+Automatización) son por ahora funciones del escritorio. Un teclado conectado a
 una tableta funciona como en el escritorio (véase [Teclado](keyboard.md)).
