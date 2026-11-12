@@ -246,6 +246,13 @@ pub enum Command {
     SetScheduleNext(crate::automation::ItemRef),
     /// AU16: next follows the clock again.
     ClearScheduleNext,
+    /// AU15, AU17: automation runs. A next set by hand plays at once; a
+    /// next from the clock plays at its block's start, with the music
+    /// filler until then.
+    StartAutomation,
+    /// AU17: the item on air (a schedule item or a filler song) ends, then
+    /// the schedule and the filler stop.
+    StopAutomationAfterCurrent,
     /// AU10: the template a date uses instead of its weekday's (`None`:
     /// its weekday's).
     SetDateTemplate {

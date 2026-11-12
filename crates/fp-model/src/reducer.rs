@@ -375,7 +375,9 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::SetWeekTemplate { weekday, template } => {
             crate::schedule::set_week_template(state, weekday, template)?
         }
-        Command::SetScheduleNext(item) => crate::automation::set_next(state, item)?,
+        Command::SetScheduleNext(item) => crate::automation::set_next(state, item, &mut out)?,
+        Command::StartAutomation => crate::automation::start(state, &mut out)?,
+        Command::StopAutomationAfterCurrent => crate::automation::stop_after_current(state),
         Command::ClearScheduleNext => crate::automation::clear_next(state)?,
         Command::SetDateTemplate { date, template } => {
             crate::schedule::set_date_template(state, date, template)?
@@ -611,11 +613,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             t.loudness_edit = crate::loudness::LoudnessEdit { excluded, trim_db };
         }
     }
-    fill_empty_next(state);
-    crate::filler::settle(state, &mut out);
-    crate::automation::settle_next(state);
-    reconcile(state, &mut out);
-    crate::live::dispatch_due(state, &mut out);
+    settle_all(state, &mut out);
     Ok(out)
 }
 
@@ -771,15 +769,26 @@ fn on_engine_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction
             refused,
         } => crate::live::stream_rate(state, device, rate, refused),
     }
-    fill_empty_next(state);
-    crate::filler::settle(state, &mut out);
-    crate::automation::settle_next(state);
-    reconcile(state, &mut out);
-    crate::live::dispatch_due(state, &mut out);
+    settle_all(state, &mut out);
     out
 }
 
-fn play(state: &mut AppState, id: PlayerId, out: &mut Vec<EngineAction>) -> Result<(), ModelError> {
+/// The upkeep that closes every step (a command, an event, an automation
+/// tick): idle players pick a next, the filler and the schedule settle, and
+/// the engine gets the preloads and plans the state implies.
+pub(crate) fn settle_all(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    fill_empty_next(state);
+    crate::filler::settle(state, out);
+    crate::automation::settle_next(state);
+    reconcile(state, out);
+    crate::live::dispatch_due(state, out);
+}
+
+pub(crate) fn play(
+    state: &mut AppState,
+    id: PlayerId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
     let i = state.player_index(id)?;
     match state.players[i].transport {
         Transport::Paused if state.players[i].current.is_some() => {

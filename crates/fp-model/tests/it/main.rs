@@ -10,6 +10,8 @@ mod audio_change;
 mod automation_config;
 mod automation_next;
 mod automation_player;
+mod automation_rig;
+mod automation_run;
 mod availability;
 mod bit_perfect_rules;
 mod bitrate_pass;
