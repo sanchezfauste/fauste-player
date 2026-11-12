@@ -135,3 +135,64 @@ fn a_deleted_track_shows_not_available() {
     let (h, _fake) = harness(s);
     assert!(h.query_all_by_label_contains("Not available").count() >= 1);
 }
+
+/// Today's row of "Top of the Hour" (yesterday's last block comes first).
+fn todays_row(h: &egui_kittest::Harness<'_, fp_app::ui::app::AppUi>) -> egui::Pos2 {
+    h.get_all_by_label_contains("Top of the Hour")
+        .nth(1)
+        .unwrap()
+        .rect()
+        .center()
+}
+
+#[test]
+fn double_click_sets_the_item_as_next() {
+    use egui::{Event, Modifiers, PointerButton};
+    let (s, item) = with_block();
+    let (mut h, fake) = harness(s);
+    let at = todays_row(&h);
+    h.event(Event::PointerMoved(at));
+    h.run_steps(1);
+    for _ in 0..2 {
+        for pressed in [true, false] {
+            h.event(Event::PointerButton {
+                pos: at,
+                button: PointerButton::Primary,
+                pressed,
+                modifiers: Modifiers::NONE,
+            });
+        }
+        h.step();
+    }
+    h.run_steps(2);
+    assert!(fake.take_sent().contains(&Command::SetScheduleNext(item)));
+}
+
+#[test]
+fn the_menu_sets_and_clears_next() {
+    let (mut s, item) = with_block();
+    let (mut h, fake) = harness(s.clone());
+    h.get_all_by_label_contains("Top of the Hour")
+        .nth(1)
+        .unwrap()
+        .click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Play next").click();
+    h.run_steps(2);
+    assert!(fake.take_sent().contains(&Command::SetScheduleNext(item)));
+    // A next set by hand can go back to the clock.
+    {
+        let a = s.automation.as_mut().unwrap();
+        a.next = Some(item);
+        a.next_by_hand = true;
+    }
+    let (mut h, fake) = harness(s);
+    h.get_all_by_label_contains("Top of the Hour")
+        .nth(1)
+        .unwrap()
+        .click_secondary();
+    h.run_steps(2);
+    h.get_by_label("Back to the clock").click();
+    h.run_steps(2);
+    assert!(fake.take_sent().contains(&Command::ClearScheduleNext));
+}

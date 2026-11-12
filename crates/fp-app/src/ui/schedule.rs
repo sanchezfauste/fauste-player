@@ -131,6 +131,7 @@ pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>) {
                         if scroll_now && Some(*item) == target {
                             response.scroll_to_me(Some(Align::Center));
                         }
+                        next_actions(scene, &response, *item);
                     }
                 }
             }
@@ -138,6 +139,30 @@ pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>) {
     if scroll_now {
         ui.data_mut(|d| d.insert_temp(memory, target));
     }
+}
+
+/// Setting next from the list: a double-click or the menu's "Play next";
+/// on a next set by hand, the menu's "Back to the clock" (AU16).
+fn next_actions(scene: &Scene<'_>, response: &egui::Response, item: ItemRef) {
+    let t = scene.i18n;
+    if response.double_clicked() {
+        scene.ctl.send(Command::SetScheduleNext(item));
+    }
+    let by_hand = scene
+        .state
+        .automation
+        .as_ref()
+        .is_some_and(|a| a.next_by_hand && a.next == Some(item));
+    response.context_menu(|ui| {
+        if ui.button(t.tr("schedule-set-next")).clicked() {
+            scene.ctl.send(Command::SetScheduleNext(item));
+            ui.close();
+        }
+        if by_hand && ui.button(t.tr("schedule-clear-next")).clicked() {
+            scene.ctl.send(Command::ClearScheduleNext);
+            ui.close();
+        }
+    });
 }
 
 /// What an item plays, in words.
