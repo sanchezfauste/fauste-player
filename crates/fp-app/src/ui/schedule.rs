@@ -7,14 +7,19 @@ use fp_model::Command;
 use fp_model::automation::{ItemRef, RowStatus, ScheduleRow, schedule_view};
 use fp_model::schedule::{BlockOrigin, Item};
 
-use super::app::Scene;
+use super::app::{Scene, ViewState};
 use super::format;
 use super::theme;
 use super::widgets::{font, font_semibold};
 
 /// Start, Stop after current and the running/stopped state, in the strip
 /// where a player has its playlist tabs (`height` tall).
-pub(crate) fn schedule_bar(ui: &mut Ui, scene: &Scene<'_>, height: f32) {
+pub(crate) fn schedule_bar(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    height: f32,
+) {
     let t = scene.i18n;
     let Some(a) = scene.state.automation.as_ref() else {
         return;
@@ -48,6 +53,9 @@ pub(crate) fn schedule_bar(ui: &mut Ui, scene: &Scene<'_>, height: f32) {
         (t.tr("schedule-stopped"), theme::NEUTRAL_400)
     };
     bar.add(egui::Label::new(RichText::new(text).font(font(11.0)).color(colour)).truncate());
+    if !view_state.phone_active && bar.button(t.tr("schedule-edit")).clicked() {
+        view_state.schedule_editor.open = true;
+    }
 }
 
 /// The schedule grouped by block (§8.1): each block's start, then its
@@ -166,7 +174,7 @@ fn next_actions(scene: &Scene<'_>, response: &egui::Response, item: ItemRef) {
 }
 
 /// What an item plays, in words.
-fn item_text(scene: &Scene<'_>, what: &Item) -> String {
+pub(crate) fn item_text(scene: &Scene<'_>, what: &Item) -> String {
     let t = scene.i18n;
     let state = scene.state;
     let missing = || t.tr("schedule-item-missing");

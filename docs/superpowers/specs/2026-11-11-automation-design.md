@@ -362,7 +362,12 @@ tracks and categories from the library.
 
 The editor's layout is the builder's call, following the Nocturne design
 system; a mock-up in the Claude Design project before the editor's plan is
-recommended.
+recommended. *(My calls, plan 7: three tabs (Templates, Week plan, Days);
+rotations stay in Settings → Automation, reached by a Rotations… button;
+a category item is added from a combo (dragging a category from the
+library tree comes later); the window's place is not saved; a template's
+last block runs to midnight for AU37, a date's to the next day's first
+block.)*
 
 ## 9. Running for weeks
 

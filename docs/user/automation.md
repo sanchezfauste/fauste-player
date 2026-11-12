@@ -3,8 +3,8 @@
 Automation keeps the station on air when nobody is in the studio. This
 version has the **music filler**, a player that chooses music by itself,
 from rules you set, and never stops for lack of a list, and the
-**Schedule** column, which runs the day's timed blocks. The schedule's
-editor, where you make those blocks, comes in a later version.
+**Schedule** column, which runs the day's timed blocks, with the editor
+where you make them.
 The players you already use (P1 … Pn) are untouched: they stay yours for
 shows you prepare and play live.
 
@@ -33,6 +33,33 @@ Above the list:
 To change what plays next, double-click an item, or right-click it and
 choose **Play next**; it follows the song on air. **Back to the clock**,
 in the same menu, lets the schedule choose by the time again.
+
+## Editing the schedule
+
+**Edit schedule**, on the Schedule column, opens the editor. It has three
+tabs, and **Rotations…** takes you to Settings → Automation, where
+rotations are made.
+
+- **Templates.** A template is a day of blocks; a new installation has
+  one, "Base", for every day. Make, duplicate, rename or delete templates
+  on the left; the chosen one's blocks are on the right. Type a block's
+  start as `HH:MM:SS` (a time that does not exist is kept in the field
+  with a note, and nothing changes). Drag tracks from the library onto a
+  block to add them; **Add from category** adds an item that plays one
+  track of that category, a different one each time; **Music after**
+  chooses the rotation the music filler plays after the block (the
+  default rotation when none is chosen). Each item can be marked
+  **Time-critical**, moved or removed. When a block's items are longer
+  than the time to the next block, the block says by how much, in amber;
+  you can still keep it so.
+- **Week plan.** Which template each weekday uses.
+- **Days.** Pick a date on the calendar (dates with changes are amber).
+  A date can use another template than its weekday's (a holiday on a
+  Thursday can use the weekend's). Its blocks can be changed for that date
+  only: the change is marked, and **Back to the template** undoes it.
+  **Not on this day** removes a block from that date alone, and **Add
+  block on this day** adds one. Later changes to the template still reach
+  the blocks you did not change on that date.
 
 ## The music filler
 

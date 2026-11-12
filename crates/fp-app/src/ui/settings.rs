@@ -150,6 +150,17 @@ impl SettingsState {
         self.reveal_library_route = true;
     }
 
+    /// Opens the Automation section (the schedule editor's Rotations…).
+    /// The section is desktop only, as the editor is; on Android nothing
+    /// opens it.
+    pub(crate) fn show_automation(&mut self) {
+        #[cfg(not(target_os = "android"))]
+        {
+            self.section = Section::Automation;
+            self.phone_section = true;
+        }
+    }
+
     /// Back on a phone (PL20): from a section to the list. False on the
     /// list, where Back closes Settings.
     pub(crate) fn phone_back(&mut self) -> bool {

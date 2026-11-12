@@ -224,6 +224,10 @@ pub(crate) struct ViewState {
     /// Open Settings on Audio outputs (a place that needs a route set up,
     /// such as the library's CUE).
     pub open_outputs: bool,
+    /// Open Settings on Automation (the schedule editor's Rotations…).
+    pub open_automation_settings: bool,
+    /// The schedule editor (automation spec §8.2).
+    pub schedule_editor: super::schedule_editor::EditorState,
     /// A track whose tags the operator asked to edit (feedback 2 spec O23);
     /// the next frame opens the editor.
     pub edit_tags: Option<TrackId>,
@@ -1235,6 +1239,7 @@ impl AppUi {
         // The library window and the CUE windows float over the screen; the
         // dialogs below stay on top.
         super::library::draw(&ctx, &scene, &mut self.view);
+        super::schedule_editor::draw(&ctx, &scene, &mut self.view);
         cue_window::show_all(&ctx, &scene, &mut self.view);
         super::loudness_edit::popup(&ctx, &scene, &mut self.view);
         // Once, at start-up: tracks an earlier version analysed wait for
@@ -1249,7 +1254,7 @@ impl AppUi {
         // PL19b: while a phone's Music screen answers a picker Settings
         // asked, Settings waits (its state kept) instead of covering it.
         let picking = self.view.phone_active && self.view.music.pick.is_some();
-        if self.view.open_outputs {
+        if self.view.open_outputs || self.view.open_automation_settings {
             self.view.settings_open = true;
         }
         if self.view.settings_open && !picking {
@@ -1262,6 +1267,9 @@ impl AppUi {
             }
             if std::mem::take(&mut self.view.open_outputs) {
                 self.settings.show_outputs();
+            }
+            if std::mem::take(&mut self.view.open_automation_settings) {
+                self.settings.show_automation();
             }
             let pending_tip = {
                 let names = |d: &fp_model::OutputDevice| self.settings.device_label(d);
