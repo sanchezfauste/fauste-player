@@ -59,6 +59,7 @@ mod review_fixes;
 mod rotation_cursor;
 mod rotations;
 mod schedule_dates;
+mod schedule_day;
 mod schedule_templates;
 mod schedule_types;
 mod selection;

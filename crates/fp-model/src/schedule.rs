@@ -8,9 +8,10 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::ModelError;
 use crate::ids::{BlockId, CategoryId, RotationId, TemplateId, TrackId};
-use crate::local_time::TimeOfDay;
+use crate::local_time::{LocalZone, TimeOfDay};
 use crate::state::AppState;
 use crate::track::TrackKind;
+use crate::wall_time::WallTime;
 
 /// One thing in a block (AU6).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -596,4 +597,24 @@ pub(crate) fn revert_block_on_date(
         .retain(|c| matches!(c, DateChange::Added(_)) || c.block_id() != block);
     schedule.settle(date);
     Ok(())
+}
+
+/// AU14: when a block at `start` on `date` begins; `None` when that local
+/// time does not exist on the date (the spring change), the first moment
+/// when it occurs twice (the autumn change).
+pub fn block_start(zone: &impl LocalZone, date: NaiveDate, start: TimeOfDay) -> Option<WallTime> {
+    let time = chrono::NaiveTime::from_num_seconds_from_midnight_opt(start.secs(), 0)?;
+    zone.earliest(date.and_time(time))
+}
+
+/// AU38: deletes the date plans dated more than
+/// `automation.overrides_keep_days` before `today`; returns how many.
+pub fn prune_dates(state: &mut AppState, today: NaiveDate) -> usize {
+    let keep = u64::from(state.config.automation.overrides_keep_days);
+    let Some(oldest) = today.checked_sub_days(chrono::Days::new(keep)) else {
+        return 0;
+    };
+    let before = state.schedule.dates.len();
+    state.schedule.dates.retain(|d, _| *d >= oldest);
+    before - state.schedule.dates.len()
 }
