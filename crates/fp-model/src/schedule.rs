@@ -739,3 +739,47 @@ pub fn prune_dates(state: &mut AppState, today: NaiveDate) -> usize {
     state.schedule.dates.retain(|d, _| *d >= oldest);
     before - state.schedule.dates.len()
 }
+
+/// AU37: by how many seconds `items` overrun the time from `start` to
+/// `next_start` (the next block's start; `None`: midnight; at or before
+/// `start`: the next day's). A track counts its play range when known, a
+/// category its shortest playable track, a rotation nothing. `None` when
+/// the block fits.
+pub fn overrun_secs(
+    state: &AppState,
+    items: &[Item],
+    start: TimeOfDay,
+    next_start: Option<TimeOfDay>,
+) -> Option<f64> {
+    let use_markers = state.config.players.use_cue_markers;
+    let length = |track: &crate::track::Track| {
+        let range = track.play_range(use_markers);
+        range.known_end().map(|_| range.length())
+    };
+    let total: f64 = items
+        .iter()
+        .filter_map(|item| match item {
+            Item::Track { track, .. } => state.library.get(*track).and_then(length),
+            Item::Category { category, .. } => {
+                let tree: std::collections::HashSet<_> =
+                    state.categories.subtree(*category).into_iter().collect();
+                state
+                    .library
+                    .iter()
+                    .filter(|t| t.category.is_some_and(|c| tree.contains(&c)))
+                    .filter(|t| t.file_state.is_playable())
+                    .filter_map(length)
+                    .min_by(f64::total_cmp)
+            }
+            Item::Rotation { .. } => None,
+        })
+        .sum();
+    let from = f64::from(start.secs());
+    let to = match next_start {
+        Some(next) if next.secs() > start.secs() => f64::from(next.secs()),
+        Some(next) => f64::from(next.secs()) + f64::from(crate::local_time::SECS_PER_DAY),
+        None => f64::from(crate::local_time::SECS_PER_DAY),
+    };
+    let excess = total - (to - from);
+    (excess > 0.0).then_some(excess)
+}
