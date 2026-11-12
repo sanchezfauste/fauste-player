@@ -276,6 +276,16 @@ not to the sample, as the spec's AU24 accepts. `AutomationSession` (the `kv`
 value `automation`) keeps the schedule's player and list ids across a
 restart. Automation always comes back stopped.
 
+## Editing helpers (`schedule.rs`)
+
+`schedule::overrun_secs(state, items, start, next_start)` is AU37's figure:
+the items' known lengths (a track's play range, a category's shortest
+playable track, a rotation nothing) against the time to `next_start`
+(midnight when `None`, the next day's when not after `start`); `Some` only
+when positive. `schedule::with_tracks(items, tracks)` adds track items
+before a final rotation item, else at the end. The editor (`ui/schedule_editor.rs`)
+sends the plan 3 commands only.
+
 ## The Schedule column's rows (`schedule_view`)
 
 `automation::schedule_view(state)` lists what the Schedule column draws
