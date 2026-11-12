@@ -121,8 +121,8 @@ and how many it plays each time, as a range:
 With a range, a station ID comes after two songs one time and after three
 the next. A range from **0** lets a step sit out some turns: with Gold at
 0–1, a gold song plays after the station ID some times and not others.
-The most is always at least 1. One rotation is the **default**: a new installation has one,
-**Music**, which plays all your music.
+The most is always at least 1. One rotation is the **default**: a new
+installation has one, **Music**, which plays all your music.
 
 Rotations are made in Settings → Automation:
 
