@@ -1,12 +1,16 @@
 //! The Schedule column (automation spec §8.1): automation's Start, Stop
 //! after current and state above the schedule's list.
 
-use egui::{Align, Layout, RichText, Sense, Ui, UiBuilder, vec2};
+use egui::{Align, Color32, Layout, RichText, Sense, Ui, UiBuilder, vec2};
+use egui_phosphor::regular as icon;
 use fp_model::Command;
+use fp_model::automation::{ItemRef, RowStatus, ScheduleRow, schedule_view};
+use fp_model::schedule::{BlockOrigin, Item};
 
 use super::app::Scene;
+use super::format;
 use super::theme;
-use super::widgets::font;
+use super::widgets::{font, font_semibold};
 
 /// Start, Stop after current and the running/stopped state, in the strip
 /// where a player has its playlist tabs (`height` tall).
@@ -44,4 +48,185 @@ pub(crate) fn schedule_bar(ui: &mut Ui, scene: &Scene<'_>, height: f32) {
         (t.tr("schedule-stopped"), theme::NEUTRAL_400)
     };
     bar.add(egui::Label::new(RichText::new(text).font(font(11.0)).color(colour)).truncate());
+}
+
+/// The schedule grouped by block (§8.1): each block's start, then its
+/// items; on air and next as on a player, missed struck through (AU23).
+pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>) {
+    let t = scene.i18n;
+    let state = scene.state;
+    let rows = schedule_view(state);
+    let today = state.local_now.date();
+    let has_today = rows
+        .iter()
+        .any(|r| matches!(r, ScheduleRow::Block { date, .. } if *date == today));
+    // Scroll to the row on air, else next, once each time it changes.
+    let target = rows.iter().find_map(|r| match r {
+        ScheduleRow::Item {
+            item,
+            status: RowStatus::OnAir,
+            ..
+        } => Some(*item),
+        _ => None,
+    });
+    let target = target.or_else(|| state.automation.as_ref().and_then(|a| a.next));
+    let memory = ui.scope_id().with("schedule-scrolled");
+    let scrolled: Option<ItemRef> = ui.data(|d| d.get_temp(memory)).flatten();
+    let scroll_now = target.is_some() && target != scrolled;
+    egui::ScrollArea::vertical()
+        .id_salt("schedule-list")
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            ui.spacing_mut().item_spacing = vec2(0.0, 1.0);
+            if !has_today {
+                ui.add_space(6.0);
+                ui.label(
+                    RichText::new(t.tr("schedule-empty"))
+                        .font(font(12.0))
+                        .color(theme::NEUTRAL_500),
+                );
+            }
+            for row in &rows {
+                match row {
+                    ScheduleRow::Block {
+                        date,
+                        start,
+                        origin,
+                        status,
+                        ..
+                    } => {
+                        let mut text = start.format("%H:%M:%S").to_string();
+                        if *date < today {
+                            text = format!("{text} · {}", t.tr("schedule-yesterday"));
+                        } else if *date > today {
+                            text = format!("{text} · {}", t.tr("schedule-tomorrow"));
+                        }
+                        if *origin != BlockOrigin::Template {
+                            text = format!("{text} · {}", t.tr("schedule-changed-for-date"));
+                        }
+                        let colour = match status {
+                            RowStatus::Missed | RowStatus::Aired => theme::NEUTRAL_500,
+                            _ => theme::TEXT,
+                        };
+                        ui.add_space(4.0);
+                        egui::Frame::new()
+                            .fill(theme::NEUTRAL_900)
+                            .inner_margin(egui::Margin::symmetric(8, 3))
+                            .show(ui, |ui| {
+                                ui.set_width(ui.available_width());
+                                ui.label(
+                                    RichText::new(text).font(font_semibold(12.0)).color(colour),
+                                );
+                            });
+                    }
+                    ScheduleRow::Item {
+                        item,
+                        what,
+                        length_secs,
+                        time_critical,
+                        status,
+                    } => {
+                        let response =
+                            item_row(ui, scene, what, *length_secs, *time_critical, *status);
+                        if scroll_now && Some(*item) == target {
+                            response.scroll_to_me(Some(Align::Center));
+                        }
+                    }
+                }
+            }
+        });
+    if scroll_now {
+        ui.data_mut(|d| d.insert_temp(memory, target));
+    }
+}
+
+/// What an item plays, in words.
+fn item_text(scene: &Scene<'_>, what: &Item) -> String {
+    let t = scene.i18n;
+    let state = scene.state;
+    let missing = || t.tr("schedule-item-missing");
+    match what {
+        Item::Track { track, .. } => state.library.get(*track).map_or_else(missing, |tr| {
+            if tr.artist.trim().is_empty() {
+                tr.title.clone()
+            } else {
+                format!("{} — {}", tr.title, tr.artist)
+            }
+        }),
+        Item::Category { category, .. } => {
+            state.categories.get(*category).map_or_else(missing, |c| {
+                t.tr_args("schedule-item-category", &[("name", c.name.clone().into())])
+            })
+        }
+        Item::Rotation { rotation } => state.rotations.get(*rotation).map_or_else(missing, |r| {
+            t.tr_args("schedule-item-rotation", &[("name", r.name.clone().into())])
+        }),
+    }
+}
+
+/// One item of a block; the response senses clicks (setting next).
+fn item_row(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    what: &Item,
+    length_secs: Option<f64>,
+    time_critical: bool,
+    status: RowStatus,
+) -> egui::Response {
+    let t = scene.i18n;
+    let (fill, colour) = match status {
+        RowStatus::OnAir => (theme::ON_AIR_ROW, theme::TEXT),
+        RowStatus::Next => (theme::NEXT_ROW, theme::TEXT),
+        RowStatus::Aired | RowStatus::Missed => (Color32::TRANSPARENT, theme::NEUTRAL_500),
+        RowStatus::Coming => (Color32::TRANSPARENT, theme::TEXT),
+    };
+    let text = item_text(scene, what);
+    let missed = status == RowStatus::Missed;
+    egui::Frame::new()
+        .fill(fill)
+        .inner_margin(egui::Margin::symmetric(8, 2))
+        .show(ui, |ui| {
+            ui.set_width(ui.available_width());
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
+                if time_critical {
+                    ui.label(
+                        RichText::new(icon::CLOCK)
+                            .font(font(12.0))
+                            .color(theme::AMBER),
+                    )
+                    .on_hover_text(t.tr("schedule-time-critical"));
+                }
+                ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                    if let Some(secs) = length_secs {
+                        ui.label(
+                            RichText::new(format::clock(secs))
+                                .font(font(12.0))
+                                .color(colour),
+                        );
+                    }
+                    let mut rich = RichText::new(text.clone()).font(font(12.0)).color(colour);
+                    if missed {
+                        rich = rich.strikethrough();
+                    }
+                    let response = ui
+                        .with_layout(Layout::left_to_right(Align::Center), |ui| {
+                            ui.add(egui::Label::new(rich).sense(Sense::click()).truncate())
+                        })
+                        .inner;
+                    if missed {
+                        let label = format!("{text} — {}", t.tr("schedule-missed"));
+                        response.widget_info(|| {
+                            egui::WidgetInfo::labeled(egui::Role::Label, true, &label)
+                        });
+                        response.on_hover_text(t.tr("schedule-missed"))
+                    } else {
+                        response
+                    }
+                })
+                .inner
+            })
+            .inner
+        })
+        .inner
 }
