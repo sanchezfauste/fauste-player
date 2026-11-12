@@ -22,6 +22,9 @@ l'antenne d'eux-mêmes.
 | [Lecteurs](players.md) | La colonne du lecteur : transport, modes, compte à rebours, forme d'onde, CUE |
 | [Playlists](playlists.md) | Onglets, tableau des pistes, glisser-déposer, menu contextuel, fichiers M3U/PLS |
 | [Mur de cartouches](cartwall.md) | Cartouches instantanées : lancement, pages, boucles, cartouches exclusives, configuration |
+| [Bibliothèque](library.md) | La fenêtre de la bibliothèque de pistes : catégories, types, recherche, pré-écoute, l'éditeur externe et les fichiers modifiés |
+| [Disposition](layout.md) | Afficher et masquer des panneaux, largeur des lecteurs, déplacer et redimensionner le mur de cartouches, agrandir un panneau, le menu de disposition |
+| [Automatisation](automation.md) | La colonne Grille, son éditeur, le remplissage musical et ses rotations |
 | [Marqueurs et mixage](markers-and-mixing.md) | Cue-in/cue-out, point MIX, intro et outro, analyse automatique |
 | [Paramètres](settings.md) | Sorties audio, lecteurs, analyse, playlists, MIDI, contrôle à distance |
 | [Normalisation du loudness](loudness.md) | Toutes les pistes et cartouches au même loudness avec un gain fixe par piste : le badge de gain, exclure et ajuster une piste, sorties bit-perfect |
@@ -30,6 +33,7 @@ l'antenne d'eux-mêmes.
 | [Surfaces de contrôle MIDI](midi.md) | Boutons, faders et voyants sur des contrôleurs MIDI |
 | [Contrôle à distance](remote-control.md) | Piloter Fauste Player par le réseau : API HTTP, sécurité |
 | [Données et sauvegardes](data-and-backups.md) | Emplacement des fichiers, sauvegarde automatique, récupération après un plantage, mode portable |
+| [Android](android.md) | L'application sur téléphones et tablettes : installation, la disposition tactile, la musique de l'appareil |
 | [Dépannage](troubleshooting.md) | Pas de son, périphérique perdu, fichiers marqués indisponibles, journaux |
 
 L'interface est disponible en anglais, espagnol, catalan, néerlandais,

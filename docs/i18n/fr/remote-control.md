@@ -155,8 +155,9 @@ accepter des paquets d'autres ordinateurs, définissez `remote.osc.bind` sur
 `remote.osc.allowed_sources` (par exemple `"192.168.1.0/24"`). OSC n'a pas de
 mot de passe, gardez-le donc sur un réseau de studio de confiance.
 
-Les lecteurs sont numérotés 1, 2, 3… comme ils apparaissent à l'écran. Les
-cartouches sont numérotées dans la page affichée.
+Les lecteurs sont numérotés 1, 2, 3… comme ils apparaissent à l'écran. La colonne
+**Musique** (le remplissage musical, voir [Automatisation](automation.md)) n'a pas
+de numéro et ne fait pas partie du contrôle à distance. Les cartouches sont numérotées dans la page affichée.
 
     oscsend localhost 7381 /fauste/player/1/play
     oscsend localhost 7381 /fauste/player/2/volume f 0.8

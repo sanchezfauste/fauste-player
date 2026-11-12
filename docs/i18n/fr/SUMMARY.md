@@ -8,6 +8,7 @@
 - [Mur de cartouches](cartwall.md)
 - [Bibliothèque](library.md)
 - [Disposition](layout.md)
+- [Automatisation](automation.md)
 - [Marqueurs et mixage](markers-and-mixing.md)
 - [Paramètres](settings.md)
 - [Normalisation du loudness](loudness.md)

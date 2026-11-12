@@ -306,6 +306,7 @@ que deux sorties sonnent en même temps dépend du téléphone.
 ## Pas sur Android {#not-on-android}
 
 Les surfaces de contrôle MIDI, le contrôle à distance, la modification des tags
-et des pochettes, et les fichiers de playlist et de pages de cartouches sont
+et des pochettes, les fichiers de playlist et de pages de cartouches, et
+l'automatisation (le remplissage musical et Paramètres → Automatisation) sont
 pour l'instant des fonctions de l'ordinateur. Un clavier branché sur une
 tablette fonctionne comme sur l'ordinateur (voir [Clavier](keyboard.md)).

@@ -31,7 +31,7 @@ C'est utile sur une clé USB, ou pour garder des configurations séparées côte
 | Fichier | Contenu |
 |---|---|
 | `config.json` | Paramètres, sorties, seuils d'analyse, réglages avancés |
-| `fauste.db` | La bibliothèque (pistes, leurs catégories, marqueurs manuels, tags, loudness), les playlists avec leurs marques de lecture, les pages de cartouches et la session : pour chaque lecteur, la playlist affichée, les pistes en cours et suivante, le mode, la position, le volume et les largeurs des colonnes (par colonne), ainsi que la disposition de la fenêtre |
+| `fauste.db` | La bibliothèque (pistes, leurs catégories, marqueurs manuels, tags, loudness), les playlists avec leurs marques de lecture, les pages de cartouches, les rotations de l'automatisation, la grille et le journal de diffusion (conservé `automation.as_run_keep_days` jours, 90 par défaut), et la session : pour chaque lecteur, la playlist affichée, les pistes en cours et suivante, le mode, la position, le volume et les largeurs des colonnes (par colonne), ainsi que la disposition de la fenêtre |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Copies de la base de données (voir ci-dessous) |
 | `window.ron` | La taille et la position de la fenêtre principale, et si elle était agrandie (ordinateur seulement ; sous Wayland, le système choisit la position) |
 

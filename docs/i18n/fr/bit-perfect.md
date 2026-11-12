@@ -42,7 +42,7 @@ périphérique bit-perfect joue autrement que les autres :
   bit-perfect est activé pour le périphérique, et y reste quand il est
   désactivé.
 - **Ce qui fonctionne toujours :** **Stop en fondu** (il fait un fondu sortant
-  sur la durée du fondu), **Pause**, **Stop**, **Reprendre au début**, les
+  sur la durée du Stop en fondu), **Pause**, **Stop**, **Reprendre au début**, les
   marques de répétition et d'arrêt après, les modes Single et Continu, le Cue
   (la pré-écoute, qui n'a pas de fader et n'est pas affectée), les
   cartouches, la [sortie DSD](#dsd), et chaque lecteur dont la sortie Main est

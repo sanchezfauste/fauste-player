@@ -31,8 +31,8 @@ sur la touche (avec Ctrl, Alt, Shift ou Cmd si vous le souhaitez). Si une autre
 action utilise déjà cette touche, son nom est affiché. Choisissez **Attribuer**
 pour déplacer la touche, ou **Annuler**. **Retirer** supprime un raccourci et
 **Rétablir les valeurs par défaut** (en haut à droite de la section) rétablit
-le tableau ci-dessus. Actions disponibles, pour chaque lecteur et chaque
-cartouche :
+le tableau ci-dessus. Actions disponibles, pour chaque lecteur (P1 … Pn ; la colonne **Musique**
+n'a pas de raccourcis) et chaque cartouche :
 
 - lecture, précédente, reprise au début, pause, stop, stop en fondu et CUE
   sur un lecteur (précédente et reprise au début n'ont pas de touche par
