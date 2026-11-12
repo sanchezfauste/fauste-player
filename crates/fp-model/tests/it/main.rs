@@ -8,6 +8,7 @@ mod air_times;
 mod analysis;
 mod audio_change;
 mod automation_blocks;
+mod automation_clock;
 mod automation_config;
 mod automation_next;
 mod automation_player;

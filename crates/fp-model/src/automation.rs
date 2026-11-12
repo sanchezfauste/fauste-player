@@ -188,7 +188,9 @@ pub fn settle_next(state: &mut AppState) {
     // AU21: a block whose start passes while automation is stopped, or
     // while a block chosen away from its time plays, is missed; one that
     // passes while a block in order plays waits for it.
-    let marking = !a.running || a.on_air.is_some_and(|b| !b.in_order);
+    // Between blocks while running, a start passes over only when the
+    // clock jumped (AU40).
+    let marking = !a.running || a.on_air.is_none_or(|b| !b.in_order);
     let by_hand = a.next_by_hand;
     let next = if by_hand { a.next } else { clock_next(state) };
     // A look from before the window (a first look, or a clock that jumped
@@ -614,6 +616,11 @@ pub(crate) fn stop_after_current(state: &mut AppState) {
     }
 }
 
+/// A step of the local clock larger than this, or any step back, is a
+/// jump (AU40). It tells a jump from a late tick; it is not an operator
+/// value.
+pub const CLOCK_JUMP_SECS: i64 = 60;
+
 /// One conductor tick: the running schedule's rules at `local_now`.
 /// Returns the engine actions and whether the state changed.
 pub fn tick(state: &mut AppState) -> (Vec<EngineAction>, bool) {
@@ -621,6 +628,15 @@ pub fn tick(state: &mut AppState) -> (Vec<EngineAction>, bool) {
     let mut out = Vec::new();
     if before.is_none() {
         return (out, false);
+    }
+    // AU40: after a jump, next is recomputed (and the blocks jumped over
+    // are missed) before anything plays.
+    let jumped = before.as_ref().and_then(|a| a.seen).is_some_and(|seen| {
+        let step = (state.local_now - seen).num_seconds();
+        !(0..=CLOCK_JUMP_SECS).contains(&step)
+    });
+    if jumped {
+        settle_next(state);
     }
     drive(state, &mut out, false);
     let second_changed = before
