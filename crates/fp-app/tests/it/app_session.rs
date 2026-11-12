@@ -76,3 +76,32 @@ fn stop_services_from_two_threads_both_wait_for_the_save() {
     });
     session.shutdown();
 }
+
+/// The names automation creates on a first start (the default rotation,
+/// the base template, the two automation players' playlists) are in the
+/// interface language chosen in Settings, not the system's.
+#[test]
+fn automation_defaults_are_named_in_the_chosen_language() {
+    let dir = tempfile::tempdir().unwrap();
+    let paths = AppPaths::under(dir.path());
+    std::fs::create_dir_all(paths.config_file().parent().unwrap()).unwrap();
+    std::fs::write(
+        paths.config_file(),
+        r#"{"schema_version":1,"config":{"ui":{"language":"de-DE"}}}"#,
+    )
+    .unwrap();
+    let backends: Vec<Arc<dyn AudioBackend>> = vec![Arc::new(NullBackend)];
+    let session = AppSession::start(paths, backends, None).unwrap();
+    let state = session.handle.model.load();
+    assert_eq!(state.config.ui.language.as_deref(), Some("de-DE"));
+    let rotation = state.rotations.default_rotation().unwrap();
+    assert_eq!(rotation.name, "Musik");
+    let names: Vec<&str> = state
+        .schedule
+        .templates()
+        .iter()
+        .map(|t| t.name.as_str())
+        .collect();
+    assert_eq!(names, ["Basis"]);
+    session.shutdown();
+}

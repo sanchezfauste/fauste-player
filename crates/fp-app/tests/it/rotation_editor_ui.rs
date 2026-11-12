@@ -71,6 +71,15 @@ fn editing_a_step_count_sends_update_rotation() {
     );
 }
 
+/// The two counts of a step are named on screen, not only for a screen
+/// reader: two bare sliders do not say which is the least and which the most.
+#[test]
+fn a_step_names_its_two_counts() {
+    let (h, _fake) = open(with_rotation());
+    h.get_by_role_and_label(Role::Label, "At least");
+    h.get_by_role_and_label(Role::Label, "At most");
+}
+
 #[test]
 fn deleting_the_last_rotation_shows_the_error() {
     let (mut h, _fake) = open(with_rotation());

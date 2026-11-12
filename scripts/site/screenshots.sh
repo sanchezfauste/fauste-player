@@ -180,8 +180,8 @@ for y in sorted(rows):
 }
 
 # The centres (x) of the bordered buttons at the left end of the top bar,
-# left to right: the players' (P1 to P4), Cartwall, Library, the layout
-# button. Their places depend on the labels' length in the interface
+# left to right: Schedule, Music, the players' (P1 to P4), Cartwall,
+# Library, the layout button. Their places depend on the labels' length in the interface
 # language, so they are found on the screen as `topbar_buttons` does.
 topbar_left_buttons() {
     local raw=$work/bar.png
@@ -499,7 +499,7 @@ shoot_guide() {
     # Settings, one capture per section (the list on the left).
     click "$settings_x" 17
     n=0
-    for section in outputs players meters analysis loudness playlists cartwall library shortcuts midi remote; do
+    for section in outputs players meters analysis loudness playlists cartwall library automation shortcuts midi remote; do
         click 600 $((291 + n * 36))
         park
         capture "$guide/settings-$section.png" 900x640+510+220
@@ -513,9 +513,10 @@ shoot_guide() {
     capture_window "$guide/about.png" 960 540 40
     key Escape
 
-    # The library window (the top bar's sixth button), on the Music
-    # category the demo session chose; closed again with the same button.
-    library_x=$(topbar_left_buttons | awk '{print $6}')
+    # The library window (the top bar's button left of the layout one), on
+    # the Music category the demo session chose; closed again with the same
+    # button.
+    library_x=$(topbar_left_buttons | awk '{print $(NF - 1)}')
     [[ -n $library_x ]] || die "cannot find the Library button in the top bar"
     click "$library_x" 17
     # A row selected (Northbound, row 4) shows its waveform for pre-listening.
