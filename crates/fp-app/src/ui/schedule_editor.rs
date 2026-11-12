@@ -4,7 +4,7 @@
 
 use std::collections::{HashMap, HashSet};
 
-use chrono::Weekday;
+use chrono::{Datelike, Days, Months, NaiveDate, Weekday};
 use egui::{Align, Layout, RichText, Ui, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::local_time::TimeOfDay;
@@ -37,6 +37,10 @@ pub(crate) struct EditorState {
     /// The block starts being typed, and those that did not parse.
     pub start_drafts: HashMap<BlockId, String>,
     pub bad_starts: HashSet<BlockId>,
+    /// The date being edited (`None`: today) and the month the grid shows
+    /// (its first day; `None`: the date's).
+    pub date: Option<NaiveDate>,
+    pub month: Option<NaiveDate>,
 }
 
 /// What the operator did to a block.
@@ -88,7 +92,7 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
             match view_state.schedule_editor.tab {
                 Tab::Templates => templates(ui, scene, &mut view_state.schedule_editor),
                 Tab::Week => week(ui, scene),
-                Tab::Days => {}
+                Tab::Days => days(ui, scene, &mut view_state.schedule_editor),
             }
         });
     if !open {
@@ -222,7 +226,7 @@ fn template_blocks(ui: &mut Ui, scene: &Scene<'_>, editor: &mut EditorState, id:
     blocks.sort_by_key(|b| b.start);
     for (i, block) in blocks.iter().enumerate() {
         let next = blocks.get(i + 1).map(|b| b.start);
-        match block_editor(ui, scene, editor, block, next) {
+        match block_editor(ui, scene, editor, block, next, "schedule-block-remove") {
             Some(BlockEdit::Update(block)) => {
                 scene.ctl.send(Command::UpdateBlock {
                     template: id,
@@ -270,6 +274,7 @@ pub(crate) fn block_editor(
     editor: &mut EditorState,
     block: &Block,
     next_start: Option<TimeOfDay>,
+    remove_key: &str,
 ) -> Option<BlockEdit> {
     let t = scene.i18n;
     let mut edit = None;
@@ -300,7 +305,7 @@ pub(crate) fn block_editor(
                     );
                 }
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    if ui.button(t.tr("schedule-block-remove")).clicked() {
+                    if ui.button(t.tr(remove_key)).clicked() {
                         edit = Some(BlockEdit::Remove);
                     }
                 });
@@ -550,4 +555,245 @@ fn item_row(
         });
     });
     items
+}
+
+/// Single dates (AU10–AU12): a month grid, then the chosen date's
+/// template and its computed blocks, each changeable for that date only.
+fn days(ui: &mut Ui, scene: &Scene<'_>, editor: &mut EditorState) {
+    let today = scene.state.local_now.date();
+    let date = editor.date.unwrap_or(today);
+    ui.horizontal_top(|ui| {
+        ui.vertical(|ui| {
+            ui.set_width(250.0);
+            month_grid(ui, scene, editor, date, today);
+        });
+        ui.separator();
+        ui.vertical(|ui| {
+            egui::ScrollArea::vertical()
+                .id_salt("schedule-date-blocks")
+                .auto_shrink([false, false])
+                .show(ui, |ui| date_blocks(ui, scene, editor, date));
+        });
+    });
+}
+
+fn first_of_month(date: NaiveDate) -> NaiveDate {
+    date.with_day(1).unwrap_or(date)
+}
+
+/// Previous and Next month, Today, and the month's days (Monday first);
+/// the chosen date is highlighted and dates with changes are amber.
+fn month_grid(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    editor: &mut EditorState,
+    date: NaiveDate,
+    today: NaiveDate,
+) {
+    let t = scene.i18n;
+    let month = editor.month.unwrap_or_else(|| first_of_month(date));
+    ui.horizontal(|ui| {
+        let previous = ui
+            .button(icon::CARET_LEFT)
+            .on_hover_text(t.tr("schedule-date-prev-month"));
+        previous.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::Button, true, t.tr("schedule-date-prev-month"))
+        });
+        if previous.clicked() {
+            editor.month = month.checked_sub_months(Months::new(1));
+        }
+        ui.label(
+            RichText::new(format!(
+                "{} {}",
+                t.tr(&format!("month-{}", month.month())),
+                month.year()
+            ))
+            .font(font_semibold(13.0)),
+        );
+        let next = ui
+            .button(icon::CARET_RIGHT)
+            .on_hover_text(t.tr("schedule-date-next-month"));
+        next.widget_info(|| {
+            egui::WidgetInfo::labeled(egui::Role::Button, true, t.tr("schedule-date-next-month"))
+        });
+        if next.clicked() {
+            editor.month = month.checked_add_months(Months::new(1));
+        }
+        if ui.button(t.tr("schedule-date-today")).clicked() {
+            editor.date = Some(today);
+            editor.month = Some(first_of_month(today));
+        }
+    });
+    let schedule = &scene.state.schedule;
+    egui::Grid::new("schedule-month")
+        .num_columns(7)
+        .spacing(vec2(2.0, 2.0))
+        .show(ui, |ui| {
+            for (_, key) in WEEKDAYS {
+                let name = t.tr(key);
+                let short: String = name.chars().take(2).collect();
+                ui.label(
+                    RichText::new(short)
+                        .font(font(11.0))
+                        .color(theme::NEUTRAL_500),
+                );
+            }
+            ui.end_row();
+            let lead = month.weekday().num_days_from_monday();
+            for _ in 0..lead {
+                ui.label("");
+            }
+            let mut day = month;
+            let mut column = lead;
+            while day.month() == month.month() {
+                let changed = schedule.date_plan(day).is_some();
+                let mut text = RichText::new(day.day().to_string()).font(font(12.0));
+                if changed {
+                    text = text.color(theme::AMBER);
+                }
+                if day == today {
+                    text = text.underline();
+                }
+                let mut response = ui.add_sized(
+                    vec2(32.0, 24.0),
+                    egui::Button::selectable(day == date, text),
+                );
+                if changed {
+                    response = response.on_hover_text(t.tr("schedule-date-changes"));
+                }
+                if response.clicked() {
+                    editor.date = Some(day);
+                }
+                column += 1;
+                if column.is_multiple_of(7) {
+                    ui.end_row();
+                }
+                let Some(next) = day.checked_add_days(Days::new(1)) else {
+                    break;
+                };
+                day = next;
+            }
+        });
+}
+
+/// The date's template, its blocks (changes for that date only) and the
+/// template blocks removed on it.
+fn date_blocks(ui: &mut Ui, scene: &Scene<'_>, editor: &mut EditorState, date: NaiveDate) {
+    let t = scene.i18n;
+    let schedule = &scene.state.schedule;
+    let plan = schedule.date_plan(date);
+    let own = plan.and_then(|p| p.template);
+    let weekday_template = schedule.week().get(date.weekday());
+    let weekday_text = t.tr_args(
+        "schedule-date-weekday-template",
+        &[(
+            "name",
+            weekday_template
+                .map(|id| template_name(scene, id))
+                .unwrap_or_default()
+                .into(),
+        )],
+    );
+    ui.label(
+        RichText::new(date.format("%Y-%m-%d").to_string())
+            .font(font_semibold(14.0))
+            .color(theme::TEXT),
+    );
+    let mut choice = own;
+    egui::ComboBox::from_label(t.tr("schedule-date-template"))
+        .selected_text(own.map_or_else(|| weekday_text.clone(), |id| template_name(scene, id)))
+        .show_ui(ui, |ui| {
+            ui.selectable_value(&mut choice, None, weekday_text.as_str());
+            for template in schedule.templates() {
+                ui.selectable_value(&mut choice, Some(template.id), template.name.as_str());
+            }
+        });
+    if choice != own {
+        scene.ctl.send(Command::SetDateTemplate {
+            date,
+            template: choice,
+        });
+    }
+    ui.add_space(8.0);
+    let day = schedule.day(date);
+    let tomorrow_first = date
+        .checked_add_days(Days::new(1))
+        .and_then(|d| schedule.day(d).first().map(|b| b.start));
+    for (i, block) in day.iter().enumerate() {
+        if block.origin != fp_model::schedule::BlockOrigin::Template {
+            ui.horizontal(|ui| {
+                ui.label(
+                    RichText::new(t.tr("schedule-changed-for-date"))
+                        .font(font(11.0))
+                        .color(theme::AMBER),
+                );
+                if block.origin == fp_model::schedule::BlockOrigin::Changed
+                    && ui.small_button(t.tr("schedule-date-revert")).clicked()
+                {
+                    scene.ctl.send(Command::RevertBlockOnDate {
+                        date,
+                        block: block.id,
+                    });
+                }
+            });
+        }
+        // The last block runs to the next day's first.
+        let next = day.get(i + 1).map(|b| b.start).or(tomorrow_first);
+        let as_block = Block {
+            id: block.id,
+            start: block.start,
+            items: block.items.clone(),
+        };
+        match block_editor(ui, scene, editor, &as_block, next, "schedule-date-remove") {
+            Some(BlockEdit::Update(block)) => {
+                scene.ctl.send(Command::ChangeBlockOnDate { date, block });
+            }
+            Some(BlockEdit::Remove) => {
+                scene.ctl.send(Command::RemoveBlockOnDate {
+                    date,
+                    block: block.id,
+                });
+            }
+            None => {}
+        }
+    }
+    // Template blocks removed on this date can come back.
+    let removed: Vec<BlockId> = plan
+        .map(|p| {
+            p.changes
+                .iter()
+                .filter_map(|c| match c {
+                    fp_model::schedule::DateChange::Removed(id) => Some(*id),
+                    _ => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let template = schedule
+        .template_for(date)
+        .and_then(|id| schedule.template(id));
+    for id in removed {
+        let start = template
+            .and_then(|tpl| tpl.blocks.iter().find(|b| b.id == id))
+            .map(|b| b.start.to_string())
+            .unwrap_or_default();
+        ui.horizontal(|ui| {
+            ui.label(
+                RichText::new(format!("{start} · {}", t.tr("schedule-date-removed")))
+                    .font(font(12.0))
+                    .color(theme::NEUTRAL_500),
+            );
+            if ui.small_button(t.tr("schedule-date-revert")).clicked() {
+                scene
+                    .ctl
+                    .send(Command::RevertBlockOnDate { date, block: id });
+            }
+        });
+    }
+    ui.add_space(8.0);
+    if ui.button(t.tr("schedule-date-add-block")).clicked()
+        && let Some(start) = free_start(day.iter().map(|b| b.start))
+    {
+        scene.ctl.send(Command::AddBlockOnDate { date, start });
+    }
 }

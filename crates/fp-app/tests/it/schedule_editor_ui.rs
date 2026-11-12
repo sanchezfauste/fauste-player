@@ -370,3 +370,89 @@ mod adding {
         assert_eq!(updated(&fake.take_sent()), Some(vec![top()]));
     }
 }
+
+mod days {
+    use super::*;
+    use fp_model::local_time::TimeOfDay;
+    use fp_model::schedule::Block;
+
+    fn date() -> chrono::NaiveDate {
+        chrono::NaiveDate::from_ymd_opt(2026, 11, 17).unwrap()
+    }
+
+    fn days_tab(h: &mut egui_kittest::Harness<'_, fp_app::ui::app::AppUi>) {
+        open(h);
+        h.get_by_label("Days").click();
+        h.run_steps(4);
+    }
+
+    #[test]
+    fn a_date_can_use_another_template() {
+        let (s, _, weekend) = with_schedule();
+        let (mut h, fake) = harness(s);
+        days_tab(&mut h);
+        h.get_by_label("Template").click();
+        h.run_steps(2);
+        h.get_by_label("Weekend").click();
+        h.run_steps(2);
+        assert!(fake.take_sent().contains(&Command::SetDateTemplate {
+            date: date(),
+            template: Some(weekend),
+        }));
+    }
+
+    #[test]
+    fn editing_a_block_on_a_date_sends_change_block_on_date() {
+        let (s, _, block) = with_block((10, 0, 0), 12.0);
+        let (mut h, fake) = harness(s);
+        days_tab(&mut h);
+        retype(&mut h, "Starts at", "11:00:00");
+        let sent = fake.take_sent();
+        assert!(
+            sent.iter().any(
+                |c| matches!(c, Command::ChangeBlockOnDate { date: d, block: b }
+                if *d == date() && b.id == block
+                    && b.start == TimeOfDay::hms(11, 0, 0).unwrap())
+            ),
+            "{sent:?}"
+        );
+    }
+
+    #[test]
+    fn back_to_the_template_reverts_it() {
+        let (mut s, _, block) = with_block((10, 0, 0), 12.0);
+        apply(
+            &mut s,
+            Command::ChangeBlockOnDate {
+                date: date(),
+                block: Block {
+                    id: block,
+                    start: TimeOfDay::hms(10, 30, 0).unwrap(),
+                    items: Vec::new(),
+                },
+            },
+        )
+        .unwrap();
+        let (mut h, fake) = harness(s);
+        days_tab(&mut h);
+        h.get_by_label("Back to the template").click();
+        h.run_steps(2);
+        assert!(fake.take_sent().contains(&Command::RevertBlockOnDate {
+            date: date(),
+            block
+        }));
+    }
+
+    #[test]
+    fn not_on_this_day_removes_it() {
+        let (s, _, block) = with_block((10, 0, 0), 12.0);
+        let (mut h, fake) = harness(s);
+        days_tab(&mut h);
+        h.get_by_label("Not on this day").click();
+        h.run_steps(2);
+        assert!(fake.take_sent().contains(&Command::RemoveBlockOnDate {
+            date: date(),
+            block
+        }));
+    }
+}
