@@ -95,7 +95,8 @@ Schema 3 (automation, plan 1) adds the `rotations` and `air_times` tables;
 the default rotation is the `kv` value `default_rotation`. A schema 2
 database migrates in place with no rotations and no air times; at every
 start the app calls `rotation::ensure_default` (`crates/fp-app/src/session.rs`),
-which creates the rotation named by `rotation-default-name` when there is
+which creates the rotation named by `rotation-default-name` (in the interface
+language chosen in Settings, else the system's) when there is
 none. A schema 2 build sets a schema 3 file aside as `.newer-<stamp>`.
 
 Schema 4 (automation, plan 3) adds the `day_templates` and `date_plans`

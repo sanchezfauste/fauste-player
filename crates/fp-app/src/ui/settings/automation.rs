@@ -242,8 +242,35 @@ fn steps(ui: &mut Ui, scene: &Scene<'_>, rotation: &Rotation) {
                 let (mut min, mut max) = (step.min, step.max);
                 let at_least = t.tr_args("settings-rotation-step-min", &[("n", n.into())]);
                 let at_most = t.tr_args("settings-rotation-step-max", &[("n", n.into())]);
-                let min_changed = slider(ui, &mut min, 1..=99, 1.0, "", &at_least);
-                let max_changed = slider(ui, &mut max, 1..=99, 1.0, "", &at_most);
+                // Each count named on screen, the names in one column so the
+                // two sliders line up.
+                let shown_least = t.tr("settings-rotation-at-least");
+                let shown_most = t.tr("settings-rotation-at-most");
+                let name_width = [&shown_least, &shown_most]
+                    .iter()
+                    .map(|s| {
+                        ui.painter()
+                            .layout_no_wrap((*s).clone(), font(12.0), theme::NEUTRAL_400)
+                            .size()
+                            .x
+                    })
+                    .fold(0.0_f32, f32::max);
+                let count_row = |ui: &mut Ui, name: &str, value: &mut u8, label: &str| {
+                    ui.horizontal(|ui| {
+                        ui.add_sized(
+                            vec2(name_width, 18.0),
+                            egui::Label::new(
+                                RichText::new(name)
+                                    .font(font(12.0))
+                                    .color(theme::NEUTRAL_400),
+                            ),
+                        );
+                        slider(ui, value, 1..=99, 1.0, "", label)
+                    })
+                    .inner
+                };
+                let min_changed = count_row(ui, &shown_least, &mut min, &at_least);
+                let max_changed = count_row(ui, &shown_most, &mut max, &at_most);
                 if min_changed || max_changed {
                     // The counts stay in order: the one not moved follows.
                     if min_changed {

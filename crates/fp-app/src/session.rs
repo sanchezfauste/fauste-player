@@ -54,30 +54,25 @@ impl AppSession {
         let mut store = Store::new(paths.clone(), fp_model::Limits::default());
         let default_name = I18n::new(None).tr("default-playlist-name");
         let mut loaded = store.load(&default_name);
+        // What automation creates on a first start is named in the
+        // interface language chosen in Settings (the system's when none).
+        let named = I18n::new(loaded.state.config.ui.language.as_deref());
         // AU4: there is always a rotation for the music filler to fall back on.
-        fp_model::rotation::ensure_default(
-            &mut loaded.state,
-            &I18n::new(None).tr("rotation-default-name"),
-        );
+        fp_model::rotation::ensure_default(&mut loaded.state, &named.tr("rotation-default-name"));
         // AU9: there is always a day template for every weekday; AU38: date
         // overrides past `automation.overrides_keep_days` are deleted.
         fp_model::schedule::ensure_default(
             &mut loaded.state,
-            &I18n::new(None).tr("schedule-template-default-name"),
+            &named.tr("schedule-template-default-name"),
         );
         fp_model::schedule::prune_dates(&mut loaded.state, chrono::Local::now().date_naive());
         // §8.1: the schedule's player, added to the engine with the others
         // by `Conductor::new`.
-        let _ = fp_model::automation::ensure(
-            &mut loaded.state,
-            &I18n::new(None).tr("schedule-playlist-name"),
-        );
+        let _ =
+            fp_model::automation::ensure(&mut loaded.state, &named.tr("schedule-playlist-name"));
         // AU27: the music filler's player, added to the engine with the
         // others by `Conductor::new`.
-        let _ = fp_model::filler::ensure(
-            &mut loaded.state,
-            &I18n::new(None).tr("filler-playlist-name"),
-        );
+        let _ = fp_model::filler::ensure(&mut loaded.state, &named.tr("filler-playlist-name"));
         for warning in &loaded.warnings {
             tracing::warn!(%warning, "while loading the saved state");
         }
