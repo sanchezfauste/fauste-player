@@ -328,6 +328,9 @@ fn restore_filler(state: &mut AppState, saved: Option<crate::filler::FillerSessi
             .filter(|e| rows.contains(e))
             .collect(),
         starved: false,
+        current_since: None,
+        unfitted: 0,
+        fitted_for: None,
     });
 }
 

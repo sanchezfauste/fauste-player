@@ -218,7 +218,7 @@ fn the_filler_looks_ahead_only_to_the_coming_block() {
     r.at_hms(10, 50, 1);
     let f = r.s.filler.as_ref().unwrap();
     let rows = r.s.playlists.get(f.playlist).unwrap().entries.len();
-    // The song on air and ten minutes of 3-minute songs ahead (four rows),
-    // not 30 minutes' worth.
-    assert_eq!(rows, 5, "{rows} rows queued");
+    // The song on air (10:50) and the 3-minute songs that start before
+    // the fade at 10:59:58 (10:53, 10:56, 10:59), not 30 minutes' worth.
+    assert_eq!(rows, 4, "{rows} rows queued");
 }

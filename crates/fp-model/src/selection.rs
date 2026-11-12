@@ -23,6 +23,45 @@ pub enum Relaxed {
 pub struct Picked {
     pub track: TrackId,
     pub relaxed: Relaxed,
+    /// No track fitted the gap (AU25): the one that cuts least was chosen.
+    pub unfitted: bool,
+}
+
+/// The time a pick must fit before a block (AU25): `gap_secs` from the
+/// row's start to the start of the filler's fade.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Fit {
+    pub gap_secs: f64,
+    pub max_cut_secs: f64,
+    pub min_play_secs: f64,
+}
+
+/// How well a track fills a gap (AU25), best first.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+enum FitClass {
+    /// It plays at least the minimum and is faded with at most the cut.
+    Ends,
+    /// It ends inside the gap, leaving at least the minimum to a later
+    /// track, and some track of the pool could close what is left (or
+    /// enough is left for more).
+    Room,
+    /// It ends inside the gap, leaving at least the minimum.
+    LooseRoom,
+}
+
+/// A track's audible length and its lead (to where the next row starts:
+/// the segue point with `players.auto_segue`, else the end), as the
+/// player plans it; `None` while its length is unknown.
+pub(crate) fn timing(state: &AppState, track: TrackId) -> Option<(f64, f64)> {
+    let t = state.library.get(track)?;
+    let range = t.play_range(state.config.players.use_cue_markers);
+    let end = range
+        .known_end()
+        .filter(|e| e.is_finite() && *e > range.cue_in)?;
+    let segue = t
+        .segue_start_secs()
+        .filter(|s| state.config.players.auto_segue && *s >= range.cue_in && *s < end);
+    Some((end - range.cue_in, segue.unwrap_or(end) - range.cue_in))
 }
 
 /// Tracks queued but not yet aired, with their expected start: they count
@@ -88,7 +127,10 @@ pub fn pick(
     planned: Planned<'_>,
     rng: &mut SplitMix64,
 ) -> Option<Picked> {
-    let ctx = Context::new(state, source, at, planned);
+    pick_in(&Context::new(state, source, at, planned), rng)
+}
+
+fn pick_in(ctx: &Context<'_>, rng: &mut SplitMix64) -> Option<Picked> {
     let mut both = Vec::with_capacity(PICK_SPREAD);
     let mut track_only = Vec::with_capacity(PICK_SPREAD);
     for (_, track) in &ctx.ordered {
@@ -121,6 +163,146 @@ pub fn pick(
     tier.get(index).map(|track| Picked {
         track: *track,
         relaxed,
+        unfitted: false,
+    })
+}
+
+/// Whether a track of `track`'s timing fills `fit`'s gap without a
+/// fragment: it ends the gap within the cut, or leaves at least the
+/// minimum after it (AU25). A track of unknown length is not judged.
+pub(crate) fn fits(state: &AppState, track: TrackId, fit: &Fit) -> bool {
+    let Some((length, lead)) = timing(state, track) else {
+        return true;
+    };
+    let gap = fit.gap_secs;
+    if length >= gap {
+        // The last before the block: it plays into the fade.
+        return length - gap <= fit.max_cut_secs && gap >= fit.min_play_secs;
+    }
+    gap - lead >= fit.min_play_secs
+}
+
+/// `pick`, preferring with a `fit` the tracks that fill the gap before a
+/// block without a fragment (AU25), a greedy fit of known lengths: a
+/// track that ends the gap within the cut, then one that leaves room for
+/// a later track that could close it, then one that leaves any room. Each
+/// class tries both separation rules, then the track rule alone; then
+/// each class with separation relaxed. When no track fits, the one that
+/// cuts least wins (then the one that leaves least, then the order), and
+/// the pick says so.
+pub fn pick_fitted(
+    state: &AppState,
+    source: &StepSource,
+    at: WallTime,
+    planned: Planned<'_>,
+    rng: &mut SplitMix64,
+    fit: Option<&Fit>,
+) -> Option<Picked> {
+    let Some(fit) = fit.filter(|f| f.gap_secs.is_finite() && f.gap_secs > 0.0) else {
+        return pick(state, source, at, planned, rng);
+    };
+    let ctx = Context::new(state, source, at, planned);
+    let timings: Vec<Option<(f64, f64)>> =
+        ctx.ordered.iter().map(|(_, t)| timing(state, *t)).collect();
+    let mut lengths: Vec<f64> = timings.iter().flatten().map(|(l, _)| *l).collect();
+    lengths.sort_by(f64::total_cmp);
+    let longest = lengths.last().copied().unwrap_or(0.0);
+    // Far from the block every known track leaves room enough: the
+    // choice is the ordinary one (a track of unknown length may play).
+    if fit.gap_secs >= 2.0 * longest + fit.min_play_secs {
+        return pick_in(&ctx, rng);
+    }
+    let closable = |rest: f64| {
+        let i = lengths.partition_point(|l| *l < rest);
+        rest >= longest + fit.min_play_secs
+            || lengths
+                .get(i)
+                .is_some_and(|l| *l <= rest + fit.max_cut_secs)
+    };
+    let class_of = |timing: Option<(f64, f64)>| {
+        let (length, lead) = timing?;
+        let gap = fit.gap_secs;
+        if length >= gap && length - gap <= fit.max_cut_secs && gap >= fit.min_play_secs {
+            return Some(FitClass::Ends);
+        }
+        // Still audible at the fade, it is the last before the block
+        // (nothing is queued after it), whatever its segue.
+        if length >= gap {
+            return None;
+        }
+        let rest = gap - lead;
+        if rest >= fit.min_play_secs {
+            return Some(if closable(rest) {
+                FitClass::Room
+            } else {
+                FitClass::LooseRoom
+            });
+        }
+        None
+    };
+    let classes: Vec<Option<FitClass>> = timings.iter().map(|t| class_of(*t)).collect();
+    let tiers = [Relaxed::None, Relaxed::Artist];
+    let order = [FitClass::Ends, FitClass::Room, FitClass::LooseRoom];
+    let meets = |track: TrackId, relaxed: Relaxed| match relaxed {
+        Relaxed::None => ctx.track_ok(track) && ctx.artist_ok(track),
+        Relaxed::Artist => ctx.track_ok(track),
+        Relaxed::Track => true,
+    };
+    let passes = order
+        .iter()
+        .flat_map(|c| tiers.iter().map(move |r| (*c, *r)))
+        .chain(order.iter().map(|c| (*c, Relaxed::Track)));
+    for (class, relaxed) in passes {
+        let tier: Vec<TrackId> = ctx
+            .ordered
+            .iter()
+            .zip(&classes)
+            .filter(|((_, t), c)| **c == Some(class) && meets(*t, relaxed))
+            .map(|((_, t), _)| *t)
+            .take(PICK_SPREAD)
+            .collect();
+        if tier.is_empty() {
+            continue;
+        }
+        let index = usize::try_from(rng.below(tier.len() as u64)).unwrap_or(0);
+        return tier.get(index).map(|track| Picked {
+            track: *track,
+            relaxed,
+            unfitted: false,
+        });
+    }
+    // Nothing fits: the least cut, then the least left, then the order;
+    // a track of unknown length comes last.
+    let cost = |timing: Option<(f64, f64)>| match timing {
+        Some((length, _)) if length >= fit.gap_secs => (length - fit.gap_secs, 0.0),
+        Some((_, lead)) => (0.0, (fit.gap_secs - lead).max(0.0)),
+        None => (f64::INFINITY, f64::INFINITY),
+    };
+    let best = ctx
+        .ordered
+        .iter()
+        .zip(&timings)
+        .map(|((_, t), timing)| (*t, cost(*timing)))
+        .reduce(|best, next| {
+            let (b, n) = (best.1, next.1);
+            if n.0.total_cmp(&b.0).then(n.1.total_cmp(&b.1)).is_lt() {
+                next
+            } else {
+                best
+            }
+        })?;
+    let track = best.0;
+    let relaxed = if meets(track, Relaxed::None) {
+        Relaxed::None
+    } else if meets(track, Relaxed::Artist) {
+        Relaxed::Artist
+    } else {
+        Relaxed::Track
+    };
+    Some(Picked {
+        track,
+        relaxed,
+        unfitted: true,
     })
 }
 

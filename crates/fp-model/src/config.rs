@@ -332,6 +332,12 @@ pub struct AutomationConfig {
     /// The music filler fades out over this many milliseconds, ending at a
     /// block's start (0 ..= 10 000, AU24).
     pub block_fade_ms: u32,
+    /// The song the filler fades at a block's start loses at most this
+    /// many seconds (0 ..= 300, AU25).
+    pub max_fade_cut_secs: u32,
+    /// The filler never starts a song that would play less than this many
+    /// seconds before its fade at a block's start (0 ..= 600, AU25).
+    pub min_song_play_secs: u32,
 }
 
 impl Default for AutomationConfig {
@@ -345,6 +351,8 @@ impl Default for AutomationConfig {
             overrides_keep_days: 30,
             late_tolerance_secs: 120,
             block_fade_ms: 2_000,
+            max_fade_cut_secs: 30,
+            min_song_play_secs: 45,
         }
     }
 }
@@ -1673,6 +1681,20 @@ impl Config {
             0,
             10_000,
             "automation.block_fade_ms",
+            &mut w,
+        );
+        clamp_to(
+            &mut a.max_fade_cut_secs,
+            0,
+            300,
+            "automation.max_fade_cut_secs",
+            &mut w,
+        );
+        clamp_to(
+            &mut a.min_song_play_secs,
+            0,
+            600,
+            "automation.min_song_play_secs",
             &mut w,
         );
         if self
