@@ -125,9 +125,9 @@ z jego przycisków) (zob. [Układ](layout.md#maximize-a-panel)).
 
 | Przycisk | Działanie |
 |---|---|
-| **Play / Następny** (duży) | Zatrzymany: uruchamia następny utwór. Na antenie: przechodzi płynnie do następnego utworu (czas wyciszania ustawia się w [Ustawieniach](settings.md)); gdy trwa wyciszanie przy przenikaniu rozpoczętym przez Następny lub przez segue, zielony pas opróżnia się na przycisku przez czas wyciszania, a jego krawędź przesuwa się od lewej do prawej, jak w carcie (przenikanie rozpoczęte przez Poprzedni opróżnia się na przycisku Poprzedni). Wstrzymany: wznawia. Gdy utwór na antenie jest ustawiony jako następny, Play uruchamia go od nowa ze zwykłym wyciszeniem. Na wyjściu bit-perfect przełącza od razu, bez wyciszania, co mówi jego podpowiedź (zob. [Jakie są koszty](bit-perfect.md#what-it-costs)). |
+| **Play / Następny** (duży) | Zatrzymany: uruchamia następny utwór. Na antenie: przechodzi płynnie do następnego utworu (czas przenikania ustawia się w [Ustawieniach](settings.md)); gdy trwa wyciszanie przy przenikaniu rozpoczętym przez Następny lub przez segue, zielony pas opróżnia się na przycisku przez czas wyciszania, a jego krawędź przesuwa się od lewej do prawej, jak w carcie (przenikanie rozpoczęte przez Poprzedni opróżnia się na przycisku Poprzedni). Wstrzymany: wznawia. Gdy utwór na antenie jest ustawiony jako następny, Play uruchamia go od nowa ze zwykłym wyciszeniem. Na wyjściu bit-perfect przełącza od razu, bez wyciszania, co mówi jego podpowiedź (zob. [Jakie są koszty](bit-perfect.md#what-it-costs)). |
 | **Stop** | Zatrzymuje od razu (z krótką rampą eliminującą trzask) |
-| **Stop z wyciszeniem** | Wycisza i zatrzymuje. Gdy trwa stop z wyciszeniem, pas opróżnia się na przycisku przez czas wyciszania, a jego krawędź przesuwa się od lewej do prawej |
+| **Stop z wyciszeniem** | Wycisza przez czas Stop z wyciszeniem (domyślnie 2 s, ustawiany w [Ustawieniach](settings.md)) i zatrzymuje. Gdy trwa stop z wyciszeniem, pas opróżnia się na przycisku przez czas wyciszania, a jego krawędź przesuwa się od lewej do prawej |
 | **Pauza** | Wstrzymuje lub wznawia; miga na bursztynowo, gdy jest wstrzymane |
 | **Stop po** (trójkąt odtwarzania, potem kwadrat) | Zatrzymuje po zakończeniu bieżącego utworu, jednorazowo. W trybie SINGLE jest dostępny tylko wtedy, gdy bieżący utwór się powtarza: kończy powtarzanie, gdy skończy się grany właśnie przebieg. Aby zatrzymywać się po utworze za każdym razem, gdy jest grany, lub aby powtarzać utwór, użyj jego menu na playliście (zob. [Playlisty](playlists.md)) |
 | **Poprzedni** (kreska i dwa trójkąty) | Na antenie: płynnie wraca do utworu, który ten odtwarzacz grał wcześniej, tak jak robi to Następny. Naciśnij ponownie, aby cofać się dalej. Utwór, który opuszczasz, staje się następnym. Na wyjściu bit-perfect przełącza od razu, bez wyciszania (zob. [Jakie są koszty](bit-perfect.md#what-it-costs)). |
@@ -259,6 +259,12 @@ Okno pokazuje:
 
 Gdy CUE jest wstrzymane, jego przycisk wstrzymania (pokazany jako **Wznów
 CUE**) miga na bursztynowo, tak jak własny przycisk odtwarzacza.
+
+Przeciągnij krawędź lub róg okna, aby je powiększyć: przebieg zajmuje
+dodatkową szerokość i wysokość, co pomaga ustawiać markery. Możesz je znów
+zmniejszyć, aż do rozmiaru początkowego. Następne okno CUE, dowolnego
+odtwarzacza, otwiera się w ostatnim rozmiarze, jaki mu nadałeś, także po
+ponownym uruchomieniu.
 
 Przeskok we wstrzymanym CUE zostawia je wstrzymane. Przycisk zamknięcia okna
 albo **Zatrzymaj CUE** zatrzymuje CUE.

@@ -25,7 +25,7 @@ sekwencera (`/dev/snd/seq`, zwykle przez członkostwo w grupie `audio`).
 
 ## Przypisywanie kontrolki {#binding-a-control}
 
-Dla każdego odtwarzacza jest wiersz na akcję: **Play / Następny**, **Pauza**,
+Dla każdego odtwarzacza (P1 … Pn; kolumna **Muzyka** nie ma przypisań) jest wiersz na akcję: **Play / Następny**, **Pauza**,
 **Stop**, **Stop z wyciszeniem**, **Od początku**, **Poprzedni**, **CUE** i
 **Głośność**.
 

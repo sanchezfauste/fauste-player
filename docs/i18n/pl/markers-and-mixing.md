@@ -87,7 +87,7 @@ są analizowane ponownie automatycznie.
   następny utwór startuje dokładnie w cue-out, bez przerwy.
 - **Tryb single** lub **Stop po**: odtwarzacz zatrzymuje się w cue-out.
 - **Naciśnięcie Play na antenie:** następny utwór startuje od razu, a
-  bieżący wycisza się przez *czas wyciszania* (domyślnie 1 s).
+  bieżący wycisza się przez *czas przenikania* (domyślnie 1 s).
 - **Odtwarzacz, którego wyjście Main jest bit-perfect**, ignoruje punkt MIX i
   automatyczny miks: każdy utwór gra do swojego cue-out, po czym startuje
   następny, a Play na antenie przełącza od razu, bez wyciszania. Zobacz

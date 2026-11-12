@@ -8,9 +8,11 @@ startuje z każdym odtwarzaczem tej samej szerokości i cartwallem pod nimi.
 
 ## Pokazywanie i ukrywanie paneli {#show-and-hide-panels}
 
-Kafelki po lewej stronie górnego paska, **P1** … **Pn** i **Cartwall**,
-pokazują, które panele są na ekranie: podświetlony kafelek oznacza panel
-pokazany. Kliknij kafelek, aby ukryć lub pokazać jego panel. Przy wielu
+Kafelki po lewej stronie górnego paska, **Ramówka** i **Muzyka**
+([ramówka](automation.md#the-schedule-column) i
+[wypełniacz muzyczny](automation.md#the-music-filler), oba ukryte, dopóki ich
+nie pokażesz), **P1** … **Pn** i **Cartwall**, pokazują, które panele są na
+ekranie: podświetlony kafelek oznacza panel pokazany. Kliknij kafelek, aby ukryć lub pokazać jego panel. Przy wielu
 odtwarzaczach kafelki przewijają się w bok (przewiń kółkiem myszy nad nimi), a
 przycisk układu pozostaje w zasięgu wzroku. Pozostałe panele zajmują
 zwolnione miejsce, a ponownie pokazany odtwarzacz wraca ze swoją szerokością.
