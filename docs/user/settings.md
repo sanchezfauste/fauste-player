@@ -276,7 +276,7 @@ changes](library.md#when-a-file-changes).
 
 The [music filler's](automation.md) rotations and rules (not on Android).
 
-![Settings, Automation: the default rotation Music with its one step over all music, and the music filler's rules](../images/guide/settings-automation.png)
+![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, and the music filler's rules](../images/guide/settings-automation.png)
 
 - **Rotations:** the list, the default marked. **New rotation** adds one
   that plays all music, **Make default** makes the selected one the

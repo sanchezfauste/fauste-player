@@ -2,6 +2,8 @@
 //! playlists filled with the audio files of a folder, with the first
 //! players paused mid-track some way into their playlist. The carts come
 //! from the shortest files, or from a second folder when one is given.
+//! Automation gets a second rotation and a schedule: a block every hour,
+//! a weekend template and two dates changed.
 //!
 //! `FAUSTE_HOME=/tmp/fp-demo cargo run -p fp-app --example demo_session -- <music folder> [cart folder]`
 
@@ -39,6 +41,8 @@ fn main() -> ExitCode {
     }
     let mut config = Config::default();
     config.players.count = 4;
+    // An editor set, so the track menu offers "Open in external editor".
+    config.library.external_editor = Some(PathBuf::from("/usr/bin/audio-editor"));
     let mut state = AppState::new(config, "Morning");
     let names = ["Afternoon", "Night"];
     for name in names {
@@ -137,6 +141,7 @@ fn main() -> ExitCode {
         },
     );
     library(&mut state, &files, &short);
+    automation(&mut state);
     let mut store = Store::new(paths, Limits::default());
     let saved = store.save_config(&state).and_then(|()| {
         store.save_state(
@@ -211,10 +216,227 @@ fn library(state: &mut AppState, songs: &[PathBuf], carts: &[PathBuf]) {
             },
         );
     }
+    // One song whose audio changed under its manual outro: the library
+    // shows it under "Markers to review" with the amber flag on its row.
+    let flagged = state
+        .library
+        .iter()
+        .find(|t| {
+            t.path
+                .file_stem()
+                .is_some_and(|s| s.to_string_lossy().ends_with("Coastline"))
+        })
+        .map(|t| t.id);
+    if let Some(track) = flagged.and_then(|id| state.library.get_mut(id)) {
+        track.markers_review = Some(fp_model::MarkersReview {
+            dropped: vec![fp_model::MarkerKind::OutroStart],
+        });
+    }
     let mut view = state.library_view.clone();
     if let Some(music) = music {
         view.selection = LibrarySelection::Category(music);
         view.expanded = vec![music];
     }
     let _ = fp_model::apply(state, Command::SetLibraryView(Box::new(view)));
+}
+
+/// The guide's automation screenshots: a "Hits" rotation beside the
+/// default one, a "Base" template with a block every hour (the hourly ID,
+/// spots, and the Hits rotation in the daytime), a "Weekend" template for
+/// Saturday and Sunday, and two dates changed: today's midnight block gets
+/// a third spot, and the date a week on uses the weekend template.
+fn automation(state: &mut AppState) {
+    use chrono::{Datelike, Duration, Local, Weekday};
+    use fp_model::local_time::TimeOfDay;
+    use fp_model::rotation::{RotationStep, StepSource};
+    use fp_model::schedule::{Block, Item};
+
+    let track = |state: &AppState, stem: &str| {
+        state
+            .library
+            .iter()
+            .find(|t| {
+                t.path
+                    .file_stem()
+                    .is_some_and(|s| s.to_string_lossy() == stem)
+            })
+            .map(|t| t.id)
+    };
+    let category = |state: &AppState, name: &str| {
+        state
+            .categories
+            .iter()
+            .find(|c| c.name == name)
+            .map(|c| c.id)
+    };
+    let station_id = track(state, "Jingle – Station ID");
+    let spots: Vec<_> = ["Spot – Riverside Bakery", "Spot – City Theatre"]
+        .iter()
+        .filter_map(|s| track(state, s))
+        .collect();
+    if let Some(id) = station_id {
+        let _ = fp_model::apply(
+            state,
+            Command::SetTracksKind {
+                tracks: vec![id],
+                kind: TrackKind::HourlyId,
+            },
+        );
+    }
+    let _ = fp_model::apply(
+        state,
+        Command::SetTracksKind {
+            tracks: spots.clone(),
+            kind: TrackKind::Ad,
+        },
+    );
+
+    fp_model::rotation::ensure_default(state, "Music");
+    let step = |category: Option<CategoryId>, min, max| {
+        category.map(|c| RotationStep {
+            source: StepSource::Category(c),
+            min,
+            max,
+        })
+    };
+    let steps: Vec<RotationStep> = [
+        step(category(state, "Pop"), 2, 3),
+        step(category(state, "Jingles"), 1, 1),
+        step(category(state, "Evening"), 1, 1),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let _ = fp_model::apply(
+        state,
+        Command::CreateRotation {
+            name: "Hits".into(),
+            steps,
+        },
+    );
+    let hits = state
+        .rotations
+        .iter()
+        .find(|r| r.name == "Hits")
+        .map(|r| r.id);
+
+    fp_model::schedule::ensure_default(state, "Base");
+    let Some(base) = state.schedule.templates().first().map(|t| t.id) else {
+        return;
+    };
+    for hour in 0..24 {
+        let Some(start) = TimeOfDay::hms(hour, 0, 0) else {
+            continue;
+        };
+        let _ = fp_model::apply(
+            state,
+            Command::AddBlock {
+                template: base,
+                start,
+            },
+        );
+        let Some(id) = state
+            .schedule
+            .template(base)
+            .and_then(|t| t.blocks.iter().find(|b| b.start == start))
+            .map(|b| b.id)
+        else {
+            continue;
+        };
+        let mut items = Vec::new();
+        if let Some(track) = station_id {
+            items.push(Item::Track {
+                track,
+                time_critical: false,
+            });
+        }
+        if hour % 2 == 0 {
+            items.extend(spots.iter().map(|&track| Item::Track {
+                track,
+                time_critical: false,
+            }));
+        }
+        // The Hits rotation in the daytime, the default one at night.
+        let rotation = if (7..20).contains(&hour) {
+            hits
+        } else {
+            state.rotations.default_id()
+        };
+        if let Some(rotation) = rotation {
+            items.push(Item::Rotation { rotation });
+        }
+        let _ = fp_model::apply(
+            state,
+            Command::UpdateBlock {
+                template: base,
+                block: Block { id, start, items },
+            },
+        );
+    }
+    let _ = fp_model::apply(
+        state,
+        Command::DuplicateTemplate {
+            template: base,
+            name: "Weekend".into(),
+        },
+    );
+    if let Some(weekend) = state
+        .schedule
+        .templates()
+        .iter()
+        .find(|t| t.name == "Weekend")
+        .map(|t| t.id)
+    {
+        for weekday in [Weekday::Sat, Weekday::Sun] {
+            let _ = fp_model::apply(
+                state,
+                Command::SetWeekTemplate {
+                    weekday,
+                    template: weekend,
+                },
+            );
+        }
+        let mut holiday = Local::now().date_naive() + Duration::days(7);
+        if matches!(holiday.weekday(), Weekday::Sat | Weekday::Sun) {
+            holiday += Duration::days(2);
+        }
+        let _ = fp_model::apply(
+            state,
+            Command::SetDateTemplate {
+                date: holiday,
+                template: Some(weekend),
+            },
+        );
+    }
+    // Today's midnight block with one more spot, for that date only: the
+    // editor's Days tab opens on today and shows it first.
+    let today = Local::now().date_naive();
+    let midnight = TimeOfDay::hms(0, 0, 0);
+    let block = state
+        .schedule
+        .day(today)
+        .into_iter()
+        .find(|b| Some(b.start) == midnight);
+    if let (Some(block), Some(&spot)) = (block, spots.first()) {
+        let mut items = block.items.clone();
+        let at = items.len().saturating_sub(1);
+        items.insert(
+            at,
+            Item::Track {
+                track: spot,
+                time_critical: false,
+            },
+        );
+        let _ = fp_model::apply(
+            state,
+            Command::ChangeBlockOnDate {
+                date: today,
+                block: Block {
+                    id: block.id,
+                    start: block.start,
+                    items,
+                },
+            },
+        );
+    }
 }

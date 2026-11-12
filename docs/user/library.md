@@ -7,7 +7,7 @@ and loudness settings. The library window lists them, groups them in
 cartwall. It is a window on the desktop and on a tablet; a phone shows the
 library in its **Library** tab instead (see [On a phone](#on-a-phone)).
 
-![The library window: the pre-listen strip with the selected track's waveform, the category tree with Music (its subcategories Pop and Evening) selected, and the table of its tracks with their category and kind](../images/guide/library.png)
+![The library window: the pre-listen strip with the selected track's waveform, meter and listening fader, the category tree with Music (its subcategories Pop and Evening) selected and Markers to review at the end, and the table of its tracks with their category and kind; Coastline carries the amber markers-to-review flag](../images/guide/library.png)
 
 ## Opening the window
 

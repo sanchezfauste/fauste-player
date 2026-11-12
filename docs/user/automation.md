@@ -14,6 +14,8 @@ The **Schedule** column plays the day's **blocks**: groups of items with a
 start time (an hourly ID, spots, a programme). Show it from the
 **Schedule** tile on the top bar, as you show a player.
 
+![The Schedule column running, beside the Music column: the day's blocks by start time, each with its station ID (the clock marks it time-critical), spots and the rotation the music filler plays after it; the filler's song on air and the next ones](../images/guide/automation-columns.png)
+
 Its list is the schedule, grouped by block: each block's start time, then
 its items. It shows today, the last block of yesterday and the first of
 tomorrow. A block changed for one day says so. The item on air and the
@@ -40,6 +42,8 @@ in the same menu, lets the schedule choose by the time again.
 tabs, and **Rotations…** takes you to Settings → Automation, where
 rotations are made.
 
+![The schedule editor, Templates tab: the Base and Weekend templates on the left; Base's blocks on the right, each with its start, its items, Add from category and the rotation for the music after it](../images/guide/schedule-templates.png)
+
 - **Templates.** A template is a day of blocks; a new installation has
   one, "Base", for every day. Make, duplicate, rename or delete templates
   on the left; the chosen one's blocks are on the right. Type a block's
@@ -53,6 +57,9 @@ rotations are made.
   than the time to the next block, the block says by how much, in amber;
   you can still keep it so.
 - **Week plan.** Which template each weekday uses.
+
+  ![The Week plan tab: Base from Monday to Friday, Weekend on Saturday and Sunday](../images/guide/schedule-week.png)
+
 - **Days.** Pick a date on the calendar (dates with changes are amber).
   A date can use another template than its weekday's (a holiday on a
   Thursday can use the weekend's). Its blocks can be changed for that date
@@ -60,6 +67,8 @@ rotations are made.
   **Not on this day** removes a block from that date alone, and **Add
   block on this day** adds one. Later changes to the template still reach
   the blocks you did not change on that date.
+
+  ![The Days tab: the calendar with today chosen and the dates with changes in amber; today's first block has one more spot, marked "changed for this day", with Back to the template](../images/guide/schedule-days.png)
 
 ## The music filler
 
@@ -112,6 +121,10 @@ and how many it plays each time, as a range:
 With a range, a station ID comes after two songs one time and after three
 the next. One rotation is the **default**: a new installation has one,
 **Music**, which plays all your music.
+
+Rotations are made in Settings → Automation:
+
+![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, its counts At least and At most, and the music filler's rules](../images/guide/settings-automation.png)
 
 ## How it chooses
 

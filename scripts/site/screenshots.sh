@@ -208,6 +208,36 @@ for y in sorted(rows):
 '
 }
 
+# label_centres <x0> <x1> <y0> <y1>: the centres (x) of the labels and
+# buttons on a strip of the window, left to right. The strip's most common
+# colour is its background; columns holding anything else are content, and
+# content less than 10 pixels apart is one label (the spaces between words
+# are narrower). Labels move with the interface language, so they are found
+# on the screen.
+label_centres() {
+    local raw=$work/strip.png
+    x import -window "$win" "$raw"
+    convert "$raw" -crop "$(($2 - $1))x$(($4 - $3))+$1+$3" +repage -depth 8 txt:- | python3 -c '
+import re, sys
+from collections import Counter
+x0 = int(sys.argv[1])
+cols = {}
+for line in sys.stdin:
+    m = re.match(r"(\d+),(\d+):.*(#[0-9A-Fa-f]{6})", line)
+    if m:
+        cols.setdefault(int(m[1]), []).append(m[3])
+bg = Counter(c for col in cols.values() for c in col).most_common(1)[0][0]
+busy = [x for x in sorted(cols) if any(c != bg for c in cols[x])]
+groups = []
+for x in busy:
+    if groups and x - groups[-1][1] < 10:
+        groups[-1][1] = x
+    else:
+        groups.append([x, x])
+print(*[x0 + (a + b) // 2 for a, b in groups])
+' "$1"
+}
+
 # capture_window <file> <x> <y> <radius> [left top right bottom]: the window
 # that covers the point (x, y), an empty part of it, found on the screen
 # (scripts/site/window_box.py), widened by the margins. A window's size depends on the language of its
@@ -529,6 +559,46 @@ shoot_guide() {
     click "$library_x" 17
 }
 
+# The automation guide: the Schedule and Music columns running, and the
+# schedule editor's three tabs. The demo session made the schedule (a block
+# every hour, a weekend template, today's first block changed).
+shoot_automation() {
+    local buttons schedule_x music_x header edit_x tabs
+    read -r -a buttons < <(topbar_left_buttons) \
+        || die "cannot find the top bar's buttons"
+    # Show Schedule and Music, hide P2 to P4: Schedule, Music and P1 share
+    # the width.
+    schedule_x=${buttons[0]}
+    music_x=${buttons[1]}
+    click "$schedule_x" 17
+    click "$music_x" 17
+    for i in 3 4 5; do click "${buttons[$i]}" 17; done
+    # Start (the first label of the Schedule column's bar), then the music
+    # filler's first song is on air.
+    read -r -a header < <(label_centres 12 630 318 334)
+    [[ ${#header[@]} -ge 4 ]] || die "cannot find the Schedule column's buttons"
+    click "${header[0]}" 325
+    park
+    sleep 4
+    capture "$guide/automation-columns.png" 1268x880+8+42
+    # The editor (the last label of the bar), on Templates.
+    edit_x=${header[-1]}
+    click "$edit_x" 325
+    park
+    sleep 1
+    capture_window "$guide/schedule-templates.png" 100 450 6 0 35 0 0
+    # Its tabs: Templates, Week plan, Days, then Rotations… on the right.
+    read -r -a tabs < <(label_centres 20 600 62 77)
+    [[ ${#tabs[@]} -ge 3 ]] || die "cannot find the schedule editor's tabs"
+    click "${tabs[1]}" 69
+    park
+    capture_window "$guide/schedule-week.png" 600 200 6 0 35 0 0
+    click "${tabs[2]}" 69
+    park
+    capture_window "$guide/schedule-days.png" 100 500 6 0 35 0 0
+    key Escape
+}
+
 # ---------------------------------------------------------------- main
 
 log "building"
@@ -561,5 +631,6 @@ fi
 shoot_main
 [[ $only == main ]] && exit 0
 shoot_guide
+shoot_automation
 check_silent
 log "done"
