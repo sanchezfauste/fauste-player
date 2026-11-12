@@ -7,8 +7,8 @@ title = "Fauste Player — Erabiltzailearen gida"
 label = "Hizkuntza"
 # The commit of master whose docs/user this translation was made from, and
 # its `git describe --tags`.
-source-commit = "fcd6eac6727128ceb4e07f9a62695bc03d99bbce"
-source-version = "v0.13.1-15-gfcd6eac6"
+source-commit = "86653d973847187fc36f2cdd79d41d20f4502592"
+source-version = "v0.14.0-142-g86653d97"
 # The notice on every page; {version} and {commit} are replaced with the
 # fields above, and english-link links to the same page in English.
 notice = "Orri hau AArekin itzuli da ingelesezko gidatik abiatuta ({version}, {commit} commita), eta akatsak izan ditzake. Desberdintasunik badago, ingelesezko bertsioa da baliozkoa."
