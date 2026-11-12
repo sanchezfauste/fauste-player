@@ -596,6 +596,18 @@ pub(crate) fn set_date_template(
     Ok(())
 }
 
+/// A block the date commands may name: one of the date's computed day, or
+/// one the date's plan holds (a block of the date can be hidden from the
+/// day by another at the same start, after a template block moved there).
+fn known_on(schedule: &Schedule, date: NaiveDate, block: BlockId) -> bool {
+    let in_plan = schedule.dates.get(&date).is_some_and(|p| {
+        p.changes.iter().any(|c| {
+            matches!(c, DateChange::Changed { .. } | DateChange::Added(_)) && c.block_id() == block
+        })
+    });
+    in_plan || schedule.day(date).iter().any(|b| b.id == block)
+}
+
 /// A start no other block of the date's computed day has.
 fn free_on(
     schedule: &Schedule,
@@ -621,7 +633,7 @@ pub(crate) fn change_block_on_date(
 ) -> Result<(), ModelError> {
     check_items(&block.items)?;
     let schedule = &mut state.schedule;
-    if !schedule.day(date).iter().any(|b| b.id == block.id) {
+    if !known_on(schedule, date, block.id) {
         return Err(ModelError::UnknownBlock(block.id));
     }
     free_on(schedule, date, block.start, Some(block.id))?;
@@ -669,7 +681,7 @@ pub(crate) fn remove_block_on_date(
     block: BlockId,
 ) -> Result<(), ModelError> {
     let schedule = &mut state.schedule;
-    if !schedule.day(date).iter().any(|b| b.id == block) {
+    if !known_on(schedule, date, block) {
         return Err(ModelError::UnknownBlock(block));
     }
     let in_template = schedule

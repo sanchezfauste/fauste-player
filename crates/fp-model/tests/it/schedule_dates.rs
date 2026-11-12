@@ -351,3 +351,146 @@ fn dates_naming_a_deleted_template_fall_back() {
     assert!(s.schedule.date_plan(date).is_none());
     assert_eq!(s.schedule.template_for(date), Some(base));
 }
+
+#[test]
+fn a_date_block_hidden_by_a_collision_can_still_be_edited() {
+    let (mut s, base) = based();
+    let date = tuesday();
+    // The 07:00 block changed on the date (following the template's time).
+    let mut seven = block_at(&s, base, at(7, 0));
+    seven.items = vec![song(1)];
+    apply(
+        &mut s,
+        Command::ChangeBlockOnDate {
+            date,
+            block: seven.clone(),
+        },
+    )
+    .unwrap();
+    // A block of the date alone at 10:00.
+    apply(
+        &mut s,
+        Command::AddBlockOnDate {
+            date,
+            start: at(10, 0),
+        },
+    )
+    .unwrap();
+    let added = s
+        .schedule
+        .date_plan(date)
+        .unwrap()
+        .changes
+        .iter()
+        .find_map(|c| match c {
+            DateChange::Added(b) => Some(b.clone()),
+            _ => None,
+        })
+        .unwrap();
+    // The template moves 07:00 to 10:00: both date blocks share a start.
+    let mut moved = block_at(&s, base, at(7, 0));
+    moved.start = at(10, 0);
+    apply(
+        &mut s,
+        Command::UpdateBlock {
+            template: base,
+            block: moved,
+        },
+    )
+    .unwrap();
+    assert_eq!(
+        s.schedule
+            .day(date)
+            .iter()
+            .filter(|b| b.start == at(10, 0))
+            .count(),
+        1
+    );
+    // The hidden one can still be moved away, and removed.
+    let mut away = added.clone();
+    away.start = at(11, 0);
+    apply(
+        &mut s,
+        Command::ChangeBlockOnDate {
+            date,
+            block: away.clone(),
+        },
+    )
+    .unwrap();
+    assert!(
+        s.schedule
+            .day(date)
+            .iter()
+            .any(|b| b.id == added.id && b.start == at(11, 0))
+    );
+    let mut back = away;
+    back.start = at(10, 0);
+    // Moving it back onto the taken start is refused.
+    assert_eq!(
+        apply(&mut s, Command::ChangeBlockOnDate { date, block: back }),
+        Err(ModelError::BlockTimeTaken)
+    );
+    apply(
+        &mut s,
+        Command::RemoveBlockOnDate {
+            date,
+            block: added.id,
+        },
+    )
+    .unwrap();
+    assert!(
+        s.schedule
+            .date_plan(date)
+            .unwrap()
+            .changes
+            .iter()
+            .all(|c| !matches!(c, DateChange::Added(_)))
+    );
+}
+
+#[test]
+fn a_hidden_added_block_can_be_removed() {
+    let (mut s, base) = based();
+    let date = tuesday();
+    let mut seven = block_at(&s, base, at(7, 0));
+    seven.items = vec![song(1)];
+    apply(&mut s, Command::ChangeBlockOnDate { date, block: seven }).unwrap();
+    apply(
+        &mut s,
+        Command::AddBlockOnDate {
+            date,
+            start: at(10, 0),
+        },
+    )
+    .unwrap();
+    let added = s
+        .schedule
+        .date_plan(date)
+        .unwrap()
+        .changes
+        .iter()
+        .find_map(|c| match c {
+            DateChange::Added(b) => Some(b.id),
+            _ => None,
+        })
+        .unwrap();
+    let mut moved = block_at(&s, base, at(7, 0));
+    moved.start = at(10, 0);
+    apply(
+        &mut s,
+        Command::UpdateBlock {
+            template: base,
+            block: moved,
+        },
+    )
+    .unwrap();
+    apply(&mut s, Command::RemoveBlockOnDate { date, block: added }).unwrap();
+    assert_eq!(
+        s.schedule
+            .day(date)
+            .iter()
+            .filter(|b| b.start == at(10, 0))
+            .count(),
+        1
+    );
+}
