@@ -113,7 +113,10 @@ fn the_list_shows_blocks_and_their_items() {
 #[test]
 fn a_missed_item_is_struck_through() {
     let (mut s, item) = with_block();
-    s.automation.as_mut().unwrap().missed.insert(item);
+    // Missed, and not next: the clock had moved on.
+    let a = s.automation.as_mut().unwrap();
+    a.missed.insert(item);
+    a.next = None;
     let (h, _fake) = harness(s);
     let row = h.get_by_label_contains("did not air");
     assert!(

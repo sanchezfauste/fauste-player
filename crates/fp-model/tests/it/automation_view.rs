@@ -36,7 +36,18 @@ fn item_status(
     index: usize,
     r: &Rig,
 ) -> RowStatus {
-    let want = r.item(date, hour, 0, index);
+    item_status_at(rows, date, hour, 0, index, r)
+}
+
+fn item_status_at(
+    rows: &[ScheduleRow],
+    date: NaiveDate,
+    hour: u32,
+    minute: u32,
+    index: usize,
+    r: &Rig,
+) -> RowStatus {
+    let want = r.item(date, hour, minute, index);
     rows.iter()
         .find_map(|row| match row {
             ScheduleRow::Item { item, status, .. } if *item == want => Some(*status),
@@ -121,4 +132,85 @@ fn a_next_set_by_hand_is_marked_where_it_is() {
     let rows = schedule_view(&r.s);
     assert_eq!(item_status(&rows, tomorrow, 10, 1, &r), RowStatus::Next);
     assert_eq!(item_status(&rows, today(), 10, 0, &r), RowStatus::Coming);
+}
+
+#[test]
+fn a_missed_block_played_by_hand_shows_aired() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    r.at_hms(10, 5, 0);
+    let first = r.item(today(), 10, 0, 0);
+    r.apply(Command::SetScheduleNext(first));
+    r.apply(Command::StartAutomation);
+    let p = r.schedule_player();
+    assert!(r.playing(p).is_some(), "the block plays");
+    r.end_current(p);
+    r.end_current(p);
+    r.at_hms(10, 10, 0);
+    let rows = schedule_view(&r.s);
+    assert_eq!(item_status(&rows, today(), 10, 0, &r), RowStatus::Aired);
+    assert_eq!(item_status(&rows, today(), 10, 1, &r), RowStatus::Aired);
+    assert!(blocks(&rows).contains(&(today(), 10, RowStatus::Aired)));
+}
+
+#[test]
+fn a_missed_item_set_as_next_is_marked_next() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    r.at_hms(10, 5, 0);
+    let second = r.item(today(), 10, 0, 1);
+    r.apply(Command::SetScheduleNext(second));
+    let rows = schedule_view(&r.s);
+    assert_eq!(item_status(&rows, today(), 10, 1, &r), RowStatus::Next);
+}
+
+#[test]
+fn items_dropped_by_a_hand_set_next_are_missed() {
+    let mut r = rig();
+    r.at_hms(9, 59, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(10, 0, 0);
+    let twelve = r.item(today(), 12, 0, 0);
+    r.apply(Command::SetScheduleNext(twelve));
+    let rows = schedule_view(&r.s);
+    assert_eq!(item_status(&rows, today(), 10, 0, &r), RowStatus::OnAir);
+    assert_eq!(item_status(&rows, today(), 10, 1, &r), RowStatus::Missed);
+}
+
+#[test]
+fn a_block_on_air_past_midnight_stays_listed() {
+    let mut r = Rig::new(vec![
+        (22, 0, vec![song(1), song(2)]),
+        (23, 30, vec![song(3)]),
+    ]);
+    r.at_hms(21, 59, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(22, 0, 0);
+    let tomorrow = today().checked_add_days(Days::new(1)).unwrap();
+    r.at(tomorrow.and_hms_opt(0, 10, 0).unwrap());
+    let rows = schedule_view(&r.s);
+    assert!(
+        blocks(&rows).contains(&(today(), 22, RowStatus::OnAir)),
+        "{:?}",
+        blocks(&rows)
+    );
+    assert_eq!(item_status(&rows, today(), 22, 0, &r), RowStatus::OnAir);
+}
+
+#[test]
+fn during_an_overrun_the_overdue_block_is_next() {
+    let mut r = Rig::new(vec![
+        (10, 0, vec![song(1), song(2)]),
+        (10, 10, vec![song(3)]),
+        (10, 40, vec![song(4)]),
+    ]);
+    r.at_hms(9, 59, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(10, 0, 0);
+    r.at_hms(10, 16, 0);
+    let rows = schedule_view(&r.s);
+    assert_eq!(
+        item_status_at(&rows, today(), 10, 10, 0, &r),
+        RowStatus::Next
+    );
 }
