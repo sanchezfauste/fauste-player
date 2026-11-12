@@ -7,7 +7,7 @@ A janela tem um único tamanho (900 × 640, mais pequena num ecrã pequeno),
 seja qual for a secção, e a secção desloca-se dentro dela. Cada secção alinha
 as suas etiquetas numa só coluna.
 
-As secções Leitores, Medidores, Análise, Loudness e Atalhos de teclado têm um botão
+As secções Leitores, Medidores, Análise, Loudness, Automatização e Atalhos de teclado têm um botão
 **Repor predefinições** no cabeçalho. Pede confirmação e depois repõe apenas
 essa secção (os Leitores mantêm o número de leitores e o idioma; os Atalhos
 não têm outro botão de reposição). As Saídas de áudio, Listas, Cartucheira,
@@ -85,7 +85,7 @@ exemplo, depois de trocar dois dispositivos) mantém-nos.
 | Sistema de áudio | A última escolha, **Sem saída (silêncio)**, não toca nada: as linhas temporais correm ao ritmo do tempo real sem placa de som (para uma máquina sem ela, ou para ensaiar). Linux: PipeWire (nas versões que o incluem), PulseAudio, JACK ou ALSA. Windows: WASAPI, ASIO (nas versões que o incluem) ou JACK. macOS: Core Audio ou JACK. Os sistemas em falta neste computador, ou sem dispositivo de saída (um servidor JACK que não está em execução), são mostrados como indisponíveis. «Predefinido do sistema» usa o primeiro disponível por essa ordem. |
 | Frequência de amostragem | A frequência a que corre cada saída, a menos que um dispositivo tenha a sua própria (Avançado); os ficheiros são convertidos para ela com reamostragem de alta qualidade. Os dispositivos bit-perfect começam à sua frequência e depois seguem os ficheiros. |
 | Tamanho do buffer | Frames por bloco de áudio, a menos que um dispositivo tenha o seu próprio; a latência resultante é mostrada por baixo. As saídas através de um servidor de som ou de um misturador do sistema (PulseAudio, o dispositivo `default` do ALSA) pedem pelo menos 50 ms seja qual for este tamanho, ou o que o dispositivo aceitar, para que um computador ocupado não se ouça; a latência di-lo então (`shared_buffer_ms` no ficheiro de configuração) |
-| Saídas por leitor | Para cada leitor, um dispositivo **Main** (no ar) e um dispositivo **Cue** (pré-escuta), cada um com um par de canais. Uma placa de som que oferece vários perfis de saída (o ALSA lista frontal, surround, hardware direto…) mostra cada um como *placa — perfil*; duas entradas que ainda assim se leriam da mesma forma recebem o seu id de dispositivo entre parênteses. As interfaces multicanal podem transportar vários leitores em pares diferentes. Uma saída Cue que partilha uma saída do ar (o Main de qualquer leitor ou o da cartucheira) é permitida: uma nota por baixo diz que a sua pré-escuta se ouve no ar e que pergunta primeiro enquanto algo toca aí. |
+| Saídas por leitor | Para cada leitor, e para a coluna **Música** (o [musicalizador](automation.md)), um dispositivo **Main** (no ar) e um dispositivo **Cue** (pré-escuta), cada um com um par de canais. Uma placa de som que oferece vários perfis de saída (o ALSA lista frontal, surround, hardware direto…) mostra cada um como *placa — perfil*; duas entradas que ainda assim se leriam da mesma forma recebem o seu id de dispositivo entre parênteses. As interfaces multicanal podem transportar vários leitores em pares diferentes. Uma saída Cue que partilha uma saída do ar (o Main de qualquer leitor ou o da cartucheira) é permitida: uma nota por baixo diz que a sua pré-escuta se ouve no ar e que pergunta primeiro enquanto algo toca aí. |
 | Testar Main / Testar Cue | Toca um tom curto (1 kHz no Main, 440 Hz no Cue, 1,5 s, −18 dBFS) na saída escolhida, para poder verificar as ligações antes de ir para o ar |
 | Biblioteca | A saída Cue da biblioteca, com o seu próprio **Testar Cue**: onde se ouve a [pré-escuta](library.md#pre-listening) da janela da biblioteca (num telemóvel, a do separador Biblioteca). Sem ela, o Play da barra de pré-escuta fica esbatido. No Android a sua escolha vazia lê-se *Predefinido do sistema* em vez de *Nenhuma*: a pré-escuta e o **Testar Cue** tocam então na saída predefinida (ver [Android → Biblioteca](android.md#library)). Uma saída da Biblioteca numa saída do ar funciona como o Cue de um leitor: uma nota por baixo diz que a sua pré-escuta se ouve no ar e que pergunta primeiro enquanto algo toca aí. Está nas vistas Básico e Avançado, também num telemóvel |
 | Cartucheira | As saídas Main e Cue da cartucheira. O Main assume por predefinição a saída do sistema. Sem um Cue não há pré-escuta de cartuchos; um Cue numa saída do ar funciona como nos leitores. |
@@ -111,22 +111,24 @@ suas linhas temporais, e o dispositivo é aberto de novo quando regressar (ver
 
 ## Leitores {#players}
 
-![Definições, Leitores: número de leitores, modo predefinido, duração do fade, mistura automática, cue-in e cue-out, aviso de fim de faixa e idioma](../../images/guide/settings-players.png)
+![Definições, Leitores: número de leitores, modo predefinido, duração do fade entre faixas, duração do Stop com fade, mistura automática, cue-in e cue-out, aviso de fim de faixa e idioma](../../images/guide/settings-players.png)
 
 | Definição | Predefinição | Significado |
 |---|---|---|
 | Idioma | Sistema | Idioma da interface |
 | Número de leitores | 4 | Colunas no ecrã principal (um leitor no ar não pode ser removido). O número aplica-se quando larga o controlo deslizante; um número escrito na caixa aplica-se ao premir Enter ou ao sair da caixa, e Escape cancela-o |
 | Modo predefinido | CONT | O modo em que os leitores arrancam |
-| Duração do fade | 1000 ms | Usada pelo Play com uma faixa no ar e pelo Stop com fade. Num leitor cuja saída Main é bit-perfect, só pelo Stop com fade |
+| Duração do fade entre faixas | 1000 ms | Quanto tempo a faixa no ar demora a fazer fade out quando prime Play (seguinte) enquanto toca, e no Anterior. Não se aplica a um leitor cuja saída Main é bit-perfect |
+| Duração do Stop com fade | 2000 ms | Quanto tempo o **Stop com fade** demora a fazer o fade out da faixa. Aplica-se a todos os leitores, também aos bit-perfect |
 | Mistura automática no ponto MIX | Ativada | Sobrepor as faixas no modo contínuo. Não se aplica a um leitor cuja saída Main é bit-perfect |
 | Usar cue-in e cue-out | Ativado | Desativado: os leitores tocam cada faixa do início ao fim do ficheiro; os marcadores são mantidos e os cartuchos continuam a usar os seus. As durações e os totais das listas seguem o mesmo intervalo |
 | Aviso de fim de faixa | 10 s | Quando a contagem decrescente começa a piscar a vermelho |
 
 Enquanto a saída Main de um leitor é bit-perfect, uma nota por baixo da
 **Mistura automática no ponto MIX** diz que esses leitores nunca misturam
-nem fazem crossfade. As duas definições continuam editáveis: aplicam-se aos
-outros leitores. Ver [O que custa](bit-perfect.md#what-it-costs).
+nem fazem crossfade, pelo que a duração do fade entre faixas e a mistura
+automática não se lhes aplicam. As duas definições continuam editáveis:
+aplicam-se aos outros leitores. Ver [O que custa](bit-perfect.md#what-it-costs).
 
 ## Medidores {#meters}
 
@@ -201,6 +203,12 @@ mais nada a fazer, com a normalização ativada ou desativada; os seus
 marcadores não são tocados. **Voltar a analisar** (no menu da lista) e
 **Voltar a analisar todas as faixas** medem de novo.
 
+**Procurar ficheiros alterados** verifica todas as faixas da biblioteca à
+procura de um ficheiro que outro programa tenha alterado enquanto o Fauste
+Player corria, e analisa de novo os alterados; um aviso diz quantos
+encontrou. O botão fica esbatido enquanto uma verificação decorre. Ver
+[Quando um ficheiro muda](library.md#when-a-file-changes).
+
 ## Loudness {#loudness}
 
 ![Definições, Loudness: a normalização ativada, com o objetivo, o teto de true peak, o ganho máximo e o ajuste máximo nas predefinições](../../images/guide/settings-loudness.png)
@@ -269,6 +277,38 @@ categorias que agrupam as suas faixas, vigiar uma pasta com uma categoria e
 remover as suas faixas em falta, sem abrir a janela da biblioteca. Ver
 [Biblioteca](library.md#categories) e
 [Pastas vigiadas](library.md#watched-folders).
+
+**Editor externo** é o editor de áudio que *Abrir no editor externo* inicia
+com o ficheiro de uma faixa: o caminho do programa (ou *Nenhum*), **Escolher…**
+para o escolher e **Limpar** para o remover. No macOS pode escolher-se um
+pacote de aplicação (`.app`). Se o programa não puder ser iniciado, um aviso
+di-lo. A linha não é mostrada no Android, nem nas versões Flatpak e snap. Ver
+[Quando um ficheiro muda](library.md#when-a-file-changes).
+
+## Automatização {#automation}
+
+As rotações e as regras do [musicalizador](automation.md) (não no Android).
+
+![Definições, Automatização: as rotações Music (a predefinida) e Hits, a Music selecionada com o seu único passo sobre toda a música, e as regras do musicalizador](../../images/guide/settings-automation.png)
+
+- **Rotações:** a lista, com a predefinida marcada. **Nova rotação**
+  adiciona uma que reproduz toda a música, **Tornar predefinida** torna a
+  selecionada a predefinida, **Eliminar rotação** remove-a (a última não pode
+  ser eliminada).
+- **A rotação selecionada:** o seu **Nome**, depois uma linha por **passo**:
+  de onde vêm as suas faixas (uma categoria com as suas subcategorias, ou
+  *Tudo* de um tipo), quantas reproduz de cada vez (**No mínimo** 0–99,
+  **No máximo** 1–99; um mínimo de 0 deixa o passo ficar de fora em algumas
+  voltas), **Subir**, **Descer** e **Remover**. **Adicionar passo**
+  adiciona um no fim. Um passo cuja categoria foi eliminada di-lo; o
+  musicalizador salta-o.
+- **Musicalizador:** quanto tempo antes de a mesma faixa poder tocar de novo
+  (3 horas, ou quando metade das outras faixas do seu passo tiverem sido
+  emitidas, o que ocorrer primeiro; 0 desliga qualquer das duas), o mesmo
+  artista (30 minutos), a **margem à frente** (30 minutos de música em fila)
+  e as **faixas tocadas que se mantêm** na sua lista (50).
+
+**Repor predefinições** repõe as regras; as rotações ficam.
 
 ## Atalhos de teclado {#keyboard-shortcuts}
 

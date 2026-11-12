@@ -30,7 +30,8 @@ Em **Definições → Atalhos de teclado**, clique numa ação e prima a tecla
 é mostrado o seu nome. Escolha **Atribuir** para mover a tecla, ou
 **Cancelar**. **Desassociar** remove um atalho e **Repor predefinições**
 (no canto superior direito da secção) repõe a tabela acima. Ações
-disponíveis, para cada leitor e cartucho:
+disponíveis, para cada leitor (P1 … Pn; a coluna **Música** não tem
+atalhos) e cartucho:
 
 - play, anterior, reiniciar, pausa, stop, stop com fade e CUE num leitor
   (anterior e reiniciar não têm tecla predefinida);

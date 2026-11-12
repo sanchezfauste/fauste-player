@@ -22,6 +22,9 @@ sobreviver a falhas sem pôr nada no ar por si sós.
 | [Leitores](players.md) | A coluna do leitor: transporte, modos, contagem decrescente, forma de onda, CUE |
 | [Listas](playlists.md) | Separadores, a tabela de faixas, arrastar e largar, o menu de contexto, ficheiros M3U/PLS |
 | [Cartucheira](cartwall.md) | Cartuchos instantâneos: disparo, páginas, ciclos, cartuchos exclusivos, configuração |
+| [Biblioteca](library.md) | A janela da biblioteca de faixas: categorias, tipos, pesquisa, pré-escuta, o editor externo e os ficheiros alterados |
+| [Disposição](layout.md) | Mostrar e ocultar painéis, larguras dos leitores, mover e redimensionar a cartucheira, maximizar um painel, o menu da disposição |
+| [Automatização](automation.md) | A coluna Grelha, o seu editor, o musicalizador e as suas rotações |
 | [Marcadores e mistura](markers-and-mixing.md) | Cue-in/cue-out, o ponto MIX, intro e outro, análise automática |
 | [Definições](settings.md) | Saídas de áudio, leitores, análise, listas, MIDI, controlo remoto |
 | [Normalização do loudness](loudness.md) | Todas as faixas e cartuchos com o mesmo loudness graças a um ganho fixo por faixa: o indicador de ganho, excluir e ajustar uma faixa, saídas bit-perfect |
@@ -30,6 +33,7 @@ sobreviver a falhas sem pôr nada no ar por si sós.
 | [Superfícies de controlo MIDI](midi.md) | Botões, faders e luzes em controladores MIDI |
 | [Controlo remoto](remote-control.md) | Operar o Fauste Player pela rede: API HTTP, segurança |
 | [Dados e cópias de segurança](data-and-backups.md) | Onde ficam os ficheiros, gravação automática, recuperação após uma falha, modo portátil |
+| [Android](android.md) | A aplicação em telemóveis e tablets: instalação, a disposição tátil, a música no dispositivo |
 | [Resolução de problemas](troubleshooting.md) | Sem som, dispositivo perdido, ficheiros marcados como indisponíveis, registos |
 
 A interface está disponível em inglês, espanhol, catalão, neerlandês,

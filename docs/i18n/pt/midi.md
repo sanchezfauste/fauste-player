@@ -28,7 +28,7 @@ abrir o sequenciador (`/dev/snd/seq`, normalmente por pertencer ao grupo
 
 ## Associar um controlo {#binding-a-control}
 
-Para cada leitor há uma linha por ação: **Play / Seguinte**, **Pausa**,
+Para cada leitor (P1 … Pn; a coluna **Música** não tem associações) há uma linha por ação: **Play / Seguinte**, **Pausa**,
 **Stop**, **Stop com fade**, **Reiniciar**, **Anterior**, **CUE** e
 **Volume**.
 

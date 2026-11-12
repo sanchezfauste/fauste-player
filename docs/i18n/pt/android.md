@@ -286,6 +286,7 @@ podem soar ao mesmo tempo depende do telemóvel.
 ## Não existe no Android {#not-on-android}
 
 As superfícies de controlo MIDI, o controlo remoto, a edição de etiquetas e
-capas e os ficheiros de listas e de páginas de cartuchos são, por agora,
-funcionalidades do computador. Um teclado ligado a um tablet funciona como no
+capas, os ficheiros de listas e de páginas de cartuchos e a automatização (o
+musicalizador e Definições → Automatização) são, por agora, funcionalidades
+do computador. Um teclado ligado a um tablet funciona como no
 computador (ver [Teclado](keyboard.md)).

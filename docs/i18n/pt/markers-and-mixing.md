@@ -90,7 +90,7 @@ as faixas são analisadas de novo automaticamente.
   faixa seguinte começa exatamente no cue-out, sem interrupção.
 - **Modo single**, ou **Stop no fim**: o leitor para no cue-out.
 - **Premir Play com uma faixa no ar:** a faixa seguinte começa de imediato e
-  a atual desvanece durante a *duração do fade* (1 s por predefinição).
+  a atual desvanece durante a *duração do fade entre faixas* (1 s por predefinição).
 - **Um leitor cuja saída principal é bit-perfect** ignora o ponto MIX e a
   mistura automática: cada faixa toca até ao seu cue-out e só então começa a
   seguinte, e Play com uma faixa no ar muda de imediato, sem fade. Ver
