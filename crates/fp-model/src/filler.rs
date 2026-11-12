@@ -102,7 +102,53 @@ pub(crate) fn settle(state: &mut AppState, out: &mut Vec<EngineAction>) {
         return;
     };
     trim(state, &f, out);
+    drop_beyond(state, &f, out);
     top_up(state);
+}
+
+/// How far ahead the filler queues: `filler_lookahead_mins`, or up to the
+/// coming block while automation runs (AU27), whichever comes first.
+fn look_ahead_secs(state: &AppState) -> f64 {
+    let own = f64::from(state.config.automation.filler_lookahead_mins) * 60.0;
+    match crate::automation::coming_start(state) {
+        Some(start) => {
+            let secs = (start - state.local_now).num_milliseconds() as f64 / 1000.0;
+            own.min(secs.max(0.0))
+        }
+        None => own,
+    }
+}
+
+/// AU27, AU28: the generated rows that would start at or after the coming
+/// block leave the list (the operator's stay; the next of a playing filler
+/// is already loaded and stays).
+fn drop_beyond(state: &mut AppState, f: &FillerState, out: &mut Vec<EngineAction>) {
+    if crate::automation::coming_start(state).is_none() {
+        return;
+    }
+    let cap = look_ahead_secs(state);
+    let Some(list) = state.playlists.get(f.playlist) else {
+        return;
+    };
+    let player = state.players.iter().find(|p| p.id == f.player);
+    let keep_next = player
+        .filter(|p| p.transport != crate::player::Transport::Stopped)
+        .and_then(|p| p.next);
+    let mut at = 0.0;
+    let mut drop = HashSet::new();
+    for e in list.entries.iter().skip(anchor(state, f)) {
+        if at >= cap && f.generated.contains(&e.id) && Some(e.id) != keep_next {
+            drop.insert(e.id);
+        }
+        at += row_secs(state, e.id);
+    }
+    if drop.is_empty() {
+        return;
+    }
+    crate::reducer::take_out_entries(state, &drop, out);
+    if let Some(filler) = state.filler.as_mut() {
+        filler.generated.retain(|e| !drop.contains(e));
+    }
 }
 
 fn trim(state: &mut AppState, f: &FillerState, out: &mut Vec<EngineAction>) {
@@ -154,7 +200,7 @@ fn top_up(state: &mut AppState) {
         }
         remaining += row_secs(state, *entry);
     }
-    let target = f64::from(state.config.automation.filler_lookahead_mins) * 60.0;
+    let target = look_ahead_secs(state);
     let mut cursor = f.cursor.clone();
     let mut rng = state.rng.clone();
     let mut added = Vec::new();

@@ -908,6 +908,21 @@ fn fade_stop(
         return stop(state, id, out);
     }
     let fade_ms = state.config.players.fade_stop_ms;
+    fade_stop_over(state, id, fade_ms, out)
+}
+
+/// A fade stop over `fade_ms` (the operator's uses `players.fade_stop_ms`;
+/// automation hands over to a block with its own, AU24).
+pub(crate) fn fade_stop_over(
+    state: &mut AppState,
+    id: PlayerId,
+    fade_ms: u32,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let i = state.player_index(id)?;
+    if state.players[i].dsd.is_some() && state.players[i].transport != Transport::Stopped {
+        return stop(state, id, out);
+    }
     let player = &mut state.players[i];
     // Allowed during a crossfade or segue overlap too: the engine fades every
     // Main source of the player. Only a fade stop already in progress blocks it.

@@ -62,6 +62,9 @@ pub struct AutomationState {
     /// passes after it, while the application runs, are marked missed.
     /// `None` before the first look.
     pub seen: Option<NaiveDateTime>,
+    /// The schedule's row on air and when it started (local time): when the
+    /// next row would start, for late time-critical items (AU22).
+    pub row_since: Option<(EntryId, NaiveDateTime)>,
 }
 
 /// Creates the schedule's player (stopped, hidden, just before the
@@ -93,6 +96,7 @@ pub fn ensure(state: &mut AppState, playlist_name: &str) -> Vec<EngineAction> {
         missed: BTreeSet::new(),
         handing_over: false,
         seen: None,
+        row_since: None,
     });
     vec![EngineAction::AddPlayer { player }]
 }
@@ -181,7 +185,10 @@ pub fn settle_next(state: &mut AppState) {
     let Some(a) = state.automation.as_ref() else {
         return;
     };
-    let running = a.running;
+    // AU21: a block whose start passes while automation is stopped, or
+    // while a block chosen away from its time plays, is missed; one that
+    // passes while a block in order plays waits for it.
+    let marking = !a.running || a.on_air.is_some_and(|b| !b.in_order);
     let by_hand = a.next_by_hand;
     let next = if by_hand { a.next } else { clock_next(state) };
     // A look from before the window (a first look, or a clock that jumped
@@ -190,7 +197,7 @@ pub fn settle_next(state: &mut AppState) {
     let seen = a.seen.filter(|s| s.date() >= yesterday);
     let earliest = state.local_now - tolerance(state);
     let passed: Vec<ItemRef> = match seen {
-        Some(seen) if !running => window_blocks(state)
+        Some(seen) if marking => window_blocks(state)
             .into_iter()
             .filter(|(date, start, b)| {
                 *start + tolerance(state) > seen
@@ -326,6 +333,12 @@ pub fn load_block(
             block: from.block,
             index,
         };
+        // AU22: a time-critical item that would start beyond the late
+        // tolerance is missed.
+        if item.is_time_critical(state) && state.local_now > start + tolerance(state) {
+            missed.push(item_ref);
+            continue;
+        }
         let track = match item {
             Item::Rotation { rotation: r } => {
                 rotation = Some(*r);
@@ -383,17 +396,7 @@ fn play_schedule(state: &mut AppState, fade_ms: u32, out: &mut Vec<EngineAction>
     if is_playing(state, Some(player)) {
         return;
     }
-    let filler = filler_player(state);
-    if is_playing(state, filler)
-        && let Some(f) = filler
-        && let Some(i) = player_index(state, f)
-        && let Some(p) = state.players.get_mut(i)
-        && !p.fade_stopping()
-    {
-        p.begin_fade(fade_ms, crate::player::FadeOrigin::FadeStop);
-        p.fade_stop_pending = true;
-        out.push(EngineAction::FadeOutAndStop { player: f, fade_ms });
-    }
+    fade_filler(state, fade_ms, out);
     let _ = crate::reducer::play(state, player, out);
 }
 
@@ -407,8 +410,99 @@ fn play_filler(state: &mut AppState, out: &mut Vec<EngineAction>) {
     }
 }
 
+/// A filler song on air fades out over `fade_ms` and stops.
+fn fade_filler(state: &mut AppState, fade_ms: u32, out: &mut Vec<EngineAction>) {
+    let filler = filler_player(state);
+    if let Some(f) = filler
+        && is_playing(state, filler)
+        && !player_index(state, f)
+            .and_then(|i| state.players.get(i))
+            .is_some_and(|p| p.fade_stop_pending)
+    {
+        let _ = crate::reducer::fade_stop_over(state, f, fade_ms, out);
+    }
+}
+
+/// The track length of a schedule row, from its play range.
+fn row_secs(state: &AppState, entry: EntryId) -> f64 {
+    state
+        .track_for_entry(entry)
+        .and_then(|t| {
+            t.play_range(state.config.players.use_cue_markers)
+                .known_end()
+                .map(|end| end - t.play_range(state.config.players.use_cue_markers).cue_in)
+        })
+        .unwrap_or(0.0)
+}
+
+/// AU22: before the schedule's player moves on, a next row that is
+/// time-critical and would start beyond its block's start plus the late
+/// tolerance is taken out and marked missed. Nothing on air is cut.
+fn skip_late_critical(state: &mut AppState, out: &mut Vec<EngineAction>) {
+    let Some(a) = state.automation.clone() else {
+        return;
+    };
+    let Some(run) = a.on_air else {
+        return;
+    };
+    let Some(p) = player_index(state, a.player).and_then(|i| state.players.get(i)) else {
+        return;
+    };
+    let (Some(current), Some(next)) = (p.current, p.next) else {
+        return;
+    };
+    // When the row on air started: the first tick that saw it.
+    let since = match a.row_since {
+        Some((e, at)) if e == current => at,
+        _ => {
+            if let Some(a) = state.automation.as_mut() {
+                a.row_since = Some((current, state.local_now));
+            }
+            state.local_now
+        }
+    };
+    let Some(item) = a.rows.get(&next).copied() else {
+        return;
+    };
+    let critical = block_items(state, item.date, item.block)
+        .and_then(|items| items.get(item.index).cloned())
+        .is_some_and(|i| i.is_time_critical(state));
+    if !critical {
+        return;
+    }
+    let ends = since + TimeDelta::milliseconds((row_secs(state, current) * 1000.0) as i64);
+    let starts = ends.max(state.local_now);
+    if starts > run.start + tolerance(state) {
+        crate::reducer::take_out_entries(state, &HashSet::from([next]), out);
+        if let Some(a) = state.automation.as_mut() {
+            a.rows.remove(&next);
+            a.missed.insert(item);
+        }
+    }
+}
+
+/// AU21: after a block in order, the earliest block that started while it
+/// played (and has not started) plays now, in order.
+fn overdue_after(state: &AppState, run: &BlockRun) -> Option<ItemRef> {
+    window_blocks(state)
+        .into_iter()
+        .find(|(date, start, b)| {
+            *start > run.start
+                && *start <= state.local_now
+                && !b.items.is_empty()
+                && !started(state, *date, b.id)
+        })
+        .map(|(date, _, b)| ItemRef {
+            date,
+            block: b.id,
+            index: 0,
+        })
+}
+
 /// The rules of a running schedule, after a start, a command or a tick.
-fn drive(state: &mut AppState, out: &mut Vec<EngineAction>) {
+/// `starting`: the operator pressed Start, and a next set by hand plays at
+/// once (AU17); otherwise it follows the filler song on air.
+fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
     let Some(a) = state.automation.clone() else {
         return;
     };
@@ -416,29 +510,59 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>) {
         .and_then(|i| state.players.get(i))
         .is_some_and(|p| p.transport == Transport::Stopped && p.current.is_none());
     // A block ends when its player is idle again.
-    if a.on_air.is_some() && schedule_idle {
+    let mut ended = None;
+    if let Some(run) = a.on_air
+        && schedule_idle
+    {
         if let Some(a) = state.automation.as_mut() {
             a.on_air = None;
             a.rows.clear();
+            a.row_since = None;
+        }
+        ended = Some(run);
+        if a.running {
+            // AU20: the filler plays the block's rotation, or the default.
+            let current = state.filler.as_ref().map(|f| f.rotation);
+            if current.is_some_and(|r| r != run.rotation) {
+                let _ = crate::filler::set_rotation(state, run.rotation, out);
+            }
         }
         settle_next(state);
     }
     if !a.running {
         return;
     }
+    skip_late_critical(state, out);
     let Some(a) = state.automation.clone() else {
         return;
     };
     if a.on_air.is_some() {
         return;
     }
+    let fade = state.config.automation.block_fade_ms;
+    if !a.next_by_hand
+        && let Some(run) = ended.filter(|r| r.in_order)
+        && let Some(item) = overdue_after(state, &run)
+    {
+        load_block(state, item, true, out);
+        play_schedule(state, 0, out);
+        return;
+    }
     let Some(next) = a.next else {
         play_filler(state, out);
         return;
     };
+    let filler_on = is_playing(state, filler_player(state));
     if a.next_by_hand {
-        load_block(state, next, false, out);
-        play_schedule(state, 0, out);
+        if starting || !filler_on {
+            load_block(state, next, false, out);
+            play_schedule(state, fade, out);
+        } else if let Some(f) = filler_player(state)
+            && let Some(i) = player_index(state, f)
+            && let Some(p) = state.players.get_mut(i)
+        {
+            p.stop_after_current = true;
+        }
         return;
     }
     let Some(start) = block_start(state, next.date, next.block) else {
@@ -447,7 +571,19 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>) {
     if start <= state.local_now {
         load_block(state, next, true, out);
         play_schedule(state, 0, out);
-    } else {
+        return;
+    }
+    // AU24: the filler fades out so that the block starts on time.
+    let lead_ms = (start - state.local_now).num_milliseconds();
+    if filler_on {
+        if !a.handing_over && lead_ms <= i64::from(fade) {
+            let fade_ms = u32::try_from(lead_ms.max(0)).unwrap_or(fade).min(fade);
+            fade_filler(state, fade_ms, out);
+            if let Some(a) = state.automation.as_mut() {
+                a.handing_over = true;
+            }
+        }
+    } else if !a.handing_over {
         play_filler(state, out);
     }
 }
@@ -456,7 +592,7 @@ pub(crate) fn start(state: &mut AppState, out: &mut Vec<EngineAction>) -> Result
     if let Some(a) = state.automation.as_mut() {
         a.running = true;
     }
-    drive(state, out);
+    drive(state, out, true);
     Ok(())
 }
 
@@ -486,7 +622,7 @@ pub fn tick(state: &mut AppState) -> (Vec<EngineAction>, bool) {
     if before.is_none() {
         return (out, false);
     }
-    drive(state, &mut out);
+    drive(state, &mut out, false);
     let second_changed = before
         .as_ref()
         .and_then(|a| a.seen)
@@ -496,4 +632,15 @@ pub fn tick(state: &mut AppState) -> (Vec<EngineAction>, bool) {
     }
     let changed = !out.is_empty() || state.automation != before;
     (out, changed)
+}
+
+/// AU27: while automation runs and no block plays, the start of the coming
+/// block: the filler queues music only up to it.
+pub fn coming_start(state: &AppState) -> Option<NaiveDateTime> {
+    let a = state.automation.as_ref()?;
+    if !a.running || a.on_air.is_some() {
+        return None;
+    }
+    let next = a.next?;
+    block_start(state, next.date, next.block)
 }
