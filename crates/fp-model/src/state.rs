@@ -123,6 +123,11 @@ impl AppState {
             .filter(move |p| !self.is_automation(p.id))
     }
 
+    /// The schedule's player (the Schedule column), not the filler.
+    pub fn is_schedule(&self, player: PlayerId) -> bool {
+        self.automation.as_ref().is_some_and(|a| a.player == player)
+    }
+
     /// The schedule's player or the music filler's: not an operator player.
     pub fn is_automation(&self, player: PlayerId) -> bool {
         self.is_filler(player) || self.automation.as_ref().is_some_and(|a| a.player == player)

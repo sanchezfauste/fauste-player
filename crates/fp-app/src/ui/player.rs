@@ -119,6 +119,8 @@ fn playlist_area(
     follow_current(scene, view_state, id, playlist);
     if scene.state.is_filler(id) {
         filler_bar(ui, scene);
+    } else if scene.state.is_schedule(id) {
+        super::schedule::schedule_bar(ui, scene, TABS_HEIGHT);
     } else {
         tabs(ui, scene, view_state, id, playlist);
     }
@@ -132,7 +134,11 @@ fn playlist_area(
             .max_rect(table_rect)
             .layout(Layout::top_down(Align::Min)),
     );
-    table::track_table(&mut table_ui, scene, view_state, id, playlist);
+    if scene.state.is_schedule(id) {
+        super::schedule::schedule_list(&mut table_ui, scene);
+    } else {
+        table::track_table(&mut table_ui, scene, view_state, id, playlist);
+    }
     let footer_rect = Rect::from_min_max(pos2(ui.max_rect().left(), footer_top), ui.max_rect().max);
     let mut footer_ui = ui.new_child(
         UiBuilder::new()

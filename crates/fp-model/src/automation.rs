@@ -334,6 +334,25 @@ pub fn load_block(
         return false;
     };
     let current = state.players.get(i).and_then(|p| p.current);
+    let current_block = current
+        .and_then(|c| a.rows.get(&c))
+        .map(|r| (r.date, r.block));
+    // AU23: the rows of the block on air that will not play now were
+    // skipped, and so were the items before `from` of a block that never
+    // started.
+    let mut missed: Vec<ItemRef> = a
+        .rows
+        .iter()
+        .filter(|(e, r)| Some(**e) != current && current_block == Some((r.date, r.block)))
+        .map(|(_, r)| *r)
+        .collect();
+    if !a.started.contains(&(from.date, from.block)) {
+        missed.extend((0..from.index).map(|index| ItemRef {
+            date: from.date,
+            block: from.block,
+            index,
+        }));
+    }
     let drop: HashSet<EntryId> = state
         .playlists
         .get(a.playlist)
@@ -352,7 +371,6 @@ pub fn load_block(
         .filter(|(e, _)| Some(**e) == current)
         .map(|(e, r)| (*e, *r))
         .collect();
-    let mut missed = Vec::new();
     let mut rotation = None;
     let mut first = None;
     let mut planned = Vec::new();
@@ -404,15 +422,17 @@ pub fn load_block(
     }
     // The rows are replaced: a block loaded before but never on air (no
     // row of it is the current one) has not started after all.
-    let current_block = current
-        .and_then(|c| a.rows.get(&c))
-        .map(|r| (r.date, r.block));
     if let Some(a) = state.automation.as_mut() {
         if let Some(prev) = a.on_air
             && (prev.date, prev.block) != (from.date, from.block)
             && current_block != Some((prev.date, prev.block))
         {
             a.started.remove(&(prev.date, prev.block));
+        }
+        // An item queued now airs after all (AU23: a missed item played
+        // by hand).
+        for queued in rows.values() {
+            a.missed.remove(queued);
         }
         a.rows = rows;
         a.missed.extend(missed);
@@ -861,4 +881,156 @@ pub(crate) fn restore(state: &mut AppState, saved: Option<AutomationSession>) {
         seen: None,
         row_since: None,
     });
+}
+
+/// How a row of the Schedule column stands (§8.1, AU23).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RowStatus {
+    Aired,
+    OnAir,
+    Next,
+    Missed,
+    Coming,
+}
+
+/// One row of the Schedule column: a block's header, or one of its items.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ScheduleRow {
+    Block {
+        date: NaiveDate,
+        block: BlockId,
+        start: NaiveDateTime,
+        origin: crate::schedule::BlockOrigin,
+        status: RowStatus,
+    },
+    Item {
+        item: ItemRef,
+        what: crate::schedule::Item,
+        /// A track's play range when known; `None` for a category, a
+        /// rotation or an unknown length.
+        length_secs: Option<f64>,
+        time_critical: bool,
+        status: RowStatus,
+    },
+}
+
+/// The Schedule column's rows (§8.1): yesterday's last block, today's
+/// blocks and tomorrow's first, each followed by its items, in time order.
+pub fn schedule_view(state: &AppState) -> Vec<ScheduleRow> {
+    let Some(a) = state.automation.as_ref() else {
+        return Vec::new();
+    };
+    let [yesterday, today, tomorrow] = window(state);
+    let all = window_blocks(state);
+    let last_of_yesterday = all
+        .iter()
+        .rposition(|(d, _, _)| *d == yesterday && yesterday != today);
+    let first_of_tomorrow = all
+        .iter()
+        .position(|(d, _, _)| *d == tomorrow && tomorrow != today);
+    // AU21: while a block plays in order, the block that came due meanwhile
+    // plays after it, whatever the clock says next is.
+    let next = match a.on_air {
+        Some(run) if run.in_order && !a.next_by_hand => overdue_after(state, &run).or(a.next),
+        _ => a.next,
+    };
+    // A block on air from yesterday (an overrun past midnight) and a next
+    // beyond tomorrow's first block stay listed, with every block between.
+    let index_of = |date: NaiveDate, block: BlockId| {
+        all.iter().position(|(d, _, b)| *d == date && b.id == block)
+    };
+    let on_air_index = a.on_air.and_then(|run| index_of(run.date, run.block));
+    let next_index = next.and_then(|n| index_of(n.date, n.block));
+    let today_first = all.iter().position(|(d, _, _)| *d == today);
+    let today_last = all.iter().rposition(|(d, _, _)| *d == today);
+    let first = [last_of_yesterday, on_air_index, next_index, today_first]
+        .into_iter()
+        .flatten()
+        .min();
+    let last = [first_of_tomorrow, on_air_index, next_index, today_last]
+        .into_iter()
+        .flatten()
+        .max();
+    let on_air_item = player_index(state, a.player)
+        .and_then(|i| state.players.get(i))
+        .and_then(|p| p.current)
+        .and_then(|e| a.rows.get(&e).copied());
+    let mut out = Vec::new();
+    for (i, (date, start, block)) in all.iter().enumerate() {
+        let shown = first.is_some_and(|f| i >= f) && last.is_some_and(|l| i <= l);
+        if !shown {
+            continue;
+        }
+        let on_air = a
+            .on_air
+            .is_some_and(|run| run.date == *date && run.block == block.id);
+        let started = a.started.contains(&(*date, block.id));
+        let item_status = |index: usize| {
+            let item = ItemRef {
+                date: *date,
+                block: block.id,
+                index,
+            };
+            if on_air_item == Some(item) {
+                RowStatus::OnAir
+            } else if next == Some(item) {
+                RowStatus::Next
+            } else if a.missed.contains(&item) {
+                RowStatus::Missed
+            } else if on_air {
+                match on_air_item {
+                    Some(o) if o.block == block.id && o.date == *date && index < o.index => {
+                        RowStatus::Aired
+                    }
+                    _ => RowStatus::Coming,
+                }
+            } else if started {
+                RowStatus::Aired
+            } else {
+                RowStatus::Coming
+            }
+        };
+        let statuses: Vec<RowStatus> = (0..block.items.len()).map(item_status).collect();
+        let status = if on_air {
+            RowStatus::OnAir
+        } else if next.is_some_and(|n| n.date == *date && n.block == block.id) {
+            RowStatus::Next
+        } else if !statuses.is_empty() && statuses.iter().all(|s| *s == RowStatus::Missed) {
+            RowStatus::Missed
+        } else if started {
+            RowStatus::Aired
+        } else {
+            RowStatus::Coming
+        };
+        out.push(ScheduleRow::Block {
+            date: *date,
+            block: block.id,
+            start: *start,
+            origin: block.origin,
+            status,
+        });
+        for (index, what) in block.items.iter().enumerate() {
+            let length_secs = match what {
+                crate::schedule::Item::Track { track, .. } => {
+                    state.library.get(*track).and_then(|t| {
+                        let range = t.play_range(state.config.players.use_cue_markers);
+                        range.known_end().map(|_| range.length())
+                    })
+                }
+                _ => None,
+            };
+            out.push(ScheduleRow::Item {
+                item: ItemRef {
+                    date: *date,
+                    block: block.id,
+                    index,
+                },
+                what: what.clone(),
+                length_secs,
+                time_critical: what.is_time_critical(state),
+                status: statuses.get(index).copied().unwrap_or(RowStatus::Coming),
+            });
+        }
+    }
+    out
 }

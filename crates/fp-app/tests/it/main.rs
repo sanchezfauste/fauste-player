@@ -65,6 +65,7 @@ mod remote_settings;
 mod reset_played_ui;
 mod rotation_editor_ui;
 mod row_double_click;
+mod schedule_ui;
 mod selection_outline_ui;
 mod services;
 mod settings;
