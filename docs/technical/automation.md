@@ -18,8 +18,9 @@ runtime only.
 ## Rotations (`rotation.rs`)
 
 A `Rotation` has a name and an ordered list of `RotationStep`s. A step
-names its `StepSource` and a count range `min..=max` (both in
-`STEP_COUNT_RANGE`, 1–99, `min <= max`); a rotation needs at least one
+names its `StepSource` and a count range `min..=max` (`min` in
+`STEP_MIN_RANGE`, 0–99; `max` in `STEP_MAX_RANGE`, 1–99; `min <= max`;
+the database loader clamps into them with a warning); a rotation needs at least one
 step (a damaged database may still hold one without, and the walk then
 falls back on the default):
 
@@ -32,6 +33,12 @@ the first remaining one the default; the last rotation cannot be deleted.
 At every start the app calls `rotation::ensure_default`, which creates
 "Music" (one step, all music, 1–1) when there is no rotation at all. A step
 on a deleted category stays stored; selection skips it.
+
+The walk (`rotation_cursor.rs`) draws a step's count each time it comes
+up; a draw of 0 passes the step over. `walk` goes over the steps at most
+twice from the cursor: in the second pass every draw is at least 1, so a
+pass where all steps drew 0 still plays the rotation instead of falling
+back on the default.
 
 Commands: `CreateRotation`, `UpdateRotation`, `DeleteRotation`,
 `SetDefaultRotation`.

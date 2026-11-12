@@ -119,6 +119,31 @@ fn damaged_rotation_and_air_time_rows_are_repaired_or_dropped() {
     assert!(text.contains("rotation"), "{text}");
 }
 
+/// A step counted 0–1 is kept as it is; one counted 0–0 could never play
+/// and loads as 0–1.
+#[test]
+fn a_step_from_zero_loads_and_a_zero_maximum_is_raised() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let (state, _) = sample();
+    save_all(&mut s, &state, 0.0);
+    let night = state.rotations.default_id().unwrap();
+    edit_doc(&s, "rotations", night.0, |doc| {
+        doc["steps"][0]["min"] = 0.into();
+        doc["steps"][0]["max"] = 1.into();
+    });
+    let loaded = store(&dir).load("Main");
+    let step = loaded.state.rotations.get(night).unwrap().steps[0];
+    assert_eq!((step.min, step.max), (0, 1));
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    edit_doc(&s, "rotations", night.0, |doc| {
+        doc["steps"][0]["max"] = 0.into();
+    });
+    let loaded = store(&dir).load("Main");
+    let step = loaded.state.rotations.get(night).unwrap().steps[0];
+    assert_eq!((step.min, step.max), (0, 1));
+}
+
 #[test]
 fn a_schema_2_database_migrates_with_no_rotations() {
     let dir = tempfile::tempdir().unwrap();

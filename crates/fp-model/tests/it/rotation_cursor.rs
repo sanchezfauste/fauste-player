@@ -118,6 +118,54 @@ fn counts_are_drawn_in_their_range_each_time() {
     assert!(runs.contains(&2) && runs.contains(&3));
 }
 
+/// A step counted 0–1 plays one track some times and sits out the others;
+/// the steps keep their order.
+#[test]
+fn a_step_from_zero_sometimes_sits_out() {
+    let mut s = state();
+    let a = category(&mut s, "A");
+    let b = category(&mut s, "B");
+    fill(&mut s, a, 1, 3);
+    fill(&mut s, b, 10, 3);
+    let r = rotation(&mut s, vec![step(a, 1, 1), step(b, 0, 1)]);
+    let mut cursor = RotationCursor::new(r);
+    let got = walk(&s, &mut cursor, 200, &mut SplitMix64(5));
+    let pairs: Vec<_> = got.windows(2).map(|w| (w[0], w[1])).collect();
+    assert!(pairs.contains(&(a, b)), "B plays some times");
+    assert!(pairs.contains(&(a, a)), "B sits out other times");
+    assert!(!pairs.contains(&(b, b)), "B plays at most one at a time");
+}
+
+/// When every step of a pass draws 0, the rotation still plays: the walk
+/// goes on with each step playing at least one, and never falls back on
+/// the default rotation for it.
+#[test]
+fn a_pass_where_every_step_draws_zero_still_plays_the_rotation() {
+    let mut s = state();
+    let other = category(&mut s, "Other");
+    fill(&mut s, other, 100, 3);
+    let default = rotation(&mut s, vec![step(other, 1, 1)]);
+    apply(&mut s, Command::SetDefaultRotation(default)).unwrap();
+    let a = category(&mut s, "A");
+    let b = category(&mut s, "B");
+    fill(&mut s, a, 1, 3);
+    fill(&mut s, b, 10, 3);
+    let r = rotation(&mut s, vec![step(a, 0, 1), step(b, 0, 1)]);
+    let mut cursor = RotationCursor::new(r);
+    let mut rng = SplitMix64(11);
+    for _ in 0..300 {
+        let out = next_track(&s, &mut cursor, NOW, &[], &mut rng);
+        assert!(!out.used_default);
+        let category = s
+            .library
+            .get(out.picked.unwrap().track)
+            .unwrap()
+            .category
+            .unwrap();
+        assert!(category == a || category == b);
+    }
+}
+
 #[test]
 fn a_step_on_a_deleted_category_is_skipped() {
     let mut s = state();

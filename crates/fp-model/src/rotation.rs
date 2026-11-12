@@ -41,9 +41,13 @@ pub struct Rotations {
     default: Option<RotationId>,
 }
 
-/// The counts a step may ask for. It checks data, it is not an operator
-/// setting.
-pub const STEP_COUNT_RANGE: RangeInclusive<u8> = 1..=99;
+/// The fewest tracks a step may ask for: 0 lets the step sit out a turn
+/// ("between 0 and 1"). It checks data, it is not an operator setting.
+pub const STEP_MIN_RANGE: RangeInclusive<u8> = 0..=99;
+
+/// The most tracks a step may ask for: at least 1, so that every step can
+/// play.
+pub const STEP_MAX_RANGE: RangeInclusive<u8> = 1..=99;
 
 impl Rotations {
     pub fn get(&self, id: RotationId) -> Option<&Rotation> {
@@ -86,10 +90,11 @@ impl Rotations {
     }
 }
 
-/// AU1: a step's counts lie in `STEP_COUNT_RANGE` and `min <= max`.
+/// AU1: a step's counts lie in `STEP_MIN_RANGE` and `STEP_MAX_RANGE`, and
+/// `min <= max`.
 pub fn check_step(step: &RotationStep) -> Result<(), ModelError> {
-    let ok = STEP_COUNT_RANGE.contains(&step.min)
-        && STEP_COUNT_RANGE.contains(&step.max)
+    let ok = STEP_MIN_RANGE.contains(&step.min)
+        && STEP_MAX_RANGE.contains(&step.max)
         && step.min <= step.max;
     if ok {
         Ok(())

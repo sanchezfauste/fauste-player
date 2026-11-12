@@ -42,8 +42,9 @@ fn create_validates_the_name_and_steps() {
         create(&mut s, "Day", vec![music(3, 2)]),
         Err(ModelError::InvalidRotationStep)
     );
+    // A step may sit out (at least 0) but never always (at most 0).
     assert_eq!(
-        create(&mut s, "Day", vec![music(0, 1)]),
+        create(&mut s, "Day", vec![music(0, 0)]),
         Err(ModelError::InvalidRotationStep)
     );
     assert_eq!(
@@ -51,6 +52,15 @@ fn create_validates_the_name_and_steps() {
         Err(ModelError::InvalidRotationStep)
     );
     assert_eq!(s.rotations.iter().count(), 0);
+}
+
+/// "Between 0 and 1": a step that may or may not play a track.
+#[test]
+fn a_step_may_play_at_least_zero() {
+    let mut s = state();
+    assert!(create(&mut s, "Day", vec![music(0, 1)]).is_ok());
+    assert!(create(&mut s, "Night", vec![music(0, 99)]).is_ok());
+    assert_eq!(s.rotations.iter().count(), 2);
 }
 
 #[test]
