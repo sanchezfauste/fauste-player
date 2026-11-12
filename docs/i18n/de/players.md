@@ -133,9 +133,9 @@ Hintergrund der Kopfzeile (nicht auf einen ihrer Buttons) (siehe
 
 | Button | Aktion |
 |---|---|
-| **Play / Weiter** (groß) | Gestoppt: den nächsten Track starten. On Air: in den nächsten Track überblenden (die Blendzeit wird in den [Einstellungen](settings.md) festgelegt); solange er für einen von Weiter oder einem Segue gestarteten Crossfade überblendet, läuft über die Länge der Blende ein grünes Band über den Button, dessen Rand sich wie bei einem Cart von links nach rechts bewegt (ein von Zurück gestarteter Crossfade läuft stattdessen über den Button Zurück). Pausiert: fortsetzen. Ist der Track, der on Air ist, als nächster gesetzt, startet Play diesen Track mit der üblichen Blende neu. Bei einem Bit-perfect-Ausgang wechselt er sofort, ohne Blende, und sein Tooltip sagt es (siehe [Was es kostet](bit-perfect.md#what-it-costs)). |
+| **Play / Weiter** (groß) | Gestoppt: den nächsten Track starten. On Air: in den nächsten Track überblenden (die Überblendzeit wird in den [Einstellungen](settings.md) festgelegt); solange er für einen von Weiter oder einem Segue gestarteten Crossfade überblendet, läuft über die Länge der Blende ein grünes Band über den Button, dessen Rand sich wie bei einem Cart von links nach rechts bewegt (ein von Zurück gestarteter Crossfade läuft stattdessen über den Button Zurück). Pausiert: fortsetzen. Ist der Track, der on Air ist, als nächster gesetzt, startet Play diesen Track mit der üblichen Blende neu. Bei einem Bit-perfect-Ausgang wechselt er sofort, ohne Blende, und sein Tooltip sagt es (siehe [Was es kostet](bit-perfect.md#what-it-costs)). |
 | **Stopp** | Sofort stoppen (mit einer kurzen Rampe gegen Knacken) |
-| **Ausblenden** | Ausblenden und stoppen. Solange ein Ausblenden läuft, läuft über die Länge der Blende ein Band über den Button, dessen Rand sich von links nach rechts bewegt |
+| **Ausblenden** | Über die Ausblendzeit (standardmäßig 2 s, in den [Einstellungen](settings.md) festgelegt) ausblenden und stoppen. Solange ein Ausblenden läuft, läuft über die Länge der Blende ein Band über den Button, dessen Rand sich von links nach rechts bewegt |
 | **Pause** | Pausieren oder fortsetzen; blinkt bernsteinfarben, solange pausiert ist |
 | **Nach dem aktuellen Track stoppen** (ein Play-Dreieck, dann ein Quadrat) | Stoppen, wenn der aktuelle Track endet, einmalig. Im SINGLE-Modus ist er nur verfügbar, solange der aktuelle Track wiederholt wird: Er beendet die Wiederholung, wenn der laufende Durchlauf endet. Um nach einem Track jedes Mal zu stoppen, wenn er gespielt wird, oder um einen Track zu wiederholen, nutze sein Menü in der Playlist (siehe [Playlists](playlists.md)) |
 | **Vorheriger Track** (ein Balken und zwei Dreiecke) | Solange on Air: in den Track zurückblenden, den dieser Player zuvor gespielt hat, wie Weiter es tut. Erneut drücken, um weiter zurückzugehen. Der Track, den du verlässt, wird zum nächsten. Bei einem Bit-perfect-Ausgang wechselt er sofort, ohne Blende (siehe [Was es kostet](bit-perfect.md#what-it-costs)). |
@@ -268,6 +268,12 @@ Das Fenster zeigt:
 
 Solange das CUE pausiert ist, blinkt sein Button **CUE pausieren** (angezeigt
 als **CUE fortsetzen**) bernsteinfarben, wie der des Players selbst.
+
+Ziehe eine Kante oder eine Ecke des Fensters, um es zu vergrößern: Die
+Wellenform nimmt die zusätzliche Breite und Höhe ein, was beim Setzen von
+Markern hilft. Du kannst es wieder verkleinern, bis auf seine erste Größe. Das
+nächste CUE-Fenster, von jedem Player, öffnet sich in der zuletzt gewählten
+Größe, auch nach einem Neustart.
 
 Ein Sprung bei pausiertem CUE lässt es pausiert. Der Schließen-Button des
 Fensters (**Schließen und CUE stoppen**) oder **CUE stoppen** stoppt das CUE.

@@ -29,7 +29,7 @@ Unter Linux läuft MIDI über ALSA: Dein Benutzer muss den Sequencer
 
 ## Ein Bedienelement binden {#binding-a-control}
 
-Für jeden Player gibt es eine Zeile pro Aktion: **Play / Weiter**, **Pause**,
+Für jeden Player (P1 … Pn; die Spalte **Musik** hat keine Belegungen) gibt es eine Zeile pro Aktion: **Play / Weiter**, **Pause**,
 **Stopp**, **Ausblenden**, **Neustart**, **Zurück**, **CUE** und **Lautstärke**.
 
 1. Klicke in der Zeile auf **Lernen**.

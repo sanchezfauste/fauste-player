@@ -32,7 +32,7 @@ führen.
 | Datei | Inhalt |
 |---|---|
 | `config.json` | Einstellungen, Ausgänge, Analyseschwellen, erweiterte Feinabstimmung |
-| `fauste.db` | Die Bibliothek (Tracks, ihre Kategorien, manuelle Marker, Tags, Lautheit), die Playlists mit ihren Gespielt-Markierungen, die Cart-Seiten und die Session: für jeden Player die angezeigte Playlist, aktueller und nächster Track, Modus, Position, Lautstärke und Spaltenbreiten (pro Spalte), sowie das Fensterlayout |
+| `fauste.db` | Die Bibliothek (Tracks, ihre Kategorien, manuelle Marker, Tags, Lautheit), die Playlists mit ihren Gespielt-Markierungen, die Cart-Seiten, die Rotationen der Automatisierung, der Sendeplan und das Sendeprotokoll (`automation.as_run_keep_days` Tage lang aufbewahrt, standardmäßig 90) und die Session: für jeden Player die angezeigte Playlist, aktueller und nächster Track, Modus, Position, Lautstärke und Spaltenbreiten (pro Spalte), sowie das Fensterlayout |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Kopien der Datenbank (siehe unten) |
 | `window.ron` | Größe und Position des Hauptfensters und ob es maximiert war (nur Computer; unter Wayland wählt das System die Position) |
 

@@ -9,7 +9,7 @@ auf einem Tablet ist sie ein Fenster; ein Telefon zeigt die Bibliothek
 stattdessen in seinem Tab **Bibliothek** (siehe [Auf einem
 Telefon](#on-a-phone)).
 
-![Das Bibliotheksfenster: der Vorhör-Streifen mit der Wellenform des gewählten Tracks, der Kategoriebaum mit Music (mit den Unterkategorien Pop und Evening) ausgewählt und die Tabelle ihrer Tracks mit Kategorie und Art](../../images/guide/library.png)
+![Das Bibliotheksfenster: der Vorhör-Streifen mit der Wellenform des gewählten Tracks, Pegelmesser und Hörpegel-Fader, der Kategoriebaum mit Music (mit den Unterkategorien Pop und Evening) ausgewählt und Zu prüfende Marker am Ende, und die Tabelle ihrer Tracks mit Kategorie und Art; Coastline trägt die bernsteinfarbene Markierung für zu prüfende Marker](../../images/guide/library.png)
 
 ## Das Fenster öffnen {#opening-the-window}
 
@@ -38,8 +38,10 @@ selbst. Der Text im Suchfeld wird nicht gespeichert.
 ## Kategorien {#categories}
 
 Der Baum links gruppiert die Tracks. Oben **Alle Titel**; dann deine
-Kategorien, die Unterkategorien enthalten können; am Ende **Ohne Kategorie**,
-die Tracks, die zu keiner Kategorie gehören. Jeder Eintrag zeigt seine Farbe
+Kategorien, die Unterkategorien enthalten können; dann **Ohne Kategorie**,
+die Tracks, die zu keiner Kategorie gehören; und, nur solange ein Track es
+braucht, **Zu prüfende Marker** (siehe [Wenn sich eine Datei
+ändert](#when-a-file-changes)). Jeder Eintrag zeigt seine Farbe
 und eine Zahl: Eine Kategorie zählt ihre eigenen Tracks und die ihrer
 Unterkategorien. Ein Track gehört höchstens zu einer Kategorie.
 
@@ -206,13 +208,82 @@ wie viele Tracks ausgewählt sind, wenn es für mehrere gilt.
 | Hinzufügen zu ▸ | Eine Playlist: Die Tracks werden an ihrem Ende hinzugefügt |
 | Zu Cart hinzufügen ▸ | Ein Cart der angezeigten Cartwall-Seite: Die Tracks füllen das gewählte Cart und die nächsten leeren Carts der Seite, in Rasterreihenfolge. Die Tracks, die nicht passen, bleiben außen vor, und ein Hinweis zählt sie |
 | In Kategorie verschieben ▸ | Eine Kategorie oder Ohne Kategorie |
-| Art ▸ | Musik, Jingle, Effekt, Werbung oder Sprache |
+| Art ▸ | Musik, Jingle, Effekt, Werbung, Sprache oder Stundenkennung |
 | Tags bearbeiten… | Der Tag-Editor (ein Track) |
+| In externem Editor öffnen | Deinen Audio-Editor mit der Datei des Tracks starten (ein Track; siehe [Wenn sich eine Datei ändert](#when-a-file-changes)) |
+| Als geprüft markieren | Die Markierung *Marker müssen geprüft werden* löschen (erscheint, wenn ein gewählter Track sie hat) |
 | Lautheit… | Das Lautheits-Popup (ein Track) |
 | Neu analysieren | Die Tracks erneut analysieren |
 | Marker auf automatisch zurücksetzen | Die manuellen Marker verwerfen |
 | Dateispeicherort anzeigen | Den Ordner der Datei öffnen (ein Track) |
 | Aus der Bibliothek entfernen… | Die Tracks nach einer Rückfrage aus der Bibliothek entfernen (unten) |
+
+## Wenn sich eine Datei ändert {#when-a-file-changes}
+
+Material vorzubereiten heißt oft, eine Datei in einem Audio-Editor zu kürzen
+oder zu korrigieren. Fauste Player hilft bei beiden Hälften.
+
+**In externem Editor öffnen** (das Zeilenmenü der Bibliothek und der
+Playlist-Zeilen) startet das Programm, das du unter [Einstellungen →
+Bibliothek](settings.md#library) gewählt hast, mit der Datei des Tracks. Es
+wirkt auf einen Track. Der Eintrag ist abgeblendet, mit dem Grund als Tooltip,
+wenn kein Editor festgelegt ist, wenn die Datei fehlt oder nicht gelesen
+werden kann oder wenn der Track *klingt*: der aktuelle Track eines Players
+(spielend oder pausiert), ein Track, der auf seinen Start wartet oder im CUE
+ist, der ausgehende Track einer Blende, ein spielendes Cart oder das
+CUE-Cart der Cartwall oder das Vorhören der Bibliothek, solange es spielt oder
+pausiert ist. Der Editor wird unter Android nicht angeboten, ebenso wenig in
+den Flatpak- und Snap-Builds, die keine anderen Programme starten können; der
+Rest dieses Abschnitts gilt dort trotzdem.
+
+Fauste Player bemerkt, wenn sich eine Datei, die es kennt, geändert hat (ihre
+Größe oder Änderungszeit weicht von der letzten Analyse ab), egal wer sie
+geändert hat, und analysiert sie von selbst neu: Dauer, Marker, Lautheit,
+Wellenform, Format und Tags. Es schaut nach:
+
+- einmal beim Start, bei jedem Track der Bibliothek;
+- wenn ein überwachter Ordner eine Änderung an einem bekannten Track meldet;
+- im Ordner jeder Datei, die du im Editor geöffnet hast, bis du beendest, damit
+  ein Speichern sofort bemerkt wird;
+- wenn ein Track in einen Player, ein Cart oder das Vorhören geladen wird und
+  wenn seine Marker zum Bearbeiten geöffnet oder auf der Wellenform gezogen
+  werden;
+- wenn du in [Einstellungen → Analyse](settings.md#analysis) auf **Nach
+  geänderten Dateien suchen** drückst, was die ganze Bibliothek prüft und in
+  einem Hinweis sagt, wie viele Dateien sich geändert haben.
+
+Es gibt kein periodisches Abfragen. Eine Datei außerhalb der überwachten
+Ordner, die ein anderes Programm ändert, während Fauste Player läuft, und die
+seither nicht benutzt wurde, wird bei ihrer nächsten Verwendung oder durch
+**Nach geänderten Dateien suchen** gefunden.
+
+Ein geänderter Track wird nie neu analysiert, während er klingt: Er wartet,
+bis er stoppt, und seine Marker und seine Lautheit bewegen sich nie unter einer
+spielenden Quelle. (**Alle Tracks neu analysieren** ist deine ausdrückliche
+Anforderung und wartet nicht.) Editoren speichern oft, indem sie die Datei
+löschen und neu anlegen, deshalb wird eine Datei, die verschwindet, zweimal
+angesehen, bevor sie als fehlend markiert wird. Eine Datei, die sich während
+ihrer Analyse ändert (ein Editor speichert sie noch), wird nicht verwendet: Sie
+wird kurz danach oder bei ihrer nächsten Änderung, Verwendung oder Suche neu
+analysiert. Ein fehlender Track, dessen Datei in einem Ordner wieder auftaucht,
+der nur wegen des Editors verfolgt wird, wird nicht von selbst wiederhergestellt.
+
+**Zu prüfende Marker.** Hat sich das *Audio* einer Datei geändert und hat der
+Track von Hand gesetzte Marker, zeigt der Track in seiner Zeile ein bernsteinfarbenes
+Warnsymbol (sein Tooltip nennt alle verworfenen Marker). Manuelle Marker, die
+jetzt hinter dem Ende des Audios liegen, werden verworfen, und der automatische
+Wert tritt an ihre Stelle; die übrigen bleiben, wie sie sind (wurde das Cue-in
+oder Cue-out verworfen, werden die Marker Intro, Outro und MIX in den neuen
+Cue-Bereich verschoben). Die Markierung hindert den Track nie am Laden, Cuen oder
+Spielen. Sie verschwindet, wenn du im Menü des Tracks **Als geprüft markieren**
+wählst (bei mehreren gewählten Zeilen löscht es alle) oder einen beliebigen
+Marker des Tracks änderst. Der Eintrag **Zu prüfende Marker** des Baums, nach
+*Ohne Kategorie*, listet die markierten Tracks auf, solange es welche gibt
+(nicht auf einem Telefon). Eine Änderung nur an den Tags oder am Cover
+aktualisiert die Tags und löst keine Markierung aus, was auch geschieht, wenn
+du Tags in Fauste Player bearbeitest. Die erste Analyse nach einem Update löst
+die Markierung nur aus, wenn sie einen Marker hinter dem Ende des Audios
+verwerfen musste.
 
 ## Vorhören {#pre-listening}
 
@@ -226,11 +297,19 @@ Die Leiste zeigt:
 
 - **Vorhören**, **Vorhören pausieren** und **Vorhören stoppen**;
 - die große Restzeit des Tracks, seinen Titel, Interpreten und seine Kategorie;
-- einen kleinen Pegelmesser rechts. Er liest nur dieses Vorhören, nie den
-  Pegelmesser eines Players oder der Cartwall; klicke ihn an, um sein Maximum
-  neu zu starten;
-- die Wellenform der ganzen Datei mit ihren Markern und darunter eine Zeile
-  `verstrichen / gesamt`.
+- rechts einen Pegelmesser und einen Lautstärke-Fader, gezeichnet wie bei einem
+  Player. Der Pegelmesser liest nur dieses Vorhören, nie den Pegelmesser eines
+  Players oder der Cartwall; klicke ihn an, um sein Maximum neu zu starten. Der
+  Fader ist dein **Hörpegel** auf Kopfhörern oder Monitoren: Er legt fest, wie
+  laut das Vorhören klingt, und ändert nie einen Track (seine Datei, seine
+  Lautheitsverstärkung oder seine Marker), einen Player oder die Cartwall. Er
+  bleibt, wie du ihn gelassen hast, wenn die Vorschau zu einem anderen Track
+  wechselt, und wird für den nächsten Start gespeichert; sein Tooltip und die
+  Anzeige darunter zeigen den Pegel in dB. Teilt der Ausgang Bibliothek
+  Kanäle mit einem On-Air-Ausgang, legt der Fader auch dort fest, wie laut das
+  Vorhören ist. Die Vorhör-Karte eines Telefons hat keinen Fader;
+- die Wellenform der ganzen Datei, so hoch wie die eines Players, mit ihren
+  Markern und darunter eine Zeile `verstrichen / gesamt`.
 
 Das Vorhören startet den gewählten Track an seinem Cue-in und spielt ihn bis zum
 Ende der Datei. Vorhören bei einer pausierten Vorschau setzt sie fort, und

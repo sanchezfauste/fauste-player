@@ -40,7 +40,7 @@ einem Bit-perfect-Gerät liegt, anders als die übrigen:
   ist oben gesperrt: auf dem Bildschirm, an [MIDI](midi.md)-Controllern und über
   die [Remote-API und OSC](remote-control.md). Er geht auf 100 %, wenn Bit-perfect
   für das Gerät eingeschaltet wird, und bleibt dort, wenn es ausgeschaltet wird.
-- **Was weiterhin funktioniert:** **Ausblenden** (es blendet über die Blendzeit
+- **Was weiterhin funktioniert:** **Ausblenden** (es blendet über die Ausblendzeit
   aus), **Pause**, **Stopp**, **Neustart**, die Markierungen Wiederholen und
   Stopp danach, die Modi Single und Continuous, Cue (Vorhören, das keinen Fader
   hat und nicht betroffen ist), Carts, die [DSD-Ausgabe](#dsd) und jeder Player,

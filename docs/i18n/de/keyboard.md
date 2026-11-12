@@ -31,7 +31,7 @@ Taste (gern mit Ctrl, Alt, Shift oder Cmd). Wird diese Taste bereits von einer
 anderen Aktion verwendet, wird deren Name angezeigt. Wähle **Zuweisen**, um die
 Taste zu verschieben, oder **Abbrechen**. **Entfernen** löscht ein Kürzel, und
 **Standardwerte wiederherstellen** (oben rechts im Abschnitt) stellt die
-obige Tabelle wieder her. Verfügbare Aktionen, für jeden Player und jedes Cart:
+obige Tabelle wieder her. Verfügbare Aktionen, für jeden Player (P1 … Pn; die Spalte **Musik** hat keine Kürzel) und jedes Cart:
 
 - Play, Zurück, Neustart, Pause, Stopp, Ausblenden und CUE an einem Player
   (Zurück und Neustart haben keine Standardtaste);

@@ -22,8 +22,9 @@ und Abstürze überstehen, ohne von sich aus etwas auf Sendung zu bringen.
 | [Player](players.md) | Die Player-Spalte: Transport, Modi, Countdown, Wellenform, CUE |
 | [Playlists](playlists.md) | Tabs, die Track-Tabelle, Drag and Drop, das Kontextmenü, M3U/PLS-Dateien |
 | [Cartwall](cartwall.md) | Sofort-Carts: Starten, Seiten, Schleifen, exklusive Carts, Einrichtung |
-| [Bibliothek](library.md) | Der Track-Katalog: Ordner, Suche, Filter, Sammlungen, Tracks in Playlists und Carts ziehen |
-| [Layout](layout.md) | Die Anordnung des Hauptfensters: Seitenleisten, Panels und die Fensteranordnungen |
+| [Bibliothek](library.md) | Das Fenster der Track-Bibliothek: Kategorien, Arten, Suche, Vorhören, der externe Editor und geänderte Dateien |
+| [Layout](layout.md) | Panels ein- und ausblenden, Player-Breiten, die Cartwall verschieben und ihre Größe ändern, ein Panel maximieren, das Layout-Menü |
+| [Automatisierung](automation.md) | Die Spalte Sendeplan, ihr Editor, der Musikfüller und seine Rotationen |
 | [Marker und Mixen](markers-and-mixing.md) | Cue-in/Cue-out, der MIX-Punkt, Intro und Outro, automatische Analyse |
 | [Einstellungen](settings.md) | Audioausgänge, Player, Analyse, Playlists, MIDI, Fernsteuerung |
 | [Lautheitsnormalisierung](loudness.md) | Jeder Track und Cart mit derselben Lautheit durch eine feste Verstärkung pro Track: das Verstärkungs-Badge, einen Track ausschließen und anpassen, Bit-perfect-Ausgänge |
@@ -32,7 +33,7 @@ und Abstürze überstehen, ohne von sich aus etwas auf Sendung zu bringen.
 | [MIDI-Controller](midi.md) | Tasten, Fader und Lichter an MIDI-Controllern |
 | [Fernsteuerung](remote-control.md) | Fauste Player über das Netzwerk bedienen: HTTP-API, Sicherheit |
 | [Daten und Backups](data-and-backups.md) | Wo die Dateien liegen, automatisches Speichern, Wiederherstellung nach einem Absturz, portabler Modus |
-| [Android](android.md) | Fauste Player auf einem Telefon oder Tablet |
+| [Android](android.md) | Die App auf Telefonen und Tablets: Installation, die Touch-Oberfläche, Musik auf dem Gerät |
 | [Fehlerbehebung](troubleshooting.md) | Kein Ton, Gerät verloren, als nicht verfügbar markierte Dateien, Logs |
 
 Die Oberfläche gibt es auf Englisch, Spanisch, Katalanisch, Niederländisch,

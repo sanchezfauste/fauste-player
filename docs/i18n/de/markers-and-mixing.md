@@ -86,7 +86,7 @@ werden die Tracks automatisch neu analysiert.
   nächste Track startet genau am Cue-out, ohne Lücke.
 - **SINGLE-Modus** oder **Stopp danach**: Der Player stoppt am Cue-out.
 - **Play drücken, während on Air:** Der nächste Track startet sofort, und der
-  aktuelle wird über die *Blendzeit* (standardmäßig 1 s) ausgeblendet.
+  aktuelle wird über die *Überblendzeit* (standardmäßig 1 s) ausgeblendet.
 - **Ein Player, dessen Main-Ausgang bit-perfect ist,** ignoriert den MIX-Punkt
   und den automatischen Mix: Jeder Track spielt bis zu seinem Cue-out, dann
   startet der nächste, und Play on Air wechselt sofort, ohne Blende. Siehe [Was
