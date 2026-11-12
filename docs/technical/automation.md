@@ -280,14 +280,23 @@ restart. Automation always comes back stopped.
 
 `automation::schedule_view(state)` lists what the Schedule column draws
 (§8.1): yesterday's last block, today's blocks and tomorrow's first, in
-time order, each a `ScheduleRow::Block` (date, start, `BlockOrigin`,
-status) followed by its `ScheduleRow::Item`s (`ItemRef`, the item, a
-track's length when known, time-critical, status). A `RowStatus` is
-`OnAir` for the item of the schedule player's current row, `Missed` when
-in `missed`, `Next` when it is next, `Aired` for the items before the one
-on air and for a started block no longer on air, else `Coming`. A block is
-`OnAir`, `Next` (next is in it), `Missed` (all its items), `Aired`
-(started) or `Coming`.
+time order, widened to keep a block on air from yesterday (an overrun past
+midnight) and the next item's block, with every block between. Each is a
+`ScheduleRow::Block` (date, start, `BlockOrigin`, status) followed by its
+`ScheduleRow::Item`s (`ItemRef`, the item, a track's length when known,
+time-critical, status). The next shown is `AutomationState::next`, except
+while a block plays in order: then the block that came due meanwhile
+(`overdue_after`), which is what will play (AU21). A `RowStatus` is
+`OnAir` for the item of the schedule player's current row, `Next`, then
+`Missed` when in `missed`, `Aired` for the items before the one on air and
+for a started block no longer on air, else `Coming`. A block is `OnAir`,
+`Next` (next is in it), `Missed` (all its items), `Aired` (started) or
+`Coming`.
+
+`load_block` keeps `missed` true to AU23: the rows of the block on air
+that a next set by hand drops, and the items before the first of a block
+played from its middle that never started, are missed; an item it queues
+is no longer missed (a missed item played by hand).
 
 ## Fitting the last songs (AU25)
 
