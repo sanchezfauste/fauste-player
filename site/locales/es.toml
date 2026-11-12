@@ -9,7 +9,7 @@ english-link = "Leer el original en inglés"
 
 [source-hash]
 common = "d4080e3e671d2848255cc4caff571e1565669fb8973eb65bfe44b4d6319765dd"
-index = "e382affae2db1eed7da53ce355f588eeae0a137bf05925037c84f461c312ae55"
+index = "476e72a5e2f6d7b9e5b56dda8f319095c00224195a366f4fa169fbe56ce836ea"
 privacy = "30dc8257ee6551a19f08944e2ca64be2ca5584553fafaa01ee67955d9adac83c"
 
 [common]
@@ -39,6 +39,8 @@ cue-title = "Preescucha CUE"
 cue = "Escucha cualquier pista en otro dispositivo o par de canales antes de que salga al aire, y cárgala como la siguiente."
 cartwall-title = "Cartuchera"
 cartwall = "Páginas de cartuchos instantáneos para sintonías, efectos y cuñas, con bucles, cartuchos exclusivos y sus propias salidas Main y Cue."
+automation-title = "Automatización"
+automation = "Un musicalizador que se llena solo con rotaciones de las categorías de tu biblioteca, y una parrilla diaria de bloques con hora para indicativos, cuñas y programas, que el operador inicia y detiene."
 bit-perfect-title = "Bit-perfect y DSD"
 bit-perfect = "El acceso exclusivo sigue la frecuencia de muestreo de cada archivo; las pistas DSD llegan intactas al convertidor como DoP o DSD nativo."
 control-title = "Control MIDI y remoto"

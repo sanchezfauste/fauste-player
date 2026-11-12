@@ -9,7 +9,7 @@ english-link = "Leggi l'originale in inglese"
 
 [source-hash]
 common = "d4080e3e671d2848255cc4caff571e1565669fb8973eb65bfe44b4d6319765dd"
-index = "e382affae2db1eed7da53ce355f588eeae0a137bf05925037c84f461c312ae55"
+index = "476e72a5e2f6d7b9e5b56dda8f319095c00224195a366f4fa169fbe56ce836ea"
 privacy = "30dc8257ee6551a19f08944e2ca64be2ca5584553fafaa01ee67955d9adac83c"
 
 [common]
@@ -39,6 +39,8 @@ cue-title = "Preascolto CUE"
 cue = "Ascolta qualsiasi brano su un dispositivo o una coppia di canali separati prima che vada in onda, e caricalo come successivo."
 cartwall-title = "Cartwall"
 cartwall = "Pagine di cart istantanei per jingle, effetti e spot, con loop, cart esclusivi e uscite Main e Cue proprie."
+automation-title = "Automazione"
+automation = "Un riempitivo musicale che si riempie da solo con rotazioni delle categorie della tua libreria, e un palinsesto giornaliero di blocchi a orario per identificativi, spot e programmi, avviato e fermato dall'operatore."
 bit-perfect-title = "Bit-perfect e DSD"
 bit-perfect = "L'accesso esclusivo segue la frequenza di campionamento di ogni file; i brani DSD arrivano al convertitore invariati come DoP o DSD nativo."
 control-title = "Controllo MIDI e remoto"
