@@ -119,6 +119,8 @@ fn playlist_area(
     follow_current(scene, view_state, id, playlist);
     if scene.state.is_filler(id) {
         filler_bar(ui, scene);
+    } else if scene.state.is_automation(id) {
+        super::schedule::schedule_bar(ui, scene, TABS_HEIGHT);
     } else {
         tabs(ui, scene, view_state, id, playlist);
     }
