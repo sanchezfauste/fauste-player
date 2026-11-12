@@ -9,7 +9,7 @@ bidaltzen ditu. Mahaigainean eta tableta batean leiho bat da; telefono batek
 liburutegia bere **Liburutegia** fitxan erakusten du horren ordez (ikus
 [Telefono batean](#on-a-phone)).
 
-![Liburutegiaren leihoa: aurrez entzuteko zerrenda hautatutako pistaren uhin-formarekin, kategorien zuhaitza Music hautatuta (bere Pop eta Evening azpikategoriekin), eta bere pisten taula kategoria eta motarekin](../../images/guide/library.png)
+![Liburutegiaren leihoa: aurrez entzuteko zerrenda hautatutako pistaren uhin-formarekin, neurgailuarekin eta entzute-faderrarekin, kategorien zuhaitza Music hautatuta (bere Pop eta Evening azpikategoriekin) eta amaieran Berrikusteko markatzaileak, eta bere pisten taula kategoria eta motarekin; Coastline pistak berrikusteko markatzaileen ikur anbarra darama](../../images/guide/library.png)
 
 ## Leihoa irekitzea {#opening-the-window}
 
@@ -37,8 +37,10 @@ jotzen. Bilaketa-eremuko testua ez da gordetzen.
 ## Kategoriak {#categories}
 
 Ezkerreko zuhaitzak pistak taldekatzen ditu. Goialdean, **Pista guztiak**;
-gero zure kategoriak, azpikategoriak izan ditzaketenak; amaieran,
-**Kategoriarik gabe**, kategoriarik ez duten pistak. Elementu bakoitzak bere
+gero zure kategoriak, azpikategoriak izan ditzaketenak; gero
+**Kategoriarik gabe**, kategoriarik ez duten pistak; eta, pistaren batek
+behar duen bitartean bakarrik, **Berrikusteko markatzaileak** (ikus
+[Fitxategi bat aldatzen denean](#when-a-file-changes)). Elementu bakoitzak bere
 kolorea eta kontagailu bat erakusten ditu: kategoria batek bere pistak eta
 bere azpikategorien pistak zenbatzen ditu. Pista bat gehienez kategoria
 batekoa da.
@@ -206,13 +208,83 @@ baterako denean, eta zenbat pista dauden hautatuta hainbaterako denean.
 | Gehitu hona ▸ | Zerrenda bat: pistak bere amaieran gehitzen dira |
 | Gehitu kartutxo batera ▸ | Kartutxo-panelaren erakutsitako orriko kartutxo bat: pistek aukeratutako kartutxoa eta orriko hurrengo kartutxo hutsak betetzen dituzte, saretaren ordenan. Sartzen ez diren pistak kanpoan geratzen dira eta ohar batek zenbatzen ditu |
 | Eraman kategoriara ▸ | Kategoria bat, edo Kategoriarik gabe |
-| Mota ▸ | Musika, Jingle, Efektua, Iragarkia edo Ahotsa |
+| Mota ▸ | Musika, Jingle, Efektua, Iragarkia, Ahotsa edo Orduko identifikazioa |
 | Editatu etiketak… | Etiketa-editorea (pista bat) |
+| Ireki kanpoko editorean | Abiarazi zure audio-editorea pistaren fitxategiarekin (pista bat; ikus [Fitxategi bat aldatzen denean](#when-a-file-changes)) |
+| Markatu berrikusitzat | Garbitu *markatzaileak berrikusi behar dira* ikurra (hautatutako pistaren batek duenean erakusten da) |
 | Ozentasuna… | Ozentasun-leiho txikia (pista bat) |
 | Berriro aztertu | Pistak berriro aztertzen ditu |
 | Berrezarri markatzaile automatikoak | Eskuzko markatzaileak uzten ditu |
 | Erakutsi fitxategiaren kokapena | Fitxategiaren karpeta irekitzen du (pista bat) |
 | Kendu liburutegitik… | Pistak liburutegitik kentzen ditu, galdetu ondoren (behean) |
+
+## Fitxategi bat aldatzen denean {#when-a-file-changes}
+
+Materiala prestatzeak sarritan fitxategi bat audio-editore batean mozteko edo
+konpontzea esan nahi du. Fauste Player-ek bi zatietan laguntzen du.
+
+**Ireki kanpoko editorean** (liburutegiaren eta zerrenden errenkaden menuan)
+[Ezarpenak → Liburutegia](settings.md#library) atalean aukeratutako programa
+abiarazten du pistaren fitxategiarekin. Pista bakar batean jarduten du.
+Sarrera ilunduta dago, bere argibidean arrazoiarekin, editorerik ezarrita ez
+dagoenean, fitxategia falta edo irakurri ezin denean, edo pista *entzuten* ari
+denean: erreproduzitzaile baten uneko pista (jotzen edo pausan), hasteko zain
+dagoen edo CUEan dagoen pista, itzaltze baten irteerako pista, jotzen ari den
+kartutxo bat edo kartutxo-panelaren CUE kartutxoa, edo liburutegiaren aurrez
+entzutea jotzen edo pausan dagoen bitartean. Editorea ez da Androiden
+eskaintzen, ezta Flatpak eta snap bertsioetan ere, ezin baitute beste
+programarik abiarazi; atal honen gainerakoa han ere aplikatzen da.
+
+Fauste Player-ek ohartzen da ezagutzen duen fitxategi bat aldatu denean (bere
+tamaina edo aldatze-ordua azken analisikoaren desberdinak dira), edonork
+aldatu duela ere, eta berez berriro aztertzen du: iraupena, markatzaileak,
+ozentasuna, uhin-forma, formatua eta etiketak. Hauetan begiratzen du:
+
+- behin hasieran, liburutegiko pista guztietan;
+- zaindutako karpeta batek pista ezagun baten aldaketa jakinarazten duenean;
+- editorean ireki duzun edozein fitxategiren karpetan, irten arte, gordetzea
+  berehala nabaritzeko;
+- pista bat erreproduzitzaile batean, kartutxo batean edo aurrez entzutean
+  kargatzen denean, eta bere markatzaileak editatzeko irekitzen edo
+  uhin-formaren gainean arrastatzen direnean;
+- [Ezarpenak → Analisia](settings.md#analysis) atalean **Bilatu aldatutako
+  fitxategiak** sakatzen duzunean, liburutegi osoa egiaztatzen duena eta ohar
+  batean zenbat fitxategi aldatu diren esaten duena.
+
+Ez dago aldizkako galdeketarik. Zaindutako karpeten kanpoko fitxategi bat,
+Fauste Player martxan zegoen bitartean beste programa batek aldatua eta ordutik
+erabili gabea, hurrengo erabileran edo **Bilatu aldatutako fitxategiak**
+aukeran aurkitzen da.
+
+Aldatutako pista bat ez da inoiz berriro aztertzen entzuten den bitartean:
+gelditu arte itxaroten du, eta bere markatzaileak eta ozentasuna ez dira inoiz
+mugitzen jotzen ari den iturri baten azpian. (**Berriro aztertu pista
+guztiak** zure eskaera esplizitua da eta ez du itxaroten.) Editoreek sarritan
+fitxategia ezabatuz eta berriz sortuz gordetzen dute, beraz desagertzen den
+fitxategi bat bi aldiz begiratzen da falta gisa markatu aurretik. Aztertzen ari
+den bitartean aldatzen den fitxategi bat (editore bat oraindik gordetzen ari
+dena) ez da erabiltzen: berriro aztertzen da handik gutxira, edo bere
+hurrengo aldaketan, erabileran edo bilaketan. Editoreagatik bakarrik jarraitzen
+den karpeta batean fitxategia itzultzen zaion falta den pista bat ez da berez
+berrezartzen.
+
+**Berrikusteko markatzaileak.** Fitxategi baten *audioa* aldatu bada eta
+pistak eskuz ezarritako markatzaileak baditu, pistak ikur anbar bat erakusten
+du bere errenkadan (bere argibideak jaitsitako markatzaileak izendatzen ditu).
+Audioaren amaieratik harago geratzen diren eskuzko markatzaileak jaitsi egiten
+dira eta balio automatikoak hartzen du haien lekua; besteak dauden bezala
+geratzen dira (cue-in edo cue-out jaitsi denean, intro, outro eta MIX
+markatzaileak cue-tarte berriaren barrura mugitzen dira). Ikurrak ez du inoiz
+pista kargatzea, cuean jartzea edo jotzea eragozten. Garbitzen da pistaren
+menuan **Markatu berrikusitzat** aukeratzen duzunean (hainbat errenkada
+hautatuta, guztiak garbitzen ditu) edo pistaren edozein markatzaile aldatzen
+duzunean. Zuhaitzaren **Berrikusteko markatzaileak** elementuak, *Kategoriarik
+gabe*ren ondoren, ikurra duten pistak zerrendatzen ditu halakorik dagoen
+bitartean (ez telefono batean). Etiketen edo azalaren aldaketa hutsak
+etiketak eguneratzen ditu eta ez du ikurrik altxatzen; Fauste Player-en
+etiketak editatu ondoren ere hori gertatzen da. Eguneratze baten ondorengo
+lehen analisiak ikurra altxatzen du bakarrik audioaren amaieratik harago zegoen
+markatzaile bat jaitsi behar izan badu.
 
 ## Aurrez entzutea {#pre-listening}
 
@@ -226,11 +298,21 @@ Barrak hau erakusten du:
 - **Aurrez entzun**, **Pausatu aurrez entzutea** eta **Gelditu aurrez
   entzutea**;
 - pistaren geratzen den denbora handia, bere izenburua, artista eta kategoria;
-- eskuinean neurgailu txiki bat. Aurrez entzute hau bakarrik irakurtzen du,
+- eskuinean, neurgailu bat eta bolumen-fader bat, erreproduzitzaile batean
+  bezala marraztuak. Neurgailuak aurrez entzute hau bakarrik irakurtzen du,
   inoiz ez erreproduzitzaile baten edo kartutxo-panelaren neurgailua; egin
-  klik bere maximoa berrabiarazteko;
-- fitxategi osoaren uhin-forma, bere markatzaileekin, eta azpian
-  `igarotakoa / guztira` lerro bat.
+  klik bere maximoa berrabiarazteko. Faderra zure **entzute-maila** da
+  entzungailuetan edo monitoreetan: aurrez entzuteak zein ozen entzuten den
+  ezartzen du eta ez du inoiz pista bat (bere fitxategia, bere ozentasun-irabazia
+  edo bere markatzaileak), erreproduzitzaile bat edo kartutxo-panela aldatzen.
+  Aurrez entzutea beste pista batera mugitzen denean zuk utzi bezala geratzen
+  da, eta hurrengo hasierarako gordetzen da; bere argibideak eta azpiko
+  irakurketak maila dB-tan erakusten dute. Liburutegiko irteerak aireko irteera
+  batekin kanalak partekatzen baditu, faderrak han aurrez entzutea zein ozen
+  dagoen ere ezartzen du. Telefono baten aurrez entzuteko txartelak ez du
+  faderrik;
+- fitxategi osoaren uhin-forma, erreproduzitzaile batena bezain altua, bere
+  markatzaileekin, eta azpian `igarotakoa / guztira` lerro bat.
 
 Aurrez entzuteak hautatutako pista bere cue-in puntutik hasten du eta
 fitxategiaren amaieraraino jotzen du. Pausatutako aurrebista batean

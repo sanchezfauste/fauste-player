@@ -8,7 +8,7 @@ Leihoak tamaina bakarra du (900 × 640, txikiagoa pantaila txiki batean),
 atala edozein dela ere, eta atalak barruan korritzen du. Atal bakoitzak
 bere etiketak zutabe bakarrean lerrokatzen ditu.
 
-Erreproduzitzaileak, Neurgailuak, Analisia, Ozentasuna eta Laster-teklak atalek
+Erreproduzitzaileak, Neurgailuak, Analisia, Ozentasuna, Automatizazioa eta Laster-teklak atalek
 **Leheneratu balio lehenetsiak** botoi bat dute goiburuan. Berrespena
 eskatzen du, eta ondoren atal hori bakarrik berrezartzen du
 (Erreproduzitzaileak atalak erreproduzitzaile kopurua eta hizkuntza
@@ -91,7 +91,7 @@ badu, balio orokorretatik hasten da. Ordura arte, berriro aukeratzeak
 | Audio-sistema | Azken aukerak, **Irteerarik ez (isilik)**, ez du ezer jotzen: denbora-lerroak denbora errealeko abiaduran doaz soinu-txartelik gabe (txartelik gabeko makina baterako, edo entseatzeko). Linux: PipeWire (hura barne duten konpilazioetan), PulseAudio, JACK edo ALSA. Windows: WASAPI, ASIO (hura barne duten konpilazioetan) edo JACK. macOS: Core Audio edo JACK. Ordenagailu honetan falta diren sistemak, edo irteera-gailurik ez dutenak (abian ez dagoen JACK zerbitzari bat), erabilgarri ez gisa agertzen dira. "Sistemaren lehenetsia" aukerak ordena horretan erabilgarri dagoen lehena erabiltzen du. |
 | Lagintze-maiztasuna | Irteera guztiek erabiltzen duten maiztasuna, gailu batek berea ez badu (Aurreratua); fitxategiak maiztasun horretara bihurtzen dira kalitate handiko birlaginketarekin. Bit perfect gailuak beren maiztasunean hasten dira eta ondoren fitxategiak jarraitzen dituzte. |
 | Bufferraren tamaina | Audio-bloke bakoitzeko frameak, gailu batek berea ez badu; ondoriozko latentzia azpian erakusten da. Soinu-zerbitzari baten edo sistemaren nahasgailu baten bidezko irteerek (PulseAudio, ALSA `default` gailua) gutxienez 50 ms eskatzen dituzte tamaina honek dioena edozein dela ere, edo gailuak hartzen duen bezainbeste, ordenagailu lanpetu bat entzun ez dadin; latentziak orduan hala dio (`shared_buffer_ms` konfigurazio-fitxategian) |
-| Irteerak erreproduzitzaileko | Erreproduzitzaile bakoitzeko, **Main** gailu bat (airerakoa) eta **Cue** gailu bat (aurrez entzuteko), bakoitza kanal-bikote batekin. Hainbat irteera-profil eskaintzen dituen soinu-txartel batek (ALSAk front, surround, direct hardware… zerrendatzen ditu) bakoitza *txartela — profila* gisa erakusten du; berdin irakurtzen jarraituko luketen bi sarrerek beren gailu-identifikatzailea jasotzen dute kortxete artean. Kanal anitzeko interfazeek hainbat erreproduzitzaile eraman ditzakete bikote desberdinetan. Aireko irteera bat (edozein erreproduzitzaileren Main edo kartutxo-panelarena) partekatzen duen Cue irteera bat baimenduta dago: azpiko ohar batek dio bere aurrez entzutea airean entzuten dela eta han zerbait jotzen ari den bitartean lehenik galdetzen duela. |
+| Irteerak erreproduzitzaileko | Erreproduzitzaile bakoitzeko, eta **Musika** zutabeko ([musika-betegarria](automation.md)), **Main** gailu bat (airerakoa) eta **Cue** gailu bat (aurrez entzuteko), bakoitza kanal-bikote batekin. Hainbat irteera-profil eskaintzen dituen soinu-txartel batek (ALSAk front, surround, direct hardware… zerrendatzen ditu) bakoitza *txartela — profila* gisa erakusten du; berdin irakurtzen jarraituko luketen bi sarrerek beren gailu-identifikatzailea jasotzen dute kortxete artean. Kanal anitzeko interfazeek hainbat erreproduzitzaile eraman ditzakete bikote desberdinetan. Aireko irteera bat (edozein erreproduzitzaileren Main edo kartutxo-panelarena) partekatzen duen Cue irteera bat baimenduta dago: azpiko ohar batek dio bere aurrez entzutea airean entzuten dela eta han zerbait jotzen ari den bitartean lehenik galdetzen duela. |
 | Probatu Main / Probatu Cue | Tonu labur bat jotzen du (1 kHz Main irteeran, 440 Hz Cue irteeran, 1,5 s, −18 dBFS) aukeratutako irteeran, airera atera aurretik kableatua egiaztatu ahal izateko |
 | Liburutegia | Liburutegiaren Cue irteera, bere **Probatu Cue** botoiarekin: liburutegiaren leihoko [aurrez entzutea](library.md#pre-listening) (telefono batean, Liburutegi fitxakoa) non entzuten den. Hura gabe, aurrez entzuteko barrako Play ilunduta dago. Androiden, bere aukera hutsak *Sistemaren lehenetsia* dio *Bat ere ez* ordez: aurrez entzuteak eta **Probatu Cue** botoiak irteera lehenetsian jotzen dute (ikus [Android → Liburutegia](android.md#library)). Aireko irteera batean dagoen Liburutegiko irteera batek erreproduzitzaile baten Cue-k bezala jokatzen du: azpiko ohar batek dio bere aurrez entzutea airean entzuten dela eta han zerbait jotzen ari den bitartean lehenik galdetzen duela. Oinarrizko eta Aurreratua ikuspegietan dago, telefono batean ere |
 | Kartutxo-panela | Kartutxo-panelaren Main eta Cue irteerak. Main lehenespenez sistemaren irteera da. Cue irteerarik gabe, ez dago kartutxoak aurrez entzuterik; aireko irteera batean dagoen Cue batek erreproduzitzaileetan bezala jokatzen du. |
@@ -118,21 +118,23 @@ itzultzen denean (ikus [Arazoen konponbidea](troubleshooting.md)).
 
 ## Erreproduzitzaileak {#players}
 
-![Ezarpenak, Erreproduzitzaileak: erreproduzitzaile kopurua, modu lehenetsia, itzaltze-denbora, nahasketa automatikoa, cue-in eta cue-out, pista-amaierako abisua eta hizkuntza](../../images/guide/settings-players.png)
+![Ezarpenak, Erreproduzitzaileak: erreproduzitzaile kopurua, modu lehenetsia, pisten arteko itzaltze-denbora, «Itzaltzearekin gelditu»ren denbora, nahasketa automatikoa, cue-in eta cue-out, pista-amaierako abisua eta hizkuntza](../../images/guide/settings-players.png)
 
 | Ezarpena | Lehenetsia | Esanahia |
 |---|---|---|
 | Hizkuntza | Sistema | Interfazearen hizkuntza |
 | Erreproduzitzaile kopurua | 4 | Pantaila nagusiko zutabeak (ezin da kendu airean dagoen erreproduzitzaile bat). Zenbakia graduatzailea askatzean aplikatzen da; koadroan idatzitako zenbaki bat Enter sakatzean edo koadrotik irtetean aplikatzen da, eta Escape-k bertan behera uzten du |
 | Modu lehenetsia | CONT | Erreproduzitzaileek hasieran duten modua |
-| Itzaltze-denbora | 1000 ms | Play-k airean dagoela eta Itzaltzearekin gelditu aukerak erabiltzen dute. Main irteera bit perfect duen erreproduzitzaile batean, Itzaltzearekin gelditu aukerak bakarrik |
+| Pisten arteko itzaltze-denbora | 1000 ms | Airean dagoen pista zenbat denboran itzaltzen den Play (hurrengoa) sakatzen duzunean jotzen ari den bitartean, eta Aurreko pistarako. Ez zaio aplikatzen Main irteera bit perfect duen erreproduzitzaile bati |
+| «Itzaltzearekin gelditu»ren denbora | 2000 ms | **Itzaltzearekin gelditu** aukerak pista zenbat denboran itzaltzen duen. Erreproduzitzaile guztiei aplikatzen zaie, bit perfect direnei barne |
 | Nahasketa automatikoa MIX puntuan | Aktibo | Pistak gainjartzen ditu modu jarraituan. Ez zaio aplikatzen Main irteera bit perfect duen erreproduzitzaile bati |
 | Erabili cue-in eta cue-out | Aktibo | Desaktibatuta: erreproduzitzaileek pista bakoitza fitxategiaren hasieratik amaierara jotzen dute; markatzaileak gorde egiten dira eta kartutxoek beren markatzaileak erabiltzen jarraitzen dute. Iraupenek eta zerrenden guztizkoek tarte bera jarraitzen dute |
 | Pista-amaierako abisua | 10 s | Atzerako kontaketa gorriz keinuka noiz hasten den |
 
 Erreproduzitzaile baten Main irteera bit perfect denean, **Nahasketa automatikoa
 MIX puntuan** aukeraren azpiko ohar batek dio erreproduzitzaile horiek ez
-dutela inoiz nahasten edo gurutzatzen. Bi ezarpenak editagarri geratzen dira:
+dutela inoiz nahasten edo gurutzatzen, beraz pisten arteko itzaltze-denbora eta
+nahasketa automatikoa ez zaizkie aplikatzen. Bi ezarpenak editagarri geratzen dira:
 beste erreproduzitzaileei aplikatzen jarraitzen diete. Ikus
 [Zer kostatzen den](bit-perfect.md#what-it-costs).
 
@@ -214,6 +216,12 @@ ezer egiteko ez duenean, normalizazioa aktibo egon edo ez; haien markatzaileei
 ez zaie ukitzen. **Berriro aztertu** (zerrendaren menuan) eta **Berriro
 aztertu pista guztiak** aukerek berriro neurtzen dute.
 
+**Bilatu aldatutako fitxategiak** botoiak liburutegiko pista guztiak
+egiaztatzen ditu, Fauste Player martxan zegoen bitartean beste programa batek
+aldatutako fitxategirik ba ote dagoen, eta aldatutakoak berriro aztertzen ditu;
+ohar batek zenbat aurkitu dituen esaten du. Botoia ilunduta dago bilaketa
+abian dagoen bitartean. Ikus [Fitxategi bat aldatzen denean](library.md#when-a-file-changes).
+
 ## Ozentasuna {#loudness}
 
 ![Ezarpenak, Ozentasuna: normalizazioa aktibo, helburuarekin, true peak sabaiarekin, gehieneko igoerarekin eta gehieneko doikuntzarekin, beren balio lehenetsietan](../../images/guide/settings-loudness.png)
@@ -286,6 +294,40 @@ ezabatu zure pistak taldekatzen dituzten kategoriak, kategoria batekin
 karpeta bat zaindu eta bere falta diren pistak kendu, liburutegiaren leihoa
 ireki gabe. Ikus [Liburutegia](library.md#categories) eta
 [Zaindutako karpetak](library.md#watched-folders).
+
+**Kanpoko editorea** da *Ireki kanpoko editorean* aukerak pista baten
+fitxategiarekin abiarazten duen audio-editorea: programaren bide-izena (edo
+*Bat ere ez*), **Aukeratu…** hautatzeko eta **Kendu** kentzeko. macOSen
+aplikazio-sorta bat (`.app`) aukeratu daiteke. Programa abiarazi ezin bada, ohar
+batek hala dio. Errenkada ez da Androiden erakusten, ezta Flatpak eta snap
+bertsioetan ere. Ikus [Fitxategi bat aldatzen
+denean](library.md#when-a-file-changes).
+
+## Automatizazioa {#automation}
+
+[Musika-betegarriaren](automation.md) errotazioak eta arauak (ez Androiden).
+
+![Ezarpenak, Automatizazioa: Music (lehenetsia) eta Hits errotazioak, hautatutako Music bere urrats bakarrarekin musika guztiaren gainean, eta musika-betegarriaren arauak](../../images/guide/settings-automation.png)
+
+- **Errotazioak:** zerrenda, lehenetsia markatuta. **Errotazio berria** aukerak
+  musika guztia jotzen duen bat gehitzen du, **Egin lehenetsi** aukerak
+  hautatutakoa lehenetsi bihurtzen du, **Ezabatu errotazioa** aukerak kentzen
+  du (azkena ezin da ezabatu).
+- **Hautatutako errotazioa:** bere **Izena**, eta gero errenkada bat **urrats**
+  bakoitzeko: bere pistak nondik datozen (kategoria bat bere azpikategoriekin,
+  edo mota bateko *guztiak*), aldi bakoitzean zenbat jotzen dituen
+  (**Gutxienez** 0–99, **Gehienez** 1–99; gutxienez 0 jarrita urratsak txanda
+  batzuk saltatzen ditu), **Gora**, **Behera** eta **Kendu**. **Gehitu
+  urratsa** aukerak bat gehitzen du amaieran. Kategoria ezabatu zaion urrats
+  batek hala dio; betegarriak saltatu egiten du.
+- **Musika-betegarria:** pista bera berriro jo aurretik zenbat denbora (3 ordu,
+  edo bere urratseko beste pisten erdia jo denean, lehenik gertatzen dena; 0k
+  bietako bat desaktibatzen du), artista bera (30 minutu), **aurrerako tartea**
+  (30 minutu musika ilaran) eta bere zerrendan **gordetzen diren jotako
+  pistak** (50).
+
+**Leheneratu balio lehenetsiak** botoiak arauak berrezartzen ditu; errotazioak
+geratzen dira.
 
 ## Laster-teklak {#keyboard-shortcuts}
 

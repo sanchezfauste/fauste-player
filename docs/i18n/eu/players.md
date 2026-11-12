@@ -140,9 +140,9 @@ botoi batean) egindako eskuineko klikaren menuan ere badaude (ikus
 
 | Botoia | Ekintza |
 |---|---|
-| **Play / Hurrengoa** (handia) | Geldituta: hurrengo pista abiarazten du. Airean: hurrengo pistara pasatzen da itzaltzearekin (itzaltze-denbora [Ezarpenak](settings.md) atalean ezartzen da); nahasketa gurutzatu bat Hurrengoak edo segue batek abiarazten duenean, banda berde bat husten da botoian zehar itzaltzearen iraupenean, bere ertza ezkerretik eskuinera mugituz kartutxo batean bezala (Aurrekoak abiarazitako nahasketa gurutzatu bat Aurrekoa botoian husten da). Pausan: jarraitzen du. Airean dagoen pista hurrengo gisa dagoela, Play-k pista hori berriro hasten du ohiko itzaltzearekin. Bit perfect irteera batean berehala aldatzen da, itzaltzerik gabe, eta bere argibideak hala dio (ikus [Zer kostatzen den](bit-perfect.md#what-it-costs)). |
+| **Play / Hurrengoa** (handia) | Geldituta: hurrengo pista abiarazten du. Airean: hurrengo pistara pasatzen da itzaltzearekin (pisten arteko itzaltze-denbora [Ezarpenak](settings.md) atalean ezartzen da); nahasketa gurutzatu bat Hurrengoak edo segue batek abiarazten duenean, banda berde bat husten da botoian zehar itzaltzearen iraupenean, bere ertza ezkerretik eskuinera mugituz kartutxo batean bezala (Aurrekoak abiarazitako nahasketa gurutzatu bat Aurrekoa botoian husten da). Pausan: jarraitzen du. Airean dagoen pista hurrengo gisa dagoela, Play-k pista hori berriro hasten du ohiko itzaltzearekin. Bit perfect irteera batean berehala aldatzen da, itzaltzerik gabe, eta bere argibideak hala dio (ikus [Zer kostatzen den](bit-perfect.md#what-it-costs)). |
 | **Gelditu** | Berehala gelditzen da (klikak saihesteko arrapala labur batekin) |
-| **Itzaltzearekin gelditu** | Bolumena itzaltzen du eta gelditzen da. Itzaltzearekin gelditzea abian dagoen bitartean, banda bat husten da botoian zehar itzaltzearen iraupenean, bere ertza ezkerretik eskuinera mugituz |
+| **Itzaltzearekin gelditu** | Bolumena itzaltzen du itzaltzearekin gelditzeko denboran (lehenespenez 2 s, [Ezarpenak](settings.md) atalean ezartzen da) eta gelditzen da. Itzaltzearekin gelditzea abian dagoen bitartean, banda bat husten da botoian zehar itzaltzearen iraupenean, bere ertza ezkerretik eskuinera mugituz |
 | **Pausatu** | Pausatu edo jarraitu; anbarrez keinuka pausan dagoen bitartean |
 | **Gelditu uneko pistaren ondoren** (play triangelu bat eta lauki bat) | Uneko pista amaitzean gelditzen da, behin. SINGLE moduan uneko pista errepikatzen den bitartean bakarrik dago erabilgarri: errepikapena amaitzen du jotzen ari den itzulia amaitzean. Pista bat jotzen den bakoitzean haren ondoren gelditzeko, edo pista bat errepikatzeko, erabili bere menua zerrendan (ikus [Zerrendak](playlists.md)) |
 | **Aurreko pista** (barra bat eta bi triangelu) | Airean dagoela: erreproduzitzaile honek lehenago jo zuen pistara itzultzen da itzaltzearekin, Hurrengoak egiten duen bezala. Sakatu berriro atzera egiten jarraitzeko. Utzi duzun pista hurrengoa bihurtzen da. Bit perfect irteera batean berehala aldatzen da, itzaltzerik gabe (ikus [Zer kostatzen den](bit-perfect.md#what-it-costs)). |
@@ -288,6 +288,12 @@ Leihoak hau erakusten du:
 
 CUEa pausan dagoen bitartean, bere **Pausatu** botoia (**Jarraitu** gisa
 erakutsia) anbarrez keinuka dago, erreproduzitzailearena bezala.
+
+Arrastatu leihoaren ertz bat edo izkina handiagoa egiteko: uhin-formak
+zabalera eta altuera gehigarria hartzen du, eta horrek markatzaileak jartzen
+laguntzen du. Berriro txikiagoa egin dezakezu, hasierako tamainaraino.
+Hurrengo CUE leihoa, edozein erreproduzitzailetakoa, eman diozun azken
+tamainan irekitzen da, berrabiarazi ondoren ere.
 
 Pausan dagoen CUE batean egindako jauzi batek pausan mantentzen du. Leihoa
 ixteko botoiak, edo **Gelditu CUEa** botoiak, CUEa gelditzen du.

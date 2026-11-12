@@ -94,7 +94,7 @@ ondoren, pistak berriro aztertzen dira automatikoki.
 - **Modu bakarra**, edo **Gelditu uneko pistaren ondoren**: erreproduzitzailea
   cue-out puntuan gelditzen da.
 - **Play sakatzea airean dagoela:** hurrengo pista berehala hasten da, eta
-  unekoa *itzaltze-denboran* (lehenespenez 1 s) itzaltzen da.
+  unekoa *pisten arteko itzaltze-denboran* (lehenespenez 1 s) itzaltzen da.
 - **Main irteera bit perfect duen erreproduzitzaile batek** ez ditu MIX
   puntua eta nahasketa automatikoa kontuan hartzen: pista bakoitza bere
   cue-out punturaino jotzen da, eta gero hurrengoa hasten da; airean dagoela

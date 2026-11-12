@@ -158,7 +158,9 @@ aukeran (adibidez `"192.168.1.0/24"`). OSCk ez du pasahitzik; beraz,
 mantendu estudioko sare fidagarri batean.
 
 Erreproduzitzaileak 1, 2, 3… zenbakitzen dira, pantailan agertzen diren
-bezala. Kartutxoak erakutsitako orrian zenbakitzen dira.
+bezala. **Musika** zutabeak (musika-betegarria, ikus
+[Automatizazioa](automation.md)) ez du zenbakirik eta ez da urruneko kontrolaren
+parte. Kartutxoak erakutsitako orrian zenbakitzen dira.
 
     oscsend localhost 7381 /fauste/player/1/play
     oscsend localhost 7381 /fauste/player/2/volume f 0.8

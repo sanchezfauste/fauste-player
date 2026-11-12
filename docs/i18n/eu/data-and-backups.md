@@ -32,7 +32,7 @@ bestearen ondoan mantentzeko.
 | Fitxategia | Edukia |
 |---|---|
 | `config.json` | Ezarpenak, irteerak, analisiaren atalaseak, doikuntza aurreratua |
-| `fauste.db` | Liburutegia (pistak, haien kategoriak, eskuzko markatzaileak, etiketak, ozentasuna), zerrendak beren jotako markekin, kartutxo-orriak eta saioa: erreproduzitzaile bakoitzeko erakutsitako zerrenda, uneko eta hurrengo pistak, modua, posizioa, bolumena eta zutabeen zabalerak (zutabeka), eta leihoaren diseinua |
+| `fauste.db` | Liburutegia (pistak, haien kategoriak, eskuzko markatzaileak, etiketak, ozentasuna), zerrendak beren jotako markekin, kartutxo-orriak, automatizazioaren errotazioak, programazioa eta emisio-erregistroa (`automation.as_run_keep_days` egunez gordetzen da, lehenespenez 90), eta saioa: erreproduzitzaile bakoitzeko erakutsitako zerrenda, uneko eta hurrengo pistak, modua, posizioa, bolumena eta zutabeen zabalerak (zutabeka), eta leihoaren diseinua |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Datu-basearen kopiak (ikus behean) |
 | `window.ron` | Leiho nagusiaren tamaina, posizioa eta maximizatuta zegoen ala ez (ordenagailuan bakarrik; Waylanden sistemak aukeratzen du posizioa) |
 

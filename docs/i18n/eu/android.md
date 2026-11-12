@@ -309,7 +309,8 @@ dezaketen ala ez telefonoaren araberakoa da.
 
 ## Androiden ez {#not-on-android}
 
-MIDI kontrol-gainazalak, urruneko kontrola, etiketa eta azalen edizioa, eta
-zerrenda eta kartutxo-orri fitxategiak oraingoz mahaigaineko eginbideak dira.
+MIDI kontrol-gainazalak, urruneko kontrola, etiketa eta azalen edizioa,
+zerrenda eta kartutxo-orri fitxategiak, eta automatizazioa (musika-betegarria
+eta Ezarpenak → Automatizazioa) oraingoz mahaigaineko eginbideak dira.
 Tableta batera konektatutako teklatu batek mahaigainean bezala funtzionatzen du
 (ikus [Teklatua](keyboard.md)).

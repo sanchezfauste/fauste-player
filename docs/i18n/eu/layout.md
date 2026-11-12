@@ -10,13 +10,16 @@ hasten ditu.
 
 ## Erakutsi eta ezkutatu panelak {#show-and-hide-panels}
 
-Goiko barraren ezkerreko lauzek, **P1** … **Pn** eta **Kartutxoak**,
-pantailan zein panel dauden erakusten dute: piztutako lauza bat erakusten da.
-Egin klik lauza batean bere panela ezkutatzeko edo erakusteko. Erreproduzitzaile
-askorekin, lauzak alboetara korritzen dira (korritu saguaren gurpila haien
-gainean) eta diseinu-botoia ikusgai geratzen da. Beste panelek uzten duen
-lekua hartzen dute, eta berriro erakutsitako erreproduzitzaile bat bere
-zabalerarekin itzultzen da.
+Goiko barraren ezkerreko lauzek, **Programazioa** eta **Musika**
+([programazioa](automation.md#the-schedule-column) eta
+[musika-betegarria](automation.md#the-music-filler), biak ezkutuan daude
+erakutsi arte), **P1** … **Pn** eta **Kartutxoak**, pantailan zein panel
+dauden erakusten dute: piztutako lauza bat erakusten da. Egin klik lauza
+batean bere panela ezkutatzeko edo erakusteko. Erreproduzitzaile askorekin,
+lauzak alboetara korritzen dira (korritu saguaren gurpila haien gainean) eta
+diseinu-botoia ikusgai geratzen da. Beste panelek uzten duen lekua hartzen
+dute, eta berriro erakutsitako erreproduzitzaile bat bere zabalerarekin
+itzultzen da.
 
 Ezkutatzeak panel bat pantailatik kentzen baino ez du egiten. Ezkutatutako
 erreproduzitzaile batek jotzen jarraitzen du, eta bere zenbaki-teklak, MIDIk,
