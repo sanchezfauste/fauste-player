@@ -238,7 +238,11 @@ rename it before the plans.
   **exactly at the block's start**: the song on air fades out over
   `automation.block_fade_ms`, starting that long before the start. If the
   hand-over is a crossfade, the timing uses the crossfade's real overlap and
-  the song's segue or cue-out point *(maintainer)*.
+  the song's segue or cue-out point *(maintainer)*. "Exactly" is to one
+  conductor tick (`tuning.conductor_tick_ms`, 5 ms by default), not to the
+  sample: the hand-over is between two players, and a few milliseconds are
+  inaudible and below the system clock's own accuracy *(maintainer,
+  2026-11-12: "5 ms es totalmente aceptable")*.
 - **AU25.** **No fragments.** When the time left before a block is short, the
   filler chooses the last songs so that the faded part is small (at most
   `automation.max_fade_cut_secs`) and never starts a song that would play
@@ -412,8 +416,8 @@ later is a mapping, not a redesign.
 - One test per rule at the lowest level that can see it: `fp-model` for the
   pure rules (AU1–AU23, AU27–AU35), with time passed in explicitly; `fp-store`
   for persistence and pruning (AU36, AU38, §10); the engine with the Offline
-  backend for timing (AU24–AU26: the block's first item starts on the exact
-  sample of its start); `egui_kittest` for the columns and the editor.
+  backend for timing (AU24–AU26: the block's first item starts within one
+  conductor tick of its start); `egui_kittest` for the columns and the editor.
 - AU39's long-run test runs in CI in fast simulated time.
 
 ## 13. Left to the builder, and open points

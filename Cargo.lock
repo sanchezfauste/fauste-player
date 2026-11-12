@@ -1884,6 +1884,7 @@ dependencies = [
  "arc-swap",
  "assert_no_alloc",
  "audioadapter-buffers",
+ "chrono",
  "crossbeam-channel",
  "fp-backends",
  "fp-decode",

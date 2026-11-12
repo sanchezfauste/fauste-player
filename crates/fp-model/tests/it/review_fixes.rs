@@ -17,6 +17,7 @@ fn parts(state: &AppState) -> RestoreParts {
         air_times: Default::default(),
         filler: None,
         schedule: Default::default(),
+        automation: None,
         library_view: Default::default(),
         config: state.config.clone(),
         library: state.library.clone(),

@@ -102,6 +102,9 @@ pub enum ModelError {
     /// AU5: a block lasts until the next one's start.
     #[error("another block starts at that time")]
     BlockTimeTaken,
+    /// A schedule item past the end of its block.
+    #[error("that block has no such item")]
+    UnknownItem,
     /// Automation spec §8.1: the music filler's list belongs to the filler;
     /// it is not renamed, deleted or shown on another player, and the
     /// filler shows no other list.

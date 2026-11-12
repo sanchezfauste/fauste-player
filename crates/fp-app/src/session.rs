@@ -66,6 +66,12 @@ impl AppSession {
             &I18n::new(None).tr("schedule-template-default-name"),
         );
         fp_model::schedule::prune_dates(&mut loaded.state, chrono::Local::now().date_naive());
+        // §8.1: the schedule's player, added to the engine with the others
+        // by `Conductor::new`.
+        let _ = fp_model::automation::ensure(
+            &mut loaded.state,
+            &I18n::new(None).tr("schedule-playlist-name"),
+        );
         // AU27: the music filler's player, added to the engine with the
         // others by `Conductor::new`.
         let _ = fp_model::filler::ensure(

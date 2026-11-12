@@ -58,6 +58,7 @@ pub fn roundtrip(state: &AppState) -> AppState {
         air_times: Default::default(),
         filler: None,
         schedule: Default::default(),
+        automation: None,
         library_view: Default::default(),
         config: state.config.clone(),
         library: state.library.clone(),

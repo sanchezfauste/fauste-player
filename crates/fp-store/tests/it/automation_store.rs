@@ -218,3 +218,45 @@ fn a_lost_filler_record_degrades_to_an_ordinary_playlist() {
     assert_ne!(new.playlist, old.playlist);
     assert!(!loaded.state.is_filler_playlist(old.playlist));
 }
+
+#[test]
+fn the_schedule_player_round_trips_stopped() {
+    let dir = tempfile::tempdir().unwrap();
+    let mut s = store(&dir);
+    let mut state = with_filler();
+    fp_model::automation::ensure(&mut state, "Schedule");
+    let saved = state.automation.clone().unwrap();
+    // A row of a block that was playing: rebuilt, not restored.
+    let track = state.library.ids().into_iter().next().unwrap();
+    let entry = state.ids.entry();
+    state
+        .playlists
+        .get_mut(saved.playlist)
+        .unwrap()
+        .entries
+        .push(fp_model::PlaylistEntry::new(entry, track));
+    save_all(&mut s, &state, 0.0);
+    let loaded = store(&dir).load("Main");
+    assert!(loaded.warnings.is_empty(), "{:?}", loaded.warnings);
+    let back = loaded.state.automation.clone().unwrap();
+    assert_eq!(back.player, saved.player);
+    assert_eq!(back.playlist, saved.playlist);
+    assert!(!back.running);
+    assert!(
+        loaded
+            .state
+            .playlists
+            .get(saved.playlist)
+            .unwrap()
+            .entries
+            .is_empty()
+    );
+    let player = loaded
+        .state
+        .players
+        .iter()
+        .find(|p| p.id == saved.player)
+        .unwrap();
+    assert_ne!(player.transport, fp_model::Transport::Playing);
+    assert_eq!(loaded.state.aux_players().count(), 4);
+}

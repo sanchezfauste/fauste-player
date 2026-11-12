@@ -115,6 +115,7 @@ fn rich() -> Snapshot {
         default_rotation: None,
         air_times: Default::default(),
         filler: None,
+        automation: None,
         templates: Vec::new(),
         week_plan: Default::default(),
         date_plans: Vec::new(),

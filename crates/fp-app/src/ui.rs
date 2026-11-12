@@ -41,8 +41,9 @@ mod wave_panel;
 pub mod wave_view;
 pub mod widgets;
 
-/// The name the operator sees for a player: "Music" for the music filler
-/// (automation spec §8.1), `P<n>` among the auxiliary players otherwise.
+/// The name the operator sees for a player: "Music" for the music filler,
+/// "Schedule" for the schedule's player (automation spec §8.1), `P<n>` among
+/// the auxiliary players otherwise.
 pub(crate) fn player_name(
     t: &crate::i18n::I18n,
     state: &fp_model::AppState,
@@ -50,6 +51,9 @@ pub(crate) fn player_name(
 ) -> String {
     if state.is_filler(id) {
         return t.tr("music-column");
+    }
+    if state.automation.as_ref().is_some_and(|a| a.player == id) {
+        return t.tr("schedule-column");
     }
     t.tr_args(
         "player-label",
