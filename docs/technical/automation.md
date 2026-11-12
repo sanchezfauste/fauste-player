@@ -270,7 +270,7 @@ AU40). The schedule plays through its own player and list, made by
   automation. Nothing then plays by itself.
 
 The hand-over is exact to one conductor tick (`tuning.conductor_tick_ms`),
-not to the sample. AU25 (no song fragments before a block) and a start
-exact to the sample come in a later plan. `AutomationSession` (the `kv`
+not to the sample, as the spec's AU24 accepts. AU25 (no song fragments
+before a block) comes in a later plan. `AutomationSession` (the `kv`
 value `automation`) keeps the schedule's player and list ids across a
 restart. Automation always comes back stopped.

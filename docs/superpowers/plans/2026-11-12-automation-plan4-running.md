@@ -40,9 +40,10 @@ AU26, AU27's "or the next block", AU29's hand-over, AU40, AU41).
 - **Timing:** the hand-over is exact to one conductor tick
   (`tuning.conductor_tick_ms`, 5 ms by default), not to the sample. A
   sample-exact start across two players needs a new engine feature (a start
-  at a given instant). That goes to plan 4b, with AU25 (no fragments: fitting
-  the last songs before a block), which needs a length-aware pick. The
-  maintainer will be asked whether tick precision is enough.
+  at a given instant). The maintainer accepted tick precision (2026-11-12),
+  so there will be no sample-exact start. AU25 (no fragments: fitting the
+  last songs before a block) goes to its own plan, because it needs a
+  length-aware pick.
 - **Local time:** the model compares local date-times (`local_now` against
   a block's date and `TimeOfDay`). A block in the spring gap is never
   reached, so it is missed. In the autumn overlap a block plays once, because
