@@ -27,6 +27,7 @@ mod library_rules;
 pub mod library_search;
 pub mod library_view;
 pub mod live;
+pub mod local_time;
 pub mod loudness;
 pub mod midi;
 pub mod on_air;
@@ -40,6 +41,7 @@ pub mod reset_played;
 pub mod restore;
 pub mod rotation;
 pub mod rotation_cursor;
+pub mod schedule;
 pub mod selection;
 pub mod session;
 pub mod shortcuts;
@@ -88,7 +90,8 @@ pub use entry_notice::{EntryNotice, entry_notice};
 pub use error::ModelError;
 pub use external_edit::{ExternalEditBlock, external_edit_block};
 pub use ids::{
-    CartId, CartPageId, CategoryId, EntryId, IdGen, PlayerId, PlaylistId, RotationId, TrackId,
+    BlockId, CartId, CartPageId, CategoryId, EntryId, IdGen, PlayerId, PlaylistId, RotationId,
+    TemplateId, TrackId,
 };
 pub use insertion::after_next;
 pub use layout::{

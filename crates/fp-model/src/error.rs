@@ -85,6 +85,9 @@ pub enum ModelError {
     /// AU4: there is always a rotation to fall back on.
     #[error("the last rotation cannot be deleted")]
     LastRotation,
+    /// AU6: a rotation fills the rest of its block.
+    #[error("a rotation must be the last item of a block")]
+    RotationNotLast,
     /// Automation spec §8.1: the music filler's list belongs to the filler;
     /// it is not renamed, deleted or shown on another player, and the
     /// filler shows no other list.

@@ -58,6 +58,7 @@ mod reuse_tracks;
 mod review_fixes;
 mod rotation_cursor;
 mod rotations;
+mod schedule_types;
 mod selection;
 mod session;
 mod set_values;

@@ -249,6 +249,7 @@ error-rotation-step = Un pas reprodueix d'1 a 99 pistes, i el primer número no 
 error-rotation-name-empty = La rotació necessita un nom.
 error-rotation-empty = La rotació necessita almenys un pas.
 error-last-rotation = No es pot esborrar l'última rotació.
+error-schedule-rotation-last = Una rotació ha de ser l'últim element del bloc.
 error-filler-playlist = Aquesta llista pertany a la columna Música.
 # The cartwall's name; `cartwall-title` is the same word in capitals.
 -cartwall = Cartutxera

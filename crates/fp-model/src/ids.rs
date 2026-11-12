@@ -47,6 +47,15 @@ id_type!(
     RotationId
 );
 
+id_type!(
+    /// Identifies a day template of the schedule (automation spec AU9).
+    TemplateId
+);
+id_type!(
+    /// Identifies a block of the schedule, stable across edits (AU12).
+    BlockId
+);
+
 /// Monotonic id generator shared by every id kind, so ids never collide
 /// even across kinds. It is persisted with the playlists.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -96,6 +105,14 @@ impl IdGen {
 
     pub fn rotation(&mut self) -> RotationId {
         RotationId(self.next_raw())
+    }
+
+    pub fn template(&mut self) -> TemplateId {
+        TemplateId(self.next_raw())
+    }
+
+    pub fn block(&mut self) -> BlockId {
+        BlockId(self.next_raw())
     }
 }
 
