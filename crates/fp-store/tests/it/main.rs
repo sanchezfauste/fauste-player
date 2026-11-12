@@ -3,6 +3,7 @@
 //! per file. Tests that install process-wide state (a panic hook, a global
 //! tracing subscriber) keep their own binary next to this directory.
 
+mod as_run_store;
 mod automation_store;
 mod carts;
 mod categories_store;

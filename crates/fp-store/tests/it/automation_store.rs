@@ -129,7 +129,7 @@ fn a_schema_2_database_migrates_with_no_rotations() {
         db.conn()
             .execute_batch(
                 "DROP TABLE rotations; DROP TABLE air_times; \
-                 DROP TABLE day_templates; DROP TABLE date_plans; \
+                 DROP TABLE day_templates; DROP TABLE date_plans; DROP TABLE as_run; \
                  DELETE FROM kv WHERE key IN ('default_rotation', 'week_plan'); \
                  PRAGMA user_version = 2;",
             )

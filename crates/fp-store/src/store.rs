@@ -329,6 +329,9 @@ fn restore(
         week_plan,
         date_plans,
         automation,
+        as_run: _,
+        as_run_next,
+        as_run_before: _,
     } = snap;
     let (schedule, notes) =
         fp_model::schedule::Schedule::from_parts(templates, week_plan, date_plans);
@@ -373,6 +376,7 @@ fn restore(
         &sessions,
         default_playlist_name,
     );
+    state.as_run.resume_at(as_run_next);
     // The restore ran the same repair for the same players.
     let mut probe = saved_layout;
     warnings.extend(

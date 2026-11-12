@@ -2,11 +2,11 @@ use fp_store::{Db, OpenError, SCHEMA_VERSION};
 use tempfile::tempdir;
 
 #[test]
-fn a_new_database_gets_schema_4_wal_and_foreign_keys() {
+fn a_new_database_gets_schema_5_wal_and_foreign_keys() {
     let dir = tempdir().unwrap();
     let db = Db::open(&dir.path().join("fauste.db")).unwrap();
-    assert_eq!(SCHEMA_VERSION, 4);
-    assert_eq!(db.pragma_i64("user_version"), 4);
+    assert_eq!(SCHEMA_VERSION, 5);
+    assert_eq!(db.pragma_i64("user_version"), 5);
     assert_eq!(db.pragma_text("journal_mode"), "wal");
     assert_eq!(db.pragma_i64("foreign_keys"), 1);
 }
@@ -17,7 +17,7 @@ fn reopening_keeps_the_schema() {
     let path = dir.path().join("fauste.db");
     drop(Db::open(&path).unwrap());
     let db = Db::open(&path).unwrap();
-    assert_eq!(db.pragma_i64("user_version"), 4);
+    assert_eq!(db.pragma_i64("user_version"), 5);
 }
 
 #[test]
