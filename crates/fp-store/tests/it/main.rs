@@ -4,6 +4,7 @@
 //! tracing subscriber) keep their own binary next to this directory.
 
 mod as_run_store;
+mod automation_long_run;
 mod automation_store;
 mod carts;
 mod categories_store;
