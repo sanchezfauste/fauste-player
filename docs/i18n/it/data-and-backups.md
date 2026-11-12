@@ -30,7 +30,7 @@ chiavetta USB, o per tenere affiancate configurazioni separate.
 | File | Contenuto |
 |---|---|
 | `config.json` | Impostazioni, uscite, soglie di analisi, regolazioni avanzate |
-| `fauste.db` | La libreria (brani, le loro categorie, marker manuali, tag, loudness), le playlist con i loro segni di riprodotto, le pagine di cart e la sessione: per ogni lettore la playlist mostrata, i brani attuale e successivo, la modalità, la posizione, il volume e le larghezze delle colonne (per colonna), e il layout della finestra |
+| `fauste.db` | La libreria (brani, le loro categorie, marker manuali, tag, loudness), le playlist con i loro segni di riprodotto, le pagine di cart, le rotazioni dell'automazione, il palinsesto e il registro di trasmissione (conservato `automation.as_run_keep_days` giorni, 90 per impostazione predefinita), e la sessione: per ogni lettore la playlist mostrata, i brani attuale e successivo, la modalità, la posizione, il volume e le larghezze delle colonne (per colonna), e il layout della finestra |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Copie del database (vedi sotto) |
 | `window.ron` | Dimensione e posizione della finestra principale e se era ingrandita (solo computer; su Wayland la posizione la sceglie il sistema) |
 

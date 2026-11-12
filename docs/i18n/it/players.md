@@ -132,9 +132,9 @@ dell'intestazione (non su uno dei suoi pulsanti) (vedi
 
 | Pulsante | Azione |
 |---|---|
-| **Play / Successivo** (grande) | Fermo: avvia il brano successivo. In onda: passa in dissolvenza al brano successivo (il tempo di dissolvenza si imposta in [Impostazioni](settings.md)); mentre sfuma per una dissolvenza incrociata avviata da Successivo o da un segue, una banda verde si svuota attraverso il pulsante per la durata della dissolvenza, con il suo bordo che si sposta da sinistra a destra come in un cart (una dissolvenza incrociata avviata da Precedente si svuota invece sul pulsante Precedente). In pausa: riprende. Con il brano in onda impostato come successivo, Play riavvia quel brano con la consueta dissolvenza. Su un'uscita bit-perfect cambia brano subito, senza dissolvenza, e il suo tooltip lo dice (vedi [Cosa costa](bit-perfect.md#what-it-costs)). |
+| **Play / Successivo** (grande) | Fermo: avvia il brano successivo. In onda: passa in dissolvenza al brano successivo (la durata della dissolvenza incrociata si imposta in [Impostazioni](settings.md)); mentre sfuma per una dissolvenza incrociata avviata da Successivo o da un segue, una banda verde si svuota attraverso il pulsante per la durata della dissolvenza, con il suo bordo che si sposta da sinistra a destra come in un cart (una dissolvenza incrociata avviata da Precedente si svuota invece sul pulsante Precedente). In pausa: riprende. Con il brano in onda impostato come successivo, Play riavvia quel brano con la consueta dissolvenza. Su un'uscita bit-perfect cambia brano subito, senza dissolvenza, e il suo tooltip lo dice (vedi [Cosa costa](bit-perfect.md#what-it-costs)). |
 | **Stop** | Si ferma subito (con una breve rampa anti-clic) |
-| **Stop in dissolvenza** | Dissolve fino al silenzio e si ferma. Mentre uno stop in dissolvenza è in corso, una banda si svuota attraverso il pulsante per la durata della dissolvenza, con il suo bordo che si sposta da sinistra a destra |
+| **Stop in dissolvenza** | Sfuma fino al silenzio nella durata dello Stop in dissolvenza (2 s per impostazione predefinita, si imposta in [Impostazioni](settings.md)) e si ferma. Mentre uno stop in dissolvenza è in corso, una banda si svuota attraverso il pulsante per la durata della dissolvenza, con il suo bordo che si sposta da sinistra a destra |
 | **Pausa** | Mette in pausa o riprende; lampeggia in ambra mentre è in pausa |
 | **Stop alla fine** (un triangolo di play e poi un quadrato) | Si ferma quando finisce il brano attuale, una volta. In modalità SINGLE è disponibile solo mentre il brano attuale si ripete: termina la ripetizione quando finisce il passaggio in corso. Per fermarsi dopo un brano ogni volta che suona, o per ripetere un brano, usa il suo menu nella playlist (vedi [Playlist](playlists.md)) |
 | **Precedente** (una barra e due triangoli) | In onda: torna in dissolvenza al brano che questo lettore ha suonato prima, come fa Successivo. Premi di nuovo per continuare a tornare indietro. Il brano che hai lasciato diventa il successivo. Su un'uscita bit-perfect cambia brano subito, senza dissolvenza (vedi [Cosa costa](bit-perfect.md#what-it-costs)). |
@@ -271,6 +271,12 @@ La finestra mostra:
 
 Mentre il CUE è in pausa, il suo pulsante **Pausa** (mostrato come
 **Riprendi**) lampeggia in ambra, come quello del lettore.
+
+Trascina un bordo o un angolo della finestra per ingrandirla: la forma
+d'onda prende la larghezza e l'altezza in più, il che aiuta a posizionare i
+marker. Puoi anche rimpicciolirla di nuovo, fino alla sua dimensione
+iniziale. La finestra CUE successiva, di qualsiasi lettore, si apre
+all'ultima dimensione che ne hai dato a una, anche dopo un riavvio.
 
 Uno spostamento su un CUE in pausa lo mantiene in pausa. Il pulsante di
 chiusura della finestra, o **Stop**, ferma il CUE.

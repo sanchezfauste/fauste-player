@@ -21,6 +21,9 @@ ai crash senza mandare nulla in onda da soli.
 | [Lettori](players.md) | La colonna del lettore: trasporto, modalità, conto alla rovescia, forma d'onda, CUE |
 | [Playlist](playlists.md) | Schede, la tabella dei brani, trascinamento, il menu contestuale, file M3U/PLS |
 | [Cartwall](cartwall.md) | Cart istantanei: lancio, pagine, loop, cart esclusivi, configurazione |
+| [Libreria](library.md) | La finestra della libreria dei brani: categorie, tipi, ricerca, preascolto, l'editor esterno e i file modificati |
+| [Layout](layout.md) | Mostrare e nascondere i pannelli, larghezze dei lettori, spostare e ridimensionare la cartwall, ingrandire un pannello, il menu del layout |
+| [Automazione](automation.md) | La colonna Palinsesto, il suo editor, il riempitivo musicale e le sue rotazioni |
 | [Marker e mix](markers-and-mixing.md) | Cue-in/cue-out, il punto MIX, intro e outro, analisi automatica |
 | [Impostazioni](settings.md) | Uscite audio, lettori, analisi, playlist, MIDI, controllo remoto |
 | [Normalizzazione del loudness](loudness.md) | Ogni brano e ogni cart allo stesso loudness con un guadagno fisso per brano: il badge del guadagno, escludere e regolare un brano, uscite bit-perfect |
@@ -29,6 +32,7 @@ ai crash senza mandare nulla in onda da soli.
 | [Superfici di controllo MIDI](midi.md) | Pulsanti, fader e luci sui controller MIDI |
 | [Controllo remoto](remote-control.md) | Usare Fauste Player in rete: API HTTP, sicurezza |
 | [Dati e backup](data-and-backups.md) | Dove si trovano i file, salvataggio automatico, recupero dopo un crash, modalità portatile |
+| [Android](android.md) | L'app su telefoni e tablet: installazione, il layout touch, la musica sul dispositivo |
 | [Risoluzione dei problemi](troubleshooting.md) | Nessun suono, dispositivo perso, file segnati come non disponibili, log |
 
 L'interfaccia è disponibile in inglese, spagnolo, catalano, olandese,

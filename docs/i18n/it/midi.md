@@ -25,7 +25,7 @@ sequencer (`/dev/snd/seq`, di solito facendo parte del gruppo `audio`).
 
 ## Associare un controllo {#binding-a-control}
 
-Per ogni lettore c'è una riga per azione: **Play / Successivo**, **Pausa**,
+Per ogni lettore (P1 … Pn; la colonna **Musica** non ha associazioni) c'è una riga per azione: **Play / Successivo**, **Pausa**,
 **Stop**, **Stop in dissolvenza**, **Riavvia**, **Precedente**, **CUE** e
 **Volume**.
 

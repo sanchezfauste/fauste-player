@@ -8,7 +8,7 @@ testo e li invia alle playlist e alla cartwall. È una finestra sul desktop e
 su un tablet; un telefono mostra invece la libreria nella sua scheda
 **Libreria** (vedi [Su un telefono](#on-a-phone)).
 
-![La finestra della libreria: la striscia di preascolto con la forma d'onda del brano selezionato, l'albero delle categorie con Music (e le sue sottocategorie Pop ed Evening) selezionata, e la tabella dei suoi brani con categoria e tipo](../../images/guide/library.png)
+![La finestra della libreria: la striscia di preascolto con la forma d'onda, il meter e il fader di ascolto del brano selezionato, l'albero delle categorie con Music (e le sue sottocategorie Pop ed Evening) selezionata e Marker da verificare in fondo, e la tabella dei suoi brani con categoria e tipo; Coastline porta il segno ambra dei marker da verificare](../../images/guide/library.png)
 
 ## Aprire la finestra {#opening-the-window}
 
@@ -36,8 +36,9 @@ nulla da solo. Il testo nel campo di ricerca non viene salvato.
 ## Categorie {#categories}
 
 L'albero a sinistra raggruppa i brani. In cima, **Tutti i brani**; poi le tue
-categorie, che possono contenere sottocategorie; in fondo, **Senza
-categoria**, i brani che non appartengono ad alcuna categoria. Ogni voce
+categorie, che possono contenere sottocategorie; poi **Senza categoria**, i
+brani che non appartengono ad alcuna categoria; e, solo finché qualche brano
+ne ha bisogno, **Marker da verificare** (vedi [Quando un file cambia](#when-a-file-changes)). Ogni voce
 mostra il suo colore e un conteggio: una categoria conta i propri brani e
 quelli delle sue sottocategorie. Un brano appartiene al massimo a una
 categoria.
@@ -200,13 +201,81 @@ selezionate quando è per più d'una.
 | Aggiungi a ▸ | Una playlist: i brani vengono aggiunti in fondo |
 | Aggiungi a un cart ▸ | Un cart della pagina mostrata della cartwall: i brani riempiono il cart scelto e i cart vuoti successivi della pagina, nell'ordine della griglia. I brani che non entrano vengono lasciati fuori e un avviso li conta |
 | Sposta nella categoria ▸ | Una categoria, o Senza categoria |
-| Tipo ▸ | Musica, Jingle, Effetto, Pubblicità o Voce |
+| Tipo ▸ | Musica, Jingle, Effetto, Pubblicità, Voce o Identificativo orario |
 | Modifica i tag… | L'editor dei tag (un brano) |
+| Apri nell'editor esterno | Avvia il tuo editor audio con il file del brano (un brano; vedi [Quando un file cambia](#when-a-file-changes)) |
+| Segna come verificato | Cancella il segno *marker da verificare* (mostrato quando un brano selezionato lo ha) |
 | Loudness… | Il popup del loudness (un brano) |
 | Rianalizza | Analizza di nuovo i brani |
 | Ripristina i marker automatici | Scarta i marker manuali |
 | Mostra la posizione del file | Apre la cartella del file (un brano) |
 | Rimuovi dalla libreria… | Rimuove i brani dalla libreria, dopo aver chiesto (sotto) |
+
+## Quando un file cambia {#when-a-file-changes}
+
+Preparare il materiale spesso significa tagliare o correggere un file in un
+editor audio. Fauste Player aiuta con entrambe le metà.
+
+**Apri nell'editor esterno** (il menu della riga della libreria e delle righe
+delle playlist) avvia il programma che hai scelto in
+[Impostazioni → Libreria](settings.md#library) con il file del brano. Agisce
+su un solo brano. La voce è attenuata, con il motivo come tooltip, quando non
+è impostato alcun editor, quando il file manca o non è leggibile, o quando il
+brano è *in riproduzione*: il brano attuale di un lettore (in riproduzione o
+in pausa), un brano in attesa di partire o sul CUE, il brano uscente di una
+dissolvenza, un cart in riproduzione o il cart sul CUE della cartwall, o il
+preascolto della libreria mentre suona o è in pausa. L'editor non è offerto su
+Android, né nelle build Flatpak e snap, che non possono avviare altri
+programmi; il resto di questa sezione vale comunque anche lì.
+
+Fauste Player si accorge quando un file che conosce è cambiato (la sua
+dimensione o la data di modifica differiscono dall'ultima analisi), chiunque
+l'abbia cambiato, e lo analizza di nuovo da solo: durata, marker, loudness,
+forma d'onda, formato e tag. Controlla:
+
+- una volta all'avvio, ogni brano della libreria;
+- quando una cartella sorvegliata segnala una modifica a un brano noto;
+- nella cartella di ogni file che hai aperto nell'editor, fino alla chiusura,
+  così un salvataggio viene notato subito;
+- quando un brano viene caricato in un lettore, in un cart o nel preascolto, e
+  quando i suoi marker vengono aperti per la modifica o trascinati sulla forma
+  d'onda;
+- quando premi **Cerca file modificati** in
+  [Impostazioni → Analisi](settings.md#analysis), che controlla l'intera
+  libreria e dice in un avviso quanti file sono cambiati.
+
+Non c'è alcun controllo periodico. Un file fuori dalle cartelle sorvegliate,
+cambiato da un altro programma mentre Fauste Player è in esecuzione e non più
+usato da allora, viene trovato al suo prossimo uso o con **Cerca file
+modificati**.
+
+Un brano cambiato non viene mai analizzato di nuovo mentre suona: aspetta che
+si fermi, e i suoi marker e il suo loudness non si spostano mai sotto una
+sorgente in riproduzione. (**Rianalizza tutti i brani** è una tua richiesta
+esplicita e non aspetta.) Gli editor spesso salvano cancellando e ricreando il
+file, quindi un file che sparisce viene controllato due volte prima di essere
+segnato come mancante. Un file che cambia mentre viene analizzato (un editor
+che lo sta ancora salvando) non viene usato: viene analizzato di nuovo poco
+dopo, o alla sua prossima modifica, uso o controllo. Un brano mancante il cui
+file ricompare in una cartella seguita solo a causa dell'editor non viene
+ripristinato da solo.
+
+**Marker da verificare.** Se l'*audio* di un file è cambiato e il brano ha
+marker che hai impostato a mano, il brano mostra un'icona di avviso ambra
+sulla sua riga (il suo tooltip nomina gli eventuali marker scartati). I
+marker manuali che ora cadono oltre la fine dell'audio vengono scartati e al
+loro posto subentra il valore automatico; gli altri restano come sono (quando
+il cue-in o il cue-out è stato scartato, i marker intro, outro e MIX vengono
+spostati dentro il nuovo intervallo di cue). Il segno non impedisce mai al
+brano di essere caricato, messo in cue o riprodotto. Si cancella quando scegli
+**Segna come verificato** nel menu del brano (su più righe selezionate le
+cancella tutte) o cambi un qualsiasi marker del brano. La voce **Marker da
+verificare** dell'albero, dopo *Senza categoria*, elenca i brani segnati
+finché ce ne sono (non su un telefono). Una modifica ai soli tag o alla sola
+copertina aggiorna i tag e non alza alcun segno, ed è anche quello che succede
+dopo aver modificato i tag in Fauste Player. La prima analisi dopo un
+aggiornamento alza il segno solo se ha dovuto scartare un marker oltre la fine
+dell'audio.
 
 ## Preascolto {#pre-listening}
 
@@ -222,10 +291,19 @@ La barra mostra:
   preascolto**;
 - il grande tempo rimanente del brano, il suo titolo, l'artista e la
   categoria;
-- un piccolo meter a destra. Legge solo questo preascolto, mai il meter di un
-  lettore o della cartwall; fai clic su di esso per riavviarne il massimo;
-- la forma d'onda dell'intero file, con i suoi marker, e una riga
-  `trascorso / totale` sotto di essa.
+- a destra, un meter e un fader del volume disegnati come su un lettore. Il
+  meter legge solo questo preascolto, mai il meter di un lettore o della
+  cartwall; fai clic su di esso per riavviarne il massimo. Il fader è il tuo
+  **livello di ascolto** in cuffia o nei monitor: imposta quanto forte suona il
+  preascolto e non cambia mai un brano (il suo file, il suo guadagno di
+  loudness o i suoi marker), un lettore o la cartwall. Resta come l'hai
+  lasciato quando l'anteprima passa a un altro brano e viene salvato per il
+  prossimo avvio; il suo tooltip e l'indicazione sotto di esso mostrano il
+  livello in dB. Se l'uscita Libreria condivide canali con un'uscita in onda,
+  il fader imposta anche quanto forte è il preascolto lì. La scheda di
+  preascolto di un telefono non ha fader;
+- la forma d'onda dell'intero file, alta quanto quella di un lettore, con i
+  suoi marker, e una riga `trascorso / totale` sotto di essa.
 
 Preascolto fa partire il brano selezionato dal suo cue-in e lo riproduce fino
 alla fine del file. Preascolto su un'anteprima in pausa la riprende, e su una

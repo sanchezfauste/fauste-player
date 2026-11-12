@@ -149,7 +149,9 @@ indirizzi o sottoreti in `remote.osc.allowed_sources` (per esempio
 `"192.168.1.0/24"`). OSC non ha una password, quindi tienilo su una rete di
 studio fidata.
 
-I lettori sono numerati 1, 2, 3… come compaiono sullo schermo. I cart sono
+I lettori sono numerati 1, 2, 3… come compaiono sullo schermo. La colonna **Musica**
+(il riempitivo musicale, vedi [Automazione](automation.md)) non ha un numero
+e non fa parte del controllo remoto. I cart sono
 numerati nella pagina mostrata.
 
     oscsend localhost 7381 /fauste/player/1/play
