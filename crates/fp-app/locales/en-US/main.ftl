@@ -113,6 +113,7 @@ default-playlist-name = Playlist 1
 rotation-default-name = Music
 schedule-template-default-name = Base
 filler-playlist-name = Music filler
+schedule-playlist-name = Schedule
 settings-title = Settings
 settings-close = Close
 settings-back = Back to the sections

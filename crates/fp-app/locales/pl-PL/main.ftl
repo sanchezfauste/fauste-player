@@ -115,6 +115,7 @@ default-playlist-name = Playlista 1
 rotation-default-name = Muzyka
 schedule-template-default-name = Podstawowy
 filler-playlist-name = Wypełniacz muzyczny
+schedule-playlist-name = Ramówka
 settings-title = Ustawienia
 settings-close = Zamknij
 settings-back = Wróć do sekcji

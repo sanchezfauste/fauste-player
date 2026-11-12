@@ -328,6 +328,7 @@ fn restore(
         templates,
         week_plan,
         date_plans,
+        automation,
     } = snap;
     let (schedule, notes) =
         fp_model::schedule::Schedule::from_parts(templates, week_plan, date_plans);
@@ -366,6 +367,7 @@ fn restore(
             rotations: fp_model::Rotations::from_parts(rotations, default_rotation),
             air_times,
             schedule,
+            automation,
             filler,
         },
         &sessions,

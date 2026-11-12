@@ -113,6 +113,7 @@ default-playlist-name = Zerrenda 1
 rotation-default-name = Musika
 schedule-template-default-name = Oinarria
 filler-playlist-name = Musika-betegarria
+schedule-playlist-name = Programazioa
 settings-title = Ezarpenak
 settings-close = Itxi
 settings-back = Itzuli ataletara

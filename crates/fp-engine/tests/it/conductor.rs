@@ -1187,3 +1187,52 @@ fn air_times_ahead_of_the_clock_are_brought_back_at_start() {
     let after = fp_model::WallTime::now();
     assert!(conductor.state().air_times.get(track).unwrap() <= after);
 }
+
+#[test]
+fn the_conductor_ticks_automation() {
+    use chrono::Timelike;
+    use fp_model::local_time::TimeOfDay;
+    use fp_model::schedule::{Block, Item};
+    let mut state = model(1, 2);
+    fp_model::rotation::ensure_default(&mut state, "Music");
+    fp_model::filler::ensure(&mut state, "Music filler");
+    fp_model::automation::ensure(&mut state, "Schedule");
+    fp_model::schedule::ensure_default(&mut state, "Base");
+    let base = state.schedule.templates()[0].id;
+    let track = state.library.ids().into_iter().next().unwrap();
+    let schedule = state.automation.as_ref().unwrap().player;
+    let (mut conductor, handle, _device, now) = offline_conductor(state);
+    conductor.tick(now);
+    assert_ne!(
+        conductor.state().local_now,
+        chrono::NaiveDateTime::default()
+    );
+    // Automation runs with nothing scheduled; then a block that started at
+    // the start of this minute appears: only the tick can start it.
+    assert!(handle.send(Command::StartAutomation));
+    conductor.tick(now);
+    let local = conductor.state().local_now;
+    let start = TimeOfDay::hms(local.hour(), local.minute(), 0).unwrap();
+    assert!(handle.send(Command::AddBlock {
+        template: base,
+        start
+    }));
+    conductor.tick(now);
+    let id = conductor.state().schedule.template(base).unwrap().blocks[0].id;
+    let items = vec![Item::Track {
+        track,
+        time_critical: false,
+    }];
+    assert!(handle.send(Command::UpdateBlock {
+        template: base,
+        block: Block { id, start, items }
+    }));
+    conductor.tick(now);
+    let player = conductor.state().player(schedule).unwrap().clone();
+    assert_eq!(player.transport, Transport::Playing);
+    let entry = player.current.unwrap();
+    assert_eq!(
+        conductor.state().playlists.entry(entry).unwrap().track,
+        track
+    );
+}

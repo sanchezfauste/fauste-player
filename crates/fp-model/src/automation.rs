@@ -660,3 +660,68 @@ pub fn coming_start(state: &AppState) -> Option<NaiveDateTime> {
     let next = a.next?;
     block_start(state, next.date, next.block)
 }
+
+/// What is saved of the schedule's player (`kv` value `automation`): its
+/// ids, so its outputs and place in the layout survive a restart. Its rows
+/// are rebuilt, and running, next and the missed marks are not saved
+/// (AU15, AU16).
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct AutomationSession {
+    pub player: crate::session::PlayerSession,
+    pub playlist: PlaylistId,
+}
+
+impl AppState {
+    /// The schedule's player as saved; `position_of` gives its position.
+    pub fn automation_session(
+        &self,
+        position_of: impl Fn(PlayerId) -> f64,
+    ) -> Option<AutomationSession> {
+        let a = self.automation.as_ref()?;
+        let player = self.players.iter().find(|p| p.id == a.player)?;
+        Some(AutomationSession {
+            player: crate::session::session_of(player, &position_of),
+            playlist: a.playlist,
+        })
+    }
+}
+
+/// The saved schedule's player, stopped, with an empty list, appended to
+/// the players (before the filler's, restored after it). A record whose
+/// list is gone, or whose player id is taken, is dropped: `ensure` then
+/// makes a new one.
+pub(crate) fn restore(state: &mut AppState, saved: Option<AutomationSession>) {
+    let Some(saved) = saved else {
+        return;
+    };
+    if state.players.iter().any(|p| p.id == saved.player.id) {
+        return;
+    }
+    let Some(list) = state.playlists.get_mut(saved.playlist) else {
+        return;
+    };
+    list.entries.clear();
+    let mut player = crate::session::restore_player(state, &saved.player);
+    player.playlist = saved.playlist;
+    player.mode = PlayMode::Continuous;
+    player.current = None;
+    player.next = None;
+    player.pending_start = None;
+    state.ids.observe(player.id.0);
+    let id = player.id;
+    state.players.push(player);
+    state.automation = Some(AutomationState {
+        player: id,
+        playlist: saved.playlist,
+        running: false,
+        next: None,
+        next_by_hand: false,
+        on_air: None,
+        rows: HashMap::new(),
+        started: BTreeSet::new(),
+        missed: BTreeSet::new(),
+        handing_over: false,
+        seen: None,
+        row_since: None,
+    });
+}

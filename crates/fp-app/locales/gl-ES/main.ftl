@@ -113,6 +113,7 @@ default-playlist-name = Lista 1
 rotation-default-name = Música
 schedule-template-default-name = Base
 filler-playlist-name = Musicalizador
+schedule-playlist-name = Grella
 settings-title = Configuración
 settings-close = Pechar
 settings-back = Volver ás seccións

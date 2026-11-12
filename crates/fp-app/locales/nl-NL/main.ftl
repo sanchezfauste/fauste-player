@@ -113,6 +113,7 @@ default-playlist-name = Playlist 1
 rotation-default-name = Muziek
 schedule-template-default-name = Basis
 filler-playlist-name = Muziekvuller
+schedule-playlist-name = Programmering
 settings-title = Instellingen
 settings-close = Sluiten
 settings-back = Terug naar de onderdelen

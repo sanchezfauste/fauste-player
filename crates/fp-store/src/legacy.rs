@@ -134,6 +134,7 @@ pub fn fuzz_documents(bytes: &[u8]) {
         RestoreParts {
             rotations: Default::default(),
             schedule: Default::default(),
+            automation: None,
             air_times: Default::default(),
             filler: None,
             config,

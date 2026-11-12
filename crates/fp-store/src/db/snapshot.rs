@@ -29,6 +29,7 @@ const KV_LIBRARY_VIEW: &str = "library_view";
 const KV_DEFAULT_ROTATION: &str = "default_rotation";
 const KV_FILLER: &str = "filler";
 const KV_WEEK_PLAN: &str = "week_plan";
+const KV_AUTOMATION: &str = "automation";
 
 /// Everything the database holds, as plain model values.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -56,6 +57,9 @@ pub struct Snapshot {
     pub week_plan: WeekPlan,
     /// The date plans, in date order (schema 4).
     pub date_plans: Vec<DatePlan>,
+    /// The schedule's player (`kv` value `automation`); `None` before it
+    /// exists.
+    pub automation: Option<fp_model::automation::AutomationSession>,
 }
 
 impl Snapshot {
@@ -79,6 +83,7 @@ impl Snapshot {
             templates: state.schedule.templates().to_vec(),
             week_plan: *state.schedule.week(),
             date_plans: state.schedule.date_plans().cloned().collect(),
+            automation: state.automation_session(&position_of),
         }
     }
 }
@@ -150,6 +155,7 @@ pub fn read_checked(db: &Db) -> Read {
         templates: read_templates(conn, &mut warnings),
         week_plan: read_kv(conn, KV_WEEK_PLAN, "week plan", &mut warnings),
         date_plans: read_date_plans(conn, &mut warnings),
+        automation: read_kv(conn, KV_AUTOMATION, "schedule player", &mut warnings),
     };
     let mut snapshot = snapshot;
     snapshot.air_times = read_air_times(conn, &snapshot.library, &mut warnings);
@@ -855,6 +861,7 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
         upsert_doc(&tx, "day_templates", template.id.0, index, template)?;
     }
     write_kv(&tx, KV_WEEK_PLAN, &snap.week_plan)?;
+    write_kv(&tx, KV_AUTOMATION, &snap.automation)?;
     for (index, plan) in snap.date_plans.iter().enumerate() {
         upsert_doc(&tx, "date_plans", date_key(plan.date), index, plan)?;
     }
@@ -999,6 +1006,9 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
     })?;
     if old.week_plan != new.week_plan {
         write_kv(&tx, KV_WEEK_PLAN, &new.week_plan)?;
+    }
+    if old.automation != new.automation {
+        write_kv(&tx, KV_AUTOMATION, &new.automation)?;
     }
     sync_docs(&tx, "date_plans", &old.date_plans, &new.date_plans, |p| {
         date_key(p.date)

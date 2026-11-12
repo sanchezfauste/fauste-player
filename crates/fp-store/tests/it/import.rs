@@ -50,6 +50,7 @@ fn state_of_fixtures() -> AppState {
             air_times: Default::default(),
             filler: None,
             schedule: Default::default(),
+            automation: None,
             library_view: Default::default(),
             config: Config::default(),
             library: lists.library,

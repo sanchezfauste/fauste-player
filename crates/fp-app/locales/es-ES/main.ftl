@@ -113,6 +113,7 @@ default-playlist-name = Playlist 1
 rotation-default-name = Música
 schedule-template-default-name = Base
 filler-playlist-name = Musicalizador
+schedule-playlist-name = Parrilla
 settings-title = Configuración
 settings-close = Cerrar
 settings-back = Volver a las secciones

@@ -175,3 +175,52 @@ fn nothing_plays_by_itself() {
         )));
     }
 }
+
+#[test]
+fn after_a_restart_automation_is_stopped_and_silent() {
+    let mut r = two_blocks();
+    r.at_hms(9, 59, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(10, 0, 0);
+    assert!(r.playing(r.schedule_player()).is_some());
+    let s = &r.s;
+    let parts = fp_model::RestoreParts {
+        rotations: s.rotations.clone(),
+        air_times: Default::default(),
+        filler: s.filler_session(|_| 10.0),
+        automation: s.automation_session(|_| 10.0),
+        schedule: s.schedule.clone(),
+        library_view: Default::default(),
+        config: s.config.clone(),
+        library: s.library.clone(),
+        categories: s.categories.clone(),
+        playlists: s.playlists.clone(),
+        cart_pages: s.cartwall.pages.clone(),
+        cartwall_session: s.cartwall.session(),
+        layout: s.layout.clone(),
+        ids: s.ids.clone(),
+    };
+    let (mut back, actions) = fp_model::AppState::restore(parts, &s.sessions(|_| 10.0), "Main");
+    assert!(
+        !actions
+            .iter()
+            .any(|a| matches!(a, EngineAction::StartCurrent { .. }))
+    );
+    let a = back.automation.clone().unwrap();
+    assert_eq!(a.player, r.schedule_player());
+    assert!(!a.running);
+    assert!(fp_model::automation::ensure(&mut back, "Schedule").is_empty());
+    let list = back.playlists.get(a.playlist).unwrap();
+    assert!(list.entries.is_empty());
+    let player = back.players.iter().find(|p| p.id == a.player).unwrap();
+    assert_eq!(player.transport, fp_model::Transport::Stopped);
+    // The schedule's player comes before the filler's, which is last.
+    assert_eq!(back.players.last().unwrap().id, r.filler_player());
+    back.local_now = today().and_hms_opt(11, 0, 0).unwrap();
+    let (actions, _) = fp_model::automation::tick(&mut back);
+    assert!(
+        !actions
+            .iter()
+            .any(|a| matches!(a, EngineAction::StartCurrent { .. }))
+    );
+}

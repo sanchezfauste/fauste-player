@@ -116,6 +116,9 @@ pub struct RestoreParts {
     pub schedule: crate::schedule::Schedule,
     /// The music filler as saved (AU27); restored last, not playing.
     pub filler: Option<crate::filler::FillerSession>,
+    /// The schedule's player as saved (automation spec §8.1); restored
+    /// stopped, with an empty list, before the filler.
+    pub automation: Option<crate::automation::AutomationSession>,
 }
 
 impl AppState {
@@ -147,6 +150,7 @@ impl AppState {
             mut air_times,
             schedule,
             filler,
+            automation,
         } = parts;
         ids.observe(library.max_raw_id());
         ids.observe(schedule.max_raw_id());
@@ -213,6 +217,7 @@ impl AppState {
             };
             state.players.push(player);
         }
+        crate::automation::restore(&mut state, automation);
         restore_filler(&mut state, filler);
         // RL19: the saved layout, repaired for the players this start has
         // (`fp-store` reports the repairs).
@@ -336,7 +341,7 @@ fn new_player(state: &mut AppState) -> PlayerState {
     PlayerState::new(id, first_playlist(state), state.config.players.default_mode)
 }
 
-fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
+pub(crate) fn restore_player(state: &mut AppState, s: &PlayerSession) -> PlayerState {
     let id = if state.players.iter().any(|p| p.id == s.id) {
         state.ids.player()
     } else {

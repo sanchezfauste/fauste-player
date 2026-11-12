@@ -113,6 +113,7 @@ default-playlist-name = Llista 1
 rotation-default-name = Música
 schedule-template-default-name = Base
 filler-playlist-name = Musicalitzador
+schedule-playlist-name = Graella
 settings-title = Configuració
 settings-close = Tancar
 settings-back = Tornar a les seccions

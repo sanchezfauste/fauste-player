@@ -402,6 +402,7 @@ impl Conductor {
         // The model never reads the clock: it is told the time here.
         let before = self.state.wall_now;
         self.state.wall_now = WallTime::now();
+        self.state.local_now = chrono::Local::now().naive_local();
         if self.state.wall_now < before {
             settle_air_times(&mut self.state);
         }
@@ -426,6 +427,12 @@ impl Conductor {
                     refused = true;
                 }
             }
+        }
+        // Automation (spec AU15–AU24): the schedule's rules at this time.
+        let (actions, moved) = fp_model::automation::tick(&mut self.state);
+        changed |= moved;
+        for action in actions {
+            self.execute(action, now);
         }
         // One request per tick keeps the tick short; the rest wait their turn.
         if let Ok(request) = self.requests.try_recv() {

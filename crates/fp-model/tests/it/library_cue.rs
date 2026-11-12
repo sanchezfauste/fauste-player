@@ -464,6 +464,7 @@ fn rule10_a_restored_state_has_the_library_cue_stopped() {
         air_times: Default::default(),
         filler: None,
         schedule: Default::default(),
+        automation: None,
         library_view: LibraryView {
             open: true,
             ..LibraryView::default()

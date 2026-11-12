@@ -404,6 +404,7 @@ fn read_documents(paths: &AppPaths, limits: &Limits, warnings: &mut Vec<String>)
             templates: Vec::new(),
             week_plan: Default::default(),
             date_plans: Vec::new(),
+            automation: None,
         },
         any_read,
         unread,
