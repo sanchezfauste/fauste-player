@@ -172,6 +172,8 @@ pub struct Conductor {
     underrun_watches: HashMap<PlayerId, Watch>,
     /// Called when a new model is published (phone layout spec PL32).
     waker: WakerSlot,
+    /// The filler's fallback picks already logged (automation spec AU25).
+    unfitted_logged: u64,
 }
 
 /// What the conductor calls when it publishes a new model: the interface's
@@ -318,6 +320,19 @@ fn settle_air_times(state: &mut AppState) {
 }
 
 impl Conductor {
+    /// AU25: a line when the filler had to take a song that does not fit
+    /// before a block (the one that cuts least).
+    fn log_unfitted(&mut self) {
+        let unfitted = self.state.filler.as_ref().map_or(0, |f| f.unfitted);
+        if unfitted > self.unfitted_logged {
+            tracing::info!(
+                picks = unfitted - self.unfitted_logged,
+                "filler: no song fits before the block; the one that cuts least plays"
+            );
+        }
+        self.unfitted_logged = unfitted;
+    }
+
     /// Takes over `state` (typically restored from disk) and runs the
     /// `initial` actions that came with it (e.g. `LoadPaused`).
     pub fn new(
@@ -362,6 +377,7 @@ impl Conductor {
             bus_watches: HashMap::new(),
             underrun_watches: HashMap::new(),
             waker: waker.clone(),
+            unfitted_logged: 0,
         };
         let handle = ConductorHandle {
             commands: tx,
@@ -434,6 +450,7 @@ impl Conductor {
         for action in actions {
             self.execute(action, now);
         }
+        self.log_unfitted();
         // One request per tick keeps the tick short; the rest wait their turn.
         if let Ok(request) = self.requests.try_recv() {
             match request {

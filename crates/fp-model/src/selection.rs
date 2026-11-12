@@ -127,7 +127,10 @@ pub fn pick(
     planned: Planned<'_>,
     rng: &mut SplitMix64,
 ) -> Option<Picked> {
-    let ctx = Context::new(state, source, at, planned);
+    pick_in(&Context::new(state, source, at, planned), rng)
+}
+
+fn pick_in(ctx: &Context<'_>, rng: &mut SplitMix64) -> Option<Picked> {
     let mut both = Vec::with_capacity(PICK_SPREAD);
     let mut track_only = Vec::with_capacity(PICK_SPREAD);
     for (_, track) in &ctx.ordered {
@@ -164,6 +167,18 @@ pub fn pick(
     })
 }
 
+/// Whether a track of `track`'s timing fills `fit`'s gap without a
+/// fragment: it ends the gap within the cut, or leaves at least the
+/// minimum after it (AU25). A track of unknown length is not judged.
+pub(crate) fn fits(state: &AppState, track: TrackId, fit: &Fit) -> bool {
+    let Some((length, lead)) = timing(state, track) else {
+        return true;
+    };
+    let gap = fit.gap_secs;
+    let ends = length >= gap && length - gap <= fit.max_cut_secs && gap >= fit.min_play_secs;
+    ends || (lead < gap && gap - lead >= fit.min_play_secs)
+}
+
 /// `pick`, preferring with a `fit` the tracks that fill the gap before a
 /// block without a fragment (AU25), a greedy fit of known lengths: a
 /// track that ends the gap within the cut, then one that leaves room for
@@ -189,6 +204,11 @@ pub fn pick_fitted(
     let mut lengths: Vec<f64> = timings.iter().flatten().map(|(l, _)| *l).collect();
     lengths.sort_by(f64::total_cmp);
     let longest = lengths.last().copied().unwrap_or(0.0);
+    // Far from the block every known track leaves room enough: the
+    // choice is the ordinary one (a track of unknown length may play).
+    if fit.gap_secs >= 2.0 * longest + fit.min_play_secs {
+        return pick_in(&ctx, rng);
+    }
     let closable = |rest: f64| {
         let i = lengths.partition_point(|l| *l < rest);
         rest >= longest + fit.min_play_secs
