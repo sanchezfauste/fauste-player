@@ -276,6 +276,19 @@ not to the sample, as the spec's AU24 accepts. `AutomationSession` (the `kv`
 value `automation`) keeps the schedule's player and list ids across a
 restart. Automation always comes back stopped.
 
+## The Schedule column's rows (`schedule_view`)
+
+`automation::schedule_view(state)` lists what the Schedule column draws
+(§8.1): yesterday's last block, today's blocks and tomorrow's first, in
+time order, each a `ScheduleRow::Block` (date, start, `BlockOrigin`,
+status) followed by its `ScheduleRow::Item`s (`ItemRef`, the item, a
+track's length when known, time-critical, status). A `RowStatus` is
+`OnAir` for the item of the schedule player's current row, `Missed` when
+in `missed`, `Next` when it is next, `Aired` for the items before the one
+on air and for a started block no longer on air, else `Coming`. A block is
+`OnAir`, `Next` (next is in it), `Missed` (all its items), `Aired`
+(started) or `Coming`.
+
 ## Fitting the last songs (AU25)
 
 Before a block, the filler chooses its last songs by length so that the

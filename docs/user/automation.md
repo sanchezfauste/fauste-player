@@ -1,10 +1,38 @@
 # Automation
 
 Automation keeps the station on air when nobody is in the studio. This
-version has its first part, the **music filler**: a player that chooses
-music by itself, from rules you set, and never stops for lack of a list.
+version has the **music filler**, a player that chooses music by itself,
+from rules you set, and never stops for lack of a list, and the
+**Schedule** column, which runs the day's timed blocks. The schedule's
+editor, where you make those blocks, comes in a later version.
 The players you already use (P1 … Pn) are untouched: they stay yours for
 shows you prepare and play live.
+
+## The Schedule column
+
+The **Schedule** column plays the day's **blocks**: groups of items with a
+start time (an hourly ID, spots, a programme). Show it from the
+**Schedule** tile on the top bar, as you show a player.
+
+Its list is the schedule, grouped by block: each block's start time, then
+its items. It shows today, the last block of yesterday and the first of
+tomorrow. A block changed for one day says so. The item on air and the
+next one are marked as on a player; items that already aired are dimmed,
+and an item that did not air (**missed**) is struck through. A clock
+marks a **time-critical** item, which plays only at its time.
+
+Above the list:
+
+- **Start** runs the schedule: each block plays at its time, and the
+  music filler plays between blocks. Nothing runs by itself: after every
+  start of the application, automation is stopped until you press Start.
+- **Stop after current** lets what is on air end, and then nothing more
+  plays by itself.
+- **Running** or **Stopped** says which.
+
+To change what plays next, double-click an item, or right-click it and
+choose **Play next**; it follows the song on air. **Back to the clock**,
+in the same menu, lets the schedule choose by the time again.
 
 ## The music filler
 
