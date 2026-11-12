@@ -115,8 +115,8 @@ impl AppState {
             .ok_or(ModelError::UnknownPlayer(id))
     }
 
-    /// The players the operator numbers P1…Pn: every player but the music
-    /// filler.
+    /// The players the operator numbers P1…Pn: every player but the
+    /// automation players (the schedule's and the music filler's).
     pub fn aux_players(&self) -> impl Iterator<Item = &PlayerState> {
         self.players
             .iter()

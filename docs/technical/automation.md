@@ -106,7 +106,7 @@ The filler (AU27–AU29) is an ordinary `PlayerState`, kept **last** in
 `AppState::players`, with a playlist of its own; `AppState::filler`
 (`FillerState`) names both. Fades, segues, routes, preloading and the engine
 are the players' own. `AppState::aux_players()` is every player but the
-filler: the player count, the numbered shortcuts and MIDI controls, the
+automation players (the filler and the schedule's): the player count, the numbered shortcuts and MIDI controls, the
 saved player sessions, the remote API and the phone count and number only
 those. Rules about sound (on air, playout, pre-listen) see the filler too.
 
