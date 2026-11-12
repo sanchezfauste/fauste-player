@@ -276,12 +276,14 @@ changes](library.md#when-a-file-changes).
 
 The [music filler's](automation.md) rotations and rules (not on Android).
 
+![Settings, Automation: the default rotation Music with its one step over all music, and the music filler's rules](../images/guide/settings-automation.png)
+
 - **Rotations:** the list, the default marked. **New rotation** adds one
   that plays all music, **Make default** makes the selected one the
   default, **Delete rotation** removes it (the last one cannot be deleted).
 - **The selected rotation:** its **Name**, then one row per **step**: where
   its tracks come from (a category with its subcategories, or *All* of a
-  kind), how many it plays each time (**at least** and **at most**, 1–99),
+  kind), how many it plays each time (**At least** and **At most**, 1–99),
   **Up**, **Down** and **Remove**. **Add step** adds one at the end. A step
   whose category was deleted says so; the filler skips it.
 - **Music filler:** how long before the same track may play again (3 hours,
