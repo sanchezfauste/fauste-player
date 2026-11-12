@@ -8,6 +8,7 @@ mod air_times;
 mod analysis;
 mod audio_change;
 mod automation_config;
+mod automation_next;
 mod automation_player;
 mod availability;
 mod bit_perfect_rules;

@@ -240,6 +240,12 @@ pub enum Command {
         weekday: chrono::Weekday,
         template: crate::ids::TemplateId,
     },
+    /// Automation spec AU16: the schedule's next item, chosen by hand (any
+    /// item of yesterday, today or tomorrow); it stays until Start or
+    /// another choice.
+    SetScheduleNext(crate::automation::ItemRef),
+    /// AU16: next follows the clock again.
+    ClearScheduleNext,
     /// AU10: the template a date uses instead of its weekday's (`None`:
     /// its weekday's).
     SetDateTemplate {

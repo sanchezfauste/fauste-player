@@ -325,6 +325,10 @@ pub struct AutomationConfig {
     /// Date overrides of the schedule older than this many days are
     /// deleted (1 ..= 3 650, AU38).
     pub overrides_keep_days: u32,
+    /// A block that started less than this many seconds ago is still next
+    /// by the clock, and a time-critical item may start this late
+    /// (0 ..= 1 800, AU16, AU22).
+    pub late_tolerance_secs: u32,
 }
 
 impl Default for AutomationConfig {
@@ -336,6 +340,7 @@ impl Default for AutomationConfig {
             filler_lookahead_mins: 30,
             filler_played_kept: 50,
             overrides_keep_days: 30,
+            late_tolerance_secs: 120,
         }
     }
 }
@@ -1650,6 +1655,13 @@ impl Config {
             1,
             3_650,
             "automation.overrides_keep_days",
+            &mut w,
+        );
+        clamp_to(
+            &mut a.late_tolerance_secs,
+            0,
+            1_800,
+            "automation.late_tolerance_secs",
             &mut w,
         );
         if self

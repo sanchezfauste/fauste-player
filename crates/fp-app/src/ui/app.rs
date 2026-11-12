@@ -2239,6 +2239,7 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError, categories: &Categorie
         | ModelError::UnknownRotation(_)
         | ModelError::UnknownTemplate(_)
         | ModelError::UnknownBlock(_)
+        | ModelError::UnknownItem
         | ModelError::UnknownTrack(_) => i18n.tr("error-not-found"),
         ModelError::FolderAlreadyWatched(other) => match categories.get(*other) {
             Some(category) => i18n.tr_args(

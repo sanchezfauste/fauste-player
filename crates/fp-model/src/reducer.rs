@@ -375,6 +375,8 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::SetWeekTemplate { weekday, template } => {
             crate::schedule::set_week_template(state, weekday, template)?
         }
+        Command::SetScheduleNext(item) => crate::automation::set_next(state, item)?,
+        Command::ClearScheduleNext => crate::automation::clear_next(state)?,
         Command::SetDateTemplate { date, template } => {
             crate::schedule::set_date_template(state, date, template)?
         }
@@ -611,6 +613,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
     }
     fill_empty_next(state);
     crate::filler::settle(state, &mut out);
+    crate::automation::settle_next(state);
     reconcile(state, &mut out);
     crate::live::dispatch_due(state, &mut out);
     Ok(out)
@@ -770,6 +773,7 @@ fn on_engine_event(state: &mut AppState, event: EngineEvent) -> Vec<EngineAction
     }
     fill_empty_next(state);
     crate::filler::settle(state, &mut out);
+    crate::automation::settle_next(state);
     reconcile(state, &mut out);
     crate::live::dispatch_due(state, &mut out);
     out
