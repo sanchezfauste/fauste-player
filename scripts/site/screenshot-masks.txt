@@ -45,3 +45,17 @@ guide/cartwall.png 486,26,232,38
 guide/cue-window.png 14,92,40,54 # playhead, the first seconds of the waveform
 guide/cue-window.png 12,158,56,18 # elapsed
 guide/cue-window.png 340,158,56,18 # remaining
+#
+# automation-columns.png (Schedule and Music, the crop 1268x880+8+42 of
+# shoot_automation): which blocks show depends on the time of the run, and
+# the music filler chooses its songs, so the lists and the Music player are
+# masked; the column bars (Start, Running, Edit schedule, the rotation) stay.
+automation-columns.png 0,298,628,557 # the schedule around the time of the run
+automation-columns.png 638,35,630,215 # Music: the song, cover, times, meters, waveform
+automation-columns.png 638,298,630,557 # Music: the filler's list
+automation-columns.png 1100,857,168,22 # Music: remaining total
+#
+# schedule-days.png: the calendar shows the month of the run, with today
+# chosen, and the date above the blocks.
+schedule-days.png 0,75,310,215 # the calendar
+schedule-days.png 310,78,200,24 # the chosen date

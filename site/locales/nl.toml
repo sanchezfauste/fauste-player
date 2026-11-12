@@ -9,7 +9,7 @@ english-link = "Lees het origineel in het Engels"
 
 [source-hash]
 common = "d4080e3e671d2848255cc4caff571e1565669fb8973eb65bfe44b4d6319765dd"
-index = "e382affae2db1eed7da53ce355f588eeae0a137bf05925037c84f461c312ae55"
+index = "476e72a5e2f6d7b9e5b56dda8f319095c00224195a366f4fa169fbe56ce836ea"
 privacy = "30dc8257ee6551a19f08944e2ca64be2ca5584553fafaa01ee67955d9adac83c"
 
 [common]
@@ -39,6 +39,8 @@ cue-title = "CUE-voorbeluisteren"
 cue = "Beluister elk nummer op een apart apparaat of kanaalpaar voordat het in de uitzending gaat, en laad het als volgende."
 cartwall-title = "Cartwall"
 cartwall = "Pagina's met directe carts voor jingles, effecten en spots, met loops, exclusieve carts en hun eigen Main- en Cue-uitgangen."
+automation-title = "Automatisering"
+automation = "Een muziekvuller die zichzelf vult uit rotaties van de categorieën in je bibliotheek, en een dagelijkse programmering met getimede blokken voor stationsjingles, spots en programma's, gestart en gestopt door de operator."
 bit-perfect-title = "Bit-perfect en DSD"
 bit-perfect = "Exclusieve toegang volgt de samplefrequentie van elk bestand; DSD-nummers bereiken de converter ongewijzigd als DoP of native DSD."
 control-title = "MIDI- en afstandsbediening"
