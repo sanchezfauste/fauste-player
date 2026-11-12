@@ -359,3 +359,30 @@ known lengths, a classic method.
   the operator's rows are never touched, so a next loaded before
   automation started may still be cut.
 
+## The as-run log (`as_run.rs`)
+
+`AppState::as_run` (an `AsRunLog`) records what aired and what was missed
+(AU36). `reducer::settle_all` ends with `as_run::record`, which compares
+what the two automation players have on air (while playing) and the
+`missed` set with what it saw last:
+
+- a new row on air on the schedule's player that maps to an `ItemRef`
+  is an `Aired` entry from the `Schedule`, with the block's start and the
+  local time it started;
+- a new row on air on the filler's player is an `Aired` entry from the
+  `Filler`, with no scheduled time;
+- each item newly in `missed` is a `Missed` entry, with no start.
+
+A missed item played by hand later has both entries. Each entry takes the
+next sequence number, which only grows (`resume_at` never goes back), so
+the store appends exactly what it has not saved, whatever the clock did.
+The model keeps only yesterday's and today's entries; the store keeps
+`automation.as_run_keep_days` (AU38; see [persistence](persistence.md)).
+Viewing the log beyond the Schedule column and exporting it are non-goals.
+
+AU39's long-run test (`fp-store/tests/it/automation_long_run.rs`) runs
+thirty simulated days with a week plan, a date override, the filler and a
+save every hour, through the model and the store with a small fake engine,
+and checks that the lists, marks, in-memory log and `as_run` table stay
+bounded and that every block started on time.
+
