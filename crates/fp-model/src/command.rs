@@ -205,6 +205,69 @@ pub enum Command {
     SetFillerRotation(Option<crate::ids::RotationId>),
     /// AU4: the rotation the filler falls back on.
     SetDefaultRotation(crate::ids::RotationId),
+    /// Automation spec AU9: a new day template with no blocks, after the
+    /// others.
+    CreateTemplate {
+        name: String,
+    },
+    /// A copy of a template under `name`; its blocks get fresh ids.
+    DuplicateTemplate {
+        template: crate::ids::TemplateId,
+        name: String,
+    },
+    RenameTemplate {
+        template: crate::ids::TemplateId,
+        name: String,
+    },
+    /// Refused for the last template and for one the week plan uses.
+    DeleteTemplate(crate::ids::TemplateId),
+    /// AU5: a block with no items; refused at a start another block has.
+    AddBlock {
+        template: crate::ids::TemplateId,
+        start: crate::local_time::TimeOfDay,
+    },
+    /// Replaces the start and items of the template block with that id.
+    UpdateBlock {
+        template: crate::ids::TemplateId,
+        block: crate::schedule::Block,
+    },
+    RemoveBlock {
+        template: crate::ids::TemplateId,
+        block: crate::ids::BlockId,
+    },
+    /// AU9: the template a weekday uses.
+    SetWeekTemplate {
+        weekday: chrono::Weekday,
+        template: crate::ids::TemplateId,
+    },
+    /// AU10: the template a date uses instead of its weekday's (`None`:
+    /// its weekday's).
+    SetDateTemplate {
+        date: chrono::NaiveDate,
+        template: Option<crate::ids::TemplateId>,
+    },
+    /// AU11, AU12: the start and items of a block of the date's schedule,
+    /// for that date only.
+    ChangeBlockOnDate {
+        date: chrono::NaiveDate,
+        block: crate::schedule::Block,
+    },
+    /// A block, with no items, on that date only.
+    AddBlockOnDate {
+        date: chrono::NaiveDate,
+        start: crate::local_time::TimeOfDay,
+    },
+    /// A block of the date's schedule does not play on that date.
+    RemoveBlockOnDate {
+        date: chrono::NaiveDate,
+        block: crate::ids::BlockId,
+    },
+    /// "Back to the template": drops what the date changed or removed of
+    /// that template block.
+    RevertBlockOnDate {
+        date: chrono::NaiveDate,
+        block: crate::ids::BlockId,
+    },
     /// Puts files in the library, filed under `category` when given: a new
     /// track takes the category and its kind, an uncategorised one joins it,
     /// one already in a category keeps it (LB16).

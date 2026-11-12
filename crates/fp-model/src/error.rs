@@ -85,6 +85,23 @@ pub enum ModelError {
     /// AU4: there is always a rotation to fall back on.
     #[error("the last rotation cannot be deleted")]
     LastRotation,
+    /// AU6: a rotation fills the rest of its block.
+    #[error("a rotation must be the last item of a block")]
+    RotationNotLast,
+    #[error("unknown template {0:?}")]
+    UnknownTemplate(crate::ids::TemplateId),
+    #[error("unknown block {0:?}")]
+    UnknownBlock(crate::ids::BlockId),
+    #[error("a template name must not be empty")]
+    EmptyTemplateName,
+    /// AU9: every weekday needs a template.
+    #[error("the last template cannot be deleted")]
+    LastTemplate,
+    #[error("the week plan uses this template")]
+    TemplateInUse,
+    /// AU5: a block lasts until the next one's start.
+    #[error("another block starts at that time")]
+    BlockTimeTaken,
     /// Automation spec §8.1: the music filler's list belongs to the filler;
     /// it is not renamed, deleted or shown on another player, and the
     /// filler shows no other list.

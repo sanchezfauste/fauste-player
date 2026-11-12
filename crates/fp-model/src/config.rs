@@ -322,6 +322,9 @@ pub struct AutomationConfig {
     /// The music filler keeps this many played rows in its list; older
     /// ones are removed (10 ..= 1 000, AU27).
     pub filler_played_kept: u32,
+    /// Date overrides of the schedule older than this many days are
+    /// deleted (1 ..= 3 650, AU38).
+    pub overrides_keep_days: u32,
 }
 
 impl Default for AutomationConfig {
@@ -332,6 +335,7 @@ impl Default for AutomationConfig {
             artist_separation_mins: 30,
             filler_lookahead_mins: 30,
             filler_played_kept: 50,
+            overrides_keep_days: 30,
         }
     }
 }
@@ -1639,6 +1643,13 @@ impl Config {
             10,
             1_000,
             "automation.filler_played_kept",
+            &mut w,
+        );
+        clamp_to(
+            &mut a.overrides_keep_days,
+            1,
+            3_650,
+            "automation.overrides_keep_days",
             &mut w,
         );
         if self

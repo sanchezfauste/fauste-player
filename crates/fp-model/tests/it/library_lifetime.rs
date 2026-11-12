@@ -262,6 +262,7 @@ fn parts(s: &AppState, library: Library) -> RestoreParts {
         rotations: Default::default(),
         air_times: Default::default(),
         filler: None,
+        schedule: Default::default(),
         library_view: Default::default(),
         config: s.config.clone(),
         library,

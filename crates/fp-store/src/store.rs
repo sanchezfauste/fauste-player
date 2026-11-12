@@ -325,7 +325,13 @@ fn restore(
         default_rotation,
         air_times,
         filler,
+        templates,
+        week_plan,
+        date_plans,
     } = snap;
+    let (schedule, notes) =
+        fp_model::schedule::Schedule::from_parts(templates, week_plan, date_plans);
+    warnings.extend(notes);
     // RL19: the restore repairs the layout; a copy says what it repaired.
     let saved_layout = layout.clone();
     // Report what the restore will repair in the cart pages (the restore
@@ -359,6 +365,7 @@ fn restore(
             ids,
             rotations: fp_model::Rotations::from_parts(rotations, default_rotation),
             air_times,
+            schedule,
             filler,
         },
         &sessions,

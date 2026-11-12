@@ -349,6 +349,41 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             crate::rotation::set_default(state, id)?;
             crate::filler::retarget(state, &mut out)?;
         }
+        Command::CreateTemplate { name } => crate::schedule::create_template(state, &name)?,
+        Command::DuplicateTemplate { template, name } => {
+            crate::schedule::duplicate_template(state, template, &name)?
+        }
+        Command::RenameTemplate { template, name } => {
+            crate::schedule::rename_template(state, template, &name)?
+        }
+        Command::DeleteTemplate(template) => crate::schedule::delete_template(state, template)?,
+        Command::AddBlock { template, start } => {
+            crate::schedule::add_block(state, template, start)?
+        }
+        Command::UpdateBlock { template, block } => {
+            crate::schedule::update_block(state, template, block)?
+        }
+        Command::RemoveBlock { template, block } => {
+            crate::schedule::remove_block(state, template, block)?
+        }
+        Command::SetWeekTemplate { weekday, template } => {
+            crate::schedule::set_week_template(state, weekday, template)?
+        }
+        Command::SetDateTemplate { date, template } => {
+            crate::schedule::set_date_template(state, date, template)?
+        }
+        Command::ChangeBlockOnDate { date, block } => {
+            crate::schedule::change_block_on_date(state, date, block)?
+        }
+        Command::AddBlockOnDate { date, start } => {
+            crate::schedule::add_block_on_date(state, date, start)?
+        }
+        Command::RemoveBlockOnDate { date, block } => {
+            crate::schedule::remove_block_on_date(state, date, block)?
+        }
+        Command::RevertBlockOnDate { date, block } => {
+            crate::schedule::revert_block_on_date(state, date, block)?
+        }
         Command::RemoveTracks(tracks) => {
             crate::library_rules::remove_tracks(state, &tracks, &mut out)?
         }

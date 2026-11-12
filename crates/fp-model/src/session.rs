@@ -112,6 +112,8 @@ pub struct RestoreParts {
     /// When each track last aired (AU35); times of tracks not in `library`
     /// are dropped.
     pub air_times: crate::air_times::AirTimes,
+    /// The schedule (automation spec AU9–AU12).
+    pub schedule: crate::schedule::Schedule,
     /// The music filler as saved (AU27); restored last, not playing.
     pub filler: Option<crate::filler::FillerSession>,
 }
@@ -143,9 +145,11 @@ impl AppState {
             mut ids,
             rotations,
             mut air_times,
+            schedule,
             filler,
         } = parts;
         ids.observe(library.max_raw_id());
+        ids.observe(schedule.max_raw_id());
         ids.observe(rotations.max_raw_id());
         air_times.retain_tracks(|t| library.get(t).is_some());
         ids.observe(categories.max_raw_id());
@@ -192,6 +196,7 @@ impl AppState {
             filler: None,
             rotations,
             air_times,
+            schedule,
             wall_now: crate::wall_time::WallTime::default(),
             rng: crate::wall_time::SplitMix64::default(),
         };
