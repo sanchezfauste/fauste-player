@@ -151,9 +151,14 @@ impl SettingsState {
     }
 
     /// Opens the Automation section (the schedule editor's Rotations…).
+    /// The section is desktop only, as the editor is; on Android nothing
+    /// opens it.
     pub(crate) fn show_automation(&mut self) {
-        self.section = Section::Automation;
-        self.phone_section = true;
+        #[cfg(not(target_os = "android"))]
+        {
+            self.section = Section::Automation;
+            self.phone_section = true;
+        }
     }
 
     /// Back on a phone (PL20): from a section to the list. False on the
