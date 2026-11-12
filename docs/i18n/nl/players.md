@@ -128,9 +128,9 @@ de kop (niet op een van zijn knoppen) (zie
 
 | Knop | Actie |
 |---|---|
-| **Play / Volgende** (groot) | Gestopt: het volgende nummer starten. On air: overfaden naar het volgende nummer (de fadetijd stel je in bij [Instellingen](settings.md)); terwijl het faadt voor een crossfade die door Volgende of door een segue is gestart, loopt een groene band over de knop leeg gedurende de fadelengte, met zijn rand van links naar rechts bewegend zoals bij een cart (een crossfade die door Vorige is gestart loopt leeg op de knop Vorige). Gepauzeerd: hervatten. Als het nummer dat on air is ook het volgende is, start Play dat nummer opnieuw met de gebruikelijke fade. Op een bit-perfect uitgang schakelt het meteen om, zonder fade, en zegt zijn tooltip dat (zie [Wat het kost](bit-perfect.md#what-it-costs)). |
+| **Play / Volgende** (groot) | Gestopt: het volgende nummer starten. On air: overfaden naar het volgende nummer (de overfadetijd stel je in bij [Instellingen](settings.md)); terwijl het faadt voor een crossfade die door Volgende of door een segue is gestart, loopt een groene band over de knop leeg gedurende de fadelengte, met zijn rand van links naar rechts bewegend zoals bij een cart (een crossfade die door Vorige is gestart loopt leeg op de knop Vorige). Gepauzeerd: hervatten. Als het nummer dat on air is ook het volgende is, start Play dat nummer opnieuw met de gebruikelijke fade. Op een bit-perfect uitgang schakelt het meteen om, zonder fade, en zegt zijn tooltip dat (zie [Wat het kost](bit-perfect.md#what-it-costs)). |
 | **Stop** | Meteen stoppen (met een korte de-click-helling) |
-| **Uitfaden** | Uitfaden en stoppen. Terwijl een uitfade loopt, loopt een band over de knop leeg gedurende de fadelengte, met zijn rand van links naar rechts bewegend |
+| **Uitfaden** | Uitfaden gedurende de uitfadetijd (standaard 2 s, in te stellen bij [Instellingen](settings.md)) en stoppen. Terwijl een uitfade loopt, loopt een band over de knop leeg gedurende de fadelengte, met zijn rand van links naar rechts bewegend |
 | **Pauze** | Pauzeren of hervatten; knippert amber terwijl gepauzeerd |
 | **Stop na** (een afspeeldriehoek en dan een vierkant) | Eenmalig stoppen wanneer het huidige nummer eindigt. In SINGLE-modus is het alleen beschikbaar zolang het huidige nummer herhaalt: het beëindigt de herhaling wanneer de lopende ronde eindigt. Om elke keer dat een nummer speelt erna te stoppen, of om een nummer te herhalen, gebruik je het menu ervan in de playlist (zie [Playlists](playlists.md)) |
 | **Vorig nummer** (een streep en twee driehoeken) | Terwijl on air: terugfaden naar het nummer dat deze speler eerder speelde, zoals Volgende doet. Druk nogmaals om verder terug te gaan. Het nummer dat je verliet, wordt het volgende. Op een bit-perfect uitgang schakelt het meteen om, zonder fade (zie [Wat het kost](bit-perfect.md#what-it-costs)). |
@@ -263,6 +263,12 @@ Het venster toont:
 
 Terwijl de CUE gepauzeerd is, knippert zijn knop **CUE pauzeren** (dan getoond
 als **CUE hervatten**) amber, zoals die van de speler zelf.
+
+Sleep een rand of een hoek van het venster om het groter te maken: de golfvorm
+neemt de extra breedte en hoogte in, wat helpt bij het plaatsen van markers. Je
+kunt het weer kleiner maken, tot zijn eerste formaat. Het volgende CUE-venster,
+van welke speler ook, opent op het laatste formaat dat je aan een venster gaf,
+ook na een herstart.
 
 Een sprong op een gepauzeerde CUE houdt hem gepauzeerd. De sluitknop van het
 venster, of **CUE stoppen**, stopt de CUE.

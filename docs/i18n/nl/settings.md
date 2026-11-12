@@ -7,7 +7,7 @@ Het venster heeft één formaat (900 × 640, kleiner op een klein scherm), welke
 sectie ook, en de sectie scrolt erin. Elke sectie lijnt haar labels uit in één
 kolom.
 
-De secties Spelers, Meters, Analyse, Loudness en Sneltoetsen hebben in hun kop een knop
+De secties Spelers, Meters, Analyse, Loudness, Automatisering en Sneltoetsen hebben in hun kop een knop
 **Standaardwaarden herstellen**. Die vraagt om bevestiging en zet dan alleen die
 sectie terug (Spelers behoudt het aantal spelers en de taal; Sneltoetsen heeft
 geen andere resetknop). Audio-uitgangen, Playlists, Cartwall, Bibliotheek, MIDI en Op
@@ -84,7 +84,7 @@ het opnieuw kiezen ervan (bijvoorbeeld na het omwisselen van twee apparaten) ze.
 | Audiosysteem | De laatste keuze, **Geen uitgang (stil)**, speelt niets af: tijdlijnen lopen in realtime zonder geluidskaart (voor een machine zonder kaart, of om te oefenen). Linux: PipeWire (in builds die het bevatten), PulseAudio, JACK of ALSA. Windows: WASAPI, ASIO (in builds die het bevatten) of JACK. macOS: Core Audio of JACK. Systemen die op deze computer ontbreken, of zonder uitvoerapparaat (een JACK-server die niet draait), worden als niet beschikbaar getoond. “Systeemstandaard” gebruikt de eerste beschikbare in die volgorde. |
 | Samplefrequentie | De frequentie waarop elke uitgang draait, tenzij een apparaat een eigen heeft (Geavanceerd); bestanden worden ernaar omgezet met hoogwaardige resampling. Bit-perfect apparaten starten op hun frequentie en volgen daarna de bestanden. |
 | Buffergrootte | Frames per audioblok, tenzij een apparaat een eigen heeft; de resulterende latentie wordt eronder getoond. Uitgangen via een geluidsserver of een systeemmixer (PulseAudio, het ALSA-apparaat `default`) vragen om minstens 50 ms, wat deze grootte ook is, of zoveel als het apparaat aanneemt, zodat een drukke computer niet te horen is; de latentie zegt dat dan (`shared_buffer_ms` in het configuratiebestand) |
-| Uitgangen per speler | Voor elke speler een **Main**-apparaat (on air) en een **Cue**-apparaat (voorbeluisteren), elk met een kanaalpaar. Een geluidskaart die meerdere uitvoerprofielen biedt (ALSA toont front, surround, direct hardware…) toont elk als *kaart — profiel*; twee items die nog steeds hetzelfde zouden lezen, krijgen hun apparaat-id tussen haakjes. Meerkanaals interfaces kunnen meerdere spelers op verschillende paren dragen. Een Cue-uitgang die een on-air uitgang deelt (de Main van een speler of die van de cartwall) is toegestaan: een opmerking eronder zegt dat zijn voorbeluistering on air te horen is en vraagt eerst om bevestiging terwijl daar iets speelt. |
+| Uitgangen per speler | Voor elke speler, en voor de kolom **Muziek** (de [muziekvuller](automation.md)), een **Main**-apparaat (on air) en een **Cue**-apparaat (voorbeluisteren), elk met een kanaalpaar. Een geluidskaart die meerdere uitvoerprofielen biedt (ALSA toont front, surround, direct hardware…) toont elk als *kaart — profiel*; twee items die nog steeds hetzelfde zouden lezen, krijgen hun apparaat-id tussen haakjes. Meerkanaals interfaces kunnen meerdere spelers op verschillende paren dragen. Een Cue-uitgang die een on-air uitgang deelt (de Main van een speler of die van de cartwall) is toegestaan: een opmerking eronder zegt dat zijn voorbeluistering on air te horen is en vraagt eerst om bevestiging terwijl daar iets speelt. |
 | Main testen / Cue testen | Speelt een korte toon (1 kHz op Main, 440 Hz op Cue, 1,5 s, −18 dBFS) af op de gekozen uitgang, zodat je de bedrading kunt controleren voordat je on air gaat |
 | Bibliotheek | De Cue-uitgang van de bibliotheek, met een eigen **Cue testen**: waar het [voorbeluisteren](library.md#pre-listening) van het bibliotheekvenster (op een telefoon dat van het tabblad Bibliotheek) te horen is. Zonder die uitgang is Play van de voorbeluisterbalk gedimd. Op Android luidt de lege keuze *Systeemstandaard* in plaats van *Geen*: het voorbeluisteren en **Cue testen** spelen dan op de standaarduitgang (zie [Android → Bibliotheek](android.md#library)). Een Bibliotheek-uitgang op een on-air uitgang werkt zoals de Cue van een speler: een opmerking eronder zegt dat zijn voorbeluistering on air te horen is en vraagt eerst om bevestiging terwijl daar iets speelt. Hij staat in de weergaven Basis en Geavanceerd, ook op een telefoon |
 | Cartwall | De Main- en Cue-uitgangen van de cartwall. Main staat standaard op de systeemuitgang. Zonder Cue is er geen voorbeluisteren van carts; een Cue op een on-air uitgang werkt zoals bij spelers. |
@@ -110,21 +110,22 @@ tijdlijnen, en wordt het apparaat heropend wanneer het terugkomt (zie
 
 ## Spelers {#players}
 
-![Instellingen, Spelers: aantal spelers, standaardmodus, fadetijd, automatisch mixen, cue-in en cue-out, waarschuwing einde nummer en taal](../../images/guide/settings-players.png)
+![Instellingen, Spelers: aantal spelers, standaardmodus, overfadetijd, uitfadetijd, automatisch mixen, cue-in en cue-out, waarschuwing einde nummer en taal](../../images/guide/settings-players.png)
 
 | Instelling | Standaard | Betekenis |
 |---|---|---|
 | Taal | Systeem | Interfacetaal |
 | Aantal spelers | 4 | Kolommen op het hoofdscherm (een speler die on air is, kan niet worden verwijderd). Het aantal werkt wanneer je de schuifregelaar loslaat; een getal dat je in het vak typt werkt wanneer je op Enter drukt of het vak verlaat, en Escape annuleert het |
 | Standaardmodus | CONT | De modus waarin spelers starten |
-| Fadetijd | 1000 ms | Gebruikt door Play terwijl on air en door Uitfaden. Op een speler waarvan de Main-uitgang bit-perfect is, alleen door Uitfaden |
+| Overfadetijd | 1000 ms | Hoe lang het nummer dat on air is uitfaadt wanneer je Play (volgende) indrukt terwijl het speelt, en bij Vorig nummer. Geldt niet voor een speler waarvan de Main-uitgang bit-perfect is |
+| Uitfadetijd | 2000 ms | Hoe lang **Uitfaden** erover doet om het nummer uit te faden. Geldt voor elke speler, ook bit-perfect |
 | Automatisch mixen op het MIX-punt | Aan | Nummers laten overlappen in doorlopende modus. Geldt niet voor een speler waarvan de Main-uitgang bit-perfect is |
 | Cue-in en cue-out gebruiken | Aan | Uit: spelers spelen elk nummer van het begin tot het einde van het bestand; de markers blijven bewaard en carts gebruiken de hunne nog steeds. Duur en playlisttotalen volgen hetzelfde bereik |
 | Waarschuwing einde nummer | 10 s | Wanneer de aftelling rood begint te knipperen |
 
 Terwijl de Main-uitgang van een speler bit-perfect is, zegt een opmerking onder
 **Automatisch mixen op het MIX-punt** dat zulke spelers nooit mixen of
-crossfaden. Beide instellingen blijven bewerkbaar: ze gelden nog voor de andere
+crossfaden, dus de overfadetijd en het automatisch mixen gelden niet voor hen. Beide instellingen blijven bewerkbaar: ze gelden nog voor de andere
 spelers. Zie [Wat het kost](bit-perfect.md#what-it-costs).
 
 ## Meters {#meters}
@@ -202,6 +203,12 @@ niets anders te doen heeft, of normalisatie nu aan of uit staat; hun markers
 worden niet aangeraakt. **Opnieuw analyseren** (in het playlistmenu) en **Alle
 nummers opnieuw analyseren** meten opnieuw.
 
+**Gewijzigde bestanden zoeken** controleert elk nummer in de bibliotheek op een
+bestand dat een ander programma heeft gewijzigd terwijl Fauste Player draaide,
+en analyseert de gewijzigde opnieuw; een melding zegt hoeveel het er vond. De
+knop is gedimd terwijl een zoekopdracht loopt. Zie [Als een bestand
+verandert](library.md#when-a-file-changes).
+
 ## Loudness {#loudness}
 
 ![Instellingen, Loudness: normalisatie aan, met het doel, het true-peakplafond, de maximale versterking en de maximale trim op hun standaardwaarden](../../images/guide/settings-loudness.png)
@@ -269,6 +276,39 @@ geven, van soort veranderen, verplaatsen (door te slepen) en verwijderen, een
 map met een categorie bewaken en de ontbrekende nummers ervan verwijderen,
 zonder het bibliotheekvenster te openen. Zie [Bibliotheek](library.md#categories)
 en [Bewaakte mappen](library.md#watched-folders).
+
+**Externe editor** is de audio-editor die *Openen in externe editor* start met
+het bestand van een nummer: het pad van het programma (of *Geen*), **Kiezen…**
+om het te kiezen en **Wissen** om het te verwijderen. Op macOS kan een
+applicatiebundel (`.app`) worden gekozen. Als het programma niet kan worden
+gestart, zegt een melding dat. De rij wordt niet getoond op Android, noch in de
+Flatpak- en snap-builds. Zie [Als een bestand
+verandert](library.md#when-a-file-changes).
+
+## Automatisering {#automation}
+
+De rotaties en regels van de [muziekvuller](automation.md) (niet op Android).
+
+![Instellingen, Automatisering: de rotaties Music (de standaard) en Hits, de geselecteerde Music met zijn ene stap over alle muziek, en de regels van de muziekvuller](../../images/guide/settings-automation.png)
+
+- **Rotaties:** de lijst, met de standaard gemarkeerd. **Nieuwe rotatie**
+  voegt er een toe die alle muziek speelt, **Standaard maken** maakt de
+  geselecteerde de standaard, **Rotatie verwijderen** verwijdert hem (de laatste
+  kan niet worden verwijderd).
+- **De geselecteerde rotatie:** zijn **Naam**, dan één rij per **stap**: waar
+  zijn nummers vandaan komen (een categorie met haar subcategorieën, of *Alle*
+  van een soort), hoeveel hij er elke keer speelt (**Minstens** 0–99,
+  **Hoogstens** 1–99; minstens 0 laat de stap sommige beurten overslaan),
+  **Omhoog**, **Omlaag** en **Verwijderen**. **Stap toevoegen** voegt er een
+  toe aan het eind. Een stap waarvan de categorie is verwijderd zegt dat; de
+  vuller slaat hem over.
+- **Muziekvuller:** hoe lang voordat hetzelfde nummer weer mag spelen (3 uur,
+  of zodra de helft van de andere nummers van zijn stap is uitgezonden, wat het
+  eerst komt; 0 zet elk van beide uit), dezelfde artiest (30 minuten), het
+  **vooruitkijken** (30 minuten muziek in de wachtrij) en de **bewaarde gespeelde
+  nummers** in zijn lijst (50).
+
+**Standaardwaarden herstellen** zet de regels terug; de rotaties blijven.
 
 ## Sneltoetsen {#keyboard-shortcuts}
 

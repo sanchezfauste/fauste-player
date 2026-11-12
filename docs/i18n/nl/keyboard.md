@@ -31,7 +31,8 @@ Ctrl, Alt, Shift of Cmd als je wilt). Gebruikt een andere actie die toets al,
 dan wordt de naam ervan getoond. Kies **Toewijzen** om de toets te verplaatsen,
 of **Annuleren**. **Ontkoppelen** verwijdert een sneltoets en **Standaardwaarden
 herstellen** (rechtsboven in de sectie) herstelt de tabel hierboven.
-Beschikbare acties, voor elke speler en cart:
+Beschikbare acties, voor elke speler (P1 … Pn; de kolom **Muziek** heeft geen
+sneltoetsen) en cart:
 
 - play, vorige, opnieuw starten, pauze, stop, uitfaden en CUE op een speler
   (vorige en opnieuw starten hebben geen standaardtoets);

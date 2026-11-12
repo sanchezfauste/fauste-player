@@ -22,6 +22,9 @@ doorstaan zonder zelf iets on air te brengen.
 | [Spelers](players.md) | De spelerkolom: transport, modi, aftelling, golfvorm, CUE |
 | [Playlists](playlists.md) | Tabbladen, de nummertabel, slepen en neerzetten, het contextmenu, M3U/PLS-bestanden |
 | [Cartwall](cartwall.md) | Instant carts: starten, pagina’s, loops, exclusieve carts, instellen |
+| [Bibliotheek](library.md) | Het bibliotheekvenster: categorieën, soorten, zoeken, voorbeluisteren, de externe editor en gewijzigde bestanden |
+| [Indeling](layout.md) | Panelen tonen en verbergen, spelerbreedtes, de cartwall verplaatsen en vergroten of verkleinen, een paneel maximaliseren, het indelingsmenu |
+| [Automatisering](automation.md) | De kolom Programmering, de editor ervan, de muziekvuller en zijn rotaties |
 | [Markers en mixen](markers-and-mixing.md) | Cue-in/-out, het MIX-punt, intro en outro, automatische analyse |
 | [Instellingen](settings.md) | Audio-uitgangen, spelers, analyse, playlists, MIDI, bediening op afstand |
 | [Loudness-normalisatie](loudness.md) | Elk nummer en elke cart op dezelfde luidheid met een vaste versterking per nummer: de gain-badge, een nummer uitsluiten en bijstellen, bit-perfect uitgangen |
@@ -30,6 +33,7 @@ doorstaan zonder zelf iets on air te brengen.
 | [MIDI-bedieningspanelen](midi.md) | Knoppen, faders en lampjes op MIDI-controllers |
 | [Bediening op afstand](remote-control.md) | Fauste Player bedienen via het netwerk: HTTP-API, beveiliging |
 | [Gegevens en back-ups](data-and-backups.md) | Waar bestanden staan, automatisch opslaan, herstel na een crash, portable-modus |
+| [Android](android.md) | De app op telefoons en tablets: installeren, de aanraakindeling, muziek op het apparaat |
 | [Problemen oplossen](troubleshooting.md) | Geen geluid, apparaat kwijt, bestanden die als niet beschikbaar zijn gemarkeerd, logbestanden |
 
 De interface is beschikbaar in het Engels, Spaans, Catalaans, Nederlands,

@@ -283,7 +283,8 @@ tegelijk kunnen klinken, hangt van de telefoon af.
 
 ## Niet op Android {#not-on-android}
 
-MIDI-bedieningspanelen, bediening op afstand, het bewerken van tags en hoezen, en
-playlist- en cartpaginabestanden zijn voorlopig functies van de desktop. Een
+MIDI-bedieningspanelen, bediening op afstand, het bewerken van tags en hoezen,
+playlist- en cartpaginabestanden, en automatisering (de muziekvuller en
+Instellingen → Automatisering) zijn voorlopig functies van de desktop. Een
 toetsenbord dat op een tablet is aangesloten, werkt zoals op de desktop (zie
 [Toetsenbord](keyboard.md)).

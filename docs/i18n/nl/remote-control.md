@@ -152,7 +152,9 @@ of subnetten in `remote.osc.allowed_sources` (bijvoorbeeld
 `"192.168.1.0/24"`). OSC heeft geen wachtwoord, dus houd het op een vertrouwd
 studionetwerk.
 
-Spelers zijn genummerd 1, 2, 3… zoals ze op het scherm staan. Carts zijn
+Spelers zijn genummerd 1, 2, 3… zoals ze op het scherm staan. De kolom
+**Muziek** (de muziekvuller, zie [Automatisering](automation.md)) heeft geen
+nummer en maakt geen deel uit van de bediening op afstand. Carts zijn
 genummerd binnen de getoonde pagina.
 
     oscsend localhost 7381 /fauste/player/1/play

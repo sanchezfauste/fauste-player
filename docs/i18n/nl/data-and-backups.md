@@ -31,7 +31,7 @@ USB-stick, of om aparte opstellingen naast elkaar te houden.
 | Bestand | Inhoud |
 |---|---|
 | `config.json` | Instellingen, uitgangen, analysedrempels, geavanceerde afstelling |
-| `fauste.db` | De bibliotheek (nummers, hun categorieën, handmatige markers, tags, loudness), de playlists met hun gespeeld-markeringen, de cartpagina's en de sessie: per speler de getoonde playlist, het huidige en volgende nummer, modus, positie, volume en kolombreedtes (per kolom), en de vensterindeling |
+| `fauste.db` | De bibliotheek (nummers, hun categorieën, handmatige markers, tags, loudness), de playlists met hun gespeeld-markeringen, de cartpagina's, de rotaties van de automatisering, de programmering en het uitzendlogboek (`automation.as_run_keep_days` dagen bewaard, standaard 90), en de sessie: per speler de getoonde playlist, het huidige en volgende nummer, modus, positie, volume en kolombreedtes (per kolom), en de vensterindeling |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Kopieën van de database (zie hieronder) |
 | `window.ron` | De grootte en positie van het hoofdvenster en of het gemaximaliseerd was (alleen computer; op Wayland kiest het systeem de positie) |
 

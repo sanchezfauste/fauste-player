@@ -8,7 +8,7 @@ stuurt ze naar de playlists en de cartwall. Het is een venster op de desktop en
 op een tablet; een telefoon toont de bibliotheek in plaats daarvan in zijn
 tabblad **Bibliotheek** (zie [Op een telefoon](#on-a-phone)).
 
-![Het bibliotheekvenster: de voorbeluisterstrook met de golfvorm van het geselecteerde nummer, de categorieboom met Music (met de subcategorieën Pop en Evening) geselecteerd, en de tabel van zijn nummers met hun categorie en soort](../../images/guide/library.png)
+![Het bibliotheekvenster: de voorbeluisterstrook met de golfvorm van het geselecteerde nummer, de meter en de luisterfader, de categorieboom met Music (met de subcategorieën Pop en Evening) geselecteerd en Te controleren markers aan het eind, en de tabel van zijn nummers met hun categorie en soort; Coastline draagt de oranje vlag voor te controleren markers](../../images/guide/library.png)
 
 ## Het venster openen {#opening-the-window}
 
@@ -35,8 +35,10 @@ vanzelf. De tekst in het zoekveld wordt niet opgeslagen.
 ## Categorieën {#categories}
 
 De boom links groepeert de nummers. Bovenaan staat **Alle nummers**; dan je
-categorieën, die subcategorieën kunnen bevatten; aan het eind **Zonder
-categorie**, de nummers die tot geen enkele categorie behoren. Elk item toont
+categorieën, die subcategorieën kunnen bevatten; dan **Zonder
+categorie**, de nummers die tot geen enkele categorie behoren; en, alleen
+zolang een nummer het nodig heeft, **Te controleren markers** (zie [Als een
+bestand verandert](#when-a-file-changes)). Elk item toont
 zijn kleur en een aantal: een categorie telt haar eigen nummers en die van haar
 subcategorieën. Een nummer hoort bij hoogstens één categorie.
 
@@ -194,13 +196,81 @@ nummers er geselecteerd zijn wanneer het voor meerdere is.
 | Toevoegen aan ▸ | Een playlist: de nummers worden aan het einde toegevoegd |
 | Toevoegen aan cart ▸ | Een cart van de getoonde pagina van de cartwall: de nummers vullen de gekozen cart en de volgende lege carts van de pagina, in rastervolgorde. De nummers die niet passen, blijven weg en een melding telt ze |
 | Verplaatsen naar categorie ▸ | Een categorie, of Zonder categorie |
-| Soort ▸ | Muziek, Jingle, Effect, Reclame of Stem |
+| Soort ▸ | Muziek, Jingle, Effect, Reclame, Stem of Uurmelding |
 | Tags bewerken… | De tag-editor (één nummer) |
+| Openen in externe editor | Je audio-editor starten met het bestand van het nummer (één nummer; zie [Als een bestand verandert](#when-a-file-changes)) |
+| Markeren als gecontroleerd | De vlag *markers moeten worden gecontroleerd* wissen (getoond wanneer een geselecteerd nummer die heeft) |
 | Loudness… | De loudness-pop-up (één nummer) |
 | Opnieuw analyseren | De nummers opnieuw analyseren |
 | Markers terugzetten op automatisch | De handmatige markers laten vallen |
 | Bestandslocatie tonen | De map van het bestand openen (één nummer) |
 | Uit de bibliotheek verwijderen… | De nummers uit de bibliotheek verwijderen, na een vraag (hieronder) |
+
+## Als een bestand verandert {#when-a-file-changes}
+
+Materiaal voorbereiden betekent vaak een bestand inkorten of repareren in een
+audio-editor. Fauste Player helpt bij beide helften.
+
+**Openen in externe editor** (het rijmenu van de bibliotheek en van
+playlistrijen) start het programma dat je koos in [Instellingen →
+Bibliotheek](settings.md#library) met het bestand van het nummer. Het werkt op
+één nummer. Het item is gedimd, met de reden als tooltip, wanneer er geen editor
+is ingesteld, wanneer het bestand ontbreekt of onleesbaar is, of wanneer het
+nummer *klinkt*: het huidige nummer van een speler (spelend of gepauzeerd), een
+nummer dat wacht om te starten of in CUE staat, het uitgaande nummer van een
+fade, een spelende cart of de CUE-cart van de cartwall, of het voorbeluisteren
+van de bibliotheek terwijl het speelt of gepauzeerd is. De editor wordt niet
+aangeboden op Android, noch in de Flatpak- en snap-builds, die geen andere
+programma's kunnen starten; de rest van dit onderdeel geldt daar nog steeds.
+
+Fauste Player merkt wanneer een bestand dat het kent is veranderd (zijn grootte
+of wijzigingstijd verschilt van de laatste analyse), door wie dan ook, en
+analyseert het uit zichzelf opnieuw: duur, markers, loudness, golfvorm, formaat
+en tags. Het kijkt:
+
+- één keer bij de start, bij elk nummer in de bibliotheek;
+- wanneer een bewaakte map een wijziging van een bekend nummer meldt;
+- in de map van elk bestand dat je in de editor opende, tot je afsluit, zodat
+  een opslag meteen wordt opgemerkt;
+- wanneer een nummer in een speler, een cart of het voorbeluisteren wordt
+  geladen, en wanneer zijn markers worden geopend om te bewerken of op de
+  golfvorm worden gesleept;
+- wanneer je op **Gewijzigde bestanden zoeken** drukt in [Instellingen →
+  Analyse](settings.md#analysis), wat de hele bibliotheek controleert en in een
+  melding zegt hoeveel bestanden zijn veranderd.
+
+Er is geen periodiek pollen. Een bestand buiten de bewaakte mappen, door een
+ander programma gewijzigd terwijl Fauste Player draait en sindsdien niet
+gebruikt, wordt gevonden bij zijn volgende gebruik of door **Gewijzigde
+bestanden zoeken**.
+
+Een gewijzigd nummer wordt nooit opnieuw geanalyseerd terwijl het klinkt: het
+wacht tot het stopt, en zijn markers en loudness verschuiven nooit onder een
+spelende bron. (**Alle nummers opnieuw analyseren** is je eigen verzoek en wacht
+niet.) Editors slaan vaak op door het bestand te verwijderen en opnieuw aan te
+maken, dus een bestand dat verdwijnt wordt twee keer bekeken voordat het als
+ontbrekend wordt gemarkeerd. Een bestand dat verandert terwijl het wordt
+geanalyseerd (een editor die het nog opslaat) wordt niet gebruikt: het wordt
+kort daarna opnieuw geanalyseerd, of bij zijn volgende wijziging, gebruik of
+controle. Een ontbrekend nummer waarvan het bestand terugkomt in een map die
+alleen wordt gevolgd vanwege de editor, wordt niet uit zichzelf hersteld.
+
+**Te controleren markers.** Als de *audio* van een bestand is veranderd en het
+nummer markers heeft die je met de hand hebt gezet, toont het nummer een oranje
+waarschuwingsicoon op zijn rij (de tooltip noemt eventuele markers die zijn
+vervallen). Handmatige markers die nu voorbij het einde van de audio liggen
+vervallen en de automatische waarde neemt hun plaats in; de andere blijven zoals
+ze zijn (wanneer de cue-in of cue-out is vervallen, worden de intro-, outro- en
+MIX-markers binnen het nieuwe cuebereik verplaatst). De vlag verhindert nooit
+dat het nummer wordt geladen, in CUE gezet of afgespeeld. Hij verdwijnt wanneer
+je **Markeren als gecontroleerd** kiest in het menu van het nummer (bij meerdere
+geselecteerde rijen verdwijnt hij bij allemaal) of een marker van het nummer
+wijzigt. Het item **Te controleren markers** van de boom, na *Zonder categorie*,
+toont de gemarkeerde nummers zolang er zijn (niet op een telefoon). Een
+wijziging van alleen de tags of de cover vernieuwt de tags en zet geen vlag,
+wat ook gebeurt nadat je tags in Fauste Player bewerkt. De eerste analyse na een
+update zet de vlag alleen als ze een marker voorbij het einde van de audio moest
+laten vallen.
 
 ## Voorbeluisteren {#pre-listening}
 
@@ -215,11 +285,19 @@ De balk toont:
 - **Voorbeluisteren**, **Voorbeluisteren pauzeren** en **Voorbeluisteren
   stoppen** (Play, Pause en Stop);
 - de grote resterende tijd van het nummer, zijn titel, artiest en categorie;
-- een kleine meter rechts. Hij leest alleen dit voorbeluisteren, nooit de meter
-  van een speler of van de cartwall; klik erop om zijn maximum opnieuw te
-  beginnen;
-- de golfvorm van het hele bestand, met zijn markers, en een regel
-  `verstreken / totaal` eronder.
+- rechts een meter en een volumefader, getekend zoals bij een speler. De meter
+  leest alleen dit voorbeluisteren, nooit de meter van een speler of van de
+  cartwall; klik erop om zijn maximum opnieuw te beginnen. De fader is je
+  **luisterniveau** in de koptelefoon of de monitors: hij bepaalt hoe luid het
+  voorbeluisteren klinkt en wijzigt nooit een nummer (zijn bestand, zijn
+  loudness-gain of zijn markers), een speler of de cartwall. Hij blijft staan
+  zoals je hem achterliet wanneer het voorbeluisteren naar een ander nummer
+  gaat en wordt bewaard voor de volgende start; zijn tooltip en de uitlezing
+  eronder tonen het niveau in dB. Deelt de Bibliotheek-uitgang kanalen met een
+  on-air uitgang, dan bepaalt de fader ook hoe luid het voorbeluisteren daar
+  klinkt. De voorbeluisterkaart van een telefoon heeft geen fader;
+- de golfvorm van het hele bestand, even hoog als die van een speler, met zijn
+  markers, en een regel `verstreken / totaal` eronder.
 
 Play start het geselecteerde nummer vanaf zijn cue-in en speelt het tot het
 einde van het bestand. Play op een gepauzeerde voorbeluistering hervat hem, en
