@@ -64,7 +64,7 @@ fn wave_format(candidate: Candidate, config: StreamConfig) -> WaveFormat {
     WaveFormat::new(
         usize::from(candidate.container_bits),
         usize::from(candidate.valid_bits),
-        &sample_type,
+        sample_type,
         config.sample_rate as usize,
         usize::from(config.channels),
         None,
@@ -112,7 +112,7 @@ fn open_on_thread(endpoint: &str, config: StreamConfig) -> Result<Opened, Backen
         .calculate_aligned_period_near(wanted, Some(128), &format)
         .map_err(unsupported)?;
     let mode = StreamMode::EventsExclusive { period_hns: period };
-    if let Err(first) = client.initialize_client(&format, &Direction::Render, &mode) {
+    if let Err(first) = client.initialize_client(&format, Direction::Render, mode, None) {
         // Some drivers want the period aligned to their own buffer size:
         // the documented recovery is a new client with that size. Whatever
         // fails, the first refusal is kept in the error: it is the reason.
@@ -126,10 +126,11 @@ fn open_on_thread(endpoint: &str, config: StreamConfig) -> Result<Opened, Backen
         client
             .initialize_client(
                 &format,
-                &Direction::Render,
-                &StreamMode::EventsExclusive {
+                Direction::Render,
+                StreamMode::EventsExclusive {
                     period_hns: aligned,
                 },
+                None,
             )
             .map_err(|e| refused(&e))?;
     }
@@ -165,10 +166,7 @@ fn render_loop(
     .ok();
     // Prime one silent buffer, so the first period is not whatever the
     // driver's buffer held (Microsoft's rendering sequence).
-    let silent = opened
-        .render
-        .write_to_device(opened.buffer_frames, &bytes, None)
-        .is_ok();
+    let silent = opened.render.write_to_device(&bytes, None).is_ok();
     if !silent || opened.client.start_stream().is_err() {
         if !stop.load(Ordering::Acquire) {
             errors.report(StreamErrorKind::DeviceLost);
@@ -200,7 +198,7 @@ fn render_loop(
         };
         renderer.render(out, channels);
         write_samples(opened.format, out, raw);
-        if opened.render.write_to_device(frames, raw, None).is_err() {
+        if opened.render.write_to_device(raw, None).is_err() {
             errors.report(StreamErrorKind::DeviceLost);
             break;
         }
