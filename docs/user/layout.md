@@ -9,11 +9,14 @@ under them.
 
 ## Show and hide panels
 
-The tiles on the left of the top bar, **Music** (the [music filler](automation.md), hidden until you show it), **P1** … **Pn** and **Cartwall**, show
-which panels are on screen: a lit tile is shown. Click a tile to hide or
-show its panel. With many players, the tiles scroll sideways (scroll the
-mouse wheel over them) and the layout button stays in view. The other panels take the room it leaves, and a player
-shown again comes back at its width.
+The tiles on the left of the top bar, **Schedule** and **Music** (the
+[schedule](automation.md#the-schedule-column) and the
+[music filler](automation.md#the-music-filler), both hidden until you show
+them), **P1** … **Pn** and **Cartwall**, show which panels are on screen: a
+lit tile is shown. Click a tile to hide or show its panel. With many
+players, the tiles scroll sideways (scroll the mouse wheel over them) and
+the layout button stays in view. The other panels take the room it leaves,
+and a player shown again comes back at its width.
 
 Hiding only takes a panel off the screen. A hidden player keeps playing,
 and its number key, MIDI, the remote API, its CUE window and automation
