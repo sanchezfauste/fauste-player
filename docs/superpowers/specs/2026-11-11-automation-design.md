@@ -113,12 +113,17 @@ rename it before the plans.
 
 - **AU1.** A **rotation** has a name and an ordered list of **steps**. A step
   is a category (with its subcategories, *my call*) and a count given as a
-  range `min–max` (both ≥ 1, `min ≤ max`). Example:
-  `Current 2–3 · Station IDs 1 · Gold 1`.
+  range `min–max` (`min` ≥ 0, `max` ≥ 1, `min ≤ max`). Example:
+  `Current 2–3 · Station IDs 1 · Gold 0–1`. A minimum of 0 lets a step
+  sit out some turns *(maintainer, 2026-11-12: "between 0 and 1", so a
+  track of that category may or may not be added; 0–0 makes no sense)*.
 - **AU2.** The filler plays the steps in order and starts again at the first
   after the last. Each time a step comes up its count is drawn afresh in its
   range, so a station ID falls after two songs one time and three the next
-  *(maintainer: variety without a separate random mechanism)*.
+  *(maintainer: variety without a separate random mechanism)*. A step that
+  draws 0 is passed over. When every step of a whole pass draws 0, the
+  next pass draws at least 1 for each step, so a rotation always plays and
+  never falls back on the default for that reason *(my call)*.
 - **AU3.** A step may use a category of any kind (music, jingles, promos,
   spots). Selection inside the step follows §6.
 - **AU4.** One rotation is the **default rotation** (chosen in the

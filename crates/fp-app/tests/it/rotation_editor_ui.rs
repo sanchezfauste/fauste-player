@@ -80,6 +80,39 @@ fn a_step_names_its_two_counts() {
     h.get_by_role_and_label(Role::Label, "At most");
 }
 
+/// "Between 0 and 1": the least count goes down to 0; the most stays at
+/// 1 or more.
+#[test]
+fn a_step_count_may_start_at_zero_but_not_end_there() {
+    let (mut h, fake) = open(with_rotation());
+    h.get_by_role_and_label(Role::Slider, "Step 1, at least")
+        .focus();
+    h.run_steps(1);
+    h.key_press(egui::Key::ArrowLeft);
+    h.run_steps(2);
+    let sent = fake.take_sent();
+    assert!(
+        sent.iter().any(|c| matches!(
+            c,
+            Command::UpdateRotation(r) if r.steps[0].min == 0 && r.steps[0].max == 1
+        )),
+        "{sent:?}"
+    );
+    h.get_by_role_and_label(Role::Slider, "Step 1, at most")
+        .focus();
+    h.run_steps(1);
+    h.key_press(egui::Key::ArrowLeft);
+    h.run_steps(2);
+    let sent = fake.take_sent();
+    assert!(
+        !sent.iter().any(|c| matches!(
+            c,
+            Command::UpdateRotation(r) if r.steps[0].max == 0
+        )),
+        "{sent:?}"
+    );
+}
+
 #[test]
 fn deleting_the_last_rotation_shows_the_error() {
     let (mut h, _fake) = open(with_rotation());

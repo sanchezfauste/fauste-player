@@ -6,7 +6,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
 use chrono::{Datelike, NaiveDate};
-use fp_model::rotation::{Rotation, STEP_COUNT_RANGE};
+use fp_model::rotation::{Rotation, STEP_MAX_RANGE, STEP_MIN_RANGE};
 use fp_model::schedule::{DatePlan, DayTemplate, WeekPlan};
 use fp_model::{
     AirTimes, AppState, CartPage, CartwallSession, Categories, Category, CategoryId, IdGen, Layout,
@@ -290,8 +290,8 @@ fn read_categories(conn: &Connection, warnings: &mut Notes) -> Vec<Category> {
 }
 
 /// Reads the rotations in `position` order. An unparsable record is
-/// dropped; a step's counts are brought into `STEP_COUNT_RANGE` with
-/// `min <= max`.
+/// dropped; a step's counts are brought into `STEP_MIN_RANGE` and
+/// `STEP_MAX_RANGE` with `min <= max`.
 fn read_rotations(conn: &Connection, warnings: &mut Notes) -> Vec<Rotation> {
     let rows = rows(
         conn,
@@ -324,8 +324,12 @@ fn read_rotations(conn: &Connection, warnings: &mut Notes) -> Vec<Rotation> {
         };
         rotation.id = id;
         for step in &mut rotation.steps {
-            let (lo, hi) = (*STEP_COUNT_RANGE.start(), *STEP_COUNT_RANGE.end());
-            let (min, max) = (step.min.clamp(lo, hi), step.max.clamp(lo, hi));
+            let min = step
+                .min
+                .clamp(*STEP_MIN_RANGE.start(), *STEP_MIN_RANGE.end());
+            let max = step
+                .max
+                .clamp(*STEP_MAX_RANGE.start(), *STEP_MAX_RANGE.end());
             let (min, max) = (min.min(max), min.max(max));
             if (min, max) != (step.min, step.max) {
                 warnings.push(format!(

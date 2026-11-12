@@ -19,6 +19,9 @@ by themselves.
 | [Players](players.md) | The player column: transport, modes, countdown, waveform, CUE |
 | [Playlists](playlists.md) | Tabs, the track table, drag and drop, the context menu, M3U/PLS files |
 | [Cartwall](cartwall.md) | Instant carts: firing, pages, loops, exclusive carts, setup |
+| [Library](library.md) | The track library window: categories, kinds, search, pre-listen, the external editor and changed files |
+| [Layout](layout.md) | Showing and hiding panels, player widths, moving and resizing the cartwall, maximizing a panel, the layout menu |
+| [Automation](automation.md) | The Schedule column, its editor, the music filler and its rotations |
 | [Markers and mixing](markers-and-mixing.md) | Cue in/out, the MIX point, intro and outro, automatic analysis |
 | [Settings](settings.md) | Audio outputs, players, analysis, playlists, MIDI, remote control |
 | [Loudness normalization](loudness.md) | Every track and cart at the same loudness with a fixed gain per track: the gain badge, excluding and trimming a track, bit-perfect outputs |
@@ -27,6 +30,7 @@ by themselves.
 | [MIDI control surfaces](midi.md) | Buttons, faders and lights on MIDI controllers |
 | [Remote control](remote-control.md) | Operating Fauste Player over the network: HTTP API, security |
 | [Data and backups](data-and-backups.md) | Where files live, autosave, crash recovery, portable mode |
+| [Android](android.md) | The app on phones and tablets: install, the touch layout, music on the device |
 | [Troubleshooting](troubleshooting.md) | No sound, device lost, files marked unavailable, logs |
 
 The interface is available in English, Spanish, Catalan, Dutch, French,

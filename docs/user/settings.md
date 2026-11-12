@@ -283,8 +283,9 @@ The [music filler's](automation.md) rotations and rules (not on Android).
   default, **Delete rotation** removes it (the last one cannot be deleted).
 - **The selected rotation:** its **Name**, then one row per **step**: where
   its tracks come from (a category with its subcategories, or *All* of a
-  kind), how many it plays each time (**At least** and **At most**, 1–99),
-  **Up**, **Down** and **Remove**. **Add step** adds one at the end. A step
+  kind), how many it plays each time (**At least** 0–99, **At most**
+  1–99; at least 0 lets the step sit out some turns), **Up**, **Down** and
+  **Remove**. **Add step** adds one at the end. A step
   whose category was deleted says so; the filler skips it.
 - **Music filler:** how long before the same track may play again (3 hours,
   or once half of the other tracks of its step have aired, whichever comes

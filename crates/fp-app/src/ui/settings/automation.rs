@@ -5,6 +5,7 @@
 
 use egui::{RichText, Ui, vec2};
 use egui_phosphor::regular as icon;
+use fp_model::rotation::{STEP_MAX_RANGE, STEP_MIN_RANGE};
 use fp_model::{Command, Rotation, RotationId, RotationStep, StepSource, TrackKind};
 
 use super::{SettingsState, caption, fitted_combo, note, row, slider, update};
@@ -255,7 +256,12 @@ fn steps(ui: &mut Ui, scene: &Scene<'_>, rotation: &Rotation) {
                             .x
                     })
                     .fold(0.0_f32, f32::max);
-                let count_row = |ui: &mut Ui, name: &str, value: &mut u8, label: &str| {
+                // AU1: at least 0 (the step may sit out), at most 1 or more.
+                let count_row = |ui: &mut Ui,
+                                 name: &str,
+                                 value: &mut u8,
+                                 range: std::ops::RangeInclusive<u8>,
+                                 label: &str| {
                     ui.horizontal(|ui| {
                         ui.add_sized(
                             vec2(name_width, 18.0),
@@ -265,12 +271,12 @@ fn steps(ui: &mut Ui, scene: &Scene<'_>, rotation: &Rotation) {
                                     .color(theme::NEUTRAL_400),
                             ),
                         );
-                        slider(ui, value, 1..=99, 1.0, "", label)
+                        slider(ui, value, range, 1.0, "", label)
                     })
                     .inner
                 };
-                let min_changed = count_row(ui, &shown_least, &mut min, &at_least);
-                let max_changed = count_row(ui, &shown_most, &mut max, &at_most);
+                let min_changed = count_row(ui, &shown_least, &mut min, STEP_MIN_RANGE, &at_least);
+                let max_changed = count_row(ui, &shown_most, &mut max, STEP_MAX_RANGE, &at_most);
                 if min_changed || max_changed {
                     // The counts stay in order: the one not moved follows.
                     if min_changed {

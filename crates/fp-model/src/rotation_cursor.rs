@@ -1,6 +1,8 @@
 //! Walking a rotation (automation spec AU2, AU34): the steps in order,
 //! again from the first after the last, each playing a count drawn afresh
-//! in its range every time it comes up. A step that yields nothing is
+//! in its range every time it comes up. A step that draws 0 sits out that
+//! turn; when every step of a pass draws 0, the next pass draws at least 1
+//! for each, so the rotation always plays. A step that yields nothing is
 //! skipped; a rotation that yields nothing falls back on the default.
 
 use serde::{Deserialize, Serialize};
@@ -111,7 +113,9 @@ pub fn next_track_fitted(
     out
 }
 
-/// One pass at most over `rotation`'s steps from where `cursor` stands.
+/// Two passes at most over `rotation`'s steps from where `cursor` stands;
+/// in the second, a step draws at least 1 (a pass of zero draws must not
+/// leave the rotation silent).
 #[allow(clippy::too_many_arguments)]
 fn walk(
     state: &AppState,
@@ -127,14 +131,19 @@ fn walk(
     if len == 0 {
         return None;
     }
-    for _ in 0..len {
+    for turn in 0..2 * len {
+        let at_least_one = turn >= len;
         if cursor.fresh || cursor.step >= len {
             cursor.fresh = false;
             cursor.step = 0;
-            cursor.left = draw(rotation, 0, rng);
+            cursor.left = draw(rotation, 0, at_least_one, rng);
         } else if cursor.left == 0 {
             cursor.step = (cursor.step + 1) % len;
-            cursor.left = draw(rotation, cursor.step, rng);
+            cursor.left = draw(rotation, cursor.step, at_least_one, rng);
+        }
+        if cursor.left == 0 {
+            // Drew 0: the step sits out this turn.
+            continue;
         }
         let step = rotation.steps.get(cursor.step)?;
         match pick_fitted(state, &step.source, at, planned, rng, fit) {
@@ -143,7 +152,9 @@ fn walk(
                 return Some(picked);
             }
             None => {
-                skipped.push(cursor.step);
+                if !skipped.contains(&cursor.step) {
+                    skipped.push(cursor.step);
+                }
                 cursor.left = 0;
             }
         }
@@ -151,9 +162,10 @@ fn walk(
     None
 }
 
-fn draw(rotation: &Rotation, step: usize, rng: &mut SplitMix64) -> u8 {
-    rotation
-        .steps
-        .get(step)
-        .map_or(1, |s| rng.in_range(s.min, s.max).max(1))
+/// A step's count for this turn, in its range; at least 1 when asked.
+fn draw(rotation: &Rotation, step: usize, at_least_one: bool, rng: &mut SplitMix64) -> u8 {
+    rotation.steps.get(step).map_or(1, |s| {
+        let min = if at_least_one { s.min.max(1) } else { s.min };
+        rng.in_range(min, s.max.max(min))
+    })
 }
