@@ -175,8 +175,11 @@ pub(crate) fn fits(state: &AppState, track: TrackId, fit: &Fit) -> bool {
         return true;
     };
     let gap = fit.gap_secs;
-    let ends = length >= gap && length - gap <= fit.max_cut_secs && gap >= fit.min_play_secs;
-    ends || (lead < gap && gap - lead >= fit.min_play_secs)
+    if length >= gap {
+        // The last before the block: it plays into the fade.
+        return length - gap <= fit.max_cut_secs && gap >= fit.min_play_secs;
+    }
+    gap - lead >= fit.min_play_secs
 }
 
 /// `pick`, preferring with a `fit` the tracks that fill the gap before a
@@ -222,8 +225,13 @@ pub fn pick_fitted(
         if length >= gap && length - gap <= fit.max_cut_secs && gap >= fit.min_play_secs {
             return Some(FitClass::Ends);
         }
+        // Still audible at the fade, it is the last before the block
+        // (nothing is queued after it), whatever its segue.
+        if length >= gap {
+            return None;
+        }
         let rest = gap - lead;
-        if lead < gap && rest >= fit.min_play_secs {
+        if rest >= fit.min_play_secs {
             return Some(if closable(rest) {
                 FitClass::Room
             } else {
@@ -266,10 +274,8 @@ pub fn pick_fitted(
     // Nothing fits: the least cut, then the least left, then the order;
     // a track of unknown length comes last.
     let cost = |timing: Option<(f64, f64)>| match timing {
-        Some((length, lead)) => (
-            (length - fit.gap_secs).max(0.0),
-            (fit.gap_secs - lead).max(0.0),
-        ),
+        Some((length, _)) if length >= fit.gap_secs => (length - fit.gap_secs, 0.0),
+        Some((_, lead)) => (0.0, (fit.gap_secs - lead).max(0.0)),
         None => (f64::INFINITY, f64::INFINITY),
     };
     let best = ctx

@@ -292,16 +292,22 @@ known lengths, a classic method.
   ahead starts when the row on air reaches its lead, and each next one a
   lead later. While a block is coming, the top-up and the drop of rows
   beyond the block both use this timeline, up to the start of the fade
-  (`block_fade_ms` before the block).
+  (`block_fade_ms` before the block). A row still audible when the fade
+  starts is the last: nothing is queued after it (even a loaded next
+  leaves when the row on air is that row), so the player plays it into
+  the fade instead of segueing into a song that would be cut at once.
 - **The choice** (`selection::pick_fitted` with a `Fit`: the gap from the
   row's start to the fade, the cut, the minimum). Each track of known
   length falls in a class, best first:
   - *ends*: it is at least as long as the gap, the cut is within the
-    limit, and the gap is at least the minimum;
-  - *room*: it ends inside the gap and leaves at least the minimum, and
+    limit, and the gap is at least the minimum (a track as long as the
+    gap that fails this has no class);
+  - *room*: it is shorter than the gap, its lead leaves at least the
+    minimum, and
     some track of the pool could close what is left (or enough is left
     for more);
-  - *loose room*: it ends inside the gap and leaves at least the minimum.
+  - *loose room*: it is shorter than the gap and its lead leaves at least
+    the minimum.
 
   Each class is tried with both separation rules, then the track rule
   alone; then every class with the separation relaxed. When no track
@@ -316,7 +322,8 @@ known lengths, a classic method.
   Once per song on air (`FillerState::fitted_for`), the generated rows
   after the loaded next are checked against the timeline; the first that
   no longer fits (`selection::fits`) leaves with every generated row after
-  it, and the top-up chooses again. The current row, the loaded next and
+  it and the generated row just before it (that one often left the gap
+  nothing closes), and the top-up chooses again. The current row, the loaded next and
   the operator's rows are never touched, so a next loaded before
   automation started may still be cut.
 

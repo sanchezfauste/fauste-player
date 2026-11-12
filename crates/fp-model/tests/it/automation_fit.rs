@@ -169,7 +169,8 @@ mod before_a_block {
 
     /// Walks the clock a second at a time from `from` to `until`; each
     /// filler song gives way to its next `segue` seconds before its end
-    /// (the engine's segue). Returns the hand-over, if one happened.
+    /// (the engine's segue), or ends at its end when it has no next.
+    /// Returns the hand-over, if one happened.
     fn run(r: &mut Rig, from: NaiveDateTime, until: NaiveDateTime, segue: f64) -> Option<HandOver> {
         let f = r.filler_player();
         let mut on_air: Option<OnAir> = None;
@@ -192,8 +193,13 @@ mod before_a_block {
             if current != on_air.map(|(e, _, _)| e) {
                 on_air = current.map(|e| (e, t, length(r, e)));
             }
+            // With no next the player plays to the end, not to the segue.
+            let lead = |len: f64| match r.player(f).next {
+                Some(_) => len - segue,
+                None => len,
+            };
             if let Some((_, since, len)) = on_air
-                && (t - since).num_seconds() as f64 >= len - segue
+                && (t - since).num_seconds() as f64 >= lead(len)
             {
                 r.end_current(f);
                 let current = r.playing(f).and(r.player(f).current);
@@ -239,6 +245,29 @@ mod before_a_block {
         let h = run(&mut r, hms(10, 40, 0), hms(11, 0, 5), 10.0).expect("a hand-over");
         assert!(h.played >= 45.0, "{h:?}");
         assert!(h.left <= 30.0 + 2.0, "{h:?}");
+    }
+
+    #[test]
+    fn with_segues_no_song_starts_just_before_the_fade() {
+        for segue in [15.0, 25.0, 40.0] {
+            for start_min in [38u32, 40, 41, 43, 44, 46, 47] {
+                let mut r = Rig::new(vec![(11, 0, vec![song(1)])]);
+                varied(&mut r);
+                for n in 1..=40u64 {
+                    let t = r.s.library.get_mut(TrackId(n)).unwrap();
+                    let at = t.duration_secs - segue;
+                    t.markers
+                        .set_auto(fp_model::track::MarkerKind::SegueStart, Some(at));
+                }
+                r.at_hms(10, start_min, 0);
+                r.apply(Command::StartAutomation);
+                let h =
+                    run(&mut r, hms(10, start_min, 0), hms(11, 0, 5), segue).expect("a hand-over");
+                let case = format!("segue {segue}, start 10:{start_min}: {h:?}");
+                assert!(h.played >= 45.0, "{case}");
+                assert!(h.left <= 30.0 + 2.0, "{case}");
+            }
+        }
     }
 
     #[test]

@@ -184,6 +184,16 @@ fn secs_between(from: NaiveDateTime, to: NaiveDateTime) -> f64 {
     (to - from).num_milliseconds() as f64 / 1000.0
 }
 
+/// AU25: the row starting at `start` is still audible when the fade
+/// starts, so it is the last before the block (unknown length: no).
+fn covers(state: &AppState, entry: EntryId, start: NaiveDateTime, fade_at: NaiveDateTime) -> bool {
+    start < fade_at
+        && state
+            .track_for_entry(entry)
+            .and_then(|t| crate::selection::timing(state, t.id))
+            .is_some_and(|(length, _)| start + millis(length) >= fade_at)
+}
+
 /// AU24, AU25: when the filler's fade before the coming block starts.
 fn fade_start(state: &AppState) -> Option<NaiveDateTime> {
     let start = crate::automation::coming_start(state)?;
@@ -221,8 +231,12 @@ fn refit(state: &mut AppState, out: &mut Vec<EngineAction>) {
     }
     let keep_next = player.and_then(|p| p.next);
     let mut drop = HashSet::new();
+    // The generated row before, which may change too: a row that does not
+    // fit often only shows that the one before left a gap nothing closes.
+    let mut before: Option<EntryId> = None;
     for (entry, start) in timeline(state, &f).0 {
         if Some(entry) == keep_next || !f.generated.contains(&entry) {
+            before = None;
             continue;
         }
         let gap = secs_between(start, fade_at);
@@ -231,9 +245,13 @@ fn refit(state: &mut AppState, out: &mut Vec<EngineAction>) {
                 .track_for_entry(entry)
                 .is_none_or(|t| crate::selection::fits(state, t.id, &fit_for(state, gap)))
         };
-        if !drop.is_empty() || (gap > 0.0 && !fits()) {
+        if drop.is_empty() && gap > 0.0 && !fits() {
+            drop.extend(before);
+        }
+        if !drop.is_empty() {
             drop.insert(entry);
         }
+        before = Some(entry);
     }
     if let Some(filler) = state.filler.as_mut() {
         filler.fitted_for = current;
@@ -265,15 +283,23 @@ fn drop_beyond(state: &mut AppState, f: &FillerState, out: &mut Vec<EngineAction
         return;
     };
     let player = state.players.iter().find(|p| p.id == f.player);
+    // A row on air still audible at the fade is the last: even the loaded
+    // next would start just before the fade (AU25).
+    let current_covers = f
+        .current_since
+        .is_some_and(|(e, since)| covers(state, e, since, fade_at));
     let keep_next = player
         .filter(|p| p.transport != crate::player::Transport::Stopped)
-        .and_then(|p| p.next);
-    let drop: HashSet<EntryId> = timeline(state, f)
-        .0
-        .into_iter()
-        .filter(|(e, start)| *start >= fade_at && f.generated.contains(e) && Some(*e) != keep_next)
-        .map(|(e, _)| e)
-        .collect();
+        .and_then(|p| p.next)
+        .filter(|_| !current_covers);
+    let mut covered = current_covers;
+    let mut drop = HashSet::new();
+    for (e, start) in timeline(state, f).0 {
+        if (covered || start >= fade_at) && f.generated.contains(&e) && Some(e) != keep_next {
+            drop.insert(e);
+        }
+        covered |= covers(state, e, start, fade_at);
+    }
     if drop.is_empty() {
         return;
     }
@@ -336,7 +362,15 @@ fn top_up(state: &mut AppState) {
     // AU25: with a block coming, the rows are timed on the timeline and
     // each is chosen to fit the time left before the fade.
     let fade_at = fade_start(state);
-    let (_, mut end) = timeline(state, &f);
+    let (rows, mut end) = timeline(state, &f);
+    // A row still audible at the fade is the last before the block.
+    let mut covered = fade_at.is_some_and(|fade| {
+        f.current_since
+            .is_some_and(|(e, since)| covers(state, e, since, fade))
+            || rows
+                .iter()
+                .any(|(e, start)| covers(state, *e, *start, fade))
+    });
     let horizon = fade_at.map(|fade| {
         let own = i64::from(state.config.automation.filler_lookahead_mins) * 60_000;
         fade.min(state.local_now + chrono::TimeDelta::milliseconds(own))
@@ -348,7 +382,7 @@ fn top_up(state: &mut AppState) {
     let mut unfitted = 0;
     while added.len() < MAX_ADDED_PER_SETTLE
         && match horizon {
-            Some(h) => end < h,
+            Some(h) => end < h && !covered,
             None => remaining < target,
         }
     {
@@ -374,6 +408,9 @@ fn top_up(state: &mut AppState) {
         }
         planned.push((picked.track, at));
         remaining += row_secs(state, entry);
+        if let Some(fade) = fade_at {
+            covered = covers(state, entry, end, fade);
+        }
         end += millis(lead_secs(state, entry));
         added.push(entry);
     }
