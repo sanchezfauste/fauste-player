@@ -110,6 +110,7 @@ alert-xruns = { $device }: Aussetzer des Audiogeräts ({ $count })
 unknown-artist = Unbekannter Interpret
 default-playlist-name = Playlist 1
 rotation-default-name = Musik
+schedule-template-default-name = Basis
 filler-playlist-name = Musikfüller
 settings-title = Einstellungen
 settings-close = Schließen

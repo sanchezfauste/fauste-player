@@ -1952,6 +1952,7 @@ dependencies = [
 name = "fp-store"
 version = "0.14.0"
 dependencies = [
+ "chrono",
  "directories",
  "fp-model",
  "rusqlite",

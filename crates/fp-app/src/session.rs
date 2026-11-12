@@ -59,6 +59,13 @@ impl AppSession {
             &mut loaded.state,
             &I18n::new(None).tr("rotation-default-name"),
         );
+        // AU9: there is always a day template for every weekday; AU38: date
+        // overrides past `automation.overrides_keep_days` are deleted.
+        fp_model::schedule::ensure_default(
+            &mut loaded.state,
+            &I18n::new(None).tr("schedule-template-default-name"),
+        );
+        fp_model::schedule::prune_dates(&mut loaded.state, chrono::Local::now().date_naive());
         // AU27: the music filler's player, added to the engine with the
         // others by `Conductor::new`.
         let _ = fp_model::filler::ensure(

@@ -205,13 +205,102 @@ impl Schedule {
         &self.week
     }
 
+    /// The schedule as loaded, repaired (rule 9), with one warning per
+    /// repair: blocks out of the day or at a start taken by an earlier
+    /// block are dropped; items after a rotation are dropped; a weekday with
+    /// no known template gets the first; a date naming a missing template
+    /// follows its weekday.
+    pub fn from_parts(
+        templates: Vec<DayTemplate>,
+        week: WeekPlan,
+        dates: Vec<DatePlan>,
+    ) -> (Schedule, Vec<String>) {
+        let mut warnings = Vec::new();
+        let templates: Vec<DayTemplate> = templates
+            .into_iter()
+            .map(|mut t| {
+                let mut blocks: Vec<Block> = Vec::with_capacity(t.blocks.len());
+                for mut b in std::mem::take(&mut t.blocks) {
+                    let what = format!("schedule: template \"{}\", block {}", t.name, b.id.0);
+                    if !repaired_block(&mut b, &what, &mut warnings) {
+                        continue;
+                    }
+                    if blocks.iter().any(|o| o.start == b.start) {
+                        warnings.push(format!(
+                            "{what}: another block starts at {}; dropped",
+                            b.start
+                        ));
+                        continue;
+                    }
+                    blocks.push(b);
+                }
+                blocks.sort_by_key(|b| b.start);
+                t.blocks = blocks;
+                t
+            })
+            .collect();
+        let known = |id: TemplateId| templates.iter().any(|t| t.id == id);
+        let first = templates.first().map(|t| t.id);
+        let mut week = week;
+        for (day, slot) in week.0.iter_mut().enumerate() {
+            if slot.is_some_and(known) {
+                continue;
+            }
+            if first.is_some() {
+                warnings.push(format!(
+                    "schedule: weekday {} had no known template; it now uses the first",
+                    day + 1
+                ));
+            }
+            *slot = first;
+        }
+        let mut map = BTreeMap::new();
+        for mut plan in dates {
+            if plan.template.is_some_and(|t| !known(t)) {
+                warnings.push(format!(
+                    "schedule: {} named a missing template; it follows its weekday",
+                    plan.date
+                ));
+                plan.template = None;
+            }
+            let what = format!("schedule: {}", plan.date);
+            plan.changes.retain_mut(|c| match c {
+                DateChange::Changed { block, .. } | DateChange::Added(block) => {
+                    repaired_block(block, &what, &mut warnings)
+                }
+                DateChange::Removed(_) => true,
+            });
+            if !plan.is_empty() {
+                map.insert(plan.date, plan);
+            }
+        }
+        let schedule = Schedule {
+            templates,
+            week,
+            dates: map,
+        };
+        (schedule, warnings)
+    }
+
+    pub fn into_parts(self) -> (Vec<DayTemplate>, WeekPlan, Vec<DatePlan>) {
+        (
+            self.templates,
+            self.week,
+            self.dates.into_values().collect(),
+        )
+    }
+
     /// The largest raw template or block id in use (0 when empty).
     pub fn max_raw_id(&self) -> u64 {
-        self.templates
+        let templates = self
+            .templates
             .iter()
-            .flat_map(|t| std::iter::once(t.id.0).chain(t.blocks.iter().map(|b| b.id.0)))
-            .max()
-            .unwrap_or(0)
+            .flat_map(|t| std::iter::once(t.id.0).chain(t.blocks.iter().map(|b| b.id.0)));
+        let dates = self
+            .dates
+            .values()
+            .flat_map(|p| p.changes.iter().map(|c| c.block_id().0));
+        templates.chain(dates).max().unwrap_or(0)
     }
 
     pub fn date_plan(&self, date: NaiveDate) -> Option<&DatePlan> {
@@ -331,6 +420,26 @@ fn place(blocks: &mut Vec<Block>, block: Block) -> Result<(), ModelError> {
     let at = blocks.partition_point(|b| b.start < block.start);
     blocks.insert(at, block);
     Ok(())
+}
+
+/// Repairs a loaded block: false when it must be dropped (a start out of
+/// the day); items after its first rotation are dropped.
+fn repaired_block(block: &mut Block, what: &str, warnings: &mut Vec<String>) -> bool {
+    if TimeOfDay::new(block.start.secs()).is_none() {
+        warnings.push(format!("{what}: its start is out of the day; dropped"));
+        return false;
+    }
+    if check_items(&block.items).is_err() {
+        if let Some(at) = block
+            .items
+            .iter()
+            .position(|i| matches!(i, Item::Rotation { .. }))
+        {
+            block.items.truncate(at + 1);
+        }
+        warnings.push(format!("{what}: items after its rotation were dropped"));
+    }
+    true
 }
 
 /// AU9: with no template at all, adds `name` (no blocks) for all seven days.

@@ -110,6 +110,7 @@ alert-xruns = { $device }: onderbrekingen van het audioapparaat ({ $count })
 unknown-artist = Onbekende artiest
 default-playlist-name = Playlist 1
 rotation-default-name = Muziek
+schedule-template-default-name = Basis
 filler-playlist-name = Muziekvuller
 settings-title = Instellingen
 settings-close = Sluiten

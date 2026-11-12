@@ -120,7 +120,7 @@ fn damaged_rotation_and_air_time_rows_are_repaired_or_dropped() {
 }
 
 #[test]
-fn a_schema_2_database_migrates_to_3_with_no_rotations() {
+fn a_schema_2_database_migrates_with_no_rotations() {
     let dir = tempfile::tempdir().unwrap();
     let mut s = store(&dir);
     let state = AppState::new(Config::default(), "Main");
@@ -129,7 +129,9 @@ fn a_schema_2_database_migrates_to_3_with_no_rotations() {
         db.conn()
             .execute_batch(
                 "DROP TABLE rotations; DROP TABLE air_times; \
-                 DELETE FROM kv WHERE key = 'default_rotation'; PRAGMA user_version = 2;",
+                 DROP TABLE day_templates; DROP TABLE date_plans; \
+                 DELETE FROM kv WHERE key IN ('default_rotation', 'week_plan'); \
+                 PRAGMA user_version = 2;",
             )
             .unwrap();
     });
@@ -141,7 +143,10 @@ fn a_schema_2_database_migrates_to_3_with_no_rotations() {
         loaded.state.rotations.default_rotation().unwrap().name,
         "Music"
     );
-    assert_eq!(count(&s, "PRAGMA user_version"), 3);
+    assert_eq!(
+        count(&s, "PRAGMA user_version"),
+        i64::from(fp_store::SCHEMA_VERSION)
+    );
 }
 
 /// A state with the default rotation, music tracks and a filler that has

@@ -2,7 +2,7 @@
 //! to *n*.
 
 /// The schema version this build writes and the newest it can read.
-pub const SCHEMA_VERSION: u32 = 3;
+pub const SCHEMA_VERSION: u32 = 4;
 
 /// The migrations, in order; `MIGRATIONS[n - 1]` is migration *n*.
 pub(crate) const MIGRATIONS: &[&str] = &[
@@ -38,5 +38,12 @@ CREATE INDEX tracks_by_path ON tracks(path);
     "
 CREATE TABLE rotations (id INTEGER PRIMARY KEY, position INTEGER NOT NULL, doc TEXT NOT NULL);
 CREATE TABLE air_times (track INTEGER PRIMARY KEY, at INTEGER NOT NULL) WITHOUT ROWID;
+",
+    // 4: the schedule (automation spec §10): day templates, and the date
+    // plans keyed by the date's day number from the common era. The week
+    // plan is a `kv` value.
+    "
+CREATE TABLE day_templates (id INTEGER PRIMARY KEY, position INTEGER NOT NULL, doc TEXT NOT NULL);
+CREATE TABLE date_plans (id INTEGER PRIMARY KEY, position INTEGER NOT NULL, doc TEXT NOT NULL);
 ",
 ];

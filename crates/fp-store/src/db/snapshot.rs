@@ -5,7 +5,9 @@
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
+use chrono::{Datelike, NaiveDate};
 use fp_model::rotation::{Rotation, STEP_COUNT_RANGE};
+use fp_model::schedule::{DatePlan, DayTemplate, WeekPlan};
 use fp_model::{
     AirTimes, AppState, CartPage, CartwallSession, Categories, Category, CategoryId, IdGen, Layout,
     Library, LibraryView, PlayerId, PlayerSession, Playlist, PlaylistEntry, Playlists, RotationId,
@@ -26,6 +28,7 @@ const KV_LAYOUT: &str = "layout";
 const KV_LIBRARY_VIEW: &str = "library_view";
 const KV_DEFAULT_ROTATION: &str = "default_rotation";
 const KV_FILLER: &str = "filler";
+const KV_WEEK_PLAN: &str = "week_plan";
 
 /// Everything the database holds, as plain model values.
 #[derive(Debug, Clone, Default, PartialEq)]
@@ -47,6 +50,12 @@ pub struct Snapshot {
     pub air_times: AirTimes,
     /// The music filler (`kv` value `filler`); `None` before it exists.
     pub filler: Option<fp_model::filler::FillerSession>,
+    /// The schedule's day templates, in display order (schema 4).
+    pub templates: Vec<DayTemplate>,
+    /// The week plan (`kv` value `week_plan`).
+    pub week_plan: WeekPlan,
+    /// The date plans, in date order (schema 4).
+    pub date_plans: Vec<DatePlan>,
 }
 
 impl Snapshot {
@@ -67,6 +76,9 @@ impl Snapshot {
             default_rotation: state.rotations.default_id(),
             air_times: state.air_times.clone(),
             filler: state.filler_session(&position_of),
+            templates: state.schedule.templates().to_vec(),
+            week_plan: *state.schedule.week(),
+            date_plans: state.schedule.date_plans().cloned().collect(),
         }
     }
 }
@@ -135,6 +147,9 @@ pub fn read_checked(db: &Db) -> Read {
         default_rotation: read_kv(conn, KV_DEFAULT_ROTATION, "default rotation", &mut warnings),
         air_times: AirTimes::default(),
         filler: read_kv(conn, KV_FILLER, "music filler", &mut warnings),
+        templates: read_templates(conn, &mut warnings),
+        week_plan: read_kv(conn, KV_WEEK_PLAN, "week plan", &mut warnings),
+        date_plans: read_date_plans(conn, &mut warnings),
     };
     let mut snapshot = snapshot;
     snapshot.air_times = read_air_times(conn, &snapshot.library, &mut warnings);
@@ -296,6 +311,79 @@ fn read_rotations(conn: &Connection, warnings: &mut Notes) -> Vec<Rotation> {
             }
         }
         list.push(rotation);
+    }
+    list
+}
+
+/// Reads the day templates in `position` order; an unparsable record is
+/// dropped (the schedule repairs the rest, `Schedule::from_parts`).
+fn read_templates(conn: &Connection, warnings: &mut Notes) -> Vec<DayTemplate> {
+    let rows = rows(
+        conn,
+        "SELECT id, doc FROM day_templates ORDER BY position, id",
+        2,
+        "the day templates",
+        warnings,
+    );
+    let mut list = Vec::with_capacity(rows.len());
+    for row in rows {
+        let [id, doc] = row.as_slice() else {
+            continue;
+        };
+        let Some(id) = int(id).map(|i| fp_model::TemplateId(raw(i))) else {
+            warnings.push(format!(
+                "schedule: a template record with an unusable id was dropped ({})",
+                id_text(id)
+            ));
+            continue;
+        };
+        match parse_doc::<DayTemplate>(doc) {
+            Ok(mut template) => {
+                template.id = id;
+                list.push(template);
+            }
+            Err(e) => warnings.push(format!(
+                "schedule: the record of template {} is not valid ({e}); dropped",
+                id.0
+            )),
+        }
+    }
+    list
+}
+
+/// The key of a date plan's row: the date's day number from the common era.
+fn date_key(date: NaiveDate) -> u64 {
+    u64::try_from(date.num_days_from_ce()).unwrap_or_default()
+}
+
+/// Reads the date plans; a record that is unparsable, or whose date is not
+/// the one its key says, is dropped.
+fn read_date_plans(conn: &Connection, warnings: &mut Notes) -> Vec<DatePlan> {
+    let rows = rows(
+        conn,
+        "SELECT id, doc FROM date_plans ORDER BY id",
+        2,
+        "the date plans",
+        warnings,
+    );
+    let mut list = Vec::with_capacity(rows.len());
+    for row in rows {
+        let [id, doc] = row.as_slice() else {
+            continue;
+        };
+        let key = int(id).map(raw);
+        match parse_doc::<DatePlan>(doc) {
+            Ok(plan) if Some(date_key(plan.date)) == key => list.push(plan),
+            Ok(plan) => warnings.push(format!(
+                "schedule: the changes of {} were saved under another day ({}); dropped",
+                plan.date,
+                id_text(id)
+            )),
+            Err(e) => warnings.push(format!(
+                "schedule: a date record ({}) is not valid ({e}); dropped",
+                id_text(id)
+            )),
+        }
     }
     list
 }
@@ -730,6 +818,8 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
         "players",
         "rotations",
         "air_times",
+        "day_templates",
+        "date_plans",
         "kv",
     ] {
         tx.execute(&format!("DELETE FROM {table}"), [])
@@ -761,6 +851,13 @@ pub fn write_full(db: &mut Db, snap: &Snapshot) -> Result<(), StoreError> {
     write_kv(&tx, KV_DEFAULT_ROTATION, &snap.default_rotation)?;
     write_air_times(&tx, &AirTimes::default(), &snap.air_times)?;
     write_kv(&tx, KV_FILLER, &snap.filler)?;
+    for (index, template) in snap.templates.iter().enumerate() {
+        upsert_doc(&tx, "day_templates", template.id.0, index, template)?;
+    }
+    write_kv(&tx, KV_WEEK_PLAN, &snap.week_plan)?;
+    for (index, plan) in snap.date_plans.iter().enumerate() {
+        upsert_doc(&tx, "date_plans", date_key(plan.date), index, plan)?;
+    }
     tx.commit().map_err(db_error)
 }
 
@@ -897,6 +994,15 @@ pub fn write_changes(db: &mut Db, old: &Snapshot, new: &Snapshot) -> Result<(), 
     if old.filler != new.filler {
         write_kv(&tx, KV_FILLER, &new.filler)?;
     }
+    sync_docs(&tx, "day_templates", &old.templates, &new.templates, |t| {
+        t.id.0
+    })?;
+    if old.week_plan != new.week_plan {
+        write_kv(&tx, KV_WEEK_PLAN, &new.week_plan)?;
+    }
+    sync_docs(&tx, "date_plans", &old.date_plans, &new.date_plans, |p| {
+        date_key(p.date)
+    })?;
     tx.commit().map_err(db_error)
 }
 

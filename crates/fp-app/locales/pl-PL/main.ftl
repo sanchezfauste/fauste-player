@@ -112,6 +112,7 @@ alert-xruns = { $device }: przerwy urządzenia audio ({ $count })
 unknown-artist = Nieznany wykonawca
 default-playlist-name = Playlista 1
 rotation-default-name = Muzyka
+schedule-template-default-name = Podstawowy
 filler-playlist-name = Wypełniacz muzyczny
 settings-title = Ustawienia
 settings-close = Zamknij

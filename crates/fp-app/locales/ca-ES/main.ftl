@@ -110,6 +110,7 @@ alert-xruns = { $device }: talls del dispositiu d'àudio ({ $count })
 unknown-artist = Artista desconegut
 default-playlist-name = Llista 1
 rotation-default-name = Música
+schedule-template-default-name = Base
 filler-playlist-name = Musicalitzador
 settings-title = Configuració
 settings-close = Tancar
