@@ -97,3 +97,30 @@ fn a_category_counts_its_shortest_track() {
     let next = TimeOfDay::hms(10, 0, 50).unwrap();
     assert_eq!(overrun_secs(&s, &items, start, Some(next)), Some(10.0));
 }
+
+mod adding {
+    use fp_model::schedule::{Item, with_tracks};
+    use fp_model::{RotationId, TrackId};
+
+    fn track(n: u64) -> Item {
+        Item::Track {
+            track: TrackId(n),
+            time_critical: false,
+        }
+    }
+
+    #[test]
+    fn dropped_tracks_go_at_the_end() {
+        let items = with_tracks(&[track(1)], &[TrackId(2), TrackId(3)]);
+        assert_eq!(items, vec![track(1), track(2), track(3)]);
+    }
+
+    #[test]
+    fn dropped_tracks_go_before_the_rotation() {
+        let rotation = Item::Rotation {
+            rotation: RotationId(9),
+        };
+        let items = with_tracks(&[track(1), rotation.clone()], &[TrackId(2)]);
+        assert_eq!(items, vec![track(1), track(2), rotation]);
+    }
+}

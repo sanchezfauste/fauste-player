@@ -196,3 +196,177 @@ fn remove_block_sends_remove_block() {
         "{sent:?}"
     );
 }
+
+mod adding {
+    use super::*;
+    use egui::{Event, Modifiers, PointerButton, Pos2, pos2, vec2};
+    use fp_model::schedule::Item;
+    use fp_model::{RotationId, TrackId};
+
+    type H = egui_kittest::Harness<'static, fp_app::ui::app::AppUi>;
+
+    fn press(h: &mut H, at: Pos2, pressed: bool) {
+        h.event(Event::PointerButton {
+            pos: at,
+            button: PointerButton::Primary,
+            pressed,
+            modifiers: Modifiers::NONE,
+        });
+    }
+
+    fn drag(h: &mut H, from: Pos2, to: Pos2) {
+        h.event(Event::PointerMoved(from));
+        h.run_steps(1);
+        press(h, from, true);
+        h.run_steps(1);
+        for step in 1..=10 {
+            let t = step as f32 / 10.0;
+            h.event(Event::PointerMoved(pos2(
+                from.x + (to.x - from.x) * t,
+                from.y + (to.y - from.y) * t,
+            )));
+            h.run_steps(1);
+        }
+        h.run_steps(2);
+        press(h, to, false);
+        h.run_steps(3);
+    }
+
+    /// The UpdateBlock items sent, if any.
+    fn updated(sent: &[Command]) -> Option<Vec<Item>> {
+        sent.iter().rev().find_map(|c| match c {
+            Command::UpdateBlock { block, .. } => Some(block.items.clone()),
+            _ => None,
+        })
+    }
+
+    fn top() -> Item {
+        Item::Track {
+            track: TrackId(9000),
+            time_critical: false,
+        }
+    }
+
+    #[test]
+    fn dropping_tracks_adds_them_to_the_block() {
+        let (mut s, _, _) = with_block((10, 0, 0), 12.0);
+        apply(
+            &mut s,
+            Command::AddToLibrary {
+                paths: vec!["/lib/Lib A.mp3".into()],
+                category: None,
+            },
+        )
+        .unwrap();
+        let lib_a = s
+            .library
+            .track_at(std::path::Path::new("/lib/Lib A.mp3"))
+            .unwrap();
+        s.library_view = fp_model::library_view::LibraryView {
+            open: true,
+            // Right of the editor, clear of the Schedule column's bar.
+            rect: Some([900.0, 300.0, 600.0, 400.0]),
+            ..Default::default()
+        };
+        let (mut h, fake) = support::harness_sized(s, vec2(1700.0, 900.0), |ui| ui);
+        h.run_steps(2);
+        open(&mut h);
+        fake.take_sent();
+        let from = h
+            .query_all_by_label("Lib A")
+            .map(|n| n.rect())
+            .find(|r| r.left() > 900.0 && r.top() > 400.0)
+            .expect("Lib A in the library table")
+            .center();
+        // The label and its text run share the value.
+        let to = h
+            .query_all_by_value("Drop tracks from the library here")
+            .next()
+            .expect("the drop hint")
+            .rect()
+            .center();
+        drag(&mut h, from, to);
+        let sent = fake.take_sent();
+        assert_eq!(
+            updated(&sent),
+            Some(vec![
+                top(),
+                Item::Track {
+                    track: lib_a,
+                    time_critical: false
+                }
+            ]),
+            "{sent:?}"
+        );
+    }
+
+    #[test]
+    fn a_category_item_is_added_from_the_combo() {
+        let (mut s, _, _) = with_block((10, 0, 0), 12.0);
+        apply(
+            &mut s,
+            Command::CreateCategory {
+                parent: None,
+                name: "Spots".into(),
+                color: None,
+                kind: fp_model::TrackKind::Music,
+            },
+        )
+        .unwrap();
+        let spots = s.categories.iter().find(|c| c.name == "Spots").unwrap().id;
+        let (mut h, fake) = harness(s);
+        open(&mut h);
+        h.get_by_label("Add from category").click();
+        h.run_steps(2);
+        h.get_by_label("Spots").click();
+        h.run_steps(2);
+        assert_eq!(
+            updated(&fake.take_sent()),
+            Some(vec![
+                top(),
+                Item::Category {
+                    category: spots,
+                    time_critical: false
+                }
+            ])
+        );
+    }
+
+    #[test]
+    fn the_rotation_item_is_set_and_cleared() {
+        let (s, base, block) = with_block((10, 0, 0), 12.0);
+        let music: RotationId = s.rotations.default_id().unwrap();
+        let (mut h, fake) = harness(s.clone());
+        open(&mut h);
+        h.get_by_label("Music after").click();
+        h.run_steps(2);
+        h.get_all_by_label("Music").last().unwrap().click();
+        h.run_steps(2);
+        assert_eq!(
+            updated(&fake.take_sent()),
+            Some(vec![top(), Item::Rotation { rotation: music }])
+        );
+        // With the rotation item, Default rotation takes it away.
+        let mut s = s;
+        let start = s.schedule.template(base).unwrap().blocks[0].start;
+        apply(
+            &mut s,
+            Command::UpdateBlock {
+                template: base,
+                block: fp_model::schedule::Block {
+                    id: block,
+                    start,
+                    items: vec![top(), Item::Rotation { rotation: music }],
+                },
+            },
+        )
+        .unwrap();
+        let (mut h, fake) = harness(s);
+        open(&mut h);
+        h.get_by_label("Music after").click();
+        h.run_steps(2);
+        h.get_by_label("Default rotation").click();
+        h.run_steps(2);
+        assert_eq!(updated(&fake.take_sent()), Some(vec![top()]));
+    }
+}

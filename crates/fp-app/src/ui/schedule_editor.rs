@@ -8,10 +8,10 @@ use chrono::Weekday;
 use egui::{Align, Layout, RichText, Ui, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::local_time::TimeOfDay;
-use fp_model::schedule::{Block, Item, overrun_secs};
+use fp_model::schedule::{Block, Item, overrun_secs, with_tracks};
 use fp_model::{BlockId, Command, TemplateId};
 
-use super::app::{Scene, ViewState};
+use super::app::{DragTracks, Scene, ViewState};
 use super::format;
 use super::theme;
 use super::widgets::{font, font_semibold};
@@ -177,10 +177,12 @@ fn templates(ui: &mut Ui, scene: &Scene<'_>, editor: &mut EditorState) {
         });
         ui.separator();
         if let Some(id) = selected {
-            egui::ScrollArea::vertical()
-                .id_salt("schedule-template-blocks")
-                .auto_shrink([false, false])
-                .show(ui, |ui| template_blocks(ui, scene, editor, id));
+            ui.vertical(|ui| {
+                egui::ScrollArea::vertical()
+                    .id_salt("schedule-template-blocks")
+                    .auto_shrink([false, false])
+                    .show(ui, |ui| template_blocks(ui, scene, editor, id));
+            });
         }
     });
 }
@@ -271,7 +273,8 @@ pub(crate) fn block_editor(
 ) -> Option<BlockEdit> {
     let t = scene.i18n;
     let mut edit = None;
-    egui::Frame::new()
+    let dragging = egui::DragAndDrop::has_payload_of_type::<DragTracks>(ui.ctx());
+    let frame = egui::Frame::new()
         .fill(theme::NEUTRAL_900)
         .inner_margin(egui::Margin::same(8))
         .corner_radius(4.0)
@@ -317,9 +320,106 @@ pub(crate) fn block_editor(
                     }));
                 }
             }
+            if let Some(items) = adders(ui, scene, block) {
+                edit = Some(BlockEdit::Update(Block {
+                    items,
+                    ..block.clone()
+                }));
+            }
         });
+    // Tracks dragged from the library onto the block join it.
+    let response = frame.response;
+    if dragging && response.contains_pointer() {
+        ui.painter().rect_stroke(
+            response.rect,
+            4.0,
+            egui::Stroke::new(2.0, theme::PLAY),
+            egui::StrokeKind::Inside,
+        );
+    }
+    if let Some(payload) = response.dnd_release_payload::<DragTracks>() {
+        edit = Some(BlockEdit::Update(Block {
+            items: with_tracks(&block.items, &payload.tracks),
+            ..block.clone()
+        }));
+    }
     ui.add_space(6.0);
     edit
+}
+
+/// The drop hint, Add from category and Music after (the block's final
+/// rotation item, AU6: none plays the default rotation, AU8). Returns the
+/// block's new items.
+fn adders(ui: &mut Ui, scene: &Scene<'_>, block: &Block) -> Option<Vec<Item>> {
+    let t = scene.i18n;
+    let state = scene.state;
+    let mut items = None;
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing = vec2(10.0, 0.0);
+        ui.label(
+            RichText::new(t.tr("schedule-block-drop-hint"))
+                .font(font(11.0))
+                .color(theme::NEUTRAL_500),
+        );
+        let mut category = None;
+        egui::ComboBox::from_id_salt(("schedule-add-category", block.id.0))
+            .selected_text(t.tr("schedule-add-category"))
+            .show_ui(ui, |ui| {
+                for c in state.categories.iter() {
+                    ui.selectable_value(&mut category, Some(c.id), c.name.as_str());
+                }
+            })
+            .response
+            .widget_info(|| {
+                egui::WidgetInfo::labeled(egui::Role::ComboBox, true, t.tr("schedule-add-category"))
+            });
+        if let Some(category) = category {
+            let mut new = block.items.clone();
+            let at = match new.last() {
+                Some(Item::Rotation { .. }) => new.len() - 1,
+                _ => new.len(),
+            };
+            new.insert(
+                at,
+                Item::Category {
+                    category,
+                    time_critical: false,
+                },
+            );
+            items = Some(new);
+        }
+        let current = match block.items.last() {
+            Some(Item::Rotation { rotation }) => Some(*rotation),
+            _ => None,
+        };
+        let default_text = t.tr("schedule-music-after-default");
+        let mut choice = current;
+        egui::ComboBox::from_label(t.tr("schedule-music-after"))
+            .selected_text(
+                current
+                    .and_then(|r| state.rotations.get(r))
+                    .map_or_else(|| default_text.clone(), |r| r.name.clone()),
+            )
+            .show_ui(ui, |ui| {
+                ui.selectable_value(&mut choice, None, default_text.as_str());
+                for r in state.rotations.iter() {
+                    ui.selectable_value(&mut choice, Some(r.id), r.name.as_str());
+                }
+            });
+        if choice != current {
+            let mut new: Vec<Item> = block
+                .items
+                .iter()
+                .filter(|i| !matches!(i, Item::Rotation { .. }))
+                .cloned()
+                .collect();
+            if let Some(rotation) = choice {
+                new.push(Item::Rotation { rotation });
+            }
+            items = Some(new);
+        }
+    });
+    items
 }
 
 /// The block's start as `HH:MM:SS`, sent when the field loses focus and

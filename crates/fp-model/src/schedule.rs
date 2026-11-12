@@ -783,3 +783,21 @@ pub fn overrun_secs(
     let excess = total - (to - from);
     (excess > 0.0).then_some(excess)
 }
+
+/// `items` with `tracks` added as track items: before a final rotation
+/// item (a rotation is always last), otherwise at the end.
+pub fn with_tracks(items: &[Item], tracks: &[TrackId]) -> Vec<Item> {
+    let at = match items.last() {
+        Some(Item::Rotation { .. }) => items.len() - 1,
+        _ => items.len(),
+    };
+    let mut out = items.to_vec();
+    out.splice(
+        at..at,
+        tracks.iter().map(|track| Item::Track {
+            track: *track,
+            time_critical: false,
+        }),
+    );
+    out
+}
