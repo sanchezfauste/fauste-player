@@ -1,7 +1,9 @@
 //! The schedule (automation spec AU5–AU14): blocks of items at a time of
 //! day, day templates, the week plan, and the changes made for one date.
 
-use chrono::Weekday;
+use std::collections::BTreeMap;
+
+use chrono::{Datelike, NaiveDate, Weekday};
 use serde::{Deserialize, Serialize};
 
 use crate::error::ModelError;
@@ -120,12 +122,73 @@ impl WeekPlan {
     }
 }
 
+/// One change a date makes to its template's blocks (AU11, AU12).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DateChange {
+    /// The template block with `block.id` has this content on the date.
+    /// `own_time`: its start was set on the date; otherwise it follows the
+    /// template block's. The start is kept either way, for when the
+    /// template block is deleted and this becomes a block of the date.
+    Changed { block: Block, own_time: bool },
+    /// The template block with this id does not play on the date.
+    Removed(BlockId),
+    /// A block of this date alone.
+    Added(Block),
+}
+
+impl DateChange {
+    fn block_id(&self) -> BlockId {
+        match self {
+            DateChange::Changed { block, .. } | DateChange::Added(block) => block.id,
+            DateChange::Removed(id) => *id,
+        }
+    }
+}
+
+/// What one date changes: another template (AU10) and block changes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DatePlan {
+    pub date: NaiveDate,
+    #[serde(default)]
+    pub template: Option<TemplateId>,
+    #[serde(default)]
+    pub changes: Vec<DateChange>,
+}
+
+impl DatePlan {
+    fn is_empty(&self) -> bool {
+        self.template.is_none() && self.changes.is_empty()
+    }
+}
+
+/// Where a block of a computed day comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BlockOrigin {
+    /// The template's block, unchanged.
+    Template,
+    /// A template block changed for this date.
+    Changed,
+    /// A block of this date alone: added on it, or changed on it when its
+    /// template block no longer exists.
+    DateOnly,
+}
+
+/// A block of a date's computed schedule (AU13).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DayBlock {
+    pub id: BlockId,
+    pub start: TimeOfDay,
+    pub items: Vec<Item>,
+    pub origin: BlockOrigin,
+}
+
 /// Everything the schedule stores: the templates, the week plan and the
 /// date plans.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Schedule {
     templates: Vec<DayTemplate>,
     week: WeekPlan,
+    dates: BTreeMap<NaiveDate, DatePlan>,
 }
 
 impl Schedule {
@@ -148,6 +211,93 @@ impl Schedule {
             .flat_map(|t| std::iter::once(t.id.0).chain(t.blocks.iter().map(|b| b.id.0)))
             .max()
             .unwrap_or(0)
+    }
+
+    pub fn date_plan(&self, date: NaiveDate) -> Option<&DatePlan> {
+        self.dates.get(&date)
+    }
+
+    pub fn date_plans(&self) -> impl Iterator<Item = &DatePlan> {
+        self.dates.values()
+    }
+
+    /// AU10: the date's own template if it still exists, else its weekday's.
+    pub fn template_for(&self, date: NaiveDate) -> Option<TemplateId> {
+        self.dates
+            .get(&date)
+            .and_then(|p| p.template)
+            .filter(|t| self.template(*t).is_some())
+            .or_else(|| self.week.get(date.weekday()))
+    }
+
+    /// AU13: the date's blocks, its template with its changes, in start
+    /// order with no two at one start. When two share a start, a block of
+    /// the date (changed or its own) wins over the template's; between two
+    /// of the same kind, the lower id.
+    pub fn day(&self, date: NaiveDate) -> Vec<DayBlock> {
+        let template = self.template_for(date).and_then(|t| self.template(t));
+        let changes = self
+            .dates
+            .get(&date)
+            .map(|p| p.changes.as_slice())
+            .unwrap_or_default();
+        let mut day: Vec<DayBlock> = Vec::new();
+        for b in template.map(|t| t.blocks.as_slice()).unwrap_or_default() {
+            let change = changes.iter().find(|c| c.block_id() == b.id);
+            match change {
+                Some(DateChange::Removed(_)) => {}
+                Some(DateChange::Changed { block, own_time }) => day.push(DayBlock {
+                    id: b.id,
+                    start: if *own_time { block.start } else { b.start },
+                    items: block.items.clone(),
+                    origin: BlockOrigin::Changed,
+                }),
+                _ => day.push(DayBlock {
+                    id: b.id,
+                    start: b.start,
+                    items: b.items.clone(),
+                    origin: BlockOrigin::Template,
+                }),
+            }
+        }
+        for c in changes {
+            let own = match c {
+                DateChange::Added(block) => Some(block),
+                DateChange::Changed { block, .. }
+                    if template.and_then(|t| t.block(block.id)).is_none() =>
+                {
+                    Some(block)
+                }
+                _ => None,
+            };
+            if let Some(block) = own {
+                day.push(DayBlock {
+                    id: block.id,
+                    start: block.start,
+                    items: block.items.clone(),
+                    origin: BlockOrigin::DateOnly,
+                });
+            }
+        }
+        day.sort_by_key(|b| (b.start, b.origin == BlockOrigin::Template, b.id));
+        day.dedup_by_key(|b| b.start);
+        day
+    }
+
+    /// The date's plan, created empty when it has none.
+    fn plan_mut(&mut self, date: NaiveDate) -> &mut DatePlan {
+        self.dates.entry(date).or_insert_with(|| DatePlan {
+            date,
+            template: None,
+            changes: Vec::new(),
+        })
+    }
+
+    /// Drops the date's plan when it no longer changes anything.
+    fn settle(&mut self, date: NaiveDate) {
+        if self.dates.get(&date).is_some_and(DatePlan::is_empty) {
+            self.dates.remove(&date);
+        }
     }
 
     fn template_mut(&mut self, id: TemplateId) -> Result<&mut DayTemplate, ModelError> {
@@ -257,6 +407,12 @@ pub(crate) fn delete_template(
         return Err(ModelError::TemplateInUse);
     }
     state.schedule.templates.retain(|t| t.id != template);
+    for plan in state.schedule.dates.values_mut() {
+        if plan.template == Some(template) {
+            plan.template = None;
+        }
+    }
+    state.schedule.dates.retain(|_, p| !p.is_empty());
     Ok(())
 }
 
@@ -312,5 +468,132 @@ pub(crate) fn set_week_template(
         return Err(ModelError::UnknownTemplate(template));
     }
     state.schedule.week.set(weekday, template);
+    Ok(())
+}
+
+pub(crate) fn set_date_template(
+    state: &mut AppState,
+    date: NaiveDate,
+    template: Option<TemplateId>,
+) -> Result<(), ModelError> {
+    if let Some(t) = template
+        && state.schedule.template(t).is_none()
+    {
+        return Err(ModelError::UnknownTemplate(t));
+    }
+    state.schedule.plan_mut(date).template = template;
+    state.schedule.settle(date);
+    Ok(())
+}
+
+/// A start no other block of the date's computed day has.
+fn free_on(
+    schedule: &Schedule,
+    date: NaiveDate,
+    start: TimeOfDay,
+    own: Option<BlockId>,
+) -> Result<(), ModelError> {
+    let taken = schedule
+        .day(date)
+        .iter()
+        .any(|b| b.start == start && Some(b.id) != own);
+    if taken {
+        Err(ModelError::BlockTimeTaken)
+    } else {
+        Ok(())
+    }
+}
+
+pub(crate) fn change_block_on_date(
+    state: &mut AppState,
+    date: NaiveDate,
+    block: Block,
+) -> Result<(), ModelError> {
+    check_items(&block.items)?;
+    let schedule = &mut state.schedule;
+    if !schedule.day(date).iter().any(|b| b.id == block.id) {
+        return Err(ModelError::UnknownBlock(block.id));
+    }
+    free_on(schedule, date, block.start, Some(block.id))?;
+    let template_start = schedule
+        .template_for(date)
+        .and_then(|t| schedule.template(t))
+        .and_then(|t| t.block(block.id))
+        .map(|b| b.start);
+    let plan = schedule.plan_mut(date);
+    if let Some(added) = plan.changes.iter_mut().find_map(|c| match c {
+        DateChange::Added(b) if b.id == block.id => Some(b),
+        _ => None,
+    }) {
+        *added = block;
+        return Ok(());
+    }
+    let own_time = template_start != Some(block.start);
+    plan.changes.retain(|c| c.block_id() != block.id);
+    plan.changes.push(DateChange::Changed { block, own_time });
+    Ok(())
+}
+
+pub(crate) fn add_block_on_date(
+    state: &mut AppState,
+    date: NaiveDate,
+    start: TimeOfDay,
+) -> Result<(), ModelError> {
+    free_on(&state.schedule, date, start, None)?;
+    let id = state.ids.block();
+    state
+        .schedule
+        .plan_mut(date)
+        .changes
+        .push(DateChange::Added(Block {
+            id,
+            start,
+            items: Vec::new(),
+        }));
+    Ok(())
+}
+
+pub(crate) fn remove_block_on_date(
+    state: &mut AppState,
+    date: NaiveDate,
+    block: BlockId,
+) -> Result<(), ModelError> {
+    let schedule = &mut state.schedule;
+    if !schedule.day(date).iter().any(|b| b.id == block) {
+        return Err(ModelError::UnknownBlock(block));
+    }
+    let in_template = schedule
+        .template_for(date)
+        .and_then(|t| schedule.template(t))
+        .is_some_and(|t| t.block(block).is_some());
+    let plan = schedule.plan_mut(date);
+    plan.changes.retain(|c| c.block_id() != block);
+    if in_template {
+        plan.changes.push(DateChange::Removed(block));
+    }
+    schedule.settle(date);
+    Ok(())
+}
+
+pub(crate) fn revert_block_on_date(
+    state: &mut AppState,
+    date: NaiveDate,
+    block: BlockId,
+) -> Result<(), ModelError> {
+    let schedule = &mut state.schedule;
+    let found = schedule.dates.get(&date).is_some_and(|p| {
+        p.changes.iter().any(|c| {
+            matches!(c, DateChange::Changed { .. } | DateChange::Removed(_))
+                && c.block_id() == block
+        })
+    });
+    if !found {
+        return Err(ModelError::UnknownBlock(block));
+    }
+    schedule
+        .plan_mut(date)
+        .changes
+        .retain(|c| matches!(c, DateChange::Added(_)) || c.block_id() != block);
+    schedule.settle(date);
     Ok(())
 }
