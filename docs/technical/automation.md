@@ -2,8 +2,9 @@
 
 The design is the [automation spec](../superpowers/specs/2026-11-11-automation-design.md)
 (rules `AU<n>`). This page describes what is implemented so far: the music
-filler's selection rules, pure functions in `fp-model`. The filler player,
-the schedule and their screens come in later plans.
+filler's selection rules and player, and the schedule's data model, pure
+functions in `fp-model`. Running the schedule and its screens come in later
+plans.
 
 ## Time and randomness (`wall_time.rs`)
 
@@ -143,3 +144,63 @@ After `DeleteRotation` or `SetDefaultRotation`, `filler::retarget` moves a
 filler whose rotation was deleted, or that follows the default, to the
 default as `SetFillerRotation(None)` would. Settings → Playlists lists
 the playlists without the filler's.
+
+## The schedule model (`schedule.rs`, `local_time.rs`)
+
+The schedule's data (AU5–AU14) lives in `AppState::schedule`, a `Schedule`
+of three parts:
+
+- **day templates** (`DayTemplate`): a name and `blocks`, kept in start
+  order with no two at one start (`BlockTimeTaken`). A `Block` has a stable
+  `BlockId`, a `TimeOfDay` (seconds after local midnight, `0..86 400`) and
+  `items`;
+- **the week plan** (`WeekPlan`): a template per weekday, Monday first. A
+  template the week plan uses cannot be deleted (`TemplateInUse`), nor the
+  last one (`LastTemplate`);
+- **date plans** (`DatePlan`, one per `NaiveDate`): another template for the
+  date (AU10) and `changes`, each a `DateChange`:
+  - `Changed { block, own_time }`: a template block's content for that date.
+    `own_time` is set when the date moved it; otherwise it follows the
+    template block's start.
+  - `Removed(id)`: the template block does not play that date.
+  - `Added(block)`: a block of the date alone.
+
+  A plan that no longer changes anything is removed.
+
+An `Item` is a track, one track of a category, or a rotation, which must be
+the block's last item (`check_items`, `RotationNotLast`).
+`Item::is_time_critical` is AU7: an Hourly ID track, a category of Hourly ID
+kind, or an item the operator marked.
+
+The commands are:
+
+- for templates: `CreateTemplate`, `DuplicateTemplate` (fresh block ids),
+  `RenameTemplate`, `DeleteTemplate`, `AddBlock`, `UpdateBlock`,
+  `RemoveBlock` and `SetWeekTemplate`;
+- for dates: `SetDateTemplate`, `ChangeBlockOnDate`, `AddBlockOnDate`,
+  `RemoveBlockOnDate` and `RevertBlockOnDate` ("back to the template").
+
+The date commands name blocks of the date's computed day.
+
+`Schedule::day(date)` computes a date (AU13) as a list of `DayBlock`s
+(`origin`: `Template`, `Changed` or `DateOnly`):
+
+1. It takes the template's blocks (`template_for`: the date's template if it
+   still exists, else its weekday's).
+2. It applies the changes. A `Changed` whose template block is gone (deleted,
+   or the date switched template) becomes a `DateOnly` block at its own
+   start.
+3. It sorts by start. When two blocks share a start, the date's block wins
+   over the template's; between two blocks of the same kind, the lower id
+   wins.
+
+Local time is passed in: `block_start(zone, date, start)` turns a block's
+start into a `WallTime` through the `LocalZone` trait (implemented for
+`chrono::Local` and `FixedOffset`; tests use their own zone). A time that
+does not exist on the date (the spring change) gives `None`, and the block
+is missed. A time that occurs twice (the autumn change) gives the first
+occurrence (AU14).
+
+`prune_dates(state, today)` deletes the date plans older than
+`automation.overrides_keep_days` (AU38). The app calls it at start-up. The
+store saves the schedule in schema 4 ([persistence](persistence.md)).
