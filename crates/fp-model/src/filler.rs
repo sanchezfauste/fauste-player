@@ -11,6 +11,7 @@ use crate::player::{PlayMode, PlayerState};
 use crate::playlist::Playlist;
 use crate::rotation_cursor::RotationCursor;
 use crate::state::AppState;
+use chrono::NaiveDateTime;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FillerState {
@@ -24,6 +25,9 @@ pub struct FillerState {
     pub generated: HashSet<EntryId>,
     /// The last top-up found nothing to play (AU34 alert); runtime only.
     pub starved: bool,
+    /// The row on air and when the model first saw it there (AU25: when
+    /// the rows ahead will start); runtime only.
+    pub current_since: Option<(EntryId, NaiveDateTime)>,
 }
 
 /// Creates the filler (a stopped player last in `players` and an empty
@@ -51,6 +55,7 @@ pub fn ensure(state: &mut AppState, playlist_name: &str) -> Vec<EngineAction> {
         cursor,
         generated: HashSet::new(),
         starved: false,
+        current_since: None,
     });
     vec![EngineAction::AddPlayer { player }]
 }
@@ -101,9 +106,76 @@ pub(crate) fn settle(state: &mut AppState, out: &mut Vec<EngineAction>) {
     let Some(f) = state.filler.clone() else {
         return;
     };
+    note_current(state, &f);
     trim(state, &f, out);
     drop_beyond(state, &f, out);
     top_up(state);
+}
+
+/// Keeps `current_since` on the filler's row on air.
+fn note_current(state: &mut AppState, f: &FillerState) {
+    let current = state
+        .players
+        .iter()
+        .find(|p| p.id == f.player)
+        .filter(|p| p.transport != crate::player::Transport::Stopped)
+        .and_then(|p| p.current);
+    let since = match current {
+        Some(entry) if f.current_since.is_some_and(|(e, _)| e == entry) => f.current_since,
+        Some(entry) => Some((entry, state.local_now)),
+        None => None,
+    };
+    if let Some(filler) = state.filler.as_mut() {
+        filler.current_since = since;
+    }
+}
+
+/// How long after a row starts the row after it starts (AU25): to the
+/// segue point when `players.auto_segue` is on and the track has one
+/// strictly inside its play range (as the player's own plan), else to the
+/// end; an unknown length counts as `UNKNOWN_LENGTH_SECS`.
+pub(crate) fn lead_secs(state: &AppState, entry: EntryId) -> f64 {
+    let Some(track) = state.track_for_entry(entry) else {
+        return UNKNOWN_LENGTH_SECS;
+    };
+    let range = track.play_range(state.config.players.use_cue_markers);
+    let Some(end) = range
+        .known_end()
+        .filter(|e| e.is_finite() && *e > range.cue_in)
+    else {
+        return UNKNOWN_LENGTH_SECS;
+    };
+    let segue = track
+        .segue_start_secs()
+        .filter(|s| state.config.players.auto_segue && *s >= range.cue_in && *s < end);
+    segue.unwrap_or(end) - range.cue_in
+}
+
+/// When each row of the filler's list from its anchor on is expected to
+/// start (AU25): the first when the row on air reaches its lead (never
+/// before now), or now when nothing plays; each next one a lead later.
+pub fn starts_ahead(state: &AppState) -> Vec<(EntryId, NaiveDateTime)> {
+    let Some(f) = state.filler.as_ref() else {
+        return Vec::new();
+    };
+    let Some(list) = state.playlists.get(f.playlist) else {
+        return Vec::new();
+    };
+    let now = state.local_now;
+    let mut at = match f.current_since {
+        Some((entry, since)) => (since + millis(lead_secs(state, entry))).max(now),
+        None => now,
+    };
+    let mut out = Vec::new();
+    for e in list.entries.iter().skip(anchor(state, f)) {
+        out.push((e.id, at));
+        at += millis(lead_secs(state, e.id));
+    }
+    out
+}
+
+fn millis(secs: f64) -> chrono::TimeDelta {
+    chrono::TimeDelta::milliseconds((secs * 1000.0).round() as i64)
 }
 
 /// How far ahead the filler queues: `filler_lookahead_mins`, or up to the
