@@ -57,7 +57,7 @@ fn a_forward_jump_misses_the_skipped_blocks() {
     r.at_hms(10, 30, 0);
     r.apply(Command::StartAutomation);
     // The clock jumps from 10:30 to 12:30.
-    r.at_hms(12, 30, 0);
+    r.jump_hms(12, 30, 0);
     assert_eq!(r.playing(r.schedule_player()), None);
     assert!(r.missed().contains(&r.item(today(), 11, 0, 0)));
     assert!(r.missed().contains(&r.item(today(), 12, 0, 0)));

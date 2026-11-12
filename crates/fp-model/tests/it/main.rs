@@ -12,6 +12,7 @@ mod automation_clock;
 mod automation_config;
 mod automation_next;
 mod automation_player;
+mod automation_review;
 mod automation_rig;
 mod automation_run;
 mod availability;

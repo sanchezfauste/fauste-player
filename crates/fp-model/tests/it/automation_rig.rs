@@ -136,12 +136,29 @@ impl Rig {
         self.s.wall_now = WallTime(at.and_utc().timestamp_millis());
     }
 
-    /// Moves the clock to `at` and ticks.
+    /// Moves the clock forward to `at` the way time passes, ticking at
+    /// least every 30 s (no step is a clock jump); returns the actions of
+    /// the last tick. A step back is a jump.
     pub fn at(&mut self, at: NaiveDateTime) -> Vec<EngineAction> {
+        let step = chrono::TimeDelta::seconds(30);
+        while self.s.local_now + step < at {
+            let t = self.s.local_now + step;
+            self.jump(t);
+        }
+        self.jump(at)
+    }
+
+    /// Sets the clock to `at` at once (a clock jump when far) and ticks.
+    pub fn jump(&mut self, at: NaiveDateTime) -> Vec<EngineAction> {
         self.set_time(at);
         let (actions, _) = tick(&mut self.s);
         self.engine(&actions);
         actions
+    }
+
+    /// Jumps to today's `h:m:s`.
+    pub fn jump_hms(&mut self, h: u32, m: u32, s: u32) -> Vec<EngineAction> {
+        self.jump(today().and_hms_opt(h, m, s).unwrap())
     }
 
     /// Ticks at today's `h:m:s`.
