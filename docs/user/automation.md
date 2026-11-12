@@ -72,5 +72,11 @@ then on the track. Settings → Automation has every value, and is where
 you make, rename and change rotations (see
 [Settings](settings.md#automation)).
 
+Before a block of the schedule, the filler also chooses its last songs by
+their length, so the music ends cleanly: the song that fades out when the
+block starts loses at most 30 seconds, and no song starts that would play
+for less than 45 seconds. When no song in the rotation can do both, the
+one that loses least plays.
+
 An **Hourly ID** is a track kind of its own (Library → Kind ▸ Hourly ID),
 for the station's identification at the top of the hour.

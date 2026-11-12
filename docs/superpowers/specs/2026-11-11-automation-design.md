@@ -249,7 +249,10 @@ rename it before the plans.
   for less than `automation.min_song_play_secs` before its fade
   *(maintainer: the goal; the selection method is the builder's call within
   §6's classic methods)*. If no choice satisfies both, the one that cuts least
-  wins and a line is logged.
+  wins and a line is logged. *(My call, plan 5: a greedy fit of known
+  lengths on the filler's timeline, segues included; the queue after the
+  loaded next is checked again once per song, since it drifts; see
+  `docs/technical/automation.md`.)*
 - **AU26.** A schedule item is never faded or cut to keep the next block on
   time *(maintainer)*. Overruns are shown at edit time (AU37) and absorbed at
   play time by AU21–AU22.

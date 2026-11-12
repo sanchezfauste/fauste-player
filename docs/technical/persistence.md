@@ -548,6 +548,8 @@ a criterion off.
 | `overrides_keep_days` | 30 | the schedule's date overrides older than this many days are deleted at start-up (1–3650; config file only for now) |
 | `late_tolerance_secs` | 120 | a block that started less than this many seconds ago is still next by the clock, and a time-critical item may start this late (0–1800; config file only for now) |
 | `block_fade_ms` | 2000 | the music filler fades out over this many milliseconds, ending at a block's start (0–10000; config file only for now) |
+| `max_fade_cut_secs` | 30 | the song the music filler fades at a block's start loses at most this many seconds (0–300; config file only for now) |
+| `min_song_play_secs` | 45 | the music filler never starts a song that would play less than this many seconds before its fade at a block's start (0–600; config file only for now) |
 
 ### `limits` (config file only)
 
