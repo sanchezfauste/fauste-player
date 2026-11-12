@@ -9,12 +9,15 @@ cartwall sotto di essi.
 
 ## Mostrare e nascondere i pannelli {#show-and-hide-panels}
 
-Le tessere a sinistra della barra superiore, **P1** … **Pn** e **Cartwall**,
-mostrano quali pannelli sono sullo schermo: una tessera accesa è mostrata.
-Fai clic su una tessera per nascondere o mostrare il suo pannello. Con molti
-lettori, le tessere scorrono di lato (usa la rotella del mouse su di esse) e
-il pulsante del layout resta in vista. Gli altri pannelli prendono lo spazio
-che resta libero, e un lettore mostrato di nuovo torna alla sua larghezza.
+Le tessere a sinistra della barra superiore, **Palinsesto** e **Musica** (il
+[palinsesto](automation.md#the-schedule-column) e il
+[riempitivo musicale](automation.md#the-music-filler), entrambi nascosti
+finché non li mostri), **P1** … **Pn** e **Cartwall**, mostrano quali pannelli
+sono sullo schermo: una tessera accesa è mostrata. Fai clic su una tessera
+per nascondere o mostrare il suo pannello. Con molti lettori, le tessere
+scorrono di lato (usa la rotella del mouse su di esse) e il pulsante del
+layout resta in vista. Gli altri pannelli prendono lo spazio che resta
+libero, e un lettore mostrato di nuovo torna alla sua larghezza.
 
 Nascondere toglie soltanto un pannello dallo schermo. Un lettore nascosto
 continua a suonare, e il suo tasto numerico, il MIDI, l'API remota, la sua

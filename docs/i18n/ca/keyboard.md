@@ -30,7 +30,7 @@ A **Configuració → Dreceres de teclat**, fes clic en una acció i prem la tec
 se'n mostra el nom. Tria **Assignar** per moure la tecla, o **Cancel·lar**.
 **Treure** elimina una drecera i **Restaurar els valors per defecte** (a dalt
 a la dreta de la secció) restaura la taula de dalt. Accions disponibles, per
-a cada reproductor i cartutx:
+a cada reproductor (P1 … Pn; la columna **Música** no té dreceres) i cartutx:
 
 - play, anterior, reiniciar, pausa, stop, stop amb fos i CUE en un
   reproductor (anterior i reiniciar no tenen tecla per defecte);

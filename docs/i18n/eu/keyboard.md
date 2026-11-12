@@ -33,7 +33,8 @@ tekla hori erabiltzen badu jada, haren izena erakusten da. Aukeratu
 **Esleitu** tekla mugitzeko, edo **Utzi**. **Kendu** botoiak laster-tekla
 bat kentzen du, eta **Leheneratu balio lehenetsiak** botoiak (atalaren
 goiko eskuinaldean) goiko taula leheneratzen du. Erabilgarri dauden
-ekintzak, erreproduzitzaile eta kartutxo guztietarako:
+ekintzak, erreproduzitzaile guztietarako (P1 … Pn; **Musika** zutabeak ez du
+lasterbiderik) eta kartutxo guztietarako:
 
 - play, aurrekoa, berrabiarazi, pausatu, gelditu, itzaltzearekin gelditu
   eta CUE erreproduzitzaile batean (aurrekoak eta berrabiarazik ez dute

@@ -8,7 +8,7 @@ Das Fenster hat unabhängig vom Abschnitt eine feste Größe (900 × 640, auf ei
 kleinen Bildschirm kleiner), und der Abschnitt scrollt darin. In jedem Abschnitt
 sind die Beschriftungen in einer Spalte ausgerichtet.
 
-Die Abschnitte Player, Pegelmesser, Analyse, Lautheit und Tastenkürzel haben in ihrer
+Die Abschnitte Player, Pegelmesser, Analyse, Lautheit, Automatisierung und Tastenkürzel haben in ihrer
 Kopfzeile einen Button **Standardwerte wiederherstellen**. Er fragt nach einer
 Bestätigung und setzt dann nur diesen Abschnitt zurück (Player behält die Anzahl
 der Player und die Sprache; Tastenkürzel hat keinen weiteren Zurücksetzen-Button).
@@ -86,7 +86,7 @@ Tausch zweier Geräte).
 | Audiosystem | Die letzte Wahl, **Keine Ausgabe (stumm)**, spielt nichts ab: Die Zeitachsen laufen in Echtzeit ohne Soundkarte (für eine Maschine ohne eine oder zum Proben). Linux: PipeWire (in Builds, die es enthalten), PulseAudio, JACK oder ALSA. Windows: WASAPI, ASIO (in Builds, die es enthalten) oder JACK. macOS: Core Audio oder JACK. Systeme, die auf diesem Computer fehlen oder kein Ausgabegerät haben (ein JACK-Server, der nicht läuft), werden als nicht verfügbar angezeigt. „Systemstandard“ verwendet in dieser Reihenfolge das erste verfügbare. |
 | Abtastrate | Die Rate, mit der jeder Ausgang läuft, sofern ein Gerät keine eigene hat (Erweitert); Dateien werden mit hochwertigem Resampling in sie umgewandelt. Bit-perfect-Geräte starten mit ihrer Rate und folgen dann den Dateien. |
 | Puffergröße | Frames pro Audioblock, sofern ein Gerät keine eigene hat; die resultierende Latenz steht darunter. Ausgänge über einen Soundserver oder einen System-Mixer (PulseAudio, das ALSA-Gerät `default`) verlangen mindestens 50 ms, egal welche Größe hier steht, oder so viel, wie das Gerät annimmt, damit ein ausgelasteter Computer nicht zu hören ist; die Latenz sagt es dann (`shared_buffer_ms` in der Konfigurationsdatei) |
-| Ausgänge pro Player | Für jeden Player ein **Main**-Gerät (On Air) und ein **Cue**-Gerät (Vorhören), jeweils mit einem Kanalpaar. Eine Soundkarte, die mehrere Ausgabeprofile anbietet (ALSA listet Front, Surround, direkte Hardware…), zeigt jedes als *Karte — Profil*; zwei Einträge, die dennoch gleich lauten würden, erhalten ihre Geräte-ID in Klammern. Mehrkanal-Interfaces können mehrere Player auf verschiedenen Paaren tragen. Ein Cue-Ausgang, der einen Sendeausgang teilt (den Main eines Players oder den der Cartwall), ist erlaubt: Ein Hinweis darunter sagt, dass sein Vorhören auf Sendung zu hören ist und dass zuerst gefragt wird, solange dort etwas spielt. |
+| Ausgänge pro Player | Für jeden Player und für die Spalte **Musik** (den [Musikfüller](automation.md)) ein **Main**-Gerät (On Air) und ein **Cue**-Gerät (Vorhören), jeweils mit einem Kanalpaar. Eine Soundkarte, die mehrere Ausgabeprofile anbietet (ALSA listet Front, Surround, direkte Hardware…), zeigt jedes als *Karte — Profil*; zwei Einträge, die dennoch gleich lauten würden, erhalten ihre Geräte-ID in Klammern. Mehrkanal-Interfaces können mehrere Player auf verschiedenen Paaren tragen. Ein Cue-Ausgang, der einen Sendeausgang teilt (den Main eines Players oder den der Cartwall), ist erlaubt: Ein Hinweis darunter sagt, dass sein Vorhören auf Sendung zu hören ist und dass zuerst gefragt wird, solange dort etwas spielt. |
 | Main testen / Cue testen | Spielt einen kurzen Ton (1 kHz auf Main, 440 Hz auf Cue, 1,5 s, −18 dBFS) auf dem gewählten Ausgang ab, damit du die Verkabelung prüfen kannst, bevor du auf Sendung gehst |
 | Bibliothek | Der Cue-Ausgang der Bibliothek, mit eigenem **Cue testen**: wo das [Vorhören](library.md#pre-listening) des Bibliotheksfensters (auf einem Telefon das des Tabs Bibliothek) zu hören ist. Ohne ihn ist Vorhören in der Vorhörleiste abgeblendet. Unter Android lautet seine leere Auswahl *Systemstandard* statt *Keiner*: Das Vorhören und **Cue testen** spielen dann auf dem Standardausgang (siehe [Android → Bibliothek](android.md#library)). Ein Ausgang Bibliothek auf einem Sendeausgang funktioniert wie der Cue eines Players: Ein Hinweis darunter sagt, dass sein Vorhören auf Sendung zu hören ist und dass zuerst gefragt wird, solange dort etwas spielt. Er steht in der Ansicht Einfach und Erweitert, auch auf einem Telefon |
 | Cartwall | Die Main- und Cue-Ausgänge der Cartwall. Main ist standardmäßig der Systemausgang. Ohne Cue gibt es kein Cart-Vorhören; ein Cue auf einem Sendeausgang funktioniert wie bei den Playern. |
@@ -112,21 +112,23 @@ Zeitachsen, und das Gerät wird wieder geöffnet, wenn es zurückkommt (siehe
 
 ## Player {#players}
 
-![Einstellungen, Player: Anzahl der Player, Standardmodus, Blendzeit, automatischer Mix, Cue-in und Cue-out, Warnung vor Track-Ende und Sprache](../../images/guide/settings-players.png)
+![Einstellungen, Player: Anzahl der Player, Standardmodus, Überblendzeit, Ausblendzeit, automatischer Mix, Cue-in und Cue-out, Warnung vor Track-Ende und Sprache](../../images/guide/settings-players.png)
 
 | Einstellung | Standard | Bedeutung |
 |---|---|---|
 | Sprache | System | Sprache der Oberfläche |
 | Anzahl der Player | 4 | Spalten im Hauptfenster (ein Player on Air kann nicht entfernt werden). Die Zahl gilt, wenn du den Schieberegler loslässt; eine in das Feld getippte Zahl gilt, wenn du Enter drückst oder das Feld verlässt, und Esc bricht ab |
 | Standardmodus | CONT | Der Modus, mit dem die Player starten |
-| Blendzeit | 1000 ms | Wird von Play während on Air und von Ausblenden verwendet. Bei einem Player, dessen Main-Ausgang bit-perfect ist, nur von Ausblenden |
+| Überblendzeit | 1000 ms | Wie lange der Track on Air ausgeblendet wird, wenn du Play (Weiter) drückst, während er spielt, und bei Zurück. Gilt nicht für einen Player, dessen Main-Ausgang bit-perfect ist |
+| Ausblendzeit | 2000 ms | Wie lange **Ausblenden** den Track ausblendet. Gilt für jeden Player, auch für Bit-perfect-Player |
 | Automatischer Mix am MIX-Punkt | An | Tracks im CONT-Modus überlappen. Gilt nicht für einen Player, dessen Main-Ausgang bit-perfect ist |
 | Cue-in und Cue-out verwenden | An | Aus: Die Player spielen jeden Track vom Anfang bis zum Ende der Datei; die Marker bleiben erhalten, und Carts verwenden weiterhin ihre eigenen. Dauern und Playlist-Summen folgen demselben Bereich |
 | Warnung vor Track-Ende | 10 s | Wann der Countdown rot zu blinken beginnt |
 
 Solange der Main-Ausgang eines Players bit-perfect ist, sagt ein Hinweis unter
 **Automatischer Mix am MIX-Punkt**, dass solche Player nie mischen oder
-überblenden. Beide Einstellungen bleiben bearbeitbar: Sie gelten weiterhin für
+überblenden, die Überblendzeit und der automatische Mix für sie also nicht
+gelten. Beide Einstellungen bleiben bearbeitbar: Sie gelten weiterhin für
 die anderen Player. Siehe [Was es kostet](bit-perfect.md#what-it-costs).
 
 ## Pegelmesser {#meters}
@@ -204,6 +206,18 @@ anderes zu tun hat, ob die Normalisierung an oder aus ist; ihre Marker werden
 nicht angetastet. **Neu analysieren** (im Playlist-Menü) und **Alle Tracks neu
 analysieren** messen erneut.
 
+**Nach geänderten Dateien suchen** prüft jeden Track der Bibliothek auf eine
+Datei, die ein anderes Programm geändert hat, während Fauste Player lief, und
+analysiert die geänderten neu; ein Hinweis sagt, wie viele es gefunden hat. Der
+Button ist abgeblendet, solange eine Suche läuft. Siehe [Wenn sich eine Datei
+ändert](library.md#when-a-file-changes).
+
+**Nach geänderten Dateien suchen** prüft jeden Track der Bibliothek auf eine
+Datei, die ein anderes Programm geändert hat, während Fauste Player lief, und
+analysiert die geänderten neu; ein Hinweis sagt, wie viele es gefunden hat. Der
+Button ist abgeblendet, solange eine Suche läuft. Siehe [Wenn sich eine Datei
+ändert](library.md#when-a-file-changes).
+
 ## Lautheit {#loudness}
 
 ![Einstellungen, Lautheit: Normalisierung an, mit Ziel, True-Peak-Obergrenze, maximaler Anhebung und maximalem Trim auf ihren Standardwerten](../../images/guide/settings-loudness.png)
@@ -274,6 +288,41 @@ Farbe und Art, verschiebe sie (durch Ziehen) und lösche sie, überwache einen
 Ordner mit einer Kategorie und entferne ihre fehlenden Tracks, ohne das
 Bibliotheksfenster zu öffnen. Siehe [Bibliothek](library.md#categories) und
 [Überwachte Ordner](library.md#watched-folders).
+
+**Externer Editor** ist der Audio-Editor, den *In externem Editor öffnen* mit
+der Datei eines Tracks startet: der Pfad des Programms (oder *Keiner*),
+**Auswählen…**, um es zu wählen, und **Entfernen**, um es zu entfernen. Unter
+macOS kann ein Anwendungspaket (`.app`) gewählt werden. Lässt sich das Programm
+nicht starten, sagt es ein Hinweis. Die Zeile wird unter Android nicht
+angezeigt, ebenso wenig in den Flatpak- und Snap-Builds. Siehe [Wenn sich eine
+Datei ändert](library.md#when-a-file-changes).
+
+## Automatisierung {#automation}
+
+Die Rotationen und Regeln des [Musikfüllers](automation.md) (nicht unter
+Android).
+
+![Einstellungen, Automatisierung: die Rotationen Music (der Standard) und Hits, die gewählte Music mit ihrem einen Schritt über die gesamte Musik, und die Regeln des Musikfüllers](../../images/guide/settings-automation.png)
+
+- **Rotationen:** die Liste, der Standard ist markiert. **Neue Rotation** fügt
+  eine hinzu, die die gesamte Musik spielt, **Zum Standard machen** macht die
+  gewählte zum Standard, **Rotation löschen** entfernt sie (die letzte kann
+  nicht gelöscht werden).
+- **Die gewählte Rotation:** ihr **Name**, dann eine Zeile pro **Schritt**:
+  woher seine Tracks kommen (eine Kategorie mit ihren Unterkategorien oder
+  *Alle* einer Art), wie viele er jedes Mal spielt (**Mindestens** 0–99,
+  **Höchstens** 1–99; bei Mindestens 0 setzt der Schritt manche Durchgänge
+  aus), **Nach oben**, **Nach unten** und **Entfernen**. **Schritt
+  hinzufügen** fügt am Ende einen hinzu. Ein Schritt, dessen Kategorie gelöscht
+  wurde, sagt es; der Füller überspringt ihn.
+- **Musikfüller:** wie lange es dauert, bis derselbe Track wieder spielen darf
+  (3 Stunden oder sobald die Hälfte der anderen Tracks seines Schritts gelaufen
+  ist, was zuerst eintritt; 0 schaltet jeweils eines ab), derselbe Interpret
+  (30 Minuten), der **Vorlauf** (30 Minuten Musik in der Warteschlange) und die
+  **behaltenen gespielten Titel** in seiner Liste (50).
+
+**Standardwerte wiederherstellen** setzt die Regeln zurück; die Rotationen
+bleiben.
 
 ## Tastenkürzel {#keyboard-shortcuts}
 

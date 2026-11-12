@@ -25,7 +25,7 @@ secuenciador (`/dev/snd/seq`, normalmente por pertencer ao grupo `audio`).
 
 ## Asignar un control {#binding-a-control}
 
-Para cada reprodutor hai unha fila por acción: **Play / Seguinte**,
+Para cada reprodutor (P1 … Pn; a columna **Música** non ten asignacións) hai unha fila por acción: **Play / Seguinte**,
 **Pausa**, **Stop**, **Stop con fundido**, **Reiniciar**, **Anterior**,
 **CUE** e **Volume**.
 

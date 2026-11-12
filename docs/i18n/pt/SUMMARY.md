@@ -8,6 +8,7 @@
 - [Cartucheira](cartwall.md)
 - [Biblioteca](library.md)
 - [Disposição](layout.md)
+- [Automatização](automation.md)
 - [Marcadores e mistura](markers-and-mixing.md)
 - [Definições](settings.md)
 - [Normalização do loudness](loudness.md)

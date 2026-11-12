@@ -42,7 +42,7 @@ dispositivo bit-perfect reproduce de forma distinta aos demais:
   [MIDI](midi.md) e pola [API remota e OSC](remote-control.md). Pasa ao 100 %
   cando se activa bit-perfect no dispositivo, e queda aí cando se desactiva.
 - **O que segue funcionando:** **Stop con fundido** (esvaécese durante a
-  duración do fundido), **Pausa**, **Stop**, **Reiniciar**, as marcas de
+  duración do stop con fundido), **Pausa**, **Stop**, **Reiniciar**, as marcas de
   repetir e de parar despois, os modos Single e Continuo, o Cue (a preescoita,
   que non ten fader e non se ve afectada), os cartuchos, a [saída DSD](#dsd),
   e todos os reprodutores cuxa saída Main está noutro dispositivo, que

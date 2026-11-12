@@ -7,7 +7,7 @@ markerami i ustawieniami głośności. Okno biblioteki wymienia je, grupuje w
 komputerze i tablecie to okno; telefon pokazuje bibliotekę w swojej karcie
 **Biblioteka** (zob. [Na telefonie](#on-a-phone)).
 
-![Okno biblioteki: pasek odsłuchu z przebiegiem wybranego utworu, drzewo kategorii z zaznaczoną kategorią Music (z jej podkategoriami Pop i Evening) oraz tabela jej utworów z kategorią i rodzajem](../../images/guide/library.png)
+![Okno biblioteki: pasek odsłuchu z przebiegiem wybranego utworu, miernikiem i suwakiem poziomu odsłuchu, drzewo kategorii z zaznaczoną kategorią Music (z jej podkategoriami Pop i Evening) i Znaczniki do sprawdzenia na końcu, oraz tabela jej utworów z kategorią i rodzajem](../../images/guide/library.png)
 
 ## Otwieranie okna {#opening-the-window}
 
@@ -34,8 +34,10 @@ wyszukiwania nie jest zapisywany.
 ## Kategorie {#categories}
 
 Drzewo po lewej grupuje utwory. U góry **Wszystkie utwory**; potem Twoje
-kategorie, które mogą zawierać podkategorie; na końcu **Bez kategorii**,
-czyli utwory, które nie należą do żadnej kategorii. Każda pozycja pokazuje
+kategorie, które mogą zawierać podkategorie; potem **Bez kategorii**,
+czyli utwory, które nie należą do żadnej kategorii; i, tylko gdy jakiś utwór
+tego wymaga, **Znaczniki do sprawdzenia** (zob. [Gdy plik się
+zmienia](#when-a-file-changes)). Każda pozycja pokazuje
 swój kolor i liczbę: kategoria liczy swoje utwory i utwory swoich podkategorii.
 Utwór należy najwyżej do jednej kategorii.
 
@@ -190,13 +192,76 @@ ile utworów jest zaznaczonych, gdy dotyczy kilku.
 | Dodaj do ▸ | Playlista: utwory są dodawane na jej końcu |
 | Dodaj do cartu ▸ | Cart pokazywanej strony cartwalla: utwory wypełniają wybrany cart i następne puste carty strony, w kolejności siatki. Utwory, które się nie mieszczą, są pomijane, a komunikat je zlicza |
 | Przenieś do kategorii ▸ | Kategoria albo Bez kategorii |
-| Rodzaj ▸ | Muzyka, Jingiel, Efekt, Reklama lub Głos |
+| Rodzaj ▸ | Muzyka, Jingiel, Efekt, Reklama, Głos lub Sygnał godzinowy |
 | Edytuj tagi… | Edytor tagów (jeden utwór) |
+| Otwórz w zewnętrznym edytorze | Uruchamia Twój edytor audio z plikiem utworu (jeden utwór; zob. [Gdy plik się zmienia](#when-a-file-changes)) |
+| Oznacz jako sprawdzony | Usuwa flagę *znaczniki do sprawdzenia* (pokazywana, gdy zaznaczony utwór ją ma) |
 | Głośność… | Okienko głośności (jeden utwór) |
 | Analizuj ponownie | Analizuje utwory od nowa |
 | Przywróć automatyczne znaczniki | Odrzuca markery ręczne |
 | Pokaż lokalizację pliku | Otwiera folder pliku (jeden utwór) |
 | Usuń z biblioteki… | Usuwa utwory z biblioteki, po zapytaniu (niżej) |
+
+## Gdy plik się zmienia {#when-a-file-changes}
+
+Przygotowanie materiału często oznacza przycięcie lub poprawienie pliku w
+edytorze audio. Fauste Player pomaga w obu połowach.
+
+**Otwórz w zewnętrznym edytorze** (menu wiersza biblioteki i wierszy playlisty)
+uruchamia program wybrany w [Ustawienia → Biblioteka](settings.md#library) z
+plikiem utworu. Działa na jednym utworze. Pozycja jest przyciemniona, a powód
+podany w jej podpowiedzi, gdy nie ustawiono edytora, gdy plik jest brakujący
+lub nieczytelny albo gdy utwór *brzmi*: bieżący utwór odtwarzacza (grający lub
+wstrzymany), utwór czekający na start lub na CUE, wychodzący utwór
+wyciszenia, grający cart lub cart CUE cartwalla albo odsłuch wstępny
+biblioteki, gdy gra lub jest wstrzymany. Edytor nie jest oferowany w Androidzie
+ani w wersjach Flatpak i snap, które nie mogą uruchamiać innych programów;
+reszta tego rozdziału nadal tam obowiązuje.
+
+Fauste Player zauważa, że znany mu plik się zmienił (jego rozmiar lub czas
+modyfikacji różnią się od ostatniej analizy), bez względu na to, kto go zmienił,
+i sam analizuje go od nowa: czas trwania, markery, głośność, przebieg, format i
+tagi. Sprawdza:
+
+- raz przy starcie, każdy utwór w bibliotece;
+- gdy obserwowany folder zgłasza zmianę znanego utworu;
+- w folderze każdego pliku otwartego w edytorze, aż do zamknięcia programu,
+  więc zapis jest zauważany od razu;
+- gdy utwór jest ładowany do odtwarzacza, carta lub odsłuchu wstępnego oraz
+  gdy jego markery są otwierane do edycji lub przeciągane na przebiegu;
+- gdy naciśniesz **Szukaj zmienionych plików** w
+  [Ustawienia → Analiza](settings.md#analysis), co sprawdza całą bibliotekę i
+  komunikatem podaje, ile plików się zmieniło.
+
+Nie ma okresowego odpytywania. Plik poza obserwowanymi folderami, zmieniony
+przez inny program, gdy Fauste Player działa, i nieużywany od tego czasu,
+zostanie znaleziony przy następnym użyciu albo przez **Szukaj zmienionych
+plików**.
+
+Zmieniony utwór nigdy nie jest analizowany od nowa, gdy brzmi: czeka, aż
+przestanie, a jego markery i głośność nigdy nie przesuwają się pod grającym
+źródłem. (**Analizuj ponownie wszystkie utwory** to Twoje wyraźne żądanie i
+nie czeka.) Edytory często zapisują, usuwając i tworząc plik na nowo, więc plik,
+który znika, jest sprawdzany dwukrotnie, zanim zostanie oznaczony jako
+brakujący. Plik, który zmienia się podczas analizy (edytor jeszcze go zapisuje),
+nie jest używany: zostanie przeanalizowany ponownie wkrótce albo przy
+następnej zmianie, użyciu lub sprawdzeniu. Brakujący utwór, którego plik wraca
+do folderu śledzonego tylko z powodu edytora, nie jest przywracany sam.
+
+**Znaczniki do sprawdzenia.** Jeśli zmieniło się *audio* pliku, a utwór ma
+markery ustawione ręcznie, jego wiersz pokazuje bursztynową ikonę ostrzeżenia
+(jej podpowiedź nazywa markery, które zostały odrzucone). Markery ręczne, które
+leżą teraz za końcem audio, są odrzucane, a ich miejsce zajmuje wartość
+automatyczna; pozostałe zostają bez zmian (gdy odrzucono cue-in lub cue-out,
+markery intro, outro i MIX są przenoszone do nowego zakresu cue). Flaga nigdy
+nie przeszkadza w ładowaniu, ustawianiu na CUE ani odtwarzaniu utworu. Znika,
+gdy wybierzesz **Oznacz jako sprawdzony** w menu utworu (przy kilku
+zaznaczonych wierszach znika we wszystkich) albo zmienisz dowolny marker
+utworu. Pozycja **Znaczniki do sprawdzenia** drzewa, po *Bez kategorii*,
+wymienia oznaczone utwory, dopóki jakieś są (nie na telefonie). Zmiana samych
+tagów lub okładki odświeża tagi i nie podnosi flagi, co dzieje się też po
+edycji tagów w Fauste Player. Pierwsza analiza po aktualizacji podnosi flagę
+tylko wtedy, gdy musiała odrzucić marker leżący za końcem audio.
 
 ## Odsłuch wstępny {#pre-listening}
 
@@ -210,10 +275,18 @@ Pasek pokazuje:
 
 - **Odsłuch**, **Wstrzymaj odsłuch** i **Zatrzymaj odsłuch**;
 - duży czas pozostały utworu, jego tytuł, wykonawcę i kategorię;
-- mały miernik po prawej. Odczytuje tylko ten odsłuch wstępny, nigdy miernik
-  odtwarzacza ani cartwalla; kliknij go, aby wyzerować jego maksimum;
-- przebieg całego pliku, z jego markerami, a pod nim wiersz
-  `upłynęło / całość`.
+- po prawej miernik i suwak głośności narysowane jak w odtwarzaczu. Miernik
+  odczytuje tylko ten odsłuch wstępny, nigdy miernik odtwarzacza ani
+  cartwalla; kliknij go, aby wyzerować jego maksimum. Suwak to Twój **poziom
+  odsłuchu** w słuchawkach lub monitorach: ustawia, jak głośno brzmi odsłuch
+  wstępny, i nigdy nie zmienia utworu (jego pliku, wzmocnienia głośności ani
+  markerów), odtwarzacza ani cartwalla. Zostaje taki, jak go zostawiłeś, gdy
+  podgląd przechodzi na inny utwór, i jest zapisywany do następnego startu;
+  jego podpowiedź i odczyt pod nim pokazują poziom w dB. Jeśli wyjście
+  Biblioteka dzieli kanały z wyjściem antenowym, suwak ustawia też głośność
+  odsłuchu wstępnego tam. Karta odsłuchu w telefonie nie ma suwaka;
+- przebieg całego pliku, tak wysoki jak w odtwarzaczu, z jego markerami, a pod
+  nim wiersz `upłynęło / całość`.
 
 Odsłuch rozpoczyna zaznaczony utwór od jego cue-in i gra go do końca pliku.
 Odsłuch na wstrzymanym podglądzie go wznawia, a na grającym nic nie robi: Stop,

@@ -8,7 +8,7 @@ encuentra por texto y las envía a las playlists y a la cartuchera. Es una
 ventana en el escritorio y en una tableta; un teléfono muestra la
 biblioteca en su pestaña **Biblioteca** (véase [En un teléfono](#on-a-phone)).
 
-![La ventana de la biblioteca: la franja de preescucha con la forma de onda de la pista seleccionada, el árbol de categorías con Music (y sus subcategorías Pop y Evening) seleccionada, y la tabla de sus pistas con su categoría y su tipo](../../images/guide/library.png)
+![La ventana de la biblioteca: la franja de preescucha con la forma de onda, el vúmetro y el fader de escucha de la pista seleccionada, el árbol de categorías con Music (y sus subcategorías Pop y Evening) seleccionada y Marcadores por revisar al final, y la tabla de sus pistas con su categoría y su tipo](../../images/guide/library.png)
 
 ## Abrir la ventana {#opening-the-window}
 
@@ -37,8 +37,10 @@ del campo de búsqueda no se guarda.
 ## Categorías {#categories}
 
 El árbol de la izquierda agrupa las pistas. Arriba, **Todas las pistas**;
-luego tus categorías, que pueden contener subcategorías; al final, **Sin
-categoría**, las pistas que no pertenecen a ninguna categoría. Cada elemento
+luego tus categorías, que pueden contener subcategorías; después, **Sin
+categoría**, las pistas que no pertenecen a ninguna categoría; y, solo
+mientras alguna pista lo necesite, **Marcadores por revisar** (véase [Cuando
+un archivo cambia](#when-a-file-changes)). Cada elemento
 muestra su color y un recuento: una categoría cuenta sus propias pistas y las
 de sus subcategorías. Una pista pertenece como mucho a una categoría.
 
@@ -198,13 +200,82 @@ pista, y cuántas pistas están seleccionadas cuando es para varias.
 | Añadir a ▸ | Una playlist: las pistas se añaden al final |
 | Añadir a un botón ▸ | Un cartucho de la página visible de la cartuchera: las pistas llenan el cartucho elegido y los siguientes cartuchos vacíos de la página, en el orden de la cuadrícula. Las pistas que no caben se dejan fuera y un aviso las cuenta |
 | Mover a la categoría ▸ | Una categoría, o Sin categoría |
-| Tipo ▸ | Música, Jingle, Efecto, Anuncio o Voz |
+| Tipo ▸ | Música, Jingle, Efecto, Anuncio, Voz o Indicativo horario |
 | Editar etiquetas… | El editor de etiquetas (una pista) |
+| Abrir en el editor externo | Abre tu editor de audio con el archivo de la pista (una pista; véase [Cuando un archivo cambia](#when-a-file-changes)) |
+| Marcar como revisada | Quita la marca de *marcadores por revisar* (aparece cuando una pista seleccionada la tiene) |
 | Sonoridad… | La ventana emergente de sonoridad (una pista) |
 | Volver a analizar | Analiza las pistas otra vez |
 | Volver a los marcadores automáticos | Descarta los marcadores manuales |
 | Mostrar la ubicación del archivo | Abre la carpeta del archivo (una pista) |
 | Quitar de la biblioteca… | Quita las pistas de la biblioteca, tras preguntar (más abajo) |
+
+## Cuando un archivo cambia {#when-a-file-changes}
+
+Preparar material a menudo significa recortar o arreglar un archivo en un
+editor de audio. Fauste Player ayuda con las dos mitades.
+
+**Abrir en el editor externo** (el menú de la fila de la biblioteca y de las
+filas de las playlists) abre el programa que elegiste en [Configuración →
+Biblioteca](settings.md#library) con el archivo de la pista. Actúa sobre una
+pista. La entrada aparece atenuada, con el motivo en su información
+emergente, cuando no hay ningún editor configurado, cuando el archivo falta
+o no se puede leer, o cuando la pista está *sonando*: la pista actual de un
+player (sonando o en pausa), una pista que espera para empezar o en CUE, la
+pista saliente de un fundido, un cartucho que suena o el cartucho en CUE de
+la cartuchera, o la preescucha de la biblioteca mientras suena o está en
+pausa. El editor no se ofrece en Android, ni en las versiones Flatpak y
+snap, que no pueden abrir otros programas; el resto de esta sección se
+aplica también allí.
+
+Fauste Player se da cuenta de cuándo ha cambiado un archivo que conoce (su
+tamaño o su fecha de modificación difieren de los del último análisis),
+lo haya cambiado quien lo haya cambiado, y lo vuelve a analizar por sí solo:
+duración, marcadores, sonoridad, forma de onda, formato y etiquetas. Mira:
+
+- una vez al arrancar, todas las pistas de la biblioteca;
+- cuando una carpeta vigilada avisa de un cambio en una pista conocida;
+- en la carpeta de cualquier archivo que hayas abierto en el editor, hasta
+  que salgas, de modo que un guardado se nota al momento;
+- cuando una pista se carga en un player, un cartucho o la preescucha, y
+  cuando sus marcadores se abren para editarlos o se arrastran en la forma
+  de onda;
+- cuando pulsas **Buscar archivos cambiados** en
+  [Configuración → Análisis](settings.md#analysis), que revisa toda la
+  biblioteca y dice en un aviso cuántos archivos han cambiado.
+
+No hay sondeo periódico. Un archivo fuera de las carpetas vigiladas,
+cambiado por otro programa mientras Fauste Player funciona y que no se ha
+usado desde entonces, se encuentra en su siguiente uso o con **Buscar
+archivos cambiados**.
+
+Una pista cambiada nunca se vuelve a analizar mientras suena: espera a que
+se detenga, y sus marcadores y su sonoridad nunca se mueven bajo una fuente
+que suena. (**Volver a analizar todas las pistas** es una petición expresa
+tuya y no espera). Los editores a menudo guardan borrando y volviendo a
+crear el archivo, así que un archivo que desaparece se mira dos veces antes
+de marcarlo como no disponible. Un archivo que cambia mientras se analiza
+(un editor que todavía lo está guardando) no se usa: se vuelve a analizar
+poco después, o en su siguiente cambio, uso o revisión. Una pista no
+disponible cuyo archivo vuelve en una carpeta que solo se sigue por el
+editor no se recupera por sí sola.
+
+**Marcadores por revisar.** Si el *audio* de un archivo cambió y la pista
+tiene marcadores puestos a mano, la pista muestra un icono de aviso ámbar en
+su fila (su información emergente nombra los marcadores que se hayan
+descartado). Los marcadores manuales que ahora quedan más allá del final del
+audio se descartan y su lugar lo ocupa el valor automático; los demás se
+quedan como están (cuando se descartó el cue-in o el cue-out, los marcadores
+de intro, outro y MIX se mueven dentro del nuevo rango de cue). La marca
+nunca impide cargar, poner en CUE ni reproducir la pista. Se quita cuando
+eliges **Marcar como revisada** en el menú de la pista (con varias filas
+seleccionadas, las quita todas) o cambias cualquier marcador de la pista. El
+elemento **Marcadores por revisar** del árbol, después de *Sin categoría*,
+lista las pistas marcadas mientras haya alguna (no en un teléfono). Un
+cambio solo en las etiquetas o en la carátula actualiza las etiquetas y no
+pone ninguna marca, que es también lo que pasa después de editar etiquetas
+en Fauste Player. El primer análisis después de una actualización solo pone
+la marca si tuvo que descartar un marcador más allá del final del audio.
 
 ## Preescucha {#pre-listening}
 
@@ -219,11 +290,19 @@ La barra muestra:
 - **Preescuchar**, **Pausar la preescucha** y **Detener la preescucha**;
 - el tiempo restante de la pista en grande, su título, su artista y su
   categoría;
-- un pequeño vúmetro a la derecha. Lee solo esta preescucha, nunca el
-  vúmetro de un player ni el de la cartuchera; haz clic en él para reiniciar
-  su máximo;
-- la forma de onda del archivo entero, con sus marcadores, y una línea
-  `transcurrido / total` debajo.
+- a la derecha, un vúmetro y un fader de volumen dibujados como en un
+  player. El vúmetro lee solo esta preescucha, nunca el vúmetro de un player
+  ni el de la cartuchera; haz clic en él para reiniciar su máximo. El fader
+  es tu **nivel de escucha** en los auriculares o los monitores: fija lo
+  fuerte que suena la preescucha y nunca cambia una pista (su archivo, su
+  ganancia de sonoridad ni sus marcadores), un player ni la cartuchera. Se
+  queda como lo dejaste cuando la preescucha pasa a otra pista y se guarda
+  para el siguiente arranque; su información emergente y la lectura de
+  debajo muestran el nivel en dB. Si la salida Biblioteca comparte canales
+  con una salida en antena, el fader también fija lo fuerte que suena la
+  preescucha allí. La tarjeta de preescucha de un teléfono no tiene fader;
+- la forma de onda del archivo entero, tan alta como la de un player, con
+  sus marcadores, y una línea `transcurrido / total` debajo.
 
 Preescuchar empieza la pista seleccionada desde su cue-in y la reproduce
 hasta el final del archivo. Preescuchar con una preescucha en pausa la

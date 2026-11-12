@@ -42,8 +42,8 @@ duen erreproduzitzaile batek besteek baino modu desberdinean jotzen du:
   goialdean blokeatuta dago: pantailan, [MIDI](midi.md) kontrolagailuetan eta
   [urruneko APIaren eta OSCren](remote-control.md) bidez. Gailuan bit perfect
   aktibatzean % 100era doa, eta bertan geratzen da desaktibatzean.
-- **Funtzionatzen jarraitzen duena:** **Itzaltzearekin gelditu** (itzaltze-denboran
-  itzaltzen da), **Pausatu**, **Gelditu**, **Berrabiarazi**, errepikapen- eta
+- **Funtzionatzen jarraitzen duena:** **Itzaltzearekin gelditu** («Itzaltzearekin
+  gelditu»ren denboran itzaltzen da), **Pausatu**, **Gelditu**, **Berrabiarazi**, errepikapen- eta
   gelditze-markak, Single eta Continuous moduak, Cue (aurrez entzutea, faderrik
   ez duena eta eragiten ez diona), kartutxoak, [DSD irteera](#dsd), eta Main
   irteera beste gailu batean duten erreproduzitzaile guztiak, ohi bezala

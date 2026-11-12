@@ -87,7 +87,7 @@ gewijzigd, worden de nummers automatisch opnieuw geanalyseerd.
   volgende nummer begint precies op de cue-out, zonder gat.
 - **SINGLE-modus**, of **Stop na**: de speler stopt op de cue-out.
 - **Op Play drukken terwijl er iets on air is:** het volgende nummer begint
-  meteen en het huidige fadet uit gedurende de *fadetijd* (standaard 1 s).
+  meteen en het huidige fadet uit gedurende de *overfadetijd* (standaard 1 s).
 - **Een speler waarvan de hoofduitgang bit-perfect is** negeert het MIX-punt
   en automatisch mixen: elk nummer speelt tot zijn cue-out, daarna begint het
   volgende, en Play terwijl er iets on air is schakelt meteen om, zonder fade.

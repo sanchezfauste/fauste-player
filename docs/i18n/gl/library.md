@@ -8,7 +8,7 @@ listas e á cartucheira. É unha xanela no escritorio e nunha tablet; un
 teléfono mostra a biblioteca na súa lapela **Biblioteca** (consulta [Nun
 teléfono](#on-a-phone)).
 
-![A xanela da biblioteca: a franxa de preescoita coa forma de onda da pista seleccionada, a árbore de categorías con Music (e as súas subcategorías Pop e Evening) seleccionada, e a táboa das súas pistas coa súa categoría e o seu tipo](../../images/guide/library.png)
+![A xanela da biblioteca: a franxa de preescoita coa forma de onda, o vúmetro e o fader de escoita da pista seleccionada, a árbore de categorías con Music (e as súas subcategorías Pop e Evening) seleccionada e Marcadores por revisar ao final, e a táboa das súas pistas coa súa categoría e o seu tipo](../../images/guide/library.png)
 
 ## Abrir a xanela {#opening-the-window}
 
@@ -35,8 +35,10 @@ garda.
 ## Categorías {#categories}
 
 A árbore da esquerda agrupa as pistas. Arriba, **Todas as pistas**; despois as
-túas categorías, que poden conter subcategorías; ao final, **Sen categoría**,
-as pistas que non pertencen a ningunha categoría. Cada elemento mostra a súa
+túas categorías, que poden conter subcategorías; despois **Sen categoría**,
+as pistas que non pertencen a ningunha categoría; e, só mentres algunha
+pista o necesite, **Marcadores por revisar** (consulta [Cando un ficheiro
+cambia](#when-a-file-changes)). Cada elemento mostra a súa
 cor e unha conta: unha categoría conta as súas propias pistas e as das súas
 subcategorías. Unha pista pertence como máximo a unha categoría.
 
@@ -189,13 +191,79 @@ están seleccionadas cando é para varias.
 | Engadir a ▸ | Unha lista: as pistas engádense ao seu final |
 | Engadir a un cartucho ▸ | Un cartucho da páxina da cartucheira que se ve: as pistas énchen o cartucho escollido e os seguintes cartuchos baleiros da páxina, na orde da grella. As pistas que non caben quedan fóra e un aviso conta cantas |
 | Mover á categoría ▸ | Unha categoría, ou Sen categoría |
-| Tipo ▸ | Música, Jingle, Efecto, Anuncio ou Voz |
+| Tipo ▸ | Música, Jingle, Efecto, Anuncio, Voz ou Indicativo horario |
 | Editar etiquetas… | O editor de etiquetas (unha pista) |
+| Abrir no editor externo | Abre o teu editor de audio co ficheiro da pista (unha pista; consulta [Cando un ficheiro cambia](#when-a-file-changes)) |
+| Marcar como revisada | Quita a marca de *marcadores por revisar* (aparece cando unha pista seleccionada a ten) |
 | Sonoridade… | A xanela emerxente de sonoridade (unha pista) |
 | Volver analizar | Analiza as pistas de novo |
 | Volver aos marcadores automáticos | Descarta os marcadores manuais |
 | Amosar a localización do ficheiro | Abre o cartafol do ficheiro (unha pista) |
 | Quitar da biblioteca… | Quita as pistas da biblioteca, despois de preguntar (abaixo) |
+
+## Cando un ficheiro cambia {#when-a-file-changes}
+
+Preparar material adoita significar recortar ou arranxar un ficheiro nun
+editor de audio. Fauste Player axuda coas dúas metades.
+
+**Abrir no editor externo** (o menú da fila da biblioteca e das filas das
+listas) abre o programa que escolliches en [Configuración →
+Biblioteca](settings.md#library) co ficheiro da pista. Actúa sobre unha
+pista. A entrada aparece atenuada, co motivo na súa axuda emerxente, cando
+non hai ningún editor configurado, cando o ficheiro falta ou non se pode ler,
+ou cando a pista está *soando*: a pista actual dun reprodutor (soando ou en
+pausa), unha pista que espera para empezar ou en CUE, a pista saínte dun
+fundido, un cartucho que soa ou o cartucho en CUE da cartucheira, ou a
+preescoita da biblioteca mentres soa ou está en pausa. O editor non se ofrece
+en Android, nin nas versións Flatpak e snap, que non poden abrir outros
+programas; o resto desta sección aplícase tamén alí.
+
+Fauste Player decátase de cando cambiou un ficheiro que coñece (o seu tamaño
+ou a súa data de modificación difiren dos da última análise), o cambiase
+quen o cambiase, e analízao de novo por si só: duración, marcadores,
+sonoridade, forma de onda, formato e etiquetas. Mira:
+
+- unha vez ao arrancar, todas as pistas da biblioteca;
+- cando un cartafol vixiado avisa dun cambio nunha pista coñecida;
+- no cartafol de calquera ficheiro que abrises no editor, ata que saias, de
+  modo que un gardado se nota ao momento;
+- cando unha pista se carga nun reprodutor, un cartucho ou a preescoita, e
+  cando os seus marcadores se abren para editalos ou se arrastran na forma
+  de onda;
+- cando premes **Buscar ficheiros cambiados** en
+  [Configuración → Análise](settings.md#analysis), que revisa toda a
+  biblioteca e di nun aviso cantos ficheiros cambiaron.
+
+Non hai sondaxe periódica. Un ficheiro fóra dos cartafoles vixiados, cambiado
+por outro programa mentres Fauste Player funciona e que non se usou desde
+entón, atópase no seu seguinte uso ou con **Buscar ficheiros cambiados**.
+
+Unha pista cambiada nunca se analiza de novo mentres soa: espera a que se
+deteña, e os seus marcadores e a súa sonoridade nunca se moven baixo unha
+fonte que soa. (**Volver analizar todas as pistas** é unha petición expresa
+túa e non espera). Os editores adoitan gardar borrando e volvendo crear o
+ficheiro, así que un ficheiro que desaparece mírase dúas veces antes de
+marcalo como non dispoñible. Un ficheiro que cambia mentres se analiza (un
+editor que aínda o está gardando) non se usa: analízase de novo pouco
+despois, ou no seu seguinte cambio, uso ou revisión. Unha pista non
+dispoñible cuxo ficheiro volve nun cartafol que só se segue polo editor non
+se recupera por si soa.
+
+**Marcadores por revisar.** Se o *audio* dun ficheiro cambiou e a pista ten
+marcadores postos a man, a pista mostra unha icona de aviso ámbar na súa fila
+(a súa axuda emerxente nomea os marcadores que se descartasen). Os
+marcadores manuais que agora quedan máis alá do final do audio descártanse e
+o seu lugar ocúpao o valor automático; os demais quedan como están (cando se
+descartou o cue-in ou o cue-out, os marcadores de intro, outro e MIX móvense
+dentro do novo rango de cue). A marca nunca impide cargar, poñer en CUE nin
+reproducir a pista. Quítase cando escolles **Marcar como revisada** no menú
+da pista (con varias filas seleccionadas, quita todas) ou cambias calquera
+marcador da pista. O elemento **Marcadores por revisar** da árbore, despois
+de *Sen categoría*, lista as pistas marcadas mentres haxa algunha (non nun
+teléfono). Un cambio só nas etiquetas ou na portada actualiza as etiquetas e
+non pon ningunha marca, que é tamén o que pasa despois de editar etiquetas
+en Fauste Player. A primeira análise despois dunha actualización só pon a
+marca se tivo que descartar un marcador máis alá do final do audio.
 
 ## Preescoita {#pre-listening}
 
@@ -209,10 +277,19 @@ A barra mostra:
 
 - **Preescoitar**, **Pausar a preescoita** e **Deter a preescoita**;
 - o tempo restante da pista en grande, o seu título, artista e categoría;
-- un vúmetro pequeno á dereita. Le só esta preescoita, nunca o vúmetro dun
-  reprodutor nin o da cartucheira; fai clic nel para reiniciar o seu máximo;
-- a forma de onda do ficheiro enteiro, cos seus marcadores, e unha liña
-  `transcorrido / total` debaixo dela.
+- á dereita, un vúmetro e un fader de volume debuxados como nun reprodutor.
+  O vúmetro le só esta preescoita, nunca o vúmetro dun reprodutor nin o da
+  cartucheira; fai clic nel para reiniciar o seu máximo. O fader é o teu
+  **nivel de escoita** nos auriculares ou nos monitores: fixa o forte que
+  soa a preescoita e nunca cambia unha pista (o seu ficheiro, a súa
+  ganancia de sonoridade nin os seus marcadores), un reprodutor nin a
+  cartucheira. Queda como o deixaches cando a preescoita pasa a outra pista
+  e gárdase para o seguinte arranque; a súa axuda emerxente e a lectura
+  debaixo del mostran o nivel en dB. Se a saída Biblioteca comparte canles
+  cunha saída en antena, o fader fixa tamén o forte que soa a preescoita
+  alí. A tarxeta de preescoita dun teléfono non ten fader;
+- a forma de onda do ficheiro enteiro, tan alta como a dun reprodutor, cos
+  seus marcadores, e unha liña `transcorrido / total` debaixo dela.
 
 Preescoitar inicia a pista seleccionada desde o seu cue-in e reprodúcea ata o
 final do ficheiro. Preescoitar nunha vista previa en pausa retómaa, e

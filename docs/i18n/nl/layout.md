@@ -8,8 +8,11 @@ installatie begint met alle spelers even breed en de cartwall eronder.
 
 ## Panelen tonen en verbergen {#show-and-hide-panels}
 
-De tegels links in de bovenbalk, **P1** … **Pn** en **Cartwall**, laten zien
-welke panelen op het scherm staan: een verlichte tegel is getoond. Klik op een
+De tegels links in de bovenbalk, **Programmering** en **Muziek** (de
+[programmering](automation.md#the-schedule-column) en de
+[muziekvuller](automation.md#the-music-filler), beide verborgen tot je ze
+toont), **P1** … **Pn** en **Cartwall**, laten zien welke panelen op het
+scherm staan: een verlichte tegel is getoond. Klik op een
 tegel om zijn paneel te verbergen of te tonen. Bij veel spelers scrollen de
 tegels zijwaarts (scroll met het muiswiel erboven) en blijft de
 indelingsknop in beeld. De andere panelen nemen de ruimte in die vrijkomt, en

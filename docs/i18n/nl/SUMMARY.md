@@ -8,6 +8,7 @@
 - [Cartwall](cartwall.md)
 - [Bibliotheek](library.md)
 - [Indeling](layout.md)
+- [Automatisering](automation.md)
 - [Markers en mixen](markers-and-mixing.md)
 - [Instellingen](settings.md)
 - [Loudness-normalisatie](loudness.md)

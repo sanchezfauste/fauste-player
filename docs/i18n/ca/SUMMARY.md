@@ -8,6 +8,7 @@
 - [Cartutxera](cartwall.md)
 - [Biblioteca](library.md)
 - [Disposició](layout.md)
+- [Automatització](automation.md)
 - [Marcadors i mescla](markers-and-mixing.md)
 - [Configuració](settings.md)
 - [Normalització de la sonoritat](loudness.md)

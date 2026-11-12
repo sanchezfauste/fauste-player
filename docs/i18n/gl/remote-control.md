@@ -151,7 +151,9 @@ computadores, pon `remote.osc.bind` a `0.0.0.0` e lista os seus enderezos ou
 subredes en `remote.osc.allowed_sources` (por exemplo `"192.168.1.0/24"`).
 OSC non ten contrasinal, así que mantén OSC nunha rede de estudo de confianza.
 
-Os reprodutores numéranse 1, 2, 3… como aparecen na pantalla. Os cartuchos
+Os reprodutores numéranse 1, 2, 3… como aparecen na pantalla. A columna
+**Música** (o musicalizador, consulta [Automatización](automation.md)) non
+ten número e non forma parte do control remoto. Os cartuchos
 numéranse na páxina que se ve.
 
     oscsend localhost 7381 /fauste/player/1/play

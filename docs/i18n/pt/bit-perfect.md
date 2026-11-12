@@ -42,7 +42,7 @@ dispositivo bit-perfect toca de forma diferente dos outros:
   [API remota e pelo OSC](remote-control.md). Vai a 100 % quando o
   bit-perfect é ativado no dispositivo, e fica aí quando é desativado.
 - **O que continua a funcionar:** o **Stop com fade** (faz fade out durante
-  a duração do fade), a **Pausa**, o **Stop**, o **Reiniciar**, as marcas de
+  a duração do Stop com fade), a **Pausa**, o **Stop**, o **Reiniciar**, as marcas de
   repetir e de parar após a faixa, os modos Single e Contínuo, o Cue
   (pré-escuta, que não tem fader e não é afetada), os cartuchos, a
   [saída DSD](#dsd) e todos os leitores cuja saída Main está noutro

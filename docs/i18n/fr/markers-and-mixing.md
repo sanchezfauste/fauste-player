@@ -91,7 +91,7 @@ modifiées, les pistes sont analysées de nouveau automatiquement.
   la piste suivante démarre exactement au cue-out, sans interruption.
 - **Mode single**, ou **Stop à la fin** : le lecteur s'arrête au cue-out.
 - **Appuyer sur PLAY pendant l'antenne :** la piste suivante démarre aussitôt
-  et la piste en cours s'estompe pendant la *durée du fondu* (1 s par
+  et la piste en cours s'estompe pendant la *durée du fondu enchaîné* (1 s par
   défaut).
 - **Un lecteur dont la sortie Main est bit-perfect** ignore le point MIX
   et le mixage automatique : chaque piste est lue jusqu'à son cue-out, puis la

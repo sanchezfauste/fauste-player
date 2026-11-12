@@ -8,7 +8,7 @@ A xanela ten un só tamaño (900 × 640, máis pequena nunha pantalla pequena)
 sexa cal for a sección, e a sección desprázase dentro dela. Cada sección
 aliña as súas etiquetas nunha columna.
 
-As seccións Reprodutores, Vúmetros, Análise, Sonoridade e Atallos de teclado teñen un
+As seccións Reprodutores, Vúmetros, Análise, Sonoridade, Automatización e Atallos de teclado teñen un
 botón **Restaurar os valores predeterminados** na súa cabeceira. Pide
 confirmación e despois restablece só esa sección (Reprodutores conserva o
 número de reprodutores e o idioma; Atallos non ten outro botón de
@@ -85,7 +85,7 @@ dispositivos) conserva eses axustes.
 | Sistema de audio | A última opción, **Sen saída (silencio)**, non reproduce nada: as liñas de tempo avanzan a ritmo de tempo real sen tarxeta de son (para un computador que non a ten, ou para ensaiar). Linux: PipeWire (nas compilacións que o inclúen), PulseAudio, JACK ou ALSA. Windows: WASAPI, ASIO (nas compilacións que o inclúen) ou JACK. macOS: Core Audio ou JACK. Os sistemas que faltan neste computador, ou sen dispositivo de saída (un servidor JACK que non está en execución), móstranse como non dispoñibles. «Predeterminado do sistema» usa o primeiro dispoñible nesa orde. |
 | Frecuencia de mostraxe | A frecuencia á que funciona cada saída salvo que un dispositivo teña a súa propia (Avanzado); os ficheiros convértense a ela con remostraxe de alta calidade. Os dispositivos bit-perfect empezan á súa frecuencia e despois seguen os ficheiros. |
 | Tamaño do búfer | Frames por bloque de audio, salvo que un dispositivo teña o seu propio; a latencia resultante móstrase debaixo. As saídas a través dun servidor de son ou dun mesturador do sistema (PulseAudio, o dispositivo ALSA `default`) piden polo menos 50 ms sexa cal for este tamaño, ou todo o que acepte o dispositivo, para que un computador ocupado non se note; a latencia dío entón (`shared_buffer_ms` no ficheiro de configuración) |
-| Saídas por reprodutor | Para cada reprodutor, un dispositivo **Main** (en antena) e un **Cue** (preescoita), cada un cun par de canles. Unha tarxeta de son que ofrece varios perfís de saída (ALSA lista frontal, surround, hardware directo…) mostra cada un como *tarxeta — perfil*; dúas entradas que aínda se lerían igual reciben o seu identificador de dispositivo entre corchetes. As interfaces multicanle poden levar varios reprodutores en pares distintos. Unha saída Cue que comparte unha saída de antena (a Main de calquera reprodutor ou a da cartucheira) está permitida: un aviso debaixo dela di que a súa preescoita óese en antena e que pregunta antes mentres algo soa alí. |
+| Saídas por reprodutor | Para cada reprodutor, e para a columna **Música** (o [musicalizador](automation.md)), un dispositivo **Main** (en antena) e un **Cue** (preescoita), cada un cun par de canles. Unha tarxeta de son que ofrece varios perfís de saída (ALSA lista frontal, surround, hardware directo…) mostra cada un como *tarxeta — perfil*; dúas entradas que aínda se lerían igual reciben o seu identificador de dispositivo entre corchetes. As interfaces multicanle poden levar varios reprodutores en pares distintos. Unha saída Cue que comparte unha saída de antena (a Main de calquera reprodutor ou a da cartucheira) está permitida: un aviso debaixo dela di que a súa preescoita óese en antena e que pregunta antes mentres algo soa alí. |
 | Probar Main / Probar Cue | Reproduce un ton curto (1 kHz en Main, 440 Hz en Cue, 1,5 s, −18 dBFS) na saída escollida, para comprobar a conexión antes de saír en antena |
 | Biblioteca | A saída Cue da biblioteca, co seu propio **Probar Cue**: onde se oe a [preescoita](library.md#pre-listening) da xanela da biblioteca (nun teléfono, a da lapela Biblioteca). Sen ela, o Play da barra de preescoita aparece atenuado. En Android a súa opción baleira le *Predeterminado do sistema* en lugar de *Ningunha*: a preescoita e **Probar Cue** soan entón na saída predeterminada (consulta [Android → Biblioteca](android.md#library)). Unha saída da biblioteca nunha saída de antena funciona como o Cue dun reprodutor: un aviso debaixo dela di que a súa preescoita óese en antena e pregunta antes mentres algo soa alí. Está nas vistas Básico e Avanzado, tamén nun teléfono |
 | Cartucheira | As saídas Main e Cue da cartucheira. Main toma como predeterminada a saída do sistema. Sen Cue non hai preescoita de cartuchos; un Cue nunha saída de antena funciona como nos reprodutores. |
@@ -111,21 +111,23 @@ as súas liñas de tempo, e o dispositivo ábrese de novo cando volve (consulta
 
 ## Reprodutores {#players}
 
-![Configuración, Reprodutores: número de reprodutores, modo predeterminado, duración do fundido, mestura automática, cue-in e cue-out, aviso de fin de pista e idioma](../../images/guide/settings-players.png)
+![Configuración, Reprodutores: número de reprodutores, modo predeterminado, duración do fundido entre pistas, duración do stop con fundido, mestura automática, cue-in e cue-out, aviso de fin de pista e idioma](../../images/guide/settings-players.png)
 
 | Axuste | Predeterminado | Significado |
 |---|---|---|
 | Idioma | Sistema | Idioma da interface |
 | Número de reprodutores | 4 | Columnas da pantalla principal (non se pode quitar un reprodutor en antena). O número aplícase ao soltar o control deslizante; un número escrito na caixa aplícase ao premer Enter ou saír da caixa, e Escape cancélao |
 | Modo predeterminado | CONT | O modo co que arrancan os reprodutores |
-| Duración do fundido | 1000 ms | Usado por Play en antena e por Stop con fundido. Nun reprodutor cuxa saída Main é bit-perfect, só por Stop con fundido |
+| Duración do fundido entre pistas | 1000 ms | Canto tarda en esvaecerse a pista en antena cando premes Play (seguinte) mentres soa, e para a pista Anterior. Non se aplica a un reprodutor cuxa saída Main é bit-perfect |
+| Duración do stop con fundido | 2000 ms | Canto tarda **Stop con fundido** en esvaecer a pista. Aplícase a todos os reprodutores, tamén aos bit-perfect |
 | Mestura automática no punto MIX | Activada | Superpoñer as pistas no modo continuo. Non se aplica a un reprodutor cuxa saída Main é bit-perfect |
 | Usar cue-in e cue-out | Activado | Desactivado: os reprodutores reproducen cada pista do principio ao fin do ficheiro; os marcadores consérvanse e os cartuchos seguen usando os seus. As duracións e os totais das listas seguen o mesmo rango |
 | Aviso de fin de pista | 10 s | Cando a conta atrás empeza a pestanexar en vermello |
 
 Mentres a saída Main dun reprodutor é bit-perfect, unha nota debaixo de
 **Mestura automática no punto MIX** di que eses reprodutores nunca mesturan
-nin fan fundidos cruzados. Ambos os axustes seguen sendo editables: aínda se
+nin fan fundidos cruzados, polo que a duración do fundido entre pistas e a
+mestura automática non se lles aplican. Ambos os axustes seguen sendo editables: aínda se
 aplican aos outros reprodutores. Consulta [O que custa](bit-perfect.md#what-it-costs).
 
 ## Vúmetros {#meters}
@@ -201,6 +203,12 @@ outra cousa que facer, estea a normalización activada ou non; os seus
 marcadores non se tocan. **Volver analizar** (no menú da lista) e **Volver
 analizar todas as pistas** miden de novo.
 
+**Buscar ficheiros cambiados** revisa todas as pistas da biblioteca á procura
+dun ficheiro que outro programa cambiase mentres Fauste Player funcionaba, e
+analiza de novo os cambiados; un aviso di cantos atopou. O botón aparece
+atenuado mentres dura unha busca. Consulta [Cando un ficheiro
+cambia](library.md#when-a-file-changes).
+
 ## Sonoridade {#loudness}
 
 ![Configuración, Sonoridade: normalización activada, co obxectivo, o teito de true peak, a ganancia máxima e o axuste máximo nos seus valores predeterminados](../../images/guide/settings-loudness.png)
@@ -269,6 +277,39 @@ as categorías que agrupan as túas pistas, vixiar un cartafol cunha categoría 
 quitar as súas pistas que faltan, sen abrir a xanela da biblioteca. Consulta
 [Biblioteca](library.md#categories) e
 [Cartafoles vixiados](library.md#watched-folders).
+
+**Editor externo** é o editor de audio co que *Abrir no editor externo*
+inicia o ficheiro dunha pista: a ruta do programa (ou *Ningún*), **Escoller…**
+para elixilo e **Quitar** para eliminalo. En macOS pódese escoller un paquete
+de aplicación (`.app`). Se o programa non se pode iniciar, un aviso dío. A
+fila non se mostra en Android, nin nas versións Flatpak e snap. Consulta
+[Cando un ficheiro cambia](library.md#when-a-file-changes).
+
+## Automatización {#automation}
+
+As rotacións e as regras do [musicalizador](automation.md) (non en Android).
+
+![Configuración, Automatización: as rotacións Music (a predeterminada) e Hits, a Music seleccionada co seu único paso sobre toda a música, e as regras do musicalizador](../../images/guide/settings-automation.png)
+
+- **Rotacións:** a lista, coa predeterminada marcada. **Nova rotación**
+  engade unha que reproduce toda a música, **Facer predeterminada** converte
+  a seleccionada na predeterminada e **Borrar rotación** elimínaa (a última
+  non se pode borrar).
+- **A rotación seleccionada:** o seu **Nome**, e despois unha fila por cada
+  **paso**: de onde saen as súas pistas (unha categoría coas súas
+  subcategorías, ou *Todo* dun tipo), cantas reproduce cada vez (**Como
+  mínimo** 0–99, **Como máximo** 1–99; un mínimo de 0 permite que o paso se
+  salte algúns turnos), **Subir**, **Baixar** e **Quitar**. **Engadir paso**
+  engade un ao final. Un paso cuxa categoría se borrou dío; o musicalizador
+  sáltao.
+- **Musicalizador:** canto tempo debe pasar antes de que a mesma pista poida
+  volver soar (3 horas, ou cando soase a metade das demais pistas do seu
+  paso, o que ocorra primeiro; 0 desactiva calquera das dúas), o mesmo
+  artista (30 minutos), a **marxe por diante** (30 minutos de música en cola)
+  e as **pistas soadas que se conservan** na súa lista (50).
+
+**Restaurar os valores predeterminados** restablece as regras; as rotacións
+quedan.
 
 ## Atallos de teclado {#keyboard-shortcuts}
 

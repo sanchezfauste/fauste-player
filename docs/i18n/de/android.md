@@ -296,7 +296,8 @@ Desktop. Ob zwei Ausgänge gleichzeitig klingen können, hängt vom Telefon ab.
 
 ## Nicht unter Android {#not-on-android}
 
-MIDI-Controller, Fernsteuerung, das Bearbeiten von Tags und Covern sowie
-Playlist- und Cart-Seiten-Dateien sind vorerst Desktop-Funktionen. Eine an ein
+MIDI-Controller, Fernsteuerung, das Bearbeiten von Tags und Covern,
+Playlist- und Cart-Seiten-Dateien sowie die Automatisierung (der Musik-Filler
+und Einstellungen → Automatisierung) sind vorerst Desktop-Funktionen. Eine an ein
 Tablet angeschlossene Tastatur funktioniert wie auf dem Desktop (siehe
 [Tastatur](keyboard.md)).

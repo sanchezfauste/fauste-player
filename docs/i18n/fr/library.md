@@ -9,7 +9,7 @@ de cartouches. C'est une fenêtre sur l'ordinateur et sur une tablette ; un
 téléphone montre la bibliothèque dans son onglet **Bibliothèque** à la place
 (voir [Sur un téléphone](#on-a-phone)).
 
-![La fenêtre de la bibliothèque : le bandeau de pré-écoute avec la forme d'onde de la piste sélectionnée, l'arbre des catégories avec Music (et ses sous-catégories Pop et Evening) sélectionnée, et le tableau de ses pistes avec leur catégorie et leur type](../../images/guide/library.png)
+![La fenêtre de la bibliothèque : le bandeau de pré-écoute avec la forme d'onde de la piste sélectionnée, son vumètre et son fader d'écoute, l'arbre des catégories avec Music (et ses sous-catégories Pop et Evening) sélectionnée et Marqueurs à vérifier à la fin, et le tableau de ses pistes avec leur catégorie et leur type ](../../images/guide/library.png)
 
 ## Ouvrir la fenêtre {#opening-the-window}
 
@@ -37,9 +37,10 @@ lui-même à cause de cela. Le texte du champ de recherche n'est pas enregistré
 ## Catégories {#categories}
 
 L'arborescence à gauche regroupe les pistes. En haut, **Tous les titres** ;
-puis vos catégories, qui peuvent contenir des sous-catégories ; à la fin,
-**Sans catégorie**, les pistes qui n'appartiennent à aucune catégorie. Chaque
-élément montre sa couleur et un compte : une catégorie compte ses propres
+puis vos catégories, qui peuvent contenir des sous-catégories ; puis
+**Sans catégorie**, les pistes qui n'appartiennent à aucune catégorie ; et,
+seulement tant qu'une piste en a besoin, **Marqueurs à vérifier** (voir
+[Quand un fichier change](#when-a-file-changes)). Chaque élément montre sa couleur et un compte : une catégorie compte ses propres
 pistes et celles de ses sous-catégories. Une piste appartient à une catégorie
 au plus.
 
@@ -206,13 +207,83 @@ combien de pistes sont sélectionnées quand il en concerne plusieurs.
 | Ajouter à ▸ | Une playlist : les pistes sont ajoutées à sa fin |
 | Ajouter à une cartouche ▸ | Une cartouche de la page affichée du mur de cartouches : les pistes remplissent la cartouche choisie et les cartouches vides suivantes de la page, dans l'ordre de la grille. Les pistes qui n'y tiennent pas sont laissées de côté et un avis les compte |
 | Déplacer vers la catégorie ▸ | Une catégorie, ou Sans catégorie |
-| Type ▸ | Musique, Jingle, Effet, Publicité ou Voix |
+| Type ▸ | Musique, Jingle, Effet, Publicité, Voix ou Indicatif horaire |
 | Modifier les tags… | L'éditeur de tags (une piste) |
+| Ouvrir dans l'éditeur externe | Lancer votre éditeur audio avec le fichier de la piste (une piste ; voir [Quand un fichier change](#when-a-file-changes)) |
+| Marquer comme vérifiée | Effacer le drapeau *marqueurs à vérifier* (affiché quand une piste sélectionnée l'a) |
 | Loudness… | La fenêtre de loudness (une piste) |
 | Réanalyser | Analyser de nouveau les pistes |
 | Rétablir les marqueurs automatiques | Abandonner les marqueurs manuels |
 | Afficher l’emplacement du fichier | Ouvrir le dossier du fichier (une piste) |
 | Retirer de la bibliothèque… | Retirer les pistes de la bibliothèque, après confirmation (plus bas) |
+
+## Quand un fichier change {#when-a-file-changes}
+
+Préparer le matériel revient souvent à couper ou corriger un fichier dans un
+éditeur audio. Fauste Player aide pour les deux moitiés.
+
+**Ouvrir dans l'éditeur externe** (le menu d'une ligne de la bibliothèque et
+des lignes de playlist) lance le programme choisi dans [Paramètres →
+Bibliothèque](settings.md#library) avec le fichier de la piste. Il agit sur
+une seule piste. L'entrée est grisée, avec la raison en infobulle, quand
+aucun éditeur n'est défini, que le fichier est manquant ou illisible, ou que
+la piste est *en cours de diffusion* : la piste en cours d'un lecteur (en
+lecture ou en pause), une piste en attente de démarrage ou sur CUE, la piste
+sortante d'un fondu, une cartouche en lecture ou la cartouche en CUE du mur
+de cartouches, ou la pré-écoute de la bibliothèque tant qu'elle joue ou est
+en pause. L'éditeur n'est pas proposé sur Android, ni dans les versions
+Flatpak et snap, qui ne peuvent pas lancer d'autres programmes ; le reste de
+cette section s'y applique quand même.
+
+Fauste Player remarque qu'un fichier qu'il connaît a changé (sa taille ou sa
+date de modification diffèrent de la dernière analyse), quel qu'en soit
+l'auteur, et le réanalyse de lui-même : durée, marqueurs, loudness, forme
+d'onde, format et tags. Il regarde :
+
+- une fois au démarrage, chaque piste de la bibliothèque ;
+- quand un dossier surveillé signale un changement sur une piste connue ;
+- dans le dossier de tout fichier que vous avez ouvert dans l'éditeur, jusqu'à
+  ce que vous quittiez, si bien qu'un enregistrement est remarqué aussitôt ;
+- quand une piste est chargée dans un lecteur, une cartouche ou la
+  pré-écoute, et quand ses marqueurs sont ouverts pour modification ou
+  déplacés sur la forme d'onde ;
+- quand vous appuyez sur **Rechercher les fichiers modifiés** dans
+  [Paramètres → Analyse](settings.md#analysis), qui vérifie toute la
+  bibliothèque et dit dans un avis combien de fichiers ont changé.
+
+Il n'y a pas de scrutation périodique. Un fichier hors des dossiers
+surveillés, modifié par un autre programme pendant que Fauste Player tourne
+et pas utilisé depuis, est trouvé à sa prochaine utilisation ou par
+**Rechercher les fichiers modifiés**.
+
+Une piste modifiée n'est jamais réanalysée pendant qu'elle est diffusée : elle
+attend qu'elle s'arrête, et ses marqueurs et son loudness ne bougent jamais
+sous une source en lecture. (**Réanalyser toutes les pistes** est une demande
+explicite de votre part et n'attend pas.) Les éditeurs enregistrent souvent en
+supprimant puis en recréant le fichier, si bien qu'un fichier qui disparaît
+est regardé deux fois avant d'être marqué manquant. Un fichier qui change
+pendant son analyse (un éditeur qui l'enregistre encore) n'est pas utilisé :
+il est réanalysé peu après, ou à son prochain changement, utilisation ou
+recherche. Une piste manquante dont le fichier revient dans un dossier suivi
+uniquement à cause de l'éditeur n'est pas restaurée d'elle-même.
+
+**Marqueurs à vérifier.** Si l'*audio* d'un fichier a changé et que la piste a
+des marqueurs que vous avez placés à la main, la piste montre une icône
+d'avertissement ambre sur sa ligne (son infobulle nomme les marqueurs
+abandonnés, le cas échéant). Les marqueurs manuels qui se trouvent désormais
+après la fin de l'audio sont abandonnés et la valeur automatique prend leur
+place ; les autres restent tels quels (quand le cue-in ou le cue-out a été
+abandonné, les marqueurs d'intro, d'outro et MIX sont ramenés dans la nouvelle
+plage de cue). Le drapeau n'empêche jamais la piste d'être chargée, mise en
+CUE ou lue. Il disparaît quand vous choisissez **Marquer comme vérifiée** dans
+le menu de la piste (sur plusieurs lignes sélectionnées, il les efface toutes)
+ou changez un marqueur quelconque de la piste. L'élément **Marqueurs à
+vérifier** de l'arborescence, après *Sans catégorie*, liste les pistes
+marquées tant qu'il y en a (pas sur un téléphone). Un changement des tags ou
+de la pochette seuls rafraîchit les tags et ne lève aucun drapeau, ce qui
+arrive aussi après une modification de tags dans Fauste Player. La première
+analyse après une mise à jour ne lève le drapeau que si elle a dû abandonner
+un marqueur situé après la fin de l'audio.
 
 ## Pré-écoute {#pre-listening}
 
@@ -227,11 +298,20 @@ La barre montre :
 - **Pré-écouter**, **Mettre la pré-écoute en pause** et **Arrêter la
   pré-écoute** ;
 - le grand temps restant de la piste, son titre, son artiste et sa catégorie ;
-- un petit vumètre à droite. Il ne lit que cette pré-écoute, jamais le vumètre
-  d'un lecteur ou du mur de cartouches ; cliquez dessus pour redémarrer son
-  maximum ;
-- la forme d'onde du fichier entier, avec ses marqueurs, et une ligne
-  `écoulé / total` dessous.
+- à droite, un vumètre et un fader de volume dessinés comme sur un lecteur.
+  Le vumètre ne lit que cette pré-écoute, jamais le vumètre d'un lecteur ou
+  du mur de cartouches ; cliquez dessus pour redémarrer son maximum. Le fader
+  est votre **niveau d'écoute** dans le casque ou les moniteurs : il règle le
+  volume de la pré-écoute et ne modifie jamais une piste (son fichier, son
+  gain de loudness ou ses marqueurs), un lecteur ou le mur de cartouches. Il
+  reste là où vous l'avez laissé quand l'aperçu passe à une autre piste et
+  est enregistré pour le prochain démarrage ; son infobulle et l'affichage
+  dessous donnent le niveau en dB. Si la sortie Bibliothèque partage des
+  canaux avec une sortie d'antenne, le fader règle aussi le volume de la
+  pré-écoute à cet endroit. La carte de pré-écoute d'un téléphone n'a pas de
+  fader ;
+- la forme d'onde du fichier entier, aussi haute que celle d'un lecteur, avec
+  ses marqueurs, et une ligne `écoulé / total` dessous.
 
 **Pré-écouter** démarre la piste sélectionnée à son cue-in et la joue jusqu'à
 la fin du fichier. **Pré-écouter** sur une pré-écoute en pause la reprend, et

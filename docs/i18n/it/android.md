@@ -295,6 +295,7 @@ nello stesso momento dipende dal telefono.
 ## Non su Android {#not-on-android}
 
 Le superfici di controllo MIDI, il controllo remoto, la modifica di tag e
-copertine, e i file di playlist e di pagine di cart sono per ora funzioni del
+copertine, i file di playlist e di pagine di cart, e l'automazione (il
+riempitivo musicale e Impostazioni → Automazione) sono per ora funzioni del
 desktop. Una tastiera collegata a un tablet funziona come sul desktop (vedi
 [Tastiera](keyboard.md)).

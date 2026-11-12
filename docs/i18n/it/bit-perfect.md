@@ -42,8 +42,8 @@ dispositivo bit-perfect suona in modo diverso dagli altri:
   bloccato in cima: sullo schermo, sui controller [MIDI](midi.md) e tramite
   l'[API remota e OSC](remote-control.md). Va al 100 % quando il bit-perfect
   viene attivato per il dispositivo, e vi resta quando viene disattivato.
-- **Cosa funziona ancora:** **Stop in dissolvenza** (sfuma nella durata della
-  dissolvenza), **Pausa**, **Stop**, **Riavvia**, i segni di ripetizione e di
+- **Cosa funziona ancora:** **Stop in dissolvenza** (sfuma nella durata dello
+  stop in dissolvenza), **Pausa**, **Stop**, **Riavvia**, i segni di ripetizione e di
   stop dopo, le modalità Single e Continua, il Cue (preascolto, che non ha un
   fader e non ne è toccato), i cart, l'[uscita DSD](#dsd) e ogni lettore il
   cui Main è su un altro dispositivo, che mixa come al solito. Un cart può

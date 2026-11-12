@@ -30,7 +30,7 @@ pen USB, ou para manter configurações separadas lado a lado.
 | Ficheiro | Conteúdo |
 |---|---|
 | `config.json` | Definições, saídas, limiares de análise, afinação avançada |
-| `fauste.db` | A biblioteca (faixas, as suas categorias, marcadores manuais, etiquetas, loudness), as listas com as suas marcas de tocada, as páginas de cartuchos e a sessão: para cada leitor a lista visível, as faixas atual e seguinte, o modo, a posição, o volume e as larguras das colunas (por coluna), e a disposição da janela |
+| `fauste.db` | A biblioteca (faixas, as suas categorias, marcadores manuais, etiquetas, loudness), as listas com as suas marcas de tocada, as páginas de cartuchos, as rotações, a grelha e o registo de emissão da automatização (guardado `automation.as_run_keep_days` dias, 90 por predefinição) e a sessão: para cada leitor a lista visível, as faixas atual e seguinte, o modo, a posição, o volume e as larguras das colunas (por coluna), e a disposição da janela |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Cópias da base de dados (ver abaixo) |
 | `window.ron` | O tamanho e a posição da janela principal e se estava maximizada (só no computador; no Wayland é o sistema que escolhe a posição) |
 

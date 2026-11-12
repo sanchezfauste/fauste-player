@@ -133,9 +133,9 @@ de la cabecera (no sobre uno de sus botones) (véase
 
 | Botón | Acción |
 |---|---|
-| **Play / Siguiente** (grande) | Detenido: inicia la siguiente pista. Sonando: hace un fundido hacia la siguiente pista (la duración del fundido se ajusta en [Configuración](settings.md)); mientras dura el fundido de una mezcla iniciada por Siguiente o por un segue, una banda verde se vacía a lo largo del botón durante la duración del fundido, con su borde moviéndose de izquierda a derecha como el de un cartucho (una mezcla iniciada por Anterior se vacía en el botón Anterior). En pausa: reanuda. Si la siguiente es la pista que está sonando, Play la vuelve a empezar con el fundido habitual. En una salida bit-perfect cambia al momento, sin fundido, y su información emergente lo dice (véase [Lo que cuesta](bit-perfect.md#what-it-costs)). |
+| **Play / Siguiente** (grande) | Detenido: inicia la siguiente pista. Sonando: hace un fundido hacia la siguiente pista (la duración del fundido entre pistas se ajusta en [Configuración](settings.md)); mientras dura el fundido de una mezcla iniciada por Siguiente o por un segue, una banda verde se vacía a lo largo del botón durante la duración del fundido, con su borde moviéndose de izquierda a derecha como el de un cartucho (una mezcla iniciada por Anterior se vacía en el botón Anterior). En pausa: reanuda. Si la siguiente es la pista que está sonando, Play la vuelve a empezar con el fundido habitual. En una salida bit-perfect cambia al momento, sin fundido, y su información emergente lo dice (véase [Lo que cuesta](bit-perfect.md#what-it-costs)). |
 | **Stop** | Se detiene al momento (con una rampa corta para evitar el chasquido) |
-| **Stop con fundido** | Baja el volumen con un fundido y se detiene. Mientras dura un stop con fundido, una banda se vacía a lo largo del botón durante la duración del fundido, con su borde moviéndose de izquierda a derecha |
+| **Stop con fundido** | Baja el volumen con un fundido durante la duración del Stop con fundido (2 s por defecto, se ajusta en [Configuración](settings.md)) y se detiene. Mientras dura un stop con fundido, una banda se vacía a lo largo del botón durante la duración del fundido, con su borde moviéndose de izquierda a derecha |
 | **Pausa** | Pausa o reanuda; parpadea en ámbar mientras está en pausa |
 | **Stop al final** (un triángulo de play y un cuadrado) | Se detiene cuando acaba la pista actual, una sola vez. En modo SINGLE solo está disponible mientras la pista actual se repite: termina la repetición cuando acaba la pasada en curso. Para detenerse tras una pista cada vez que suene, o para repetir una pista, usa su menú en la playlist (consulta [Playlists](playlists.md)) |
 | **Anterior** (una barra y dos triángulos) | Sonando: hace un fundido de vuelta a la pista que este player reprodujo antes, igual que Siguiente. Púlsalo otra vez para seguir retrocediendo. La pista que dejas pasa a ser la siguiente. En una salida bit-perfect cambia al momento, sin fundido (véase [Lo que cuesta](bit-perfect.md#what-it-costs)). |
@@ -270,6 +270,12 @@ La ventana muestra:
 
 Mientras el CUE está en pausa, su botón de pausa (que muestra **Reanudar
 CUE**) parpadea en ámbar, como el del propio player.
+
+Arrastra un borde o una esquina de la ventana para hacerla más grande: la
+forma de onda ocupa el ancho y el alto de más, lo que ayuda a colocar los
+marcadores. Puedes volver a hacerla más pequeña, hasta su tamaño inicial. La
+siguiente ventana CUE, de cualquier player, se abre con el último tamaño que
+le diste a una, también después de reiniciar.
 
 Un salto en un CUE en pausa lo mantiene en pausa. El botón de cerrar de la
 ventana, o **Parar CUE**, detiene el CUE.

@@ -8,7 +8,7 @@ La finestra ha un'unica dimensione (900 × 640, più piccola su uno schermo
 piccolo) qualunque sia la sezione, e la sezione scorre al suo interno. Ogni
 sezione allinea le sue etichette in un'unica colonna.
 
-Le sezioni Lettori, Meter, Analisi, Loudness e Scorciatoie da tastiera hanno nella
+Le sezioni Lettori, Meter, Analisi, Loudness, Automazione e Scorciatoie da tastiera hanno nella
 loro intestazione un pulsante **Ripristina i valori predefiniti**. Chiede
 conferma e poi reimposta soltanto quella sezione (Lettori mantiene il numero
 di lettori e la lingua; Scorciatoie non ha altri pulsanti di ripristino).
@@ -117,21 +117,22 @@ loro linee temporali, e il dispositivo viene riaperto quando torna (vedi
 
 ## Lettori {#players}
 
-![Impostazioni, Lettori: numero di lettori, modalità predefinita, durata della dissolvenza, mix automatico, cue-in e cue-out, avviso di fine brano e lingua](../../images/guide/settings-players.png)
+![Impostazioni, Lettori: numero di lettori, modalità predefinita, durata della dissolvenza incrociata, durata dello Stop in dissolvenza, mix automatico, cue-in e cue-out, avviso di fine brano e lingua](../../images/guide/settings-players.png)
 
 | Impostazione | Predefinito | Significato |
 |---|---|---|
 | Lingua | Sistema | Lingua dell'interfaccia |
 | Numero di lettori | 4 | Colonne nella schermata principale (un lettore in onda non si può rimuovere). Il numero si applica quando rilasci il cursore; un numero digitato nella casella si applica quando premi Invio o esci dalla casella, ed Esc lo annulla |
 | Modalità predefinita | CONT | La modalità con cui partono i lettori |
-| Durata della dissolvenza | 1000 ms | Usata da Play quando è in onda e da Stop in dissolvenza. Su un lettore la cui uscita Main è bit-perfect, solo da Stop in dissolvenza |
+| Durata della dissolvenza incrociata | 1000 ms | Per quanto tempo il brano in onda sfuma quando premi Play (successivo) mentre suona, e per Brano precedente. Non vale per un lettore la cui uscita Main è bit-perfect |
+| Durata dello Stop in dissolvenza | 2000 ms | Per quanto tempo **Stop in dissolvenza** impiega a sfumare il brano. Vale per ogni lettore, anche quelli bit-perfect |
 | Mix automatico al punto MIX | Attivo | Sovrappone i brani in modalità continua. Non vale per un lettore la cui uscita Main è bit-perfect |
 | Usa cue-in e cue-out | Attivo | Disattivato: i lettori suonano ogni brano dall'inizio alla fine del file; i marker vengono mantenuti e i cart usano comunque i propri. Le durate e i totali delle playlist seguono lo stesso intervallo |
 | Avviso di fine brano | 10 s | Quando il conto alla rovescia inizia a lampeggiare in rosso |
 
 Mentre l'uscita Main di un lettore è bit-perfect, una nota sotto **Mix
 automatico al punto MIX** dice che tali lettori non mixano né fanno
-dissolvenze incrociate. Entrambe le impostazioni restano modificabili:
+dissolvenze incrociate, quindi la durata della dissolvenza incrociata e il mix automatico non valgono per loro. Entrambe le impostazioni restano modificabili:
 valgono ancora per gli altri lettori. Vedi [Cosa costa](bit-perfect.md#what-it-costs).
 
 ## Meter {#meters}
@@ -209,6 +210,12 @@ non ha altro da fare, con la normalizzazione attiva o no; i loro marker non
 vengono toccati. **Rianalizza** (nel menu della playlist) e **Rianalizza
 tutti i brani** misurano di nuovo.
 
+**Cerca file modificati** controlla ogni brano della libreria alla ricerca di
+un file che un altro programma ha cambiato mentre Fauste Player era in
+esecuzione, e analizza di nuovo quelli cambiati; un avviso dice quanti ne ha
+trovati. Il pulsante è attenuato mentre un controllo è in corso. Vedi
+[Quando un file cambia](library.md#when-a-file-changes).
+
 ## Loudness {#loudness}
 
 ![Impostazioni, Loudness: normalizzazione attiva, con l'obiettivo, il tetto di true peak, il guadagno massimo e il trim massimo ai valori predefiniti](../../images/guide/settings-loudness.png)
@@ -279,6 +286,40 @@ le categorie che raggruppano i tuoi brani, sorveglia una cartella con una
 categoria e rimuovi i suoi brani mancanti, senza aprire la finestra della
 libreria. Vedi [Libreria](library.md#categories) e
 [Cartelle sorvegliate](library.md#watched-folders).
+
+**Editor esterno** è l'editor audio che *Apri nell'editor esterno* avvia con il
+file di un brano: il percorso del programma (o *Nessuno*), **Scegli…** per
+sceglierlo e **Svuota** per rimuoverlo. Su macOS si può scegliere un bundle di
+applicazione (`.app`). Se il programma non può essere avviato, un avviso lo
+dice. La riga non è mostrata su Android, né nelle build Flatpak e snap. Vedi
+[Quando un file cambia](library.md#when-a-file-changes).
+
+## Automazione {#automation}
+
+Le rotazioni e le regole del [riempitivo musicale](automation.md) (non su
+Android).
+
+![Impostazioni, Automazione: le rotazioni Music (la predefinita) e Hits, la Music selezionata con il suo unico passo su tutta la musica, e le regole del riempitivo musicale](../../images/guide/settings-automation.png)
+
+- **Rotazioni:** l'elenco, con la predefinita contrassegnata. **Nuova
+  rotazione** ne aggiunge una che riproduce tutta la musica, **Rendi
+  predefinita** rende predefinita quella selezionata, **Elimina rotazione** la
+  rimuove (l'ultima non si può eliminare).
+- **La rotazione selezionata:** il suo **Nome**, poi una riga per ogni
+  **passo**: da dove vengono i suoi brani (una categoria con le sue
+  sottocategorie, oppure *Tutti* di un tipo), quanti ne riproduce ogni volta
+  (**Almeno** 0–99, **Al massimo** 1–99; un minimo di 0 permette al passo di
+  saltare alcuni turni), **Su**, **Giù** e **Rimuovi**. **Aggiungi passo** ne
+  aggiunge uno in fondo. Un passo la cui categoria è stata eliminata lo dice;
+  il riempitivo lo salta.
+- **Riempitivo musicale:** quanto tempo deve passare prima che lo stesso brano
+  possa suonare di nuovo (3 ore, o quando è andata in onda la metà degli
+  altri brani del suo passo, a seconda di quale accade prima; 0 disattiva
+  l'uno o l'altro), lo stesso artista (30 minuti), l'**anticipo** (30 minuti
+  di musica in coda) e i **brani riprodotti conservati** nel suo elenco (50).
+
+**Ripristina i valori predefiniti** reimposta le regole; le rotazioni
+restano.
 
 ## Scorciatoie da tastiera {#keyboard-shortcuts}
 

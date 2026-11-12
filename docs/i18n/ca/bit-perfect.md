@@ -42,7 +42,7 @@ un dispositiu bit perfect sona de manera diferent dels altres:
   l'OSC](remote-control.md). Passa al 100 % quan s'activa bit perfect per al
   dispositiu, i s'hi queda quan es desactiva.
 - **El que continua funcionant:** **Stop amb fos** (fa un fos de sortida durant
-  la durada del fos), **Pausa**, **Stop**, **Reiniciar**, les marques de
+  la durada de l'stop amb fos), **Pausa**, **Stop**, **Reiniciar**, les marques de
   repetició i de stop al final, els modes Single i Continu, el Cue (la
   preescolta, que no té fader i no es veu afectada), els cartutxos, la [sortida
   DSD](#dsd), i tots els reproductors la sortida Main dels quals és en un altre

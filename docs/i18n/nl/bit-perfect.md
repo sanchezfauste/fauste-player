@@ -42,7 +42,7 @@ op een bit-perfect apparaat staat anders dan de andere:
   via de [API op afstand en OSC](remote-control.md). Hij gaat naar 100 % wanneer
   bit-perfect voor het apparaat wordt aangezet, en blijft daar wanneer het wordt
   uitgezet.
-- **Wat nog werkt:** **Uitfaden** (het faadt uit gedurende de fadetijd),
+- **Wat nog werkt:** **Uitfaden** (het faadt uit gedurende de uitfadetijd),
   **Pauze**, **Stop**, **Opnieuw starten**, de markeringen voor herhalen en
   stoppen na, de modi Single en Continuous, Cue (voorbeluisteren, dat geen fader
   heeft en niet wordt beïnvloed), carts, [DSD-uitgang](#dsd), en elke speler

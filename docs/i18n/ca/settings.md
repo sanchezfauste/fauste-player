@@ -8,7 +8,7 @@ La finestra té una sola mida (900 × 640, més petita en una pantalla petita)
 sigui quina sigui la secció, i la secció es desplaça dins seu. Cada secció
 alinea les seves etiquetes en una sola columna.
 
-Les seccions Reproductors, Vúmetres, Anàlisi, Sonoritat i Dreceres de teclat tenen un
+Les seccions Reproductors, Vúmetres, Anàlisi, Sonoritat, Automatització i Dreceres de teclat tenen un
 botó **Restaurar els valors per defecte** a la capçalera. Demana confirmació
 i després restableix només aquella secció (Reproductors conserva el nombre de
 reproductors i l'idioma; Dreceres no té cap altre botó de restabliment).
@@ -85,7 +85,7 @@ nou (per exemple després d'intercanviar dos dispositius) els conserva.
 | Sistema d'àudio | L'última opció, **Sense sortida (silenci)**, no reprodueix res: les línies de temps avancen al ritme del temps real sense targeta de so (per a una màquina que no en té, o per assajar). Linux: PipeWire (a les compilacions que l'inclouen), PulseAudio, JACK o ALSA. Windows: WASAPI, ASIO (a les compilacions que l'inclouen) o JACK. macOS: Core Audio o JACK. Els sistemes que falten en aquest ordinador, o sense dispositiu de sortida (un servidor JACK que no s'està executant), es mostren com a no disponibles. «Predeterminat del sistema» usa el primer disponible en aquest ordre. |
 | Freqüència de mostreig | La freqüència a la qual funciona cada sortida tret que un dispositiu en tingui una de pròpia (Avançat); els fitxers s'hi converteixen amb un remostreig d'alta qualitat. Els dispositius bit perfect comencen a la seva freqüència i després segueixen els fitxers. |
 | Mida del búfer | Fotogrames per bloc d'àudio, tret que un dispositiu en tingui una de pròpia; la latència resultant es mostra a sota. Les sortides a través d'un servidor de so o d'un mesclador del sistema (PulseAudio, el dispositiu `default` d'ALSA) demanen almenys 50 ms sigui quina sigui aquesta mida, o tant com accepti el dispositiu, perquè no se senti un ordinador ocupat; la latència llavors ho diu (`shared_buffer_ms` al fitxer de configuració) |
-| Sortides per reproductor | Per a cada reproductor, un dispositiu **Main** (en antena) i un dispositiu **Cue** (preescolta), cadascun amb un parell de canals. Una targeta de so que ofereix diversos perfils de sortida (ALSA llista frontal, surround, maquinari directe…) mostra cadascun com a *targeta — perfil*; dues entrades que encara es llegirien igual reben l'identificador del dispositiu entre parèntesis. Les interfícies multicanal poden portar diversos reproductors en parells diferents. Es permet una sortida Cue que comparteix una sortida d'antena (el Main de qualsevol reproductor o el de la cartutxera): una nota a sota diu que la seva preescolta se sent a l'antena i que pregunta primer mentre hi sona alguna cosa. |
+| Sortides per reproductor | Per a cada reproductor, i per a la columna **Música** (el [musicalitzador](automation.md)), un dispositiu **Main** (en antena) i un dispositiu **Cue** (preescolta), cadascun amb un parell de canals. Una targeta de so que ofereix diversos perfils de sortida (ALSA llista frontal, surround, maquinari directe…) mostra cadascun com a *targeta — perfil*; dues entrades que encara es llegirien igual reben l'identificador del dispositiu entre parèntesis. Les interfícies multicanal poden portar diversos reproductors en parells diferents. Es permet una sortida Cue que comparteix una sortida d'antena (el Main de qualsevol reproductor o el de la cartutxera): una nota a sota diu que la seva preescolta se sent a l'antena i que pregunta primer mentre hi sona alguna cosa. |
 | Provar Main / Provar Cue | Reprodueix un to breu (1 kHz a Main, 440 Hz a Cue, 1,5 s, −18 dBFS) a la sortida triada, de manera que puguis comprovar el cablejat abans de sortir en antena |
 | Biblioteca | La sortida Cue de la biblioteca, amb el seu propi **Provar Cue**: on se sent la [preescolta](library.md#pre-listening) de la finestra de la biblioteca (en un mòbil, la de la pestanya Biblioteca). Sense ella, Preescolta de la barra de previsualització és atenuat. A Android la seva elecció buida diu *Predeterminat del sistema* en lloc de *Cap*: la preescolta i **Provar Cue** sonen llavors per la sortida predeterminada (vegeu [Android → Biblioteca](android.md#library)). Una sortida Biblioteca en una sortida d'antena funciona com el Cue d'un reproductor: una nota a sota diu que la seva preescolta se sent a l'antena i que pregunta primer mentre hi sona alguna cosa. És a les vistes Bàsic i Avançat, també en un mòbil |
 | Cartutxera | Les sortides Main i Cue de la cartutxera. Main per defecte és la sortida del sistema. Sense Cue no hi ha preescolta dels cartutxos; un Cue en una sortida d'antena funciona com als reproductors. |
@@ -111,21 +111,23 @@ línies de temps, i el dispositiu es torna a obrir quan torna (vegeu
 
 ## Reproductors {#players}
 
-![Configuració, Reproductors: nombre de reproductors, mode per defecte, durada del fos, mescla automàtica, cue-in i cue-out, avís de final de pista i idioma](../../images/guide/settings-players.png)
+![Configuració, Reproductors: nombre de reproductors, mode per defecte, durada del fos entre pistes, durada de l'stop amb fos, mescla automàtica, cue-in i cue-out, avís de final de pista i idioma](../../images/guide/settings-players.png)
 
 | Ajust | Per defecte | Significat |
 |---|---|---|
 | Idioma | Sistema | Idioma de la interfície |
 | Nombre de reproductors | 4 | Columnes de la pantalla principal (no es pot treure un reproductor en antena). El nombre s'aplica quan deixes anar el control lliscant; un nombre escrit al quadre s'aplica quan prems Enter o surts del quadre, i Escape el cancel·la |
 | Mode per defecte | CONT | El mode amb què comencen els reproductors |
-| Durada del fos | 1000 ms | Usat per Play en antena i per Stop amb fos. En un reproductor la sortida Main del qual és bit perfect, només per Stop amb fos |
+| Durada del fos entre pistes | 1000 ms | Quant triga a fer el fos de sortida la pista en antena quan prems Play (següent) mentre sona, i per a Pista anterior. No s'aplica a un reproductor la sortida Main del qual és bit perfect |
+| Durada de l'Stop amb fos | 2000 ms | Quant triga **Stop amb fos** a fer el fos de sortida de la pista. S'aplica a tots els reproductors, també als bit perfect |
 | Mescla automàtica al punt MIX | Activada | Superposa les pistes en mode continu. No s'aplica a un reproductor la sortida Main del qual és bit perfect |
 | Usar cue-in i cue-out | Activat | Desactivat: els reproductors reprodueixen cada pista de l'inici al final del fitxer; els marcadors es conserven i els cartutxos continuen usant els seus. Les durades i els totals de les llistes segueixen el mateix interval |
 | Avís de final de pista | 10 s | Quan el compte enrere comença a parpellejar en vermell |
 
 Mentre la sortida Main d'un reproductor és bit perfect, una nota sota **Mescla
 automàtica al punt MIX** diu que aquests reproductors mai no mesclen ni fan fos
-encadenat. Tots dos ajustos continuen editables: encara s'apliquen als altres
+encadenat, de manera que la durada del fos entre pistes i la mescla
+automàtica no s'hi apliquen. Tots dos ajustos continuen editables: encara s'apliquen als altres
 reproductors. Vegeu [Què costa](bit-perfect.md#what-it-costs).
 
 ## Vúmetres {#meters}
@@ -203,6 +205,12 @@ la normalització és activada com desactivada; els seus marcadors no es toquen.
 **Tornar a analitzar** (al menú de la llista) i **Tornar a analitzar totes les
 pistes** tornen a mesurar.
 
+**Cercar fitxers canviats** revisa totes les pistes de la biblioteca a la
+recerca d'un fitxer que un altre programa hagi canviat mentre Fauste Player
+s'executava, i torna a analitzar els canviats; un avís diu quants n'ha trobat.
+El botó apareix atenuat mentre una cerca és en marxa. Vegeu [Quan un fitxer
+canvia](library.md#when-a-file-changes).
+
 ## Sonoritat {#loudness}
 
 ![Configuració, Sonoritat: normalització activada, amb l'objectiu, el sostre de true peak, el guany màxim i l'ajust màxim als seus valors per defecte](../../images/guide/settings-loudness.png)
@@ -273,6 +281,37 @@ categories que agrupen les teves pistes, vigila una carpeta amb una categoria i
 treu-ne les pistes que falten, sense obrir la finestra de la biblioteca. Vegeu
 [Biblioteca](library.md#categories) i
 [Carpetes vigilades](library.md#watched-folders).
+
+**Editor extern** és l'editor d'àudio que *Obrir a l'editor extern* inicia amb
+el fitxer d'una pista: la ruta del programa (o *Cap*), **Triar…** per
+escollir-lo i **Treure** per eliminar-lo. A macOS es pot triar un paquet
+d'aplicació (`.app`). Si el programa no es pot iniciar, un avís ho diu. La fila
+no es mostra a Android, ni a les compilacions Flatpak i snap. Vegeu [Quan un
+fitxer canvia](library.md#when-a-file-changes).
+
+## Automatització {#automation}
+
+Les rotacions i les regles del [musicalitzador](automation.md) (no a Android).
+
+![Configuració, Automatització: les rotacions Música (la per defecte) i Hits, la Música seleccionada amb el seu únic pas sobre tota la música, i les regles del musicalitzador](../../images/guide/settings-automation.png)
+
+- **Rotacions:** la llista, amb la per defecte marcada. **Nova rotació** n'afegeix
+  una que reprodueix tota la música, **Fes-la per defecte** converteix la
+  seleccionada en la per defecte, **Esborra la rotació** l'elimina (l'última no
+  es pot esborrar).
+- **La rotació seleccionada:** el seu **Nom**, i després una fila per **pas**:
+  d'on surten les seves pistes (una categoria amb les seves subcategories, o
+  *Tot* d'un tipus), quantes en reprodueix cada vegada (**Com a mínim** 0–99,
+  **Com a màxim** 1–99; amb mínim 0 el pas es salta alguns torns), **Puja**,
+  **Baixa** i **Treu**. **Afegeix un pas** n'afegeix un al final. Un pas la
+  categoria del qual s'ha esborrat ho diu; el musicalitzador se'l salta.
+- **Musicalitzador:** quant temps ha de passar abans que la mateixa pista pugui
+  tornar a sonar (3 hores, o quan hagi sonat la meitat de les altres pistes del
+  seu pas, el que passi primer; 0 desactiva qualsevol dels dos), el mateix
+  artista (30 minuts), el **marge per endavant** (30 minuts de música en cua) i
+  les **pistes sonades que es conserven** a la seva llista (50).
+
+**Restaurar els valors per defecte** restableix les regles; les rotacions es queden.
 
 ## Dreceres de teclat {#keyboard-shortcuts}
 

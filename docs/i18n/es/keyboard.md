@@ -33,7 +33,8 @@ tecla (con Ctrl, Alt, Shift o Cmd si quieres). Si otra acción ya usa esa
 tecla, se muestra su nombre. Elige **Asignar** para mover la tecla, o
 **Cancelar**. **Quitar** elimina un atajo y **Restaurar valores por
 defecto** (arriba a la derecha de la sección) restablece la tabla de arriba.
-Acciones disponibles, para cada player y cartucho:
+Acciones disponibles, para cada player (P1 … Pn; la columna **Música** no
+tiene atajos) y cartucho:
 
 - play, anterior, reiniciar, pausa, stop, stop con fundido y CUE en un
   player (anterior y reiniciar no tienen tecla por defecto);

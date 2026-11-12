@@ -8,7 +8,7 @@ Okno ma jeden rozmiar (900 × 640, mniejszy na małym ekranie) niezależnie od
 sekcji, a sekcja przewija się wewnątrz niego. Każda sekcja ustawia etykiety
 w jednej kolumnie.
 
-Sekcje Odtwarzacze, Mierniki, Analiza, Głośność i Skróty klawiszowe mają w nagłówku
+Sekcje Odtwarzacze, Mierniki, Analiza, Głośność, Automatyzacja i Skróty klawiszowe mają w nagłówku
 przycisk **Przywróć domyślne**. Prosi o potwierdzenie, a potem resetuje
 tylko tę sekcję (Odtwarzacze zachowują liczbę odtwarzaczy i język; Skróty
 nie mają innego przycisku resetowania). Wyjścia audio, Playlisty, Cartwall,
@@ -85,7 +85,7 @@ ponowny wybór (na przykład po zamianie dwóch urządzeń) je zachowuje.
 | System audio | Ostatni wybór, **Brak wyjścia (cisza)**, nie odtwarza niczego: osie czasu biegną w tempie rzeczywistym bez karty dźwiękowej (dla komputera bez niej lub do prób). Linux: PipeWire (w wersjach, które go zawierają), PulseAudio, JACK lub ALSA. Windows: WASAPI, ASIO (w wersjach, które go zawierają) lub JACK. macOS: Core Audio lub JACK. Systemy, których nie ma na tym komputerze, lub bez urządzenia wyjściowego (niedziałający serwer JACK), są pokazywane jako niedostępne. „Domyślny systemowy” używa pierwszego dostępnego w tej kolejności. |
 | Częstotliwość próbkowania | Częstotliwość, z jaką działa każde wyjście, chyba że urządzenie ma własną (Zaawansowane); pliki są do niej konwertowane resamplingiem wysokiej jakości. Urządzenia bit-perfect startują z własną częstotliwością, a potem podążają za plikami. |
 | Rozmiar bufora | Ramki na blok audio, chyba że urządzenie ma własny; wynikające z niego opóźnienie jest pokazane pod spodem. Wyjścia przez serwer dźwięku lub mikser systemowy (PulseAudio, urządzenie ALSA `default`) proszą o co najmniej 50 ms bez względu na ten rozmiar, albo tyle, ile przyjmie urządzenie, aby zajęty komputer nie był słyszalny; opóźnienie mówi wtedy o tym (`shared_buffer_ms` w pliku konfiguracyjnym) |
-| Wyjścia odtwarzaczy | Dla każdego odtwarzacza urządzenie **Main** (na antenę) i urządzenie **Cue** (odsłuch wstępny), każde z parą kanałów. Karta dźwiękowa oferująca kilka profili wyjściowych (ALSA wymienia front, surround, bezpośredni sprzęt…) pokazuje każdy jako *karta — profil*; dwie pozycje, które nadal brzmiałyby tak samo, dostają w nawiasie identyfikator urządzenia. Interfejsy wielokanałowe mogą obsługiwać kilka odtwarzaczy na różnych parach. Wyjście Cue dzielące wyjście antenowe (Main dowolnego odtwarzacza lub cartwalla) jest dozwolone: uwaga pod nim mówi, że jego odsłuch wstępny jest słyszalny na antenie, i pyta najpierw, gdy coś tam gra. |
+| Wyjścia odtwarzaczy | Dla każdego odtwarzacza oraz dla kolumny **Muzyka** ([wypełniacz muzyczny](automation.md)) urządzenie **Main** (na antenę) i urządzenie **Cue** (odsłuch wstępny), każde z parą kanałów. Karta dźwiękowa oferująca kilka profili wyjściowych (ALSA wymienia front, surround, bezpośredni sprzęt…) pokazuje każdy jako *karta — profil*; dwie pozycje, które nadal brzmiałyby tak samo, dostają w nawiasie identyfikator urządzenia. Interfejsy wielokanałowe mogą obsługiwać kilka odtwarzaczy na różnych parach. Wyjście Cue dzielące wyjście antenowe (Main dowolnego odtwarzacza lub cartwalla) jest dozwolone: uwaga pod nim mówi, że jego odsłuch wstępny jest słyszalny na antenie, i pyta najpierw, gdy coś tam gra. |
 | Test Main / Test Cue | Odtwarza krótki ton (1 kHz na Main, 440 Hz na Cue, 1,5 s, −18 dBFS) na wybranym wyjściu, abyś mógł sprawdzić okablowanie przed wejściem na antenę |
 | Biblioteka | Wyjście Cue biblioteki, z własnym przyciskiem **Test Cue**: tam słychać [odsłuch wstępny](library.md#pre-listening) okna biblioteki (na telefonie: karty Biblioteka). Bez niego przycisk Odsłuch paska odsłuchu jest przyciemniony. W Androidzie jego pusty wybór brzmi *Domyślne systemowe* zamiast *Brak*: odsłuch wstępny i **Test Cue** grają wtedy na wyjściu domyślnym (zob. [Android → Biblioteka](android.md#library)). Wyjście Biblioteki na wyjściu antenowym działa jak Cue odtwarzacza: uwaga pod nim mówi, że jego odsłuch wstępny jest słyszalny na antenie, i pyta najpierw, gdy coś tam gra. Jest w widokach Podstawowe i Zaawansowane, także na telefonie |
 | Cartwall | Wyjścia Main i Cue cartwalla. Main domyślnie jest wyjściem systemowym. Bez Cue nie ma odsłuchu wstępnego cartów; Cue na wyjściu antenowym działa jak w odtwarzaczach. |
@@ -111,21 +111,22 @@ osie czasu, a urządzenie jest otwierane ponownie, gdy wróci (zob.
 
 ## Odtwarzacze {#players}
 
-![Ustawienia, Odtwarzacze: liczba odtwarzaczy, tryb domyślny, czas wyciszania, automatyczny miks, cue-in i cue-out, ostrzeżenie o końcu utworu i język](../../images/guide/settings-players.png)
+![Ustawienia, Odtwarzacze: liczba odtwarzaczy, tryb domyślny, czas przenikania, czas Stop z wyciszeniem, automatyczny miks, cue-in i cue-out, ostrzeżenie o końcu utworu i język](../../images/guide/settings-players.png)
 
 | Ustawienie | Domyślnie | Znaczenie |
 |---|---|---|
 | Język | Systemowy | Język interfejsu |
 | Liczba odtwarzaczy | 4 | Kolumny na ekranie głównym (nie można usunąć odtwarzacza na antenie). Liczba obowiązuje po puszczeniu suwaka; liczba wpisana w pole obowiązuje po naciśnięciu Enter lub opuszczeniu pola, a Escape ją anuluje |
 | Tryb domyślny | CONT | Tryb, w którym startują odtwarzacze |
-| Czas wyciszania | 1000 ms | Używany przez Play na antenie i przez Stop z wyciszeniem. W odtwarzaczu, którego wyjście Main jest bit-perfect, tylko przez Stop z wyciszeniem |
+| Czas przenikania | 1000 ms | Jak długo utwór na antenie wycisza się, gdy naciśniesz Play (następny), kiedy gra, oraz przy Poprzednim utworze. Nie dotyczy odtwarzacza, którego wyjście Main jest bit-perfect |
+| Czas Stop z wyciszeniem | 2000 ms | Jak długo **Stop z wyciszeniem** wycisza utwór. Dotyczy każdego odtwarzacza, także bit-perfect |
 | Automatyczny miks w punkcie MIX | Wł. | Nakłada utwory w trybie ciągłym. Nie dotyczy odtwarzacza, którego wyjście Main jest bit-perfect |
 | Używaj cue-in i cue-out | Wł. | Wył.: odtwarzacze grają każdy utwór od początku do końca pliku; markery są zachowywane, a carty nadal używają swoich. Czasy trwania i sumy playlist podążają za tym samym zakresem |
 | Ostrzeżenie o końcu utworu | 10 s | Kiedy odliczanie zaczyna migać na czerwono |
 
 Gdy wyjście Main odtwarzacza jest bit-perfect, uwaga pod **Automatyczny miks w
-punkcie MIX** mówi, że takie odtwarzacze nigdy nie miksują ani nie przenikają.
-Oba ustawienia pozostają edytowalne: nadal dotyczą pozostałych odtwarzaczy. Zob.
+punkcie MIX** mówi, że takie odtwarzacze nigdy nie miksują ani nie przenikają, więc czas
+przenikania i automatyczny miks ich nie dotyczą. Oba ustawienia pozostają edytowalne: nadal dotyczą pozostałych odtwarzaczy. Zob.
 [Jakie są koszty](bit-perfect.md#what-it-costs).
 
 ## Mierniki {#meters}
@@ -200,6 +201,11 @@ czy normalizacja jest włączona; ich markery nie są ruszane. **Analizuj
 ponownie** (w menu playlisty) i **Analizuj ponownie wszystkie utwory** mierzą
 od nowa.
 
+**Szukaj zmienionych plików** sprawdza każdy utwór w bibliotece pod kątem
+pliku zmienionego przez inny program, gdy Fauste Player działał, i analizuje
+zmienione od nowa; komunikat mówi, ile znalazł. Przycisk jest przyciemniony,
+dopóki trwa wyszukiwanie. Zob. [Gdy plik się zmienia](library.md#when-a-file-changes).
+
 ## Głośność {#loudness}
 
 ![Ustawienia, Głośność: normalizacja włączona, z wartością docelową, pułapem true peak, maksymalnym wzmocnieniem i maksymalną korektą w wartościach domyślnych](../../images/guide/settings-loudness.png)
@@ -268,6 +274,36 @@ kategorie grupujące Twoje utwory, obserwuj folder za pomocą kategorii i usuwaj
 jej brakujące utwory, bez otwierania okna biblioteki. Zob.
 [Biblioteka](library.md#categories) i
 [Obserwowane foldery](library.md#watched-folders).
+
+**Zewnętrzny edytor** to edytor audio, który *Otwórz w zewnętrznym edytorze*
+uruchamia z plikiem utworu: ścieżka programu (lub *Brak*), **Wybierz…**, aby
+go wskazać, i **Wyczyść**, aby go usunąć. W macOS można wybrać pakiet
+aplikacji (`.app`). Jeśli programu nie da się uruchomić, komunikat o tym
+mówi. Wiersz nie jest pokazywany w Androidzie ani w wersjach Flatpak i snap.
+Zob. [Gdy plik się zmienia](library.md#when-a-file-changes).
+
+## Automatyzacja {#automation}
+
+Rotacje i reguły [wypełniacza muzycznego](automation.md) (nie w Androidzie).
+
+![Ustawienia, Automatyzacja: rotacje Music (domyślna) i Hits, zaznaczona Music z jednym krokiem obejmującym całą muzykę oraz reguły wypełniacza muzycznego](../../images/guide/settings-automation.png)
+
+- **Rotacje:** lista z zaznaczoną domyślną. **Nowa rotacja** dodaje rotację
+  grającą całą muzykę, **Ustaw jako domyślną** czyni zaznaczoną rotację
+  domyślną, **Usuń rotację** ją usuwa (ostatniej nie można usunąć).
+- **Zaznaczona rotacja:** jej **Nazwa**, a potem po jednym wierszu na **krok**:
+  skąd pochodzą jego utwory (kategoria z jej podkategoriami albo *Wszystkie*
+  danego rodzaju), ile gra za każdym razem (**Co najmniej** 0–99, **Co
+  najwyżej** 1–99; co najmniej 0 pozwala krokowi pominąć niektóre kolejki),
+  **W górę**, **W dół** i **Usuń**. **Dodaj krok** dodaje jeden na końcu.
+  Krok, którego kategorię usunięto, mówi o tym; wypełniacz go pomija.
+- **Wypełniacz muzyczny:** po jakim czasie ten sam utwór może zagrać
+  ponownie (3 godziny albo gdy zagra połowa pozostałych utworów jego kroku,
+  zależnie od tego, co nastąpi pierwsze; 0 wyłącza każde z tych kryteriów),
+  ten sam wykonawca (30 minut), **wyprzedzenie** (30 minut muzyki w kolejce)
+  i **zachowane odtworzone utwory** na jego liście (50).
+
+**Przywróć domyślne** resetuje reguły; rotacje zostają.
 
 ## Skróty klawiszowe {#keyboard-shortcuts}
 

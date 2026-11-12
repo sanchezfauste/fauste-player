@@ -29,7 +29,7 @@ razie potrzeby z Ctrl, Alt, Shift lub Cmd). Jeśli inna akcja już używa tego
 klawisza, pokazywana jest jej nazwa. Wybierz **Przypisz**, aby przenieść
 klawisz, lub **Anuluj**. **Odepnij** usuwa skrót, a **Przywróć domyślne**
 (w prawym górnym rogu sekcji) przywraca powyższą tabelę. Dostępne akcje, dla
-każdego odtwarzacza i carta:
+każdego odtwarzacza (P1 … Pn; kolumna **Muzyka** nie ma skrótów) i carta:
 
 - play, poprzedni, od początku, pauza, stop, stop z wyciszeniem i CUE w
   odtwarzaczu (poprzedni i od początku nie mają klawisza domyślnego);

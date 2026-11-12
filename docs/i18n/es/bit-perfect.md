@@ -43,7 +43,7 @@ dispositivo bit-perfect se comporta de forma distinta a los demás:
   la [API remota y OSC](remote-control.md). Pasa al 100 % cuando se activa
   bit-perfect en el dispositivo, y se queda ahí cuando se desactiva.
 - **Lo que sigue funcionando:** **Stop con fundido** (baja con un fundido
-  durante la duración del fundido), **Pausa**, **Stop**, **Reiniciar**, las
+  durante la duración del Stop con fundido), **Pausa**, **Stop**, **Reiniciar**, las
   marcas de repetir y de parar después, los modos Single y Continuo, Cue
   (la preescucha, que no tiene fader y no se ve afectada), los cartuchos, la
   [salida DSD](#dsd), y todos los players cuya salida Main está en otro

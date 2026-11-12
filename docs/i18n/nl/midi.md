@@ -28,7 +28,7 @@ Op Linux loopt MIDI via ALSA: je gebruiker moet de sequencer mogen openen
 
 ## Een bedieningselement koppelen {#binding-a-control}
 
-Voor elke speler is er een rij per actie: **Play / Volgende**, **Pauze**,
+Voor elke speler (P1 … Pn; de kolom **Muziek** heeft geen koppelingen) is er een rij per actie: **Play / Volgende**, **Pauze**,
 **Stop**, **Uitfaden**, **Opnieuw starten**, **Vorige**, **CUE** en
 **Volume**.
 

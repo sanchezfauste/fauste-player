@@ -28,7 +28,7 @@ groupe `audio`).
 
 ## Associer une commande {#binding-a-control}
 
-Pour chaque lecteur, il y a une ligne par action : **Lecture / Suivante**,
+Pour chaque lecteur (P1 … Pn ; la colonne **Musique** n'a pas d'assignations), il y a une ligne par action : **Lecture / Suivante**,
 **Pause**, **Stop**, **Stop en fondu**, **Reprendre au début**,
 **Précédente**, **CUE** et **Volume**.
 

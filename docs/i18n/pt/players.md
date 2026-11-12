@@ -127,9 +127,9 @@ próprios separadores de listas, transporte, volume e saídas.
 
 | Botão | Ação |
 |---|---|
-| **Play / Seguinte** (grande) | Parado: iniciar a faixa seguinte. No ar: fade para a faixa seguinte (o tempo de fade define-se em [Definições](settings.md)); enquanto faz o fade de um crossfade iniciado pelo Seguinte ou por um segue, uma faixa verde escoa-se pelo botão durante a duração do fade, com a margem a mover-se da esquerda para a direita como a de um cartucho (um crossfade iniciado pelo Anterior escoa-se no botão Anterior). Em pausa: retomar. Com a faixa no ar como seguinte, o Play reinicia essa faixa com o fade habitual. Numa saída bit-perfect muda de imediato, sem fade, e a sua dica di-lo (ver [O que custa](bit-perfect.md#what-it-costs)). |
+| **Play / Seguinte** (grande) | Parado: iniciar a faixa seguinte. No ar: fade para a faixa seguinte (a duração do fade entre faixas define-se em [Definições](settings.md)); enquanto faz o fade de um crossfade iniciado pelo Seguinte ou por um segue, uma faixa verde escoa-se pelo botão durante a duração do fade, com a margem a mover-se da esquerda para a direita como a de um cartucho (um crossfade iniciado pelo Anterior escoa-se no botão Anterior). Em pausa: retomar. Com a faixa no ar como seguinte, o Play reinicia essa faixa com o fade habitual. Numa saída bit-perfect muda de imediato, sem fade, e a sua dica di-lo (ver [O que custa](bit-perfect.md#what-it-costs)). |
 | **Stop** | Parar de imediato (com uma curta rampa anti-estalido) |
-| **Stop com fade** | Fade out e parar. Enquanto um stop com fade decorre, uma faixa escoa-se pelo botão durante a duração do fade, com a margem a mover-se da esquerda para a direita |
+| **Stop com fade** | Fade out durante a duração do Stop com fade (2 s por predefinição, definida em [Definições](settings.md)) e parar. Enquanto um stop com fade decorre, uma faixa escoa-se pelo botão durante a duração do fade, com a margem a mover-se da esquerda para a direita |
 | **Pausa** | Pausar ou retomar; pisca a âmbar enquanto está em pausa |
 | **Stop no fim** (um triângulo de play seguido de um quadrado) | Parar quando a faixa atual termina, uma só vez. No modo SINGLE só está disponível enquanto a faixa atual se repete: termina a repetição quando a passagem que está a tocar termina. Para parar após uma faixa sempre que toca, ou para repetir uma faixa, use o seu menu na lista (ver [Listas](playlists.md)) |
 | **Anterior** (uma barra e dois triângulos) | No ar: fade de volta para a faixa que este leitor tocou antes, como faz o Seguinte. Prima de novo para continuar a recuar. A faixa que deixou passa a ser a seguinte. Numa saída bit-perfect muda de imediato, sem fade (ver [O que custa](bit-perfect.md#what-it-costs)). |
@@ -260,6 +260,12 @@ A janela mostra:
 
 Enquanto o CUE está em pausa, o seu botão de pausa (que mostra **Retomar o
 CUE**) pisca a âmbar, como o do próprio leitor.
+
+Arraste uma margem ou um canto da janela para a aumentar: a forma de onda
+ocupa a largura e a altura extra, o que ajuda a colocar marcadores. Pode
+voltar a reduzi-la, até ao seu tamanho inicial. A janela de CUE seguinte, de
+qualquer leitor, abre com o último tamanho que deu a uma, também depois de um
+reinício.
 
 Um salto num CUE em pausa mantém-no em pausa. O botão de fechar da janela,
 ou **Parar o CUE**, para o CUE.

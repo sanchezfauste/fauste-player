@@ -9,8 +9,11 @@ e a cartucheira debaixo deles.
 
 ## Mostrar e ocultar paneis {#show-and-hide-panels}
 
-As teselas da esquerda da barra superior, **P1** … **Pn** e **Cartucheira**,
-mostran que paneis están na pantalla: unha tesela acesa está mostrada. Fai
+As teselas da esquerda da barra superior, **Grella** e **Música** (a
+[grella](automation.md#the-schedule-column) e o
+[musicalizador](automation.md#the-music-filler), ocultos os dous ata que os
+mostras), **P1** … **Pn** e **Cartucheira**, mostran que paneis están na
+pantalla: unha tesela acesa está mostrada. Fai
 clic nunha tesela para ocultar ou mostrar o seu panel. Con moitos
 reprodutores, as teselas desprázanse cara aos lados (move a roda do rato
 sobre elas) e o botón da disposición queda á vista. Os outros paneis toman o

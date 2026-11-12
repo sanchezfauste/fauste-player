@@ -10,13 +10,16 @@ sous eux.
 
 ## Afficher et masquer des panneaux {#show-and-hide-panels}
 
-Les tuiles à gauche de la barre supérieure, **P1** … **Pn** et **Cartouches**,
-montrent quels panneaux sont à l'écran : une tuile allumée est affichée.
-Cliquez sur une tuile pour masquer ou afficher son panneau. Avec de nombreux
-lecteurs, les tuiles défilent latéralement (faites tourner la molette de la
-souris au-dessus d'elles) et le bouton de disposition reste en vue. Les
-autres panneaux prennent la place libérée, et un lecteur affiché de nouveau
-revient à sa largeur.
+Les tuiles à gauche de la barre supérieure, **Grille** et **Musique** (la
+[grille](automation.md#the-schedule-column) et le
+[remplissage musical](automation.md#the-music-filler), tous deux masqués tant que
+vous ne les affichez pas), **P1** … **Pn** et **Cartouches**, montrent quels
+panneaux sont à l'écran : une tuile allumée est affichée. Cliquez sur une
+tuile pour masquer ou afficher son panneau. Avec de nombreux lecteurs, les
+tuiles défilent latéralement (faites tourner la molette de la souris
+au-dessus d'elles) et le bouton de disposition reste en vue. Les autres
+panneaux prennent la place libérée, et un lecteur affiché de nouveau revient
+à sa largeur.
 
 Masquer ne fait que retirer un panneau de l'écran. Un lecteur masqué continue
 de jouer, et sa touche numérique, le MIDI, l'API à distance, sa fenêtre CUE

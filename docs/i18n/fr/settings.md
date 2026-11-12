@@ -8,7 +8,7 @@ La fenêtre a une seule taille (900 × 640, plus petite sur un petit écran)
 quelle que soit la section, et la section défile à l'intérieur. Chaque
 section aligne ses libellés sur une seule colonne.
 
-Les sections Lecteurs, Vumètres, Analyse, Loudness et Raccourcis clavier ont un bouton
+Les sections Lecteurs, Vumètres, Analyse, Loudness, Automatisation et Raccourcis clavier ont un bouton
 **Rétablir les valeurs par défaut** dans leur en-tête. Il demande une
 confirmation puis réinitialise uniquement cette section (Lecteurs conserve le
 nombre de lecteurs et la langue ; Raccourcis n'a pas d'autre bouton de
@@ -91,7 +91,7 @@ valeurs globales. D'ici là, le choisir de nouveau (par exemple après avoir
 | Système audio | Le dernier choix, **Aucune sortie (silence)**, ne joue rien : les lignes de temps tournent en temps réel sans carte son (pour une machine qui n'en a pas, ou pour répéter). Linux : PipeWire (dans les versions qui l'incluent), PulseAudio, JACK ou ALSA. Windows : WASAPI, ASIO (dans les versions qui l'incluent) ou JACK. macOS : Core Audio ou JACK. Les systèmes absents de cet ordinateur, ou sans périphérique de sortie (un serveur JACK qui ne tourne pas), sont indiqués comme indisponibles. « Par défaut du système » utilise le premier disponible dans cet ordre. |
 | Fréquence d'échantillonnage | La fréquence à laquelle chaque sortie tourne, sauf si un périphérique a la sienne (Avancé) ; les fichiers y sont convertis avec un rééchantillonnage de haute qualité. Les périphériques bit-perfect démarrent à leur fréquence puis suivent les fichiers. |
 | Taille du tampon | Trames par bloc audio, sauf si un périphérique a le sien ; la latence qui en résulte est affichée en dessous. Les sorties passant par un serveur de son ou un mélangeur du système (PulseAudio, le périphérique ALSA `default`) demandent au moins 50 ms quelle que soit cette taille, ou autant que le périphérique en accepte, afin qu'un ordinateur occupé ne s'entende pas ; la latence l'indique alors (`shared_buffer_ms` dans le fichier de configuration) |
-| Sorties par lecteur | Pour chaque lecteur, un périphérique **Main** (antenne) et un périphérique **Cue** (pré-écoute), chacun avec une paire de canaux. Une carte son qui propose plusieurs profils de sortie (ALSA liste frontal, surround, matériel direct…) montre chacun sous la forme *carte — profil* ; deux entrées qui se liraient encore pareil reçoivent l'identifiant de leur périphérique entre parenthèses. Les interfaces multicanaux peuvent porter plusieurs lecteurs sur des paires différentes. Une sortie Cue qui partage une sortie d'antenne (le Main d'un lecteur quelconque ou celui du mur de cartouches) est permise : une note en dessous dit que sa pré-écoute s'entend à l'antenne et qu'elle demande d'abord tant que quelque chose y joue. |
+| Sorties par lecteur | Pour chaque lecteur, et pour la colonne **Musique** (le [remplissage musical](automation.md)), un périphérique **Main** (antenne) et un périphérique **Cue** (pré-écoute), chacun avec une paire de canaux. Une carte son qui propose plusieurs profils de sortie (ALSA liste frontal, surround, matériel direct…) montre chacun sous la forme *carte — profil* ; deux entrées qui se liraient encore pareil reçoivent l'identifiant de leur périphérique entre parenthèses. Les interfaces multicanaux peuvent porter plusieurs lecteurs sur des paires différentes. Une sortie Cue qui partage une sortie d'antenne (le Main d'un lecteur quelconque ou celui du mur de cartouches) est permise : une note en dessous dit que sa pré-écoute s'entend à l'antenne et qu'elle demande d'abord tant que quelque chose y joue. |
 | Tester Main / Tester Cue | Joue une courte tonalité (1 kHz sur Main, 440 Hz sur Cue, 1,5 s, −18 dBFS) sur la sortie choisie, pour vérifier le câblage avant de passer à l'antenne |
 | Bibliothèque | La sortie Cue de la bibliothèque, avec son propre **Tester Cue** : là où s'entend la [pré-écoute](library.md#pre-listening) de la fenêtre de la bibliothèque (sur un téléphone, celle de l'onglet Bibliothèque). Sans elle, le bouton de lecture de la barre de pré-écoute est grisé. Sur Android, son choix vide se lit *Par défaut du système* au lieu de *Aucune* : la pré-écoute et **Tester Cue** jouent alors sur la sortie par défaut (voir [Android → Bibliothèque](android.md#library)). Une sortie Bibliothèque sur une sortie d'antenne fonctionne comme le Cue d'un lecteur : une note en dessous dit que sa pré-écoute s'entend à l'antenne et qu'elle demande d'abord tant que quelque chose y joue. Elle est dans les vues Simple et Avancé, aussi sur un téléphone |
 | Mur de cartouches | Les sorties Main et Cue du mur de cartouches. Main prend par défaut la sortie du système. Sans Cue, il n'y a pas de pré-écoute des cartouches ; un Cue sur une sortie d'antenne fonctionne comme pour les lecteurs. |
@@ -118,22 +118,24 @@ lignes de temps, et le périphérique est rouvert à son retour (voir
 
 ## Lecteurs {#players}
 
-![Paramètres, Lecteurs : nombre de lecteurs, mode par défaut, durée du fondu, enchaînement automatique, cue-in et cue-out, alerte de fin de piste et langue](../../images/guide/settings-players.png)
+![Paramètres, Lecteurs : nombre de lecteurs, mode par défaut, durée du fondu enchaîné, durée du Stop en fondu, enchaînement automatique, cue-in et cue-out, alerte de fin de piste et langue](../../images/guide/settings-players.png)
 
 | Réglage | Défaut | Signification |
 |---|---|---|
 | Langue | Système | Langue de l'interface |
 | Nombre de lecteurs | 4 | Colonnes de l'écran principal (un lecteur à l'antenne ne peut pas être retiré). Le nombre s'applique quand vous relâchez le curseur ; un nombre saisi dans la case s'applique quand vous appuyez sur Entrée ou quittez la case, et Échap l'annule |
 | Mode par défaut | CONT | Le mode dans lequel démarrent les lecteurs |
-| Durée du fondu | 1000 ms | Utilisée par PLAY pendant l'antenne et par Stop en fondu. Sur un lecteur dont la sortie Main est bit-perfect, seulement par Stop en fondu |
+| Durée du fondu enchaîné | 1000 ms | Temps que met la piste à l'antenne à s'estomper quand vous appuyez sur PLAY (suivante) pendant qu'elle joue, et pour Précédente. Ne s'applique pas à un lecteur dont la sortie Main est bit-perfect |
+| Durée du Stop en fondu | 2000 ms | Temps que met **Stop en fondu** à estomper la piste. S'applique à tous les lecteurs, bit-perfect compris |
 | Enchaînement automatique au point MIX | Activé | Faire chevaucher les pistes en mode continu. Ne s'applique pas à un lecteur dont la sortie Main est bit-perfect |
 | Utiliser le cue-in et le cue-out | Activé | Désactivé : les lecteurs jouent chaque piste du début à la fin du fichier ; les marqueurs sont conservés et les cartouches utilisent toujours les leurs. Les durées et les totaux de playlist suivent la même plage |
 | Alerte de fin de piste | 10 s | Quand le compte à rebours commence à clignoter en rouge |
 
 Tant que la sortie Main d'un lecteur est bit-perfect, une note sous
 **Enchaînement automatique au point MIX** dit que de tels lecteurs ne mixent
-ni n'enchaînent jamais en fondu. Les deux réglages restent modifiables : ils
-s'appliquent toujours aux autres lecteurs. Voir
+ni n'enchaînent jamais en fondu, si bien que la durée du fondu enchaîné et
+l'enchaînement automatique ne s'appliquent pas à eux. Les deux réglages
+restent modifiables : ils s'appliquent toujours aux autres lecteurs. Voir
 [Ce que cela coûte](bit-perfect.md#what-it-costs).
 
 ## Vumètres {#meters}
@@ -213,6 +215,12 @@ d'autre à faire, que la normalisation soit activée ou non ; leurs marqueurs n
 sont pas touchés. **Réanalyser** (dans le menu de la playlist) et **Réanalyser
 toutes les pistes** mesurent de nouveau.
 
+**Rechercher les fichiers modifiés** vérifie chaque piste de la bibliothèque
+à la recherche d'un fichier qu'un autre programme a modifié pendant que
+Fauste Player tournait, et réanalyse ceux qui ont changé ; un avis dit
+combien il en a trouvé. Le bouton est grisé pendant qu'une recherche tourne.
+Voir [Quand un fichier change](library.md#when-a-file-changes).
+
 ## Loudness {#loudness}
 
 ![Paramètres, Loudness : normalisation activée, avec la cible, le plafond de true peak, le gain maximal et l'ajustement maximal à leurs valeurs par défaut](../../images/guide/settings-loudness.png)
@@ -283,6 +291,41 @@ et supprimer les catégories qui regroupent vos pistes, faire surveiller un
 dossier par une catégorie et retirer ses pistes manquantes, sans ouvrir la
 fenêtre de la bibliothèque. Voir [Bibliothèque](library.md#categories) et
 [Dossiers surveillés](library.md#watched-folders).
+
+**Éditeur externe** est l'éditeur audio que *Ouvrir dans l'éditeur externe*
+lance avec le fichier d'une piste : le chemin du programme (ou *Aucun*),
+**Choisir…** pour le sélectionner et **Effacer** pour le retirer. Sur macOS,
+on peut choisir un paquet d'application (`.app`). Si le programme ne peut pas
+être lancé, un avis le dit. La ligne n'est pas affichée sur Android, ni dans
+les versions Flatpak et snap. Voir [Quand un fichier
+change](library.md#when-a-file-changes).
+
+## Automatisation {#automation}
+
+Les rotations et les règles du [remplissage musical](automation.md) (pas sur
+Android).
+
+![Paramètres, Automatisation : les rotations Music (par défaut) et Hits, Music sélectionnée avec son unique étape sur toute la musique, et les règles du remplissage musical](../../images/guide/settings-automation.png)
+
+- **Rotations :** la liste, avec celle par défaut marquée. **Nouvelle
+  rotation** en ajoute une qui joue toute la musique, **Définir par défaut**
+  fait de la rotation sélectionnée la rotation par défaut, **Supprimer la
+  rotation** la retire (la dernière ne peut pas être supprimée).
+- **La rotation sélectionnée :** son **Nom**, puis une ligne par **étape** :
+  d'où viennent ses pistes (une catégorie avec ses sous-catégories, ou *Tout*
+  d'un type), combien elle en joue à chaque fois (**Au moins** 0–99, **Au
+  plus** 1–99 ; au moins 0 permet à l'étape de sauter certains tours),
+  **Monter**, **Descendre** et **Retirer**. **Ajouter une étape** en ajoute une
+  à la fin. Une étape dont la catégorie a été supprimée le dit ; le
+  remplissage la saute.
+- **Remplissage musical :** le délai avant qu'une même piste puisse rejouer
+  (3 heures, ou dès que la moitié des autres pistes de son étape sont passées
+  à l'antenne, selon ce qui arrive en premier ; 0 désactive l'un ou l'autre),
+  le même artiste (30 minutes), l'**avance** (30 minutes de musique en file)
+  et les **pistes jouées conservées** dans sa liste (50).
+
+**Rétablir les valeurs par défaut** réinitialise les règles ; les rotations
+restent.
 
 ## Raccourcis clavier {#keyboard-shortcuts}
 

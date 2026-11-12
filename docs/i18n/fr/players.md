@@ -136,9 +136,9 @@ de l'en-tête (pas sur l'un de ses boutons) (voir
 
 | Bouton | Action |
 |---|---|
-| **PLAY / SUIV.** (grand) | À l'arrêt : démarrer la piste suivante. À l'antenne : fondre dans la piste suivante (la durée du fondu se règle dans les [Paramètres](settings.md)) ; pendant le fondu d'un enchaînement lancé par Suivante ou par un segue, une bande verte se vide à travers le bouton sur la durée du fondu, son bord allant de gauche à droite comme celui d'une cartouche (un enchaînement lancé par Précédente se vide plutôt sur le bouton Précédente). En pause : reprendre. Quand la piste à l'antenne est aussi la suivante, PLAY redémarre cette piste avec le fondu habituel. Sur une sortie bit-perfect, il bascule aussitôt, sans fondu, et son infobulle le dit (voir [Ce que cela coûte](bit-perfect.md#what-it-costs)). |
+| **PLAY / SUIV.** (grand) | À l'arrêt : démarrer la piste suivante. À l'antenne : fondre dans la piste suivante (la durée du fondu enchaîné se règle dans les [Paramètres](settings.md)) ; pendant le fondu d'un enchaînement lancé par Suivante ou par un segue, une bande verte se vide à travers le bouton sur la durée du fondu, son bord allant de gauche à droite comme celui d'une cartouche (un enchaînement lancé par Précédente se vide plutôt sur le bouton Précédente). En pause : reprendre. Quand la piste à l'antenne est aussi la suivante, PLAY redémarre cette piste avec le fondu habituel. Sur une sortie bit-perfect, il bascule aussitôt, sans fondu, et son infobulle le dit (voir [Ce que cela coûte](bit-perfect.md#what-it-costs)). |
 | **Stop** | Arrêter aussitôt (avec une courte rampe anti-clic) |
-| **Stop en fondu** | Fondu sortant puis arrêt. Pendant qu'un stop en fondu se déroule, une bande se vide à travers le bouton sur la durée du fondu, son bord allant de gauche à droite |
+| **Stop en fondu** | Fondu sortant sur la durée du Stop en fondu (2 s par défaut, réglée dans les [Paramètres](settings.md)), puis arrêt. Pendant qu'un stop en fondu se déroule, une bande se vide à travers le bouton sur la durée du fondu, son bord allant de gauche à droite |
 | **Pause** | Mettre en pause ou reprendre ; clignote en ambre pendant la pause |
 | **Stop à la fin** (un triangle de lecture puis un carré) | S'arrêter quand la piste en cours se termine, une seule fois. En mode SINGLE, il n'est disponible que pendant que la piste en cours se répète : il met fin à la répétition quand le passage en cours se termine. Pour s'arrêter après une piste à chaque fois qu'elle est lue, ou pour répéter une piste, utilisez son menu dans la playlist (voir [Playlists](playlists.md)) |
 | **Précédente** (une barre et deux triangles) | À l'antenne : revenir en fondu vers la piste que ce lecteur a jouée avant, comme le fait Suivante. Appuyez de nouveau pour continuer à reculer. La piste que vous quittez devient la suivante. Sur une sortie bit-perfect, il bascule aussitôt, sans fondu (voir [Ce que cela coûte](bit-perfect.md#what-it-costs)). |
@@ -277,6 +277,13 @@ La fenêtre montre :
 
 Pendant que le CUE est en pause, son bouton **Mettre le CUE en pause**
 (affiché comme **Reprendre le CUE**) clignote en ambre, comme celui du lecteur.
+
+Faites glisser un bord ou un coin de la fenêtre pour l'agrandir : la forme
+d'onde prend la largeur et la hauteur supplémentaires, ce qui aide à placer
+les marqueurs. Vous pouvez la rétrécir de nouveau, jusqu'à sa taille
+initiale. La prochaine fenêtre CUE, de n'importe quel lecteur, s'ouvre à la
+dernière taille que vous avez donnée à l'une d'elles, y compris après un
+redémarrage.
 
 Un déplacement sur un CUE en pause le laisse en pause. Le bouton de fermeture
 de la fenêtre, ou **Arrêter le CUE**, arrête le CUE.

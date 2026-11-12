@@ -93,7 +93,7 @@ cambiati, i brani vengono analizzati di nuovo automaticamente.
   pause.
 - **Modalità single**, o **Stop alla fine**: il lettore si ferma al cue-out.
 - **Premere Play mentre è in onda:** il brano successivo parte subito e
-  quello attuale sfuma nella *durata della dissolvenza* (1 s per
+  quello attuale sfuma nella *durata della dissolvenza incrociata* (1 s per
   impostazione predefinita).
 - **Un lettore la cui uscita Main è bit-perfect** ignora il punto MIX e il
   mix automatico: ogni brano suona fino al suo cue-out, poi parte il

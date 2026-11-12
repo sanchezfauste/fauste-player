@@ -8,7 +8,7 @@ envia-as para as listas e para a cartucheira. É uma janela no computador e
 num tablet; um telemóvel mostra a biblioteca no seu separador **Biblioteca**
 (ver [Num telemóvel](#on-a-phone)).
 
-![A janela da biblioteca: a faixa de pré-escuta com a forma de onda da faixa selecionada, a árvore de categorias com Music (e as suas subcategorias Pop e Evening) selecionada, e a tabela das suas faixas com a categoria e o tipo](../../images/guide/library.png)
+![A janela da biblioteca: a faixa de pré-escuta com a forma de onda, o medidor e o fader de escuta da faixa selecionada, a árvore de categorias com Music (e as suas subcategorias Pop e Evening) selecionada e Marcadores a rever no fim, e a tabela das suas faixas com a categoria e o tipo](../../images/guide/library.png)
 
 ## Abrir a janela {#opening-the-window}
 
@@ -34,8 +34,9 @@ de pesquisa não é guardado.
 ## Categorias {#categories}
 
 A árvore à esquerda agrupa as faixas. No topo, **Todas as faixas**; depois as
-suas categorias, que podem ter subcategorias; no fim, **Sem categoria**, as
-faixas que não pertencem a nenhuma categoria. Cada item mostra a sua cor e uma
+suas categorias, que podem ter subcategorias; depois **Sem categoria**, as
+faixas que não pertencem a nenhuma categoria; e, só enquanto alguma faixa
+precisar, **Marcadores a rever** (ver [Quando um ficheiro muda](#when-a-file-changes)). Cada item mostra a sua cor e uma
 contagem: uma categoria conta as suas faixas e as das suas subcategorias. Uma
 faixa pertence a uma só categoria, no máximo.
 
@@ -190,13 +191,81 @@ uma faixa, e quantas faixas estão selecionadas quando é para várias.
 | Adicionar a ▸ | Uma lista: as faixas são adicionadas ao seu fim |
 | Adicionar a um cartucho ▸ | Um cartucho da página visível da cartucheira: as faixas preenchem o cartucho escolhido e os cartuchos vazios seguintes da página, pela ordem da grelha. As faixas que não cabem ficam de fora e um aviso conta-as |
 | Mover para a categoria ▸ | Uma categoria, ou Sem categoria |
-| Tipo ▸ | Música, Jingle, Efeito, Anúncio ou Voz |
+| Tipo ▸ | Música, Jingle, Efeito, Anúncio, Voz ou Indicativo horário |
 | Editar etiquetas… | O editor de etiquetas (uma faixa) |
+| Abrir no editor externo | Iniciar o seu editor de áudio com o ficheiro da faixa (uma faixa; ver [Quando um ficheiro muda](#when-a-file-changes)) |
+| Marcar como revista | Limpar o indicador de *marcadores a rever* (mostrado quando uma faixa selecionada o tem) |
 | Loudness… | A janela de loudness (uma faixa) |
 | Voltar a analisar | Analisar as faixas de novo |
 | Repor os marcadores automáticos | Descartar os marcadores manuais |
 | Mostrar a localização do ficheiro | Abrir a pasta do ficheiro (uma faixa) |
 | Remover da biblioteca… | Remover as faixas da biblioteca, depois de perguntar (abaixo) |
+
+## Quando um ficheiro muda {#when-a-file-changes}
+
+Preparar material implica muitas vezes cortar ou corrigir um ficheiro num
+editor de áudio. O Fauste Player ajuda nas duas metades.
+
+**Abrir no editor externo** (o menu da linha da biblioteca e das linhas das
+listas) inicia o programa que escolheu em [Definições →
+Biblioteca](settings.md#library) com o ficheiro da faixa. Atua sobre uma só
+faixa. A entrada fica esbatida, com o motivo na dica, quando não há editor
+definido, quando o ficheiro está em falta ou não pode ser lido, ou quando a
+faixa está *a soar*: a faixa atual de um leitor (a tocar ou em pausa), uma
+faixa à espera de começar ou em CUE, a faixa que sai num fade, um cartucho a
+tocar ou o cartucho em CUE da cartucheira, ou a pré-escuta da biblioteca
+enquanto toca ou está em pausa. O editor não é oferecido no Android, nem nas
+versões Flatpak e snap, que não podem iniciar outros programas; o resto desta
+secção aplica-se-lhes na mesma.
+
+O Fauste Player nota quando um ficheiro que conhece mudou (o seu tamanho ou
+a data de modificação diferem da última análise), seja quem for que o mudou,
+e analisa-o de novo sozinho: duração, marcadores, loudness, forma de onda,
+formato e etiquetas. Verifica:
+
+- uma vez no arranque, todas as faixas da biblioteca;
+- quando uma pasta vigiada comunica uma alteração a uma faixa conhecida;
+- na pasta de qualquer ficheiro que tenha aberto no editor, até sair, para
+  que uma gravação seja notada de imediato;
+- quando uma faixa é carregada num leitor, num cartucho ou na pré-escuta, e
+  quando os seus marcadores são abertos para edição ou arrastados na forma de
+  onda;
+- quando prime **Procurar ficheiros alterados** em
+  [Definições → Análise](settings.md#analysis), que verifica toda a
+  biblioteca e diz num aviso quantos ficheiros mudaram.
+
+Não há verificação periódica. Um ficheiro fora das pastas vigiadas, alterado
+por outro programa enquanto o Fauste Player corre e sem ter sido usado
+depois, é encontrado na sua próxima utilização ou com **Procurar ficheiros
+alterados**.
+
+Uma faixa alterada nunca é analisada de novo enquanto soa: espera até parar,
+e os seus marcadores e loudness nunca se movem sob uma fonte a tocar.
+(**Voltar a analisar todas as faixas** é um pedido seu explícito e não
+espera.) Os editores gravam muitas vezes apagando e recriando o ficheiro, por
+isso um ficheiro que desaparece é verificado duas vezes antes de ser marcado
+como em falta. Um ficheiro que muda enquanto está a ser analisado (um editor
+ainda a gravá-lo) não é usado: é analisado de novo pouco depois, ou na sua
+próxima alteração, utilização ou verificação. Uma faixa em falta cujo
+ficheiro volta numa pasta que só é seguida por causa do editor não é
+restaurada sozinha.
+
+**Marcadores a rever.** Se o *áudio* de um ficheiro mudou e a faixa tem
+marcadores definidos à mão, a faixa mostra um ícone de aviso âmbar na sua
+linha (a sua dica indica os marcadores que foram descartados). Os marcadores
+manuais que ficam agora depois do fim do áudio são descartados e o valor
+automático ocupa o seu lugar; os restantes ficam como estão (quando o cue-in
+ou o cue-out foi descartado, os marcadores de intro, outro e MIX são movidos
+para dentro do novo intervalo de cue). O indicador nunca impede a faixa de
+ser carregada, posta em CUE ou tocada. Limpa-se quando escolhe **Marcar como
+revista** no menu da faixa (em várias linhas selecionadas, limpa todas) ou
+altera qualquer marcador da faixa. O item **Marcadores a rever** da árvore,
+depois de *Sem categoria*, lista as faixas assinaladas enquanto as houver
+(não num telemóvel). Uma alteração só das etiquetas ou da capa atualiza as
+etiquetas e não levanta indicador, o que também acontece depois de editar
+etiquetas no Fauste Player. A primeira análise após uma atualização só
+levanta o indicador se tiver de descartar um marcador depois do fim do
+áudio.
 
 ## Pré-escuta {#pre-listening}
 
@@ -210,10 +279,19 @@ A barra mostra:
 
 - **Pré-escutar**, **Pausar a pré-escuta** e **Parar a pré-escuta**;
 - o tempo restante da faixa, em grande, o seu título, artista e categoria;
-- um pequeno medidor à direita. Lê apenas esta pré-escuta, nunca o medidor de
-  um leitor ou da cartucheira; clique nele para reiniciar o seu máximo;
-- a forma de onda do ficheiro inteiro, com os seus marcadores, e uma linha
-  `decorrido / total` por baixo.
+- à direita, um medidor e um fader de volume desenhados como os de um
+  leitor. O medidor lê apenas esta pré-escuta, nunca o medidor de um leitor
+  ou da cartucheira; clique nele para reiniciar o seu máximo. O fader é o seu
+  **nível de escuta** nos auscultadores ou monitores: define quão alto soa a
+  pré-escuta e nunca altera uma faixa (o seu ficheiro, o seu ganho de
+  loudness ou os seus marcadores), um leitor ou a cartucheira. Fica como o
+  deixou quando a pré-escuta passa para outra faixa e é guardado para o
+  próximo arranque; a sua dica e a leitura por baixo mostram o nível em dB.
+  Se a saída da Biblioteca partilha canais com uma saída do ar, o fader
+  define também quão alta é a pré-escuta aí. O cartão de pré-escuta de um
+  telemóvel não tem fader;
+- a forma de onda do ficheiro inteiro, tão alta como a de um leitor, com os
+  seus marcadores, e uma linha `decorrido / total` por baixo.
 
 **Pré-escutar** começa a faixa selecionada a partir do seu cue-in e toca-a
 até ao fim do ficheiro. **Pré-escutar** numa pré-escuta em pausa retoma-a, e

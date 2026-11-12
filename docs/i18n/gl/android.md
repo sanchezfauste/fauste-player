@@ -282,6 +282,7 @@ dúas saídas poidan soar á vez depende do teléfono.
 ## Non está en Android {#not-on-android}
 
 As superficies de control MIDI, o control remoto, a edición de etiquetas e
-portadas, e os ficheiros de listas e de páxinas de cartuchos son funcións do
+portadas, os ficheiros de listas e de páxinas de cartuchos, e a automatización
+(o musicalizador e Configuración → Automatización) son funcións do
 escritorio por agora. Un teclado enchufado a unha tablet funciona como no
 escritorio (consulta [Teclado](keyboard.md)).

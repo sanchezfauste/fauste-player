@@ -9,12 +9,15 @@ cartucheira por baixo deles.
 
 ## Mostrar e ocultar painéis {#show-and-hide-panels}
 
-Os mosaicos à esquerda da barra superior, **P1** … **Pn** e **Cartucheira**,
-mostram que painéis estão no ecrã: um mosaico aceso está visível. Clique num
-mosaico para ocultar ou mostrar o seu painel. Com muitos leitores, os
-mosaicos deslocam-se para os lados (rode a roda do rato sobre eles) e o
-botão da disposição continua à vista. Os outros painéis ocupam o espaço que
-fica livre, e um leitor mostrado de novo regressa à sua largura.
+Os mosaicos à esquerda da barra superior, **Grelha** e **Música** (a
+[grelha](automation.md#the-schedule-column) e o
+[musicalizador](automation.md#the-music-filler), ambos ocultos até os
+mostrar), **P1** … **Pn** e **Cartucheira**, mostram que painéis estão no
+ecrã: um mosaico aceso está visível. Clique num mosaico para ocultar ou
+mostrar o seu painel. Com muitos leitores, os mosaicos deslocam-se para os
+lados (rode a roda do rato sobre eles) e o botão da disposição continua à
+vista. Os outros painéis ocupam o espaço que fica livre, e um leitor
+mostrado de novo regressa à sua largura.
 
 Ocultar apenas tira um painel do ecrã. Um leitor oculto continua a tocar, e
 a sua tecla numérica, o MIDI, a API remota, a sua janela de CUE e a

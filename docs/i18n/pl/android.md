@@ -274,6 +274,7 @@ w tym samym czasie, zależy od telefonu.
 
 ## Czego nie ma w Androidzie {#not-on-android}
 
-Powierzchnie sterujące MIDI, zdalne sterowanie, edycja tagów i okładek oraz
-pliki playlist i stron cartów to na razie funkcje komputera. Klawiatura
+Powierzchnie sterujące MIDI, zdalne sterowanie, edycja tagów i okładek,
+pliki playlist i stron cartów oraz automatyka (wypełniacz muzyczny i
+Ustawienia → Automatyzacja) to na razie funkcje komputera. Klawiatura
 podłączona do tabletu działa jak na komputerze (zob. [Klawiatura](keyboard.md)).

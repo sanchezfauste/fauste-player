@@ -30,7 +30,7 @@ taldean egonda).
 
 ## Kontrol bat lotzea {#binding-a-control}
 
-Erreproduzitzaile bakoitzerako errenkada bat dago ekintza bakoitzeko:
+Erreproduzitzaile bakoitzerako (P1 … Pn; **Musika** zutabeak ez du loturarik) errenkada bat dago ekintza bakoitzeko:
 **Play / Hurrengoa**, **Pausatu**, **Gelditu**, **Itzaltzearekin gelditu**,
 **Berrabiarazi**, **Aurrekoa**, **CUE** eta **Bolumena**.
 

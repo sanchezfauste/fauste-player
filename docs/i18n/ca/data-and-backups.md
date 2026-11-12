@@ -30,7 +30,7 @@ per mantenir configuracions separades una al costat de l'altra.
 | Fitxer | Contingut |
 |---|---|
 | `config.json` | Configuració, sortides, llindars d'anàlisi, ajustos avançats |
-| `fauste.db` | La biblioteca (pistes, les seves categories, marcadors manuals, etiquetes, sonoritat), les llistes amb les seves marques de reproduïda, les pàgines de cartutxos i la sessió: per a cada reproductor la llista mostrada, les pistes actual i següent, el mode, la posició, el volum i les amplades de columna (per columna), i la disposició de la finestra |
+| `fauste.db` | La biblioteca (pistes, les seves categories, marcadors manuals, etiquetes, sonoritat), les llistes amb les seves marques de reproduïda, les pàgines de cartutxos, les rotacions de l'automatització, la graella i el registre d'emissió (es conserva `automation.as_run_keep_days` dies, 90 per defecte), i la sessió: per a cada reproductor la llista mostrada, les pistes actual i següent, el mode, la posició, el volum i les amplades de columna (per columna), i la disposició de la finestra |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Còpies de la base de dades (vegeu més avall) |
 | `window.ron` | La mida i la posició de la finestra principal i si estava maximitzada (només a l'ordinador; a Wayland el sistema tria la posició) |
 

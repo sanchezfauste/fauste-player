@@ -44,7 +44,7 @@ urządzeniu bit-perfect, gra inaczej niż pozostałe:
   bit-perfect zostaje włączony dla urządzenia, i tam zostaje po jego
   wyłączeniu.
 - **Co nadal działa:** **Stop z wyciszeniem** (wycisza przez czas
-  wyciszania), **Pauza**, **Stop**, **Od początku**, oznaczenia powtarzania i
+  Stop z wyciszeniem), **Pauza**, **Stop**, **Od początku**, oznaczenia powtarzania i
   stopu po, tryby Single i Continuous, Cue (odsłuch wstępny, który nie ma
   suwaka i nie jest dotknięty), carty, [wyjście DSD](#dsd) oraz każdy
   odtwarzacz, którego wyjście Main jest na innym urządzeniu i który miksuje

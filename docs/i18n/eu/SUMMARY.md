@@ -8,6 +8,7 @@
 - [Kartutxo-panela](cartwall.md)
 - [Liburutegia](library.md)
 - [Diseinua](layout.md)
+- [Automatizazioa](automation.md)
 - [Markatzaileak eta nahasketa](markers-and-mixing.md)
 - [Ezarpenak](settings.md)
 - [Bolumen-normalizazioa](loudness.md)

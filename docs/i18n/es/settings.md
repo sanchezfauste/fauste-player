@@ -8,7 +8,7 @@ La ventana tiene un único tamaño (900 × 640, más pequeña en una pantalla
 pequeña) sea cual sea la sección, y la sección se desplaza dentro de ella.
 Cada sección alinea sus etiquetas en una columna.
 
-Las secciones Players, Vúmetros, Análisis, Sonoridad y Atajos de teclado tienen un
+Las secciones Players, Vúmetros, Análisis, Sonoridad, Automatización y Atajos de teclado tienen un
 botón **Restaurar valores por defecto** en su cabecera. Pide confirmación y
 luego restablece solo esa sección (Players conserva el número de players y
 el idioma; Atajos de teclado no tiene ningún otro botón para restablecer).
@@ -86,7 +86,7 @@ elegirlo (por ejemplo, tras intercambiar dos dispositivos) los conserva.
 | Sistema de audio | La última opción, **Sin salida (silencio)**, no reproduce nada: las líneas de tiempo avanzan a ritmo real sin tarjeta de sonido (para una máquina que no la tiene, o para ensayar). Linux: PipeWire (en las compilaciones que lo incluyen), PulseAudio, JACK o ALSA. Windows: WASAPI, ASIO (en las compilaciones que lo incluyen) o JACK. macOS: Core Audio o JACK. Los sistemas que no existen en este ordenador, o que no tienen ningún dispositivo de salida (un servidor JACK que no está en marcha), aparecen como no disponibles. «Predeterminado del sistema» usa el primero disponible en ese orden. |
 | Frecuencia de muestreo | La frecuencia a la que funcionan todas las salidas salvo que un dispositivo tenga la suya (Avanzado); los archivos se convierten a ella con un remuestreo de alta calidad. Los dispositivos bit-perfect empiezan a su frecuencia y luego siguen a los archivos. |
 | Tamaño de búfer | Fotogramas por bloque de audio, salvo que un dispositivo tenga el suyo; debajo se muestra la latencia resultante. Las salidas a través de un servidor de sonido o un mezclador del sistema (PulseAudio, el dispositivo `default` de ALSA) piden al menos 50 ms sea cual sea este tamaño, o lo que admita el dispositivo, para que un ordenador ocupado no se oiga; la latencia lo indica entonces (`shared_buffer_ms` en el archivo de configuración) |
-| Salidas por player | Para cada player, un dispositivo **Main** (al aire) y uno **Cue** (preescucha), cada uno con un par de canales. Una tarjeta de sonido que ofrece varios perfiles de salida (ALSA lista front, surround, hardware directo…) muestra cada uno como *tarjeta — perfil*; dos entradas que seguirían leyéndose igual llevan entre paréntesis el identificador del dispositivo. Las interfaces multicanal pueden llevar varios players en pares distintos. Se permite una salida Cue que comparta una salida en antena (la Main de cualquier player o la de la cartuchera): una nota debajo dice que su preescucha se oye en antena y que pregunta primero si algo suena allí. |
+| Salidas por player | Para cada player, y para la columna **Música** (el [musicalizador](automation.md)), un dispositivo **Main** (al aire) y uno **Cue** (preescucha), cada uno con un par de canales. Una tarjeta de sonido que ofrece varios perfiles de salida (ALSA lista front, surround, hardware directo…) muestra cada uno como *tarjeta — perfil*; dos entradas que seguirían leyéndose igual llevan entre paréntesis el identificador del dispositivo. Las interfaces multicanal pueden llevar varios players en pares distintos. Se permite una salida Cue que comparta una salida en antena (la Main de cualquier player o la de la cartuchera): una nota debajo dice que su preescucha se oye en antena y que pregunta primero si algo suena allí. |
 | Probar Main / Probar Cue | Reproduce un tono breve (1 kHz en Main, 440 Hz en Cue, 1,5 s, −18 dBFS) en la salida elegida, para comprobar el cableado antes de salir al aire |
 | Biblioteca | La salida Cue de la biblioteca, con su propio **Probar Cue**: donde se oye la [preescucha](library.md#pre-listening) de la ventana de la biblioteca (en un teléfono, la de la pestaña Biblioteca). Sin ella, Preescuchar en la barra de preescucha está atenuado. En Android su opción vacía dice *Predeterminado del sistema* en lugar de *Ninguna*: la preescucha y **Probar Cue** suenan entonces en la salida por defecto (véase [Android → Biblioteca](android.md#library)). Una salida Biblioteca en una salida en antena funciona como la Cue de un player: una nota debajo dice que su preescucha se oye en antena y que pregunta primero si algo suena allí. Está en las vistas Básico y Avanzado, también en un teléfono |
 | Cartuchera | Las salidas Main y Cue de la cartuchera. Main es por defecto la salida del sistema. Sin Cue no hay preescucha de cartuchos; una Cue en una salida en antena funciona como en los players. |
@@ -112,21 +112,23 @@ líneas de tiempo, y el dispositivo se vuelve a abrir cuando regresa
 
 ## Players {#players}
 
-![Configuración, Players: número de players, modo por defecto, duración del fundido, mezcla automática, cue-in y cue-out, aviso de fin de pista e idioma](../../images/guide/settings-players.png)
+![Configuración, Players: número de players, modo por defecto, duración del fundido entre pistas, duración del Stop con fundido, mezcla automática, cue-in y cue-out, aviso de fin de pista e idioma](../../images/guide/settings-players.png)
 
 | Ajuste | Por defecto | Significado |
 |---|---|---|
 | Idioma | Sistema | Idioma de la interfaz |
 | Número de players | 4 | Columnas de la pantalla principal (no se puede quitar un player que está sonando). El número se aplica al soltar el deslizador; un número escrito en la casilla se aplica al pulsar `Enter` o al salir de la casilla, y `Esc` lo cancela |
 | Modo por defecto | CONT | El modo con el que arrancan los players |
-| Duración del fundido | 1000 ms | La usan Play mientras suena una pista y Stop con fundido. En un player cuya salida Main es bit-perfect, solo Stop con fundido |
+| Duración del fundido entre pistas | 1000 ms | Cuánto tarda en bajar la pista que suena cuando pulsas Play (siguiente) mientras suena, y con Pista anterior. No se aplica a un player cuya salida Main es bit-perfect |
+| Duración del Stop con fundido | 2000 ms | Cuánto tarda **Stop con fundido** en bajar la pista. Se aplica a todos los players, también a los bit-perfect |
 | Mezcla automática en el punto MIX | Activada | Solapa las pistas en modo continuo. No se aplica a un player cuya salida Main es bit-perfect |
 | Usar cue-in y cue-out | Activado | Desactivado: los players reproducen cada pista desde el principio hasta el final del archivo; los marcadores se conservan y los cartuchos siguen usando los suyos. Las duraciones y los totales de las playlists siguen el mismo rango |
 | Aviso de fin de pista | 10 s | Cuándo empieza a parpadear en rojo la cuenta atrás |
 
 Mientras la salida Main de un player es bit-perfect, una nota bajo **Mezcla
 automática en el punto MIX** dice que esos players nunca mezclan ni
-encadenan con fundido. Ambos ajustes siguen siendo editables: se siguen
+encadenan con fundido, así que la duración del fundido entre pistas y la
+mezcla automática no se les aplican. Ambos ajustes siguen siendo editables: se siguen
 aplicando a los demás players. Véase [Lo que cuesta](bit-perfect.md#what-it-costs).
 
 ## Vúmetros {#meters}
@@ -203,6 +205,12 @@ no tiene nada más que hacer, esté la normalización activada o no; sus
 marcadores no se tocan. **Volver a analizar** (en el menú de la playlist) y
 **Volver a analizar todas las pistas** miden de nuevo.
 
+**Buscar archivos cambiados** revisa todas las pistas de la biblioteca en
+busca de un archivo que otro programa haya cambiado mientras Fauste Player
+funcionaba, y vuelve a analizar los cambiados; un aviso dice cuántos ha
+encontrado. El botón aparece atenuado mientras dura una búsqueda. Véase
+[Cuando un archivo cambia](library.md#when-a-file-changes).
+
 ## Sonoridad {#loudness}
 
 ![Configuración, Sonoridad: normalización activada, con el objetivo, el techo de true peak, la ganancia máxima y el ajuste manual máximo en sus valores por defecto](../../images/guide/settings-loudness.png)
@@ -273,6 +281,42 @@ categorías que agrupan tus pistas, vigila una carpeta con una categoría y
 quita sus pistas que faltan, sin abrir la ventana de la biblioteca. Consulta
 [Biblioteca](library.md#categories) y
 [Carpetas vigiladas](library.md#watched-folders).
+
+**Editor externo** es el editor de audio que *Abrir en el editor externo*
+abre con el archivo de una pista: la ruta del programa (o *Ninguno*),
+**Elegir…** para escogerlo y **Quitar** para borrarlo. En macOS se puede
+elegir un paquete de aplicación (`.app`). Si el programa no se puede
+iniciar, un aviso lo dice. La fila no se muestra en Android, ni en las
+versiones Flatpak y snap. Véase [Cuando un archivo
+cambia](library.md#when-a-file-changes).
+
+## Automatización {#automation}
+
+Las rotaciones y las reglas del [musicalizador](automation.md) (no en
+Android).
+
+![Configuración, Automatización: las rotaciones Música (la por defecto) y Hits, la Música seleccionada con su único paso sobre toda la música, y las reglas del musicalizador](../../images/guide/settings-automation.png)
+
+- **Rotaciones:** la lista, con la por defecto marcada. **Nueva rotación**
+  añade una que reproduce toda la música, **Hacer por defecto** convierte la
+  seleccionada en la por defecto y **Borrar rotación** la elimina (la última
+  no se puede borrar).
+- **La rotación seleccionada:** su **Nombre**, y luego una fila por cada
+  **paso**: de dónde salen sus pistas (una categoría con sus subcategorías,
+  o *Todo* de un tipo), cuántas reproduce cada vez (**Como mínimo** 0–99,
+  **Como máximo** 1–99; un mínimo de 0 permite que el paso se salte algunos
+  turnos), **Subir**, **Bajar** y **Quitar**. **Añadir paso** añade uno al
+  final. Un paso cuya categoría se borró lo dice; el musicalizador se lo
+  salta.
+- **Musicalizador:** cuánto tiempo debe pasar antes de que la misma pista
+  pueda volver a sonar (3 horas, o cuando haya sonado la mitad de las demás
+  pistas de su paso, lo que ocurra primero; 0 desactiva cualquiera de las
+  dos), el mismo artista (30 minutos), el **margen por delante** (30 minutos
+  de música en cola) y las **pistas sonadas que se conservan** en su lista
+  (50).
+
+**Restaurar valores por defecto** restablece las reglas; las rotaciones se
+quedan.
 
 ## Atajos de teclado {#keyboard-shortcuts}
 

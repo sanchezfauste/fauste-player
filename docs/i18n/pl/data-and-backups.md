@@ -30,7 +30,7 @@ na pendrivie albo do trzymania osobnych konfiguracji obok siebie.
 | Plik | Zawartość |
 |---|---|
 | `config.json` | Ustawienia, wyjścia, progi analizy, zaawansowane strojenie |
-| `fauste.db` | Biblioteka (utwory, ich kategorie, markery ręczne, tagi, głośność), playlisty ze znacznikami odtworzenia, strony cartów i sesja: dla każdego odtwarzacza pokazywana playlista, bieżący i następny utwór, tryb, pozycja, głośność i szerokości kolumn (według kolumny) oraz układ okna |
+| `fauste.db` | Biblioteka (utwory, ich kategorie, markery ręczne, tagi, głośność), playlisty ze znacznikami odtworzenia, strony cartów, rotacje automatyki, ramówkę i dziennik emisji (przechowywany `automation.as_run_keep_days` dni, domyślnie 90) oraz sesja: dla każdego odtwarzacza pokazywana playlista, bieżący i następny utwór, tryb, pozycja, głośność i szerokości kolumn (według kolumny) oraz układ okna |
 | `fauste.db.bak1`, `.bak2`, `.bak3` | Kopie bazy danych (zob. niżej) |
 | `window.ron` | Rozmiar i położenie głównego okna oraz informacja, czy było zmaksymalizowane (tylko komputer; w Waylandzie położenie wybiera system) |
 
