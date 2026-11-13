@@ -67,3 +67,72 @@ fn at_start_up_next_follows_the_clock() {
     r.at_hms(10, 50, 0);
     assert_eq!(next(&r), Some(r.item(today(), 11, 0, 0)));
 }
+
+// Task 2: AR6, the Log's Stop at end.
+
+#[test]
+fn stop_at_end_on_an_item_stops_after_it() {
+    let mut r = on_air_at_ten();
+    let log = r.schedule_player();
+    r.apply(Command::ToggleStopAfterCurrent(log));
+    assert!(running(&r), "running until the item ends");
+    assert!(r.s.automation.as_ref().unwrap().stop_at_end);
+    assert!(r.player(log).stop_after_current);
+    r.end_current(log);
+    r.at_hms(10, 0, 1);
+    assert!(!running(&r));
+    assert!(!r.s.automation.as_ref().unwrap().stop_at_end);
+    r.at_hms(10, 3, 0);
+    assert_eq!(r.playing(log), None);
+    assert_eq!(r.playing(r.filler_player()), None);
+}
+
+#[test]
+fn stop_at_end_during_music_lets_the_song_end_then_stops() {
+    let mut r = two_blocks();
+    r.at_hms(10, 30, 0);
+    r.apply(Command::StartAutomation);
+    let f = r.filler_player();
+    assert!(r.playing(f).is_some());
+    r.apply(Command::ToggleStopAfterCurrent(r.schedule_player()));
+    assert!(r.player(f).stop_after_current);
+    r.end_current(f);
+    r.at_hms(10, 31, 0);
+    assert_eq!(r.playing(f), None);
+    assert!(!running(&r));
+    assert_eq!(next(&r), Some(r.item(today(), 11, 0, 0)));
+    r.at_hms(11, 0, 0);
+    assert_eq!(r.playing(r.schedule_player()), None);
+}
+
+#[test]
+fn stop_at_end_during_music_moves_to_the_block_when_it_comes_first() {
+    let mut r = two_blocks();
+    r.at_hms(10, 58, 30);
+    r.apply(Command::StartAutomation);
+    let log = r.schedule_player();
+    r.apply(Command::ToggleStopAfterCurrent(log));
+    r.at_hms(11, 0, 0);
+    assert_eq!(r.playing(log), Some(TrackId(3)));
+    assert!(r.player(log).stop_after_current);
+    assert!(running(&r));
+    r.end_current(log);
+    r.at_hms(11, 1, 0);
+    assert!(!running(&r));
+    assert_eq!(r.playing(r.filler_player()), None);
+}
+
+#[test]
+fn unsetting_stop_at_end_lets_automation_go_on() {
+    let mut r = two_blocks();
+    r.at_hms(10, 58, 30);
+    r.apply(Command::StartAutomation);
+    let log = r.schedule_player();
+    r.apply(Command::ToggleStopAfterCurrent(log));
+    r.apply(Command::ToggleStopAfterCurrent(log));
+    assert!(!r.player(r.filler_player()).stop_after_current);
+    r.at_hms(11, 0, 0);
+    assert_eq!(r.playing(log), Some(TrackId(3)));
+    assert!(!r.player(log).stop_after_current);
+    assert!(running(&r));
+}

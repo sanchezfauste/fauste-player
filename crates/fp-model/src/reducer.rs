@@ -87,6 +87,14 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
                 state.players[i].stop_after_current = false;
             }
         }
+        Command::ToggleStopAfterCurrent(id) if state.is_schedule(id) => {
+            crate::automation::toggle_stop_at_end(state);
+        }
+        Command::SetStopAfterCurrent(id, on) if state.is_schedule(id) => {
+            if state.automation.as_ref().is_some_and(|a| a.stop_at_end != on) {
+                crate::automation::toggle_stop_at_end(state);
+            }
+        }
         Command::ToggleStopAfterCurrent(id) => {
             let i = state.player_index(id)?;
             if state.players[i].mode == PlayMode::Single && !repeat_entry(state, &state.players[i])

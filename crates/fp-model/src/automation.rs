@@ -74,6 +74,10 @@ pub struct AutomationState {
     /// The item of the Log's row last seen on air (runtime only): where
     /// the row below is when automation stops (AR10).
     pub last_on_air: Option<ItemRef>,
+    /// AR6: the Log's Stop at end (runtime only). What is on air for the
+    /// Log ends, then automation stops; a block that comes first takes it
+    /// over (its first row stops automation).
+    pub stop_at_end: bool,
 }
 
 /// Creates the schedule's player (stopped, hidden, just before the
@@ -108,6 +112,7 @@ pub fn ensure(state: &mut AppState, playlist_name: &str) -> Vec<EngineAction> {
         seen: None,
         row_since: None,
         last_on_air: None,
+        stop_at_end: false,
     });
     vec![EngineAction::AddPlayer { player }]
 }
@@ -521,6 +526,56 @@ fn play_schedule(state: &mut AppState, fade_ms: u32, out: &mut Vec<EngineAction>
     }
     fade_filler(state, fade_ms, out);
     let _ = crate::reducer::play(state, player, out);
+    // AR6: a Stop at end set during the music moves to the block's row.
+    if state.automation.as_ref().is_some_and(|a| a.stop_at_end) {
+        set_stop_mark(state, Some(player), true);
+    }
+}
+
+/// Sets or clears `stop_after_current` on `player` while it plays.
+fn set_stop_mark(state: &mut AppState, player: Option<PlayerId>, on: bool) {
+    if let Some(i) = player.and_then(|p| player_index(state, p))
+        && let Some(p) = state.players.get_mut(i)
+        && p.transport != Transport::Stopped
+    {
+        p.stop_after_current = on;
+    }
+}
+
+/// AR6: the Log's Stop at end, on or off; nothing while stopped. The mark
+/// goes on the Log's row on air, else on the filler's song playing for the
+/// Log.
+pub(crate) fn toggle_stop_at_end(state: &mut AppState) {
+    let Some(a) = state.automation.as_ref() else {
+        return;
+    };
+    if !a.running {
+        return;
+    }
+    let on = !a.stop_at_end;
+    let log = a.player;
+    let block_on_air = a.on_air.is_some();
+    if let Some(a) = state.automation.as_mut() {
+        a.stop_at_end = on;
+    }
+    if block_on_air {
+        set_stop_mark(state, Some(log), on);
+    } else {
+        let hold = state.automation.as_ref().is_some_and(|a| a.filler_held);
+        set_stop_mark(state, filler_player(state), on || hold);
+    }
+}
+
+/// Automation stops (AR3): not running, no Stop at end, next pinned
+/// (AR10).
+fn halt(state: &mut AppState) {
+    pin_next_after_stop(state);
+    if let Some(a) = state.automation.as_mut() {
+        a.running = false;
+        a.stop_at_end = false;
+        a.handing_over = None;
+        a.filler_held = false;
+    }
 }
 
 /// Plays the filler when it is stopped (music until the coming block).
@@ -640,6 +695,8 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
     {
         if !a.running {
             pin_next_after_stop(state);
+        } else if a.stop_at_end {
+            halt(state);
         }
         let rows: HashSet<EntryId> = state
             .playlists
@@ -653,7 +710,7 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
             a.row_since = None;
         }
         ended = Some(run);
-        if a.running {
+        if a.running && !a.stop_at_end {
             // AU20: the filler plays the block's rotation, or the default.
             let current = state.filler.as_ref().map(|f| f.rotation);
             if current.is_some_and(|r| r != run.rotation) {
@@ -662,7 +719,7 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
         }
         settle_next(state);
     }
-    if !a.running {
+    if !state.automation.as_ref().is_some_and(|a| a.running) {
         return;
     }
     skip_late_critical(state, out);
@@ -674,6 +731,12 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
         set_filler_hold(state, false);
     }
     if a.on_air.is_some() {
+        return;
+    }
+    // AR6: the filler's song for the Log ended under Stop at end, before
+    // any hand-over: automation stops.
+    if a.stop_at_end && a.handing_over.is_none() && !is_playing(state, filler_player(state)) {
+        halt(state);
         return;
     }
     let fade = state.config.automation.block_fade_ms;
@@ -772,22 +835,14 @@ pub(crate) fn start(state: &mut AppState, out: &mut Vec<EngineAction>) -> Result
     Ok(())
 }
 
+/// `StopAutomationAfterCurrent`: the Log's Stop at end on (AR6).
 pub(crate) fn stop_after_current(state: &mut AppState) {
-    let Some(a) = state.automation.as_mut() else {
-        return;
-    };
-    a.running = false;
-    a.next_by_hand = false;
-    a.handing_over = None;
-    a.filler_held = false;
-    let players = [Some(a.player), filler_player(state)];
-    for player in players.into_iter().flatten() {
-        if let Some(i) = player_index(state, player)
-            && let Some(p) = state.players.get_mut(i)
-            && p.transport != Transport::Stopped
-        {
-            p.stop_after_current = true;
-        }
+    if state
+        .automation
+        .as_ref()
+        .is_some_and(|a| a.running && !a.stop_at_end)
+    {
+        toggle_stop_at_end(state);
     }
 }
 
@@ -944,6 +999,7 @@ pub(crate) fn restore(state: &mut AppState, saved: Option<AutomationSession>) {
         seen: None,
         row_since: None,
         last_on_air: None,
+        stop_at_end: false,
     });
 }
 
