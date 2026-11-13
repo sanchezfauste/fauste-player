@@ -511,3 +511,36 @@ fn a_changed_block_goes_back_to_the_template() {
         (vec![song(3)], BlockOrigin::Template)
     );
 }
+
+#[test]
+fn a_template_edit_keeps_todays_block_on_air_as_loaded() {
+    use fp_model::automation::{RowStatus, ScheduleRow, schedule_view};
+    let mut r = on_air();
+    let block = r.block(10, 0);
+    edit_template(
+        &mut r,
+        LogEdit::Insert {
+            block,
+            index: 0,
+            items: vec![song(9)],
+        },
+    )
+    .unwrap();
+    // The Log still shows what plays: today's block keeps its items (as a
+    // change of today), the template has the new one for the days after.
+    assert_eq!(items(&r, today(), 10).0, vec![song(1), song(2)]);
+    let tomorrow = today().succ_opt().unwrap();
+    assert_eq!(items(&r, tomorrow, 10).0, vec![song(9), song(1), song(2)]);
+    let on_air: Vec<_> = schedule_view(&r.s)
+        .into_iter()
+        .filter_map(|row| match row {
+            ScheduleRow::Item {
+                status: RowStatus::OnAir,
+                track,
+                ..
+            } => Some(track),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(on_air, vec![Some(TrackId(1))]);
+}

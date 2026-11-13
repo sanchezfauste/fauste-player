@@ -162,3 +162,24 @@ fn the_log_has_no_edit_button() {
     let (h, _fake) = harness(s);
     assert!(h.query_by_label("Edit log").is_none());
 }
+
+#[test]
+fn edit_on_the_open_template_still_closes_settings() {
+    let (s, base, _) = with_templates();
+    let (mut h, _fake) = support::harness_with(s, |ui| {
+        ui.open_plan_window(fp_model::log_edit::EditTarget::Template(base))
+    });
+    h.run_steps(2);
+    h.get_by_label("Settings").click();
+    h.run_steps(2);
+    h.get_by_role_and_label(Role::Button, "Automation").click();
+    h.run_steps(2);
+    reveal(&mut h, "Edit…");
+    h.get_by_label("Edit…").click();
+    h.run_steps(4);
+    assert!(
+        h.query_by_role_and_label(Role::Button, "Automation")
+            .is_none()
+    );
+    assert!(h.query_by_label("Template · Base").is_some());
+}

@@ -109,8 +109,9 @@ block, its header says by how much, in amber; you can still keep it so.
 A change to a date is marked "changed for this day" on its block, and
 **Back to the template**, on the block header's menu, undoes it. Later
 changes to the template still reach the blocks you did not change on
-that date. A change to a template reaches the day on air only for blocks
-not loaded yet: the block on air goes on as it was loaded.
+that date. A change to a template made while one of its blocks is on air
+leaves that block as it is for today (it shows "changed for this day");
+the change reaches it from the next day.
 
 ## The music fill
 

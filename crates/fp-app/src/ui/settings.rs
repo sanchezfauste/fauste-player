@@ -270,7 +270,6 @@ pub(crate) fn show(
     deps: &SettingsDeps<'_>,
 ) -> Outcome {
     let capturing = st.capturing();
-    let plan_before = view_state.plan_window;
     st.poll();
     if let Some(rx) = &st.folder
         && let Ok(picked) = rx.try_recv()
@@ -452,7 +451,7 @@ pub(crate) fn show(
     }
     // AR21: a template or a date opened from Automation closes Settings
     // (it is modal; the popup floats over the main window).
-    if view_state.plan_window.is_some() && view_state.plan_window != plan_before {
+    if std::mem::take(&mut view_state.plan_requested) {
         open = false;
     }
     Outcome { open, apply_now }

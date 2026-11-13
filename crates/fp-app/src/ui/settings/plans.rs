@@ -36,6 +36,12 @@ pub(crate) struct PlansState {
     month: Option<NaiveDate>,
 }
 
+/// Opens a template or a date in its popup; Settings then closes.
+fn open(view_state: &mut ViewState, target: EditTarget) {
+    view_state.plan_window = Some(target);
+    view_state.plan_requested = true;
+}
+
 /// The template's name, or "?" when it is gone.
 fn template_name(scene: &Scene<'_>, id: TemplateId) -> String {
     scene
@@ -100,7 +106,7 @@ fn templates(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, st: &mu
             st.name_draft = None;
         }
         if response.double_clicked() {
-            view_state.plan_window = Some(EditTarget::Template(template.id));
+            open(view_state, EditTarget::Template(template.id));
         }
     }
     ui.add_space(6.0);
@@ -108,7 +114,7 @@ fn templates(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, st: &mu
         if let Some(id) = selected
             && ui.button(t.tr("settings-plan-edit")).clicked()
         {
-            view_state.plan_window = Some(EditTarget::Template(id));
+            open(view_state, EditTarget::Template(id));
         }
         if ui.button(t.tr("schedule-template-new")).clicked() {
             scene.ctl.send(Command::CreateTemplate {
@@ -263,7 +269,7 @@ fn date_part(
         )
         .clicked()
     {
-        view_state.plan_window = Some(EditTarget::Date(date));
+        open(view_state, EditTarget::Date(date));
     }
 }
 

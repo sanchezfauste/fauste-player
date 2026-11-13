@@ -138,6 +138,56 @@ fn check_target(
     }
 }
 
+/// The blocks an edit changes.
+fn blocks_of(edit: &LogEdit) -> Vec<BlockId> {
+    match edit {
+        LogEdit::Insert { block, .. }
+        | LogEdit::Remove { block, .. }
+        | LogEdit::SetHardStart { block, .. }
+        | LogEdit::MoveBlock { block, .. }
+        | LogEdit::RemoveBlock { block }
+        | LogEdit::Revert { block } => vec![*block],
+        LogEdit::Move { from, to } => vec![from.0, to.0],
+        LogEdit::AddBlock { .. } => Vec::new(),
+    }
+}
+
+/// A template edit to the block on air, while its date follows the
+/// template for it: that date first keeps the block as it was loaded (a
+/// change of the date, AU12), so the Log's rows still match what plays;
+/// the template's change reaches the days after.
+fn keep_on_air_as_loaded(
+    state: &mut AppState,
+    template: TemplateId,
+    edit: &LogEdit,
+) -> Result<(), ModelError> {
+    let Some(run) = state.automation.as_ref().and_then(|a| a.on_air) else {
+        return Ok(());
+    };
+    if !blocks_of(edit).contains(&run.block)
+        || state.schedule.template_for(run.date) != Some(template)
+    {
+        return Ok(());
+    }
+    let Some(day_block) = state
+        .schedule
+        .day(run.date)
+        .into_iter()
+        .find(|b| b.id == run.block && b.origin == crate::schedule::BlockOrigin::Template)
+    else {
+        return Ok(());
+    };
+    crate::schedule::change_block_on_date(
+        state,
+        run.date,
+        Block {
+            id: day_block.id,
+            start: day_block.start,
+            items: day_block.items,
+        },
+    )
+}
+
 /// `items` inserted before `index`, a Music fill kept last (AU6).
 fn inserted(mut list: Vec<Item>, index: usize, items: Vec<Item>) -> Vec<Item> {
     let (rotations, plain): (Vec<Item>, Vec<Item>) = items
@@ -166,6 +216,9 @@ pub(crate) fn apply(
         && date < state.local_now.date()
     {
         return Err(ModelError::PastDate);
+    }
+    if let EditTarget::Template(template) = target {
+        keep_on_air_as_loaded(state, template, &edit)?;
     }
     let touched: Vec<BlockId> = match edit {
         LogEdit::Insert {

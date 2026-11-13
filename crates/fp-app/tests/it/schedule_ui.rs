@@ -585,3 +585,33 @@ fn the_footer_says_when_the_next_block_starts() {
     let (h, _fake) = harness(s);
     assert!(h.query_by_label_contains("Next block 10:00").is_some());
 }
+
+#[test]
+fn library_tracks_dropped_on_a_row_go_before_it() {
+    let (s, item) = with_block();
+    let (mut h, fake) = harness(s);
+    let rows: Vec<_> = h.query_all_by_label_contains("Top of the Hour").collect();
+    let at = rows[1].rect().center();
+    h.event(egui::Event::PointerMoved(at));
+    h.run();
+    fp_app::ui::app::AppUi::start_track_drag(&h.ctx, vec![fp_model::TrackId(1)]);
+    h.run();
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Insert {
+            block: item.block,
+            index: 0,
+            items: vec![fp_model::schedule::Item::Track {
+                track: fp_model::TrackId(1),
+                time_critical: false,
+            }],
+        }]
+    );
+}

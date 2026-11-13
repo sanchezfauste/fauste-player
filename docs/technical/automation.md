@@ -327,8 +327,11 @@ rules for the Log (`log_availability`).
 AR17–AR22). `EditTarget::Date(date)` is the Log (live) or a date's popup;
 `EditTarget::Template(id)` is a template's popup: its edits go through
 `update_block`, `add_block` and `remove_block`, are never locked and never
-reload the Log (a template reaches a date through `Schedule::day`, AU12;
-the block on air stays as it was loaded); `Revert` has no meaning there
+reload the Log (a template reaches a date through `Schedule::day`, AU12).
+An edit to the template's block on air, while its date follows the
+template for it, first stores that block as it is as a change of the date
+(`keep_on_air_as_loaded`), so the Log's rows, read by index, still match
+what plays; `Revert` has no meaning there
 (`UnknownBlock`). The edits: `Insert`
 (before an index; past a final rotation item it goes before it; a
 rotation item replaces the block's), `Remove`, `Move`, `SetHardStart`,

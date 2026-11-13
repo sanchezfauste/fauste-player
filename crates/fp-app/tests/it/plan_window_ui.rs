@@ -167,3 +167,37 @@ fn a_date_popup_edits_that_date() {
         [(EditTarget::Date(d), LogEdit::Remove { index: 0, .. })] if *d == thursday
     ));
 }
+
+#[test]
+fn tracks_dropped_on_the_popup_go_into_the_template() {
+    let (s, base, _) = with_templates();
+    let block = s.schedule.template(base).unwrap().blocks[0].id;
+    let (mut h, fake) = open(s, EditTarget::Template(base));
+    fake.take_sent();
+    let at = h.get_by_label_contains("Top of the Hour").rect().center();
+    h.event(egui::Event::PointerMoved(at));
+    h.run();
+    fp_app::ui::app::AppUi::start_track_drag(&h.ctx, vec![fp_model::TrackId(1)]);
+    h.run();
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![(
+            EditTarget::Template(base),
+            LogEdit::Insert {
+                block,
+                index: 0,
+                items: vec![Item::Track {
+                    track: fp_model::TrackId(1),
+                    time_critical: false,
+                }],
+            }
+        )]
+    );
+}

@@ -123,6 +123,9 @@ pub(crate) struct ViewState {
     pub log_dialog: Option<super::schedule::LogDialog>,
     /// The template or date open in its popup (rework AR21).
     pub plan_window: Option<fp_model::log_edit::EditTarget>,
+    /// Settings asked for `plan_window` this frame (Edit…, Edit day…): it
+    /// closes, whatever was open before.
+    pub plan_requested: bool,
     /// What a phone shows (mobile spec §6); unused elsewhere.
     pub phone: super::touch::PhoneView,
     /// The phone's Music screen (phone layout spec §9), the Library tab's
@@ -880,6 +883,13 @@ impl AppUi {
     #[cfg(feature = "test-hooks")]
     pub fn pin_clock_millis(&mut self, millis: u32) {
         self.clock_millis = Some(millis);
+    }
+
+    /// Starts dragging library tracks, as the library's table does when
+    /// its rows are dragged. Used by tests.
+    #[cfg(feature = "test-hooks")]
+    pub fn start_track_drag(ctx: &egui::Context, tracks: Vec<TrackId>) {
+        egui::DragAndDrop::set_payload(ctx, DragTracks { tracks });
     }
 
     /// Opens a template or a date in its popup, as Settings does. Used by

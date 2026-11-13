@@ -446,7 +446,11 @@ fn drop_tracks(
             .hline(r.x_range(), r.top(), egui::Stroke::new(2.0, theme::ACCENT));
     }
     // A row dragged here moves before this row (same date or template).
-    if let Some(from) = response.dnd_release_payload::<DragLogItem>()
+    // `dnd_release_payload` takes the payload whatever its type: ask for
+    // the type being dragged only.
+    let row_dragged = egui::DragAndDrop::has_payload_of_type::<DragLogItem>(&response.ctx);
+    if row_dragged
+        && let Some(from) = response.dnd_release_payload::<DragLogItem>()
         && from.target == target
         && (from.block, from.index) != (block, index)
     {
@@ -459,7 +463,7 @@ fn drop_tracks(
             },
         );
     }
-    if let Some(payload) = response.dnd_release_payload::<DragTracks>() {
+    if !row_dragged && let Some(payload) = response.dnd_release_payload::<DragTracks>() {
         let items = payload
             .tracks
             .iter()
