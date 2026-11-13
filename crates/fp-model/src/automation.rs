@@ -71,6 +71,9 @@ pub struct AutomationState {
     /// The schedule's row on air and when it started (local time): when the
     /// next row would start, for late time-critical items (AU22).
     pub row_since: Option<(EntryId, NaiveDateTime)>,
+    /// The item of the Log's row last seen on air (runtime only): where
+    /// the row below is when automation stops (AR10).
+    pub last_on_air: Option<ItemRef>,
 }
 
 /// Creates the schedule's player (stopped, hidden, just before the
@@ -104,6 +107,7 @@ pub fn ensure(state: &mut AppState, playlist_name: &str) -> Vec<EngineAction> {
         filler_held: false,
         seen: None,
         row_since: None,
+        last_on_air: None,
     });
     vec![EngineAction::AddPlayer { player }]
 }
@@ -243,15 +247,69 @@ pub fn settle_next(state: &mut AppState) {
             .collect(),
         _ => Vec::new(),
     };
+    let on_air_item = player_index(state, a.player)
+        .and_then(|i| state.players.get(i))
+        .filter(|p| p.transport != Transport::Stopped)
+        .and_then(|p| p.current)
+        .and_then(|e| a.rows.get(&e).copied());
     let Some(a) = state.automation.as_mut() else {
         return;
     };
     a.next = next;
     a.next_by_hand = by_hand;
+    if let Some(item) = on_air_item {
+        a.last_on_air = Some(item);
+    }
     a.seen = Some(state.local_now);
     a.missed.extend(passed);
     a.missed.retain(|i| i.date >= yesterday);
     a.started.retain(|(d, _)| *d >= yesterday);
+}
+
+/// The row below `item` in the Log (AR9, AR10): the next item of its
+/// block (a rotation item included), else the first item of the next
+/// block of the window in time order.
+pub fn row_below(state: &AppState, item: ItemRef) -> Option<ItemRef> {
+    let len = block_items(state, item.date, item.block)?.len();
+    if item.index + 1 < len {
+        return Some(ItemRef {
+            index: item.index + 1,
+            ..item
+        });
+    }
+    let blocks = window_blocks(state);
+    let at = blocks
+        .iter()
+        .position(|(d, _, b)| *d == item.date && b.id == item.block)?;
+    blocks
+        .iter()
+        .skip(at + 1)
+        .find(|(_, _, b)| !b.items.is_empty())
+        .map(|(date, _, b)| ItemRef {
+            date: *date,
+            block: b.id,
+            index: 0,
+        })
+}
+
+/// AR10: automation stopped; next stays on the row below what was on air
+/// (the Log's loaded next row, else the row below the last item on air,
+/// else the next it had), pinned until the operator chooses another.
+fn pin_next_after_stop(state: &mut AppState) {
+    let Some(a) = state.automation.as_ref() else {
+        return;
+    };
+    let loaded = player_index(state, a.player)
+        .and_then(|i| state.players.get(i))
+        .and_then(|p| p.next)
+        .and_then(|e| a.rows.get(&e).copied());
+    let below = loaded.or_else(|| a.last_on_air.and_then(|i| row_below(state, i)));
+    if let Some(a) = state.automation.as_mut() {
+        if let Some(item) = below {
+            a.next = Some(item);
+        }
+        a.next_by_hand = a.next.is_some();
+    }
 }
 
 pub(crate) fn set_next(
@@ -580,6 +638,9 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
     if let Some(run) = a.on_air
         && schedule_idle
     {
+        if !a.running {
+            pin_next_after_stop(state);
+        }
         let rows: HashSet<EntryId> = state
             .playlists
             .get(a.playlist)
@@ -882,6 +943,7 @@ pub(crate) fn restore(state: &mut AppState, saved: Option<AutomationSession>) {
         filler_held: false,
         seen: None,
         row_since: None,
+        last_on_air: None,
     });
 }
 
