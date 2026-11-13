@@ -390,3 +390,198 @@ fn a_past_row_has_no_remove() {
     h.run();
     assert!(h.query_by_label("Remove from today's log").is_none());
 }
+
+/// Today's block header (yesterday's and tomorrow's show too).
+fn todays_header(h: &egui_kittest::Harness<'_, fp_app::ui::app::AppUi>) -> egui::Pos2 {
+    h.query_all_by_label_contains("Block ·")
+        .find(|n| {
+            let text = format!("{n:?}");
+            !text.contains("tomorrow") && !text.contains("yesterday")
+        })
+        .unwrap()
+        .rect()
+        .center()
+}
+
+fn secondary_at(h: &mut egui_kittest::Harness<'_, fp_app::ui::app::AppUi>, pos: egui::Pos2) {
+    h.hover_at(pos);
+    h.run();
+    h.event(egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Secondary,
+        pressed: true,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.event(egui::Event::PointerButton {
+        pos,
+        button: egui::PointerButton::Secondary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+}
+
+#[test]
+fn add_category_track_sends_insert() {
+    let (mut s, item) = with_block();
+    apply(
+        &mut s,
+        Command::CreateCategory {
+            parent: None,
+            name: "Spots".into(),
+            color: None,
+            kind: fp_model::TrackKind::Ad,
+        },
+    )
+    .unwrap();
+    let category = s.categories.iter().next().unwrap().id;
+    let (mut h, fake) = harness(s);
+    h.get_by_label("Add to the log").click();
+    h.run();
+    h.get_by_label("Category track…").click();
+    h.run();
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Insert {
+            block: item.block,
+            index: usize::MAX,
+            items: vec![fp_model::schedule::Item::Category {
+                category,
+                time_critical: false,
+            }],
+        }]
+    );
+}
+
+#[test]
+fn cancel_sends_nothing() {
+    let (s, _) = with_block();
+    let (mut h, fake) = harness(s);
+    h.get_by_label("Add to the log").click();
+    h.run();
+    h.get_by_label("Block…").click();
+    h.run();
+    h.get_by_label("Cancel").click();
+    h.run();
+    assert!(edits(&fake.take_sent()).is_empty());
+    assert!(h.query_by_label("OK").is_none());
+}
+
+#[test]
+fn add_track_opens_the_library() {
+    let (s, _) = with_block();
+    let (mut h, fake) = harness(s);
+    h.get_by_label("Add to the log").click();
+    h.run();
+    h.get_by_label("Track…").click();
+    h.run();
+    assert!(
+        fake.take_sent()
+            .iter()
+            .any(|c| matches!(c, Command::SetLibraryView(v) if v.open))
+    );
+}
+
+#[test]
+fn the_block_menu_changes_its_time() {
+    let (s, item) = with_block();
+    let (mut h, fake) = harness(s);
+    let at = todays_header(&h);
+    secondary_at(&mut h, at);
+    h.get_by_label("Change time…").click();
+    h.run();
+    h.get_by_label("Starts at").focus();
+    h.run();
+    h.get_by_label("Starts at").type_text("x");
+    h.run();
+    // A time that does not parse: the field says so.
+    assert!(h.query_by_label("Use HH:MM:SS").is_some());
+    h.get_by_label("Cancel").click();
+    h.run();
+    secondary_at(&mut h, at);
+    h.get_by_label("Change time…").click();
+    h.run();
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::MoveBlock {
+            block: item.block,
+            start: fp_model::local_time::TimeOfDay::hms(10, 0, 0).unwrap()
+        }]
+    );
+}
+
+#[test]
+fn the_block_menu_removes_the_block() {
+    let (s, item) = with_block();
+    let (mut h, fake) = harness(s);
+    let at = todays_header(&h);
+    secondary_at(&mut h, at);
+    h.get_by_label("Remove block").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::RemoveBlock { block: item.block }]
+    );
+}
+
+#[test]
+fn a_changed_block_goes_back_to_the_template() {
+    let (mut s, item) = with_block();
+    apply(
+        &mut s,
+        Command::EditLog {
+            date: item.date,
+            edit: fp_model::log_edit::LogEdit::SetHardStart {
+                block: item.block,
+                index: 0,
+                on: true,
+            },
+        },
+    )
+    .unwrap();
+    let (mut h, fake) = harness(s);
+    let at = h
+        .get_by_label_contains("changed for this day")
+        .rect()
+        .center();
+    secondary_at(&mut h, at);
+    h.get_by_label("Back to the template").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Revert { block: item.block }]
+    );
+}
+
+#[test]
+fn the_row_menu_toggles_hard_start() {
+    let (s, item) = with_block();
+    let (mut h, fake) = harness(s);
+    let rows: Vec<_> = h.query_all_by_label_contains("Top of the Hour").collect();
+    rows[1].click_secondary();
+    h.run();
+    h.get_by_label("Hard start").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::SetHardStart {
+            block: item.block,
+            index: 0,
+            on: true
+        }]
+    );
+}
+
+#[test]
+fn the_footer_says_when_the_next_block_starts() {
+    let (mut s, item) = with_block();
+    let a = s.automation.as_mut().unwrap();
+    a.running = true;
+    a.next = Some(item);
+    let (h, _fake) = harness(s);
+    assert!(h.query_by_label_contains("Next block 10:00").is_some());
+}

@@ -308,3 +308,88 @@ fn moving_a_row_onto_the_one_below_changes_nothing() {
     .unwrap();
     assert_eq!(items(&r, today(), 10).1, BlockOrigin::Template);
 }
+
+#[test]
+fn an_item_moves_to_another_block() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    let ten = r.block(10, 0);
+    let eleven = r.block(11, 0);
+    edit(
+        &mut r,
+        LogEdit::Move {
+            from: (ten, 1),
+            to: (eleven, 0),
+        },
+    )
+    .unwrap();
+    assert_eq!(items(&r, today(), 10).0, vec![song(1)]);
+    assert_eq!(items(&r, today(), 11).0, vec![song(2), song(3)]);
+    // Within a block, down past the row below.
+    edit(
+        &mut r,
+        LogEdit::Move {
+            from: (eleven, 0),
+            to: (eleven, 2),
+        },
+    )
+    .unwrap();
+    assert_eq!(items(&r, today(), 11).0, vec![song(3), song(2)]);
+}
+
+#[test]
+fn an_unknown_row_is_refused() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    let block = r.block(11, 0);
+    assert_eq!(
+        edit(&mut r, LogEdit::Remove { block, index: 5 }),
+        Err(ModelError::UnknownItem)
+    );
+    assert_eq!(
+        edit(
+            &mut r,
+            LogEdit::Move {
+                from: (block, 5),
+                to: (block, 0),
+            }
+        ),
+        Err(ModelError::UnknownItem)
+    );
+    assert_eq!(
+        edit(
+            &mut r,
+            LogEdit::SetHardStart {
+                block,
+                index: 5,
+                on: true,
+            }
+        ),
+        Err(ModelError::UnknownItem)
+    );
+    let gone = fp_model::BlockId(999);
+    assert_eq!(
+        edit(
+            &mut r,
+            LogEdit::Remove {
+                block: gone,
+                index: 0
+            }
+        ),
+        Err(ModelError::UnknownBlock(gone))
+    );
+}
+
+#[test]
+fn a_changed_block_goes_back_to_the_template() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    let block = r.block(11, 0);
+    edit(&mut r, LogEdit::Remove { block, index: 0 }).unwrap();
+    assert!(items(&r, today(), 11).0.is_empty());
+    edit(&mut r, LogEdit::Revert { block }).unwrap();
+    assert_eq!(
+        items(&r, today(), 11),
+        (vec![song(3)], BlockOrigin::Template)
+    );
+}
