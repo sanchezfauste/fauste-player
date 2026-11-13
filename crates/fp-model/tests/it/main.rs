@@ -52,6 +52,7 @@ mod library_search;
 mod library_storage;
 mod library_view;
 mod live;
+mod log_edit;
 mod loudness;
 mod loudness_config;
 mod markers;

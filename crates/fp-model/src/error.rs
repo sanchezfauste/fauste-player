@@ -85,6 +85,12 @@ pub enum ModelError {
     /// AU4: there is always a rotation to fall back on.
     #[error("the last rotation cannot be deleted")]
     LastRotation,
+    /// Rework AR19: the row on air, a played row, or a block that played.
+    #[error("that row of the log has already played or is on air")]
+    LogRowLocked,
+    /// Rework AR19: a past date's log is not edited.
+    #[error("a past date's log cannot be changed")]
+    PastDate,
     /// AU6: a rotation fills the rest of its block.
     #[error("a rotation must be the last item of a block")]
     RotationNotLast,

@@ -310,6 +310,26 @@ pub fn row_below(state: &AppState, item: ItemRef) -> Option<ItemRef> {
         })
 }
 
+/// The item of the Log's row on air, if any.
+pub fn on_air_item(state: &AppState) -> Option<ItemRef> {
+    let a = state.automation.as_ref()?;
+    player_index(state, a.player)
+        .and_then(|i| state.players.get(i))
+        .filter(|p| p.transport != Transport::Stopped)
+        .and_then(|p| p.current)
+        .and_then(|e| a.rows.get(&e).copied())
+}
+
+/// AR19b: the block on air was edited; its rows after `on_air` are loaded
+/// again from the edited block, the row on air kept.
+pub(crate) fn reload_after(state: &mut AppState, on_air: ItemRef, out: &mut Vec<EngineAction>) {
+    let Some(run) = state.automation.as_ref().and_then(|a| a.on_air) else {
+        return;
+    };
+    let from = crate::log_edit::after(on_air);
+    let _ = load_block(state, from, run.in_order, out);
+}
+
 /// AR10: automation stopped; next stays on the row below what was on air
 /// (the Log's loaded next row, else the row below the last item on air,
 /// else the next it had), pinned until the operator chooses another.

@@ -30,6 +30,7 @@ pub mod library_search;
 pub mod library_view;
 pub mod live;
 pub mod local_time;
+pub mod log_edit;
 pub mod loudness;
 pub mod midi;
 pub mod on_air;
