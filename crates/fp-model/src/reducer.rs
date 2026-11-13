@@ -421,6 +421,7 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::ChangeBlockOnDate { date, block } => {
             crate::schedule::change_block_on_date(state, date, block)?
         }
+        Command::EditLog { date, edit } => crate::log_edit::apply(state, date, edit, &mut out)?,
         Command::AddBlockOnDate { date, start } => {
             crate::schedule::add_block_on_date(state, date, start)?
         }

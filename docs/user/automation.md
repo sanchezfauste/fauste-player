@@ -16,12 +16,36 @@ start time (an hourly ID, spots, a programme). Show it from the
 
 ![The Log column running, beside the Music fill column: the day's blocks by start time, each with its station ID (the clock marks it hard-start), spots and the rotation the music fill plays after it; the music fill's song on air and the next ones](../images/guide/automation-columns.png)
 
-Its list is the log, grouped by block: each block's start time, then
-its items. It shows today, the last block of yesterday and the first of
-tomorrow. A block changed for one day says so. The item on air and the
+Its list looks like a playlist, grouped by block. Each block starts with
+a header row: its start time, how many items it has and how long they
+last, "changed for this day" when you changed it today, and, in amber,
+by how much it runs past the next block. Then come its items, with the
+**Time** each one is planned to start. The list shows today, the last
+block of yesterday and the first of tomorrow. The item on air and the
 next one are marked as on a player; items that already aired are dimmed,
 and an item that did not air (**missed**) is struck through. A clock
-marks a **hard start** item, which plays only at its time.
+marks a **hard start** item, which plays only at its time. A **category
+track** shows the track chosen for it once its block is loaded, with the
+category after it. The **music fill** row says until when it plays, and
+shows as on air while the music fill plays for the Log. A next whose
+time has passed shows its time in amber.
+
+### Changing today's log
+
+You change the Log as you change a playlist, and the change is for that
+day only: the template stays as it is.
+
+- **Add**, at the bottom of the column: **Track…** opens the library, to
+  drag tracks onto the list; **Category track…** and **Music fill
+  (rotation)…** ask which one and add it to the coming block; **Block…**
+  asks for a time, with the first free one already filled in.
+- Drag tracks from the library onto a row to put them before it, and
+  drag rows within the Log to move them.
+- Right-click a row for **Hard start** and **Remove from today's log**;
+  right-click a block header for **Change time…**, **Remove block** and,
+  on a changed block, **Back to the template**.
+- What already played, the item on air and past days cannot be changed.
+  A change to the block on air takes effect after the item on air.
 
 The Log column has a player's header and buttons, and they work as on a
 player:

@@ -17,10 +17,10 @@ use super::track_cells;
 use super::view::{self, RowStatus};
 use super::widgets::{self, font, font_medium};
 
-const HEADER_HEIGHT: f32 = 24.0;
+pub(crate) const HEADER_HEIGHT: f32 = 24.0;
 /// The width of a phone row's drag handle.
 const HANDLE_WIDTH: f32 = 36.0;
-const ROW_HEIGHT: f32 = 28.0;
+pub(crate) const ROW_HEIGHT: f32 = 28.0;
 /// Width of the track info popup: fixed, so egui's sizing pass gives the
 /// final size and the popup is never shown elsewhere first (Q9.3).
 const TIP_WIDTH: f32 = 380.0;

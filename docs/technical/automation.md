@@ -320,6 +320,30 @@ rules for the Log (`log_availability`).
 - A Log in `PlayMode::Single` halts when its row ends (`drive`); `restore`
   keeps the saved mode.
 
+## Editing the Log live (`log_edit.rs`)
+
+`Command::EditLog { date, edit: LogEdit }` (rework AR17–AR19): `Insert`
+(before an index; past a final rotation item it goes before it; a
+rotation item replaces the block's), `Remove`, `Move`, `SetHardStart`,
+`AddBlock`, `MoveBlock`, `RemoveBlock`, `Revert`. Every edit is a date
+change through `change_block_on_date` and its siblings. `is_locked`:
+a past date (`PastDate`), a block that already played, or, in the block
+on air, the row on air and those before it (`LogRowLocked`). An edit to
+the block on air calls `automation::reload_after`, which loads the
+block again from the row after the one on air, by hand (so no hard-start
+item turns late), keeping next, a hand-over or hold, the missed marks and
+how the block was reached. `AutomationState::chosen` keeps the track
+chosen for each loaded category item (yesterday on): reused when the
+block is loaded again and shown after it played.
+
+`schedule_view` gives each item row its planned start (`starts_at`: the
+block's start plus the known lengths before it), the track it plays
+(`track`: a category item's chosen track while its block is loaded, from
+`rows`), `late` (AR11) and each block row its `total_secs` and
+`overrun_secs` (known lengths only; the library-wide category lengths are
+too costly per frame). `fill_item` is the rotation item whose music is
+on air, shown `OnAir` while `fill_is_current`.
+
 ## Editing helpers (`schedule.rs`)
 
 `schedule::overrun_secs(state, items, start, next_start)` is AU37's figure:
@@ -336,12 +360,15 @@ sends the plan 3 commands only.
 (§8.1): yesterday's last block, today's blocks and tomorrow's first, in
 time order, widened to keep a block on air from yesterday (an overrun past
 midnight) and the next item's block, with every block between. Each is a
-`ScheduleRow::Block` (date, start, `BlockOrigin`, status) followed by its
-`ScheduleRow::Item`s (`ItemRef`, the item, a track's length when known,
-hard-start, status). The next shown is `AutomationState::next`, except
+`ScheduleRow::Block` (date, start, `BlockOrigin`, status, `total_secs`,
+`overrun_secs`, `count`) followed by its `ScheduleRow::Item`s (`ItemRef`,
+the item, its length when known, hard-start, status, `starts_at`, `track`,
+`late`; see "Editing the Log live"). The next shown is `AutomationState::next`, except
 while a block plays in order: then the block that came due meanwhile
 (`overdue_after`), which is what will play (AU21). A `RowStatus` is
-`OnAir` for the item of the schedule player's current row, `Next`, then
+`OnAir` for the item of the schedule player's current row (or the music
+fill row, `fill_item` or the last started block's rotation item, while
+`fill_is_current`), `Next`, then
 `Missed` when in `missed`, `Aired` for the items before the one on air and
 for a started block no longer on air, else `Coming`. A block is `OnAir`,
 `Next` (next is in it), `Missed` (all its items), `Aired` (started) or

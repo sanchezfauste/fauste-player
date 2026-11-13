@@ -119,6 +119,8 @@ pub(crate) struct TabScroll {
 /// Everything the UI remembers between frames.
 #[derive(Default)]
 pub(crate) struct ViewState {
+    /// The Log's open Add or Change time dialog (rework AR17).
+    pub log_dialog: Option<super::schedule::LogDialog>,
     /// What a phone shows (mobile spec §6); unused elsewhere.
     pub phone: super::touch::PhoneView,
     /// The phone's Music screen (phone layout spec §9), the Library tab's
@@ -2283,6 +2285,8 @@ pub(crate) fn error_text(i18n: &I18n, error: &ModelError, categories: &Categorie
         ModelError::EmptyRotation => i18n.tr("error-rotation-empty"),
         ModelError::LastRotation => i18n.tr("error-last-rotation"),
         ModelError::RotationNotLast => i18n.tr("error-schedule-rotation-last"),
+        ModelError::LogRowLocked => i18n.tr("error-log-row-locked"),
+        ModelError::PastDate => i18n.tr("error-log-past-date"),
         ModelError::EmptyTemplateName => i18n.tr("error-template-name-empty"),
         ModelError::LastTemplate => i18n.tr("error-last-template"),
         ModelError::TemplateInUse => i18n.tr("error-template-in-use"),

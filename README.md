@@ -64,8 +64,9 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   [automation guide](docs/user/automation.md).
 - **Log:** a **Log** column that plays the day's timed blocks
   (hourly IDs, spots, shows) with the music fill between them, from day
-  templates, a week plan and per-date changes made in its editor. The
-  operator starts and stops it; nothing runs by itself after a start. What
+  templates, a week plan and per-date changes; today's log is edited live
+  from its list, like a playlist. The operator starts and stops it with its
+  player buttons; nothing runs by itself after a start. What
   aired and what was missed is kept in an as-run log. See
   [the Log column](docs/user/automation.md#the-log-column).
 - **Track library window:** a floating **Library** window from the top bar

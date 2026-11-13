@@ -265,6 +265,11 @@ pub enum Command {
         date: chrono::NaiveDate,
         block: crate::schedule::Block,
     },
+    /// Automation rework AR17: a live edit of the date's Log.
+    EditLog {
+        date: chrono::NaiveDate,
+        edit: crate::log_edit::LogEdit,
+    },
     /// A block, with no items, on that date only.
     AddBlockOnDate {
         date: chrono::NaiveDate,
