@@ -142,7 +142,7 @@ fn playlist_area(
     if scene.state.is_filler(id) {
         filler_bar(ui, scene);
     } else if scene.state.is_schedule(id) {
-        super::schedule::schedule_bar(ui, scene, view_state, TABS_HEIGHT);
+        super::schedule::schedule_bar(ui, scene, TABS_HEIGHT);
     } else {
         tabs(ui, scene, view_state, id, playlist);
     }

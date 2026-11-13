@@ -29,7 +29,6 @@ pub mod playlist_files;
 pub(crate) mod playlist_keys;
 mod reset_played;
 mod schedule;
-mod schedule_editor;
 mod settings;
 pub mod shell;
 pub mod tab_strip;

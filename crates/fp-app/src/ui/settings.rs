@@ -29,6 +29,8 @@ mod meters;
 #[cfg(not(target_os = "android"))]
 mod midi;
 #[cfg(not(target_os = "android"))]
+mod plans;
+#[cfg(not(target_os = "android"))]
 mod remote;
 use super::format;
 use super::theme;
@@ -150,17 +152,6 @@ impl SettingsState {
         self.reveal_library_route = true;
     }
 
-    /// Opens the Automation section (the schedule editor's Rotations…).
-    /// The section is desktop only, as the editor is; on Android nothing
-    /// opens it.
-    pub(crate) fn show_automation(&mut self) {
-        #[cfg(not(target_os = "android"))]
-        {
-            self.section = Section::Automation;
-            self.phone_section = true;
-        }
-    }
-
     /// Back on a phone (PL20): from a section to the list. False on the
     /// list, where Back closes Settings.
     pub(crate) fn phone_back(&mut self) -> bool {
@@ -279,6 +270,7 @@ pub(crate) fn show(
     deps: &SettingsDeps<'_>,
 ) -> Outcome {
     let capturing = st.capturing();
+    let plan_before = view_state.plan_window;
     st.poll();
     if let Some(rx) = &st.folder
         && let Ok(picked) = rx.try_recv()
@@ -458,6 +450,11 @@ pub(crate) fn show(
     if modal.should_close() && !capturing {
         open = false;
     }
+    // AR21: a template or a date opened from Automation closes Settings
+    // (it is modal; the popup floats over the main window).
+    if view_state.plan_window.is_some() && view_state.plan_window != plan_before {
+        open = false;
+    }
     Outcome { open, apply_now }
 }
 
@@ -501,7 +498,9 @@ fn body(
                             Section::Cartwall => carts::section(ui, scene, st),
                             Section::Library => library::section(ui, scene, view_state, st),
                             #[cfg(not(target_os = "android"))]
-                            Section::Automation => automation::section(ui, scene, st),
+                            Section::Automation => {
+                                automation::section(ui, scene, view_state, st);
+                            }
                             Section::Shortcuts => keys::section(ui, scene, st),
                             #[cfg(not(target_os = "android"))]
                             Section::Midi => midi::section(ui, scene, st, deps.midi),

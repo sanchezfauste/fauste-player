@@ -15,14 +15,9 @@ use fp_model::ids::TemplateId;
 use fp_model::log_edit::{EditTarget, LogEdit};
 
 /// The Log's strip where a player has its playlist tabs (`height` tall):
-/// Edit log. Its transport is the player header's (rework AR3).
-pub(crate) fn schedule_bar(
-    ui: &mut Ui,
-    scene: &Scene<'_>,
-    view_state: &mut ViewState,
-    height: f32,
-) {
-    let t = scene.i18n;
+/// the date it plays. Its transport is the player header's (rework AR3);
+/// its templates are edited in Settings → Automation (AR20).
+pub(crate) fn schedule_bar(ui: &mut Ui, scene: &Scene<'_>, height: f32) {
     if scene.state.automation.is_none() {
         return;
     }
@@ -30,13 +25,14 @@ pub(crate) fn schedule_bar(
     ui.painter().rect_filled(strip, 0.0, theme::NEUTRAL_900);
     let mut bar = ui.new_child(
         UiBuilder::new()
-            .max_rect(strip.shrink2(vec2(8.0, 0.0)))
+            .max_rect(strip.shrink2(vec2(10.0, 0.0)))
             .layout(Layout::left_to_right(Align::Center)),
     );
-    bar.spacing_mut().item_spacing = vec2(8.0, 0.0);
-    if !view_state.phone_active && bar.button(t.tr("schedule-edit")).clicked() {
-        view_state.schedule_editor.open = true;
-    }
+    bar.label(
+        RichText::new(scene.state.local_now.date().format("%Y-%m-%d").to_string())
+            .font(font(11.0))
+            .color(theme::NEUTRAL_400),
+    );
 }
 
 /// The Log's list (rework AR14), over the rows of `schedule_view`.
