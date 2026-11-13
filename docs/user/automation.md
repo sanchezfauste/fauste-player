@@ -1,32 +1,32 @@
 # Automation
 
 Automation keeps the station on air when nobody is in the studio. This
-version has the **music filler**, a player that chooses music by itself,
+version has the **music fill**, a player that chooses music by itself,
 from rules you set, and never stops for lack of a list, and the
-**Schedule** column, which runs the day's timed blocks, with the editor
+**Log** column, which runs the day's timed blocks, with the editor
 where you make them.
 The players you already use (P1 … Pn) are untouched: they stay yours for
 shows you prepare and play live.
 
-## The Schedule column
+## The Log column
 
-The **Schedule** column plays the day's **blocks**: groups of items with a
+The **Log** column plays the day's **blocks**: groups of items with a
 start time (an hourly ID, spots, a programme). Show it from the
-**Schedule** tile on the top bar, as you show a player.
+**Log** tile on the top bar, as you show a player.
 
-![The Schedule column running, beside the Music column: the day's blocks by start time, each with its station ID (the clock marks it time-critical), spots and the rotation the music filler plays after it; the filler's song on air and the next ones](../images/guide/automation-columns.png)
+![The Log column running, beside the Music fill column: the day's blocks by start time, each with its station ID (the clock marks it hard-start), spots and the rotation the music fill plays after it; the filler's song on air and the next ones](../images/guide/automation-columns.png)
 
 Its list is the schedule, grouped by block: each block's start time, then
 its items. It shows today, the last block of yesterday and the first of
 tomorrow. A block changed for one day says so. The item on air and the
 next one are marked as on a player; items that already aired are dimmed,
 and an item that did not air (**missed**) is struck through. A clock
-marks a **time-critical** item, which plays only at its time.
+marks a **hard start** item, which plays only at its time.
 
 Above the list:
 
 - **Start** runs the schedule: each block plays at its time, and the
-  music filler plays between blocks. Nothing runs by itself: after every
+  music fill plays between blocks. Nothing runs by itself: after every
   start of the application, automation is stopped until you press Start.
 - **Stop after current** lets what is on air end, and then nothing more
   plays by itself.
@@ -38,22 +38,22 @@ in the same menu, lets the schedule choose by the time again.
 
 ## Editing the schedule
 
-**Edit schedule**, on the Schedule column, opens the editor. It has three
+**Edit log**, on the Log column, opens the editor. It has three
 tabs, and **Rotations…** takes you to Settings → Automation, where
 rotations are made.
 
-![The schedule editor, Templates tab: the Base and Weekend templates on the left; Base's blocks on the right, each with its start, its items, Add from category and the rotation for the music after it](../images/guide/schedule-templates.png)
+![The log editor, Templates tab: the Base and Weekend templates on the left; Base's blocks on the right, each with its start, its items, Add category track and the rotation for the music after it](../images/guide/schedule-templates.png)
 
 - **Templates.** A template is a day of blocks; a new installation has
   one, "Base", for every day. Make, duplicate, rename or delete templates
   on the left; the chosen one's blocks are on the right. Type a block's
   start as `HH:MM:SS` (a time that does not exist is kept in the field
   with a note, and nothing changes). Drag tracks from the library onto a
-  block to add them; **Add from category** adds an item that plays one
-  track of that category, a different one each time; **Music after**
-  chooses the rotation the music filler plays after the block (the
+  block to add them; **Add category track** adds an item that plays one
+  track of that category, a different one each time; **Then music fill**
+  chooses the rotation the music fill plays after the block (the
   default rotation when none is chosen). Each item can be marked
-  **Time-critical**, moved or removed. When a block's items are longer
+  **Hard start**, moved or removed. When a block's items are longer
   than the time to the next block, the block says by how much, in amber;
   you can still keep it so.
 - **Week plan.** Which template each weekday uses.
@@ -70,10 +70,10 @@ rotations are made.
 
   ![The Days tab: the calendar with today chosen and the dates with changes in amber; today's first block has one more spot, marked "changed for this day", with Back to the template](../images/guide/schedule-days.png)
 
-## The music filler
+## The music fill
 
-The music filler is the **Music** column. It is hidden until you show it:
-click the **Music** tile on the left of the top bar. It sits left of P1.
+The music fill is the **Music fill** column. It is hidden until you show it:
+click the **Music fill** tile on the left of the top bar. It sits left of P1.
 
 It looks and works like a player: the big clock, the waveform, the
 transport buttons, the fader and the track list. The difference is the
@@ -91,7 +91,7 @@ list:
   with a hand and is never replaced; a row you remove does not count as
   played.
 
-Its outputs are set in Settings → Audio outputs, on the **Music** row, as
+Its outputs are set in Settings → Audio outputs, on the **Music fill** row, as
 for any player. It has no number, no keyboard shortcuts or MIDI bindings,
 and remote control does not see it.
 
@@ -99,7 +99,7 @@ Press **Play** to start it and **Stop after current** to let the song on air
 end and stop. Like every player, it never starts by itself, not even after
 a restart.
 
-Above its list, where a player has its playlist tabs, the Music column
+Above its list, where a player has its playlist tabs, the Music fill column
 shows the **rotation** it plays. Choose another one there: the songs it had
 queued are replaced, the ones you added stay. When the rotation can find
 nothing to play (its categories are empty, or every file is missing), the
@@ -126,7 +126,7 @@ installation has one, **Music**, which plays all your music.
 
 Rotations are made in Settings → Automation:
 
-![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, its counts At least and At most, and the music filler's rules](../images/guide/settings-automation.png)
+![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, its counts At least and At most, and the music fill's rules](../images/guide/settings-automation.png)
 
 ## How it chooses
 

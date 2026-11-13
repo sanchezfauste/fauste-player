@@ -53,7 +53,7 @@ transaction. The tables:
 | `playlists`, `entries` | A playlist's `position` and `name`; its entries with `playlist`, `position`, `track` and `doc` (`played_by`, `repeat`, `stop_after`). Deleting a playlist deletes its entries |
 | `cart_pages` | `id`, `position`, and `doc`: the page with its carts (`color` is a lower-case name, left out when the cart has none) |
 | `players` | `id`, `position`, and `doc`: playlist, current, next, `next_explicit`, mode, `stop_after_current`, position, volume, columns, history, `pending_start` |
-| `rotations` | `id`, `position` and `doc` (schema 3): a rotation of the music filler (`name`, `steps`: each a `source`, `{"Category": id}` or `{"Kind": "Music"}`, with `min` and `max`). An unreadable record is dropped; a step's counts are brought into 1–99 with `min ≤ max` ([automation](automation.md)) |
+| `rotations` | `id`, `position` and `doc` (schema 3): a rotation of the music fill (`name`, `steps`: each a `source`, `{"Category": id}` or `{"Kind": "Music"}`, with `min` and `max`). An unreadable record is dropped; a step's counts are brought into 1–99 with `min ≤ max` ([automation](automation.md)) |
 | `air_times` | `track` and `at` (schema 3): when each track last aired, UTC Unix milliseconds. A row of a track not in the library is dropped on load |
 | `day_templates` | `id`, `position` and `doc` (schema 4): a day template of the schedule (`name`, `blocks`: each an `id`, a `start` in seconds after local midnight and `items`, each `{"Track": {"track", "time_critical"}}`, `{"Category": {"category", "time_critical"}}` or `{"Rotation": {"rotation"}}`). An unreadable record is dropped; `Schedule::from_parts` drops a block out of the day or at a start an earlier block has, and items after a rotation ([automation](automation.md)) |
 | `date_plans` | `id` (the date's day number from the common era, `NaiveDate::num_days_from_ce`), `position` and `doc` (schema 4): what one date changes (`date`, `template`, `changes`: `Changed {block, own_time}`, `Removed(id)`, `Added(block)`). A record whose date is not its key's is dropped; a missing template is cleared |
@@ -62,7 +62,7 @@ transaction. The tables:
 The default rotation is the `kv` value `default_rotation` (a rotation id,
 or null); one that names no rotation falls back on the first. The schedule's player is the `kv` value `automation` (its player's
 session and its playlist id; the list's rows are cleared on restore, and the
-running state, next and missed marks are never saved). The music filler is the `kv` value `filler`: its player's session (as a
+running state, next and missed marks are never saved). The music fill is the `kv` value `filler`: its player's session (as a
 `players` row would hold it), its playlist (an ordinary `playlists` row,
 listed nowhere), its rotation, its rotation cursor and the rows it
 generated. It comes back last of the players and not playing; a record
@@ -548,22 +548,22 @@ A source on a bit-perfect device gets no gain (N8). The meter's own
 
 ### `automation` (Settings → Automation, desktop only)
 
-The music filler's selection rules ([automation](automation.md)); 0 turns
+The music fill's selection rules ([automation](automation.md)); 0 turns
 a criterion off.
 
 | Field | Default | Meaning |
 |---|---|---|
 | `track_separation_mins` | 180 | a track may air again once this many minutes have passed since it last aired (0–10080) |
 | `track_separation_percent` | 50 | …or once this percentage of the other tracks of its step's source have aired since (0–95) |
-| `filler_lookahead_mins` | 30 | the music filler keeps this many minutes of tracks queued ahead (5–240) |
-| `filler_played_kept` | 50 | the music filler keeps this many played rows in its list; older ones are removed (10–1000) |
+| `filler_lookahead_mins` | 30 | the music fill keeps this many minutes of tracks queued ahead (5–240) |
+| `filler_played_kept` | 50 | the music fill keeps this many played rows in its list; older ones are removed (10–1000) |
 | `artist_separation_mins` | 30 | no track of an artist that aired less than this many minutes ago (0–1440; the artist compared trimmed and case-insensitively) |
 | `as_run_keep_days` | 90 | the as-run log keeps this many days in the database (1–3650; config file only for now) |
 | `overrides_keep_days` | 30 | the schedule's date overrides older than this many days are deleted at start-up (1–3650; config file only for now) |
-| `late_tolerance_secs` | 120 | a block that started less than this many seconds ago is still next by the clock, and a time-critical item may start this late (0–1800; config file only for now) |
-| `block_fade_ms` | 2000 | the music filler fades out over this many milliseconds, ending at a block's start (0–10000; config file only for now) |
-| `max_fade_cut_secs` | 30 | the song the music filler fades at a block's start loses at most this many seconds (0–300; config file only for now) |
-| `min_song_play_secs` | 45 | the music filler never starts a song that would play less than this many seconds before its fade at a block's start (0–600; config file only for now) |
+| `late_tolerance_secs` | 120 | a block that started less than this many seconds ago is still next by the clock, and a hard-start item may start this late (0–1800; config file only for now) |
+| `block_fade_ms` | 2000 | the music fill fades out over this many milliseconds, ending at a block's start (0–10000; config file only for now) |
+| `max_fade_cut_secs` | 30 | the song the music fill fades at a block's start loses at most this many seconds (0–300; config file only for now) |
+| `min_song_play_secs` | 45 | the music fill never starts a song that would play less than this many seconds before its fade at a block's start (0–600; config file only for now) |
 
 ### `limits` (config file only)
 

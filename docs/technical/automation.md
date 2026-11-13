@@ -4,7 +4,7 @@ The design is the [automation spec](../superpowers/specs/2026-11-11-automation-d
 (rules `AU<n>`). This page describes what is implemented so far: the music
 filler's selection rules and player, the schedule's data model, running
 the schedule and its as-run log, pure functions in `fp-model`. The
-Schedule column and the schedule editor are described in [ui](ui.md).
+Log column and the log editor are described in [ui](ui.md).
 
 ## Time and randomness (`wall_time.rs`)
 
@@ -107,7 +107,7 @@ stands in its rotation; it is plain data, saved with the filler.
   the caller's cursor keeps its place (`used_default`, AU34). With nothing
   playable anywhere the result is `None`.
 
-## The music filler (`filler.rs`)
+## The music fill (`filler.rs`)
 
 The filler (AU27–AU29) is an ordinary `PlayerState`, kept **last** in
 `AppState::players`, with a playlist of its own; `AppState::filler`
@@ -123,6 +123,11 @@ those. Rules about sound (on air, playout, pre-listen) see the filler too.
 - **trim:** the rows before the current one (or before the next, when
   stopped) beyond `automation.filler_played_kept` leave the list, through
   `take_out_entries`, so the list never grows;
+- **ahead:** the rows from the player's next on, when next is after the
+  row on air (the rows between will not play, and are not history
+  either: they stay in the list); else the rows after the row on air
+  (rework spec AR13). A filler with no next, playing or stopped, takes
+  the first row the top-up adds as next;
 - **top up:** while the rows ahead play for less than
   `automation.filler_lookahead_mins`, it asks the rotation cursor for the
   next track (`next_track`, with every row ahead passed as `planned` at its
@@ -220,7 +225,7 @@ AU40). The schedule plays through its own player and list, made by
 
 - **The players:** `players` holds the schedule's player just before the
   filler's, both last. `player_ids` shows the schedule first, then the
-  Music column, then P1…. `is_automation` and `is_automation_playlist` keep
+  Music fill column, then P1…. `is_automation` and `is_automation_playlist` keep
   both players and their lists out of the operator's lists, the remote API
   and the player count, and the reducer refuses edits to them with
   `FillerPlaylist`.
@@ -247,7 +252,7 @@ AU40). The schedule plays through its own player and list, made by
   - a track item becomes its track;
   - a category item becomes a track picked by the §6 rules;
   - a rotation item ends the rows, and the filler plays it after the block;
-  - an item with nothing playable, or a time-critical item already past
+  - an item with nothing playable, or a hard-start item already past
     the late tolerance, is missed.
 
   The rows play in order with the player's crossfades and segues (AU18).
@@ -259,7 +264,7 @@ AU40). The schedule plays through its own player and list, made by
   - **The hand-over (AU24):** `automation.block_fade_ms` before a block, the
     filler fades out (`reducer::fade_stop_over`), and `handing_over` keeps
     it from restarting. At the start the block plays.
-  - **A late time-critical item (AU22):** a next row that is time-critical
+  - **A late hard-start item (AU22):** a next row that is hard-start
     and would start beyond the block's start plus the tolerance is taken
     out and missed. When it would start is estimated from when the row on
     air started (`row_since`) and its length.
@@ -293,15 +298,15 @@ when positive. `schedule::with_tracks(items, tracks)` adds track items
 before a final rotation item, else at the end. The editor (`ui/schedule_editor.rs`)
 sends the plan 3 commands only.
 
-## The Schedule column's rows (`schedule_view`)
+## The Log column's rows (`schedule_view`)
 
-`automation::schedule_view(state)` lists what the Schedule column draws
+`automation::schedule_view(state)` lists what the Log column draws
 (§8.1): yesterday's last block, today's blocks and tomorrow's first, in
 time order, widened to keep a block on air from yesterday (an overrun past
 midnight) and the next item's block, with every block between. Each is a
 `ScheduleRow::Block` (date, start, `BlockOrigin`, status) followed by its
 `ScheduleRow::Item`s (`ItemRef`, the item, a track's length when known,
-time-critical, status). The next shown is `AutomationState::next`, except
+hard-start, status). The next shown is `AutomationState::next`, except
 while a block plays in order: then the block that came due meanwhile
 (`overdue_after`), which is what will play (AU21). A `RowStatus` is
 `OnAir` for the item of the schedule player's current row, `Next`, then
@@ -386,7 +391,7 @@ next sequence number, which only grows (`resume_at` never goes back), so
 the store appends exactly what it has not saved, whatever the clock did.
 The model keeps only yesterday's and today's entries; the store keeps
 `automation.as_run_keep_days` (AU38; see [persistence](persistence.md)).
-Viewing the log beyond the Schedule column and exporting it are non-goals.
+Viewing the log beyond the Log column and exporting it are non-goals.
 
 AU39's long-run test (`fp-store/tests/it/automation_long_run.rs`) runs
 thirty simulated days with a week plan, a date override, the filler and a

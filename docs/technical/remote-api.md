@@ -106,7 +106,7 @@ The file path is never exposed.
 | Method and path | Returns |
 |---|---|
 | `GET /state` | State |
-| `GET /players` | Players, in display order (the automation players, the schedule's and the music filler's, and their playlists are not part of the API: `/players/{id}` and `/playlists/{id}` answer 404 for them, as does every operation or edit on them, their lists or their rows, and OSC numbers only the other players) |
+| `GET /players` | Players, in display order (the automation players, the schedule's and the music fill's, and their playlists are not part of the API: `/players/{id}` and `/playlists/{id}` answer 404 for them, as does every operation or edit on them, their lists or their rows, and OSC numbers only the other players) |
 | `GET /players/{id}` | Player |
 | `GET /playlists` | Playlist summaries |
 | `GET /playlists/{id}` | Playlist |

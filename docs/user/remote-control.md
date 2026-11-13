@@ -141,8 +141,8 @@ port 7381 of this computer. To accept packets from other computers, set
 `remote.osc.allowed_sources` (for example `"192.168.1.0/24"`). OSC has no
 password, so keep it on a trusted studio network.
 
-Players are numbered 1, 2, 3… as they appear on screen. The **Music**
-column (the music filler, see [Automation](automation.md)) has no number
+Players are numbered 1, 2, 3… as they appear on screen. The **Music fill**
+column (the music fill, see [Automation](automation.md)) has no number
 and is not part of remote control. Carts are numbered
 in the page shown.
 
