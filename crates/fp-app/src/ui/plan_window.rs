@@ -60,6 +60,9 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
         .id(egui::Id::unique("plan-window"))
         .open(&mut open)
         .default_size(vec2(620.0, 520.0))
+        // First shown in the middle of the screen, clear of the top bar.
+        .pivot(egui::Align2::CENTER_CENTER)
+        .default_pos(ctx.content_rect().center())
         .min_size(vec2(360.0, 200.0))
         .resizable(true)
         .collapsible(false)

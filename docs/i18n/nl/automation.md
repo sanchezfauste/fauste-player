@@ -44,7 +44,7 @@ op de tijd kiezen.
 heeft drie tabbladen, en **Rotaties…** brengt je naar Instellingen →
 Automatisering, waar rotaties worden gemaakt.
 
-![De programmeringseditor, tabblad Sjablonen: de sjablonen Base en Weekend links; de blokken van Base rechts, elk met zijn start, zijn items, Toevoegen uit categorie en de rotatie voor de muziek daarna](../../images/guide/schedule-templates.png)
+![De programmeringseditor, tabblad Sjablonen: de sjablonen Base en Weekend links; de blokken van Base rechts, elk met zijn start, zijn items, Toevoegen uit categorie en de rotatie voor de muziek daarna](../../images/guide/template-popup.png)
 
 - **Sjablonen.** Een sjabloon is een dag met blokken; een nieuwe installatie
   heeft er één, "Basis", voor elke dag. Maak, dupliceer, hernoem of verwijder
@@ -60,7 +60,7 @@ Automatisering, waar rotaties worden gemaakt.
   hoeveel, in amber; je kunt het toch zo laten.
 - **Weekplan.** Welk sjabloon elke weekdag gebruikt.
 
-  ![Het tabblad Weekplan: Base van maandag tot vrijdag, Weekend op zaterdag en zondag](../../images/guide/schedule-week.png)
+  ![Het tabblad Weekplan: Base van maandag tot vrijdag, Weekend op zaterdag en zondag](../../images/guide/settings-plans.png)
 
 - **Dagen.** Kies een datum in de kalender (data met wijzigingen zijn amber).
   Een datum kan een ander sjabloon gebruiken dan dat van zijn weekdag (een
@@ -71,7 +71,7 @@ Automatisering, waar rotaties worden gemaakt.
   voegt er een toe. Latere wijzigingen aan het sjabloon bereiken nog steeds de
   blokken die je op die datum niet hebt gewijzigd.
 
-  ![Het tabblad Dagen: de kalender met vandaag gekozen en de data met wijzigingen in amber; het eerste blok van vandaag heeft één spot extra, gemarkeerd "gewijzigd voor deze dag", met Terug naar het sjabloon](../../images/guide/schedule-days.png)
+  ![Het tabblad Dagen: de kalender met vandaag gekozen en de data met wijzigingen in amber; het eerste blok van vandaag heeft één spot extra, gemarkeerd "gewijzigd voor deze dag", met Terug naar het sjabloon](../../images/guide/settings-plans.png)
 
 ## De muziekvuller {#the-music-filler}
 

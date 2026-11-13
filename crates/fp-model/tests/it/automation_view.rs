@@ -487,3 +487,18 @@ fn plan_view_of_a_date_has_its_changes() {
         Some((fp_model::schedule::BlockOrigin::Changed, tomorrow, 2))
     );
 }
+
+#[test]
+fn plan_view_runs_a_templates_last_block_to_midnight() {
+    let mut r = Rig::new(vec![(23, 59, vec![song(1), song(2)])]);
+    r.at_hms(9, 0, 0);
+    let base = r.s.schedule.templates()[0].id;
+    let rows =
+        fp_model::automation::plan_view(&r.s, fp_model::log_edit::EditTarget::Template(base));
+    let overrun = rows.iter().find_map(|row| match row {
+        ScheduleRow::Block { overrun_secs, .. } => Some(*overrun_secs),
+        ScheduleRow::Item { .. } => None,
+    });
+    // Two songs of known length in one minute before midnight.
+    assert!(overrun.flatten().is_some_and(|secs| secs > 0.0));
+}

@@ -45,7 +45,7 @@ choisir de nouveau d'après l'heure.
 onglets, et **Rotations…** vous mène à Paramètres → Automatisation, où l'on
 fait les rotations.
 
-![L'éditeur de grille, onglet Modèles : les modèles Base et Weekend à gauche ; les blocs de Base à droite, chacun avec son début, ses éléments, Ajouter depuis une catégorie et la rotation de la musique qui suit](../../images/guide/schedule-templates.png)
+![L'éditeur de grille, onglet Modèles : les modèles Base et Weekend à gauche ; les blocs de Base à droite, chacun avec son début, ses éléments, Ajouter depuis une catégorie et la rotation de la musique qui suit](../../images/guide/template-popup.png)
 
 - **Modèles.** Un modèle est un jour de blocs ; une nouvelle installation en
   a un, « Base », pour tous les jours. Créez, dupliquez, renommez ou
@@ -62,7 +62,7 @@ fait les rotations.
   pouvez quand même le garder ainsi.
 - **Semaine type.** Quel modèle chaque jour de la semaine utilise.
 
-  ![L'onglet Semaine type : Base du lundi au vendredi, Weekend le samedi et le dimanche](../../images/guide/schedule-week.png)
+  ![L'onglet Semaine type : Base du lundi au vendredi, Weekend le samedi et le dimanche](../../images/guide/settings-plans.png)
 
 - **Jours.** Choisissez une date dans le calendrier (les dates avec des
   changements sont en ambre). Une date peut utiliser un autre modèle que celui
@@ -73,7 +73,7 @@ fait les rotations.
   jour-là** en ajoute un. Les modifications ultérieures du modèle atteignent
   encore les blocs que vous n'avez pas changés à cette date.
 
-  ![L'onglet Jours : le calendrier avec aujourd'hui choisi et les dates avec des changements en ambre ; le premier bloc d'aujourd'hui a un spot de plus, marqué « modifié pour ce jour », avec Revenir au modèle](../../images/guide/schedule-days.png)
+  ![L'onglet Jours : le calendrier avec aujourd'hui choisi et les dates avec des changements en ambre ; le premier bloc d'aujourd'hui a un spot de plus, marqué « modifié pour ce jour », avec Revenir au modèle](../../images/guide/settings-plans.png)
 
 ## Le remplissage musical {#the-music-filler}
 

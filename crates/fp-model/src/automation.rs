@@ -1554,9 +1554,21 @@ pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<S
                 .map(|t| date.and_time(t))
         })
         .collect();
+    // AU37: a template's last block runs to midnight, a date's to the next
+    // day's first block.
+    let tomorrow = date.succ_opt();
+    let end = match target {
+        EditTarget::Template(_) => tomorrow.and_then(|d| d.and_hms_opt(0, 0, 0)),
+        EditTarget::Date(_) => tomorrow.and_then(|d| {
+            day_starts(state, d)
+                .into_iter()
+                .next()
+                .map(|(start, _)| start)
+        }),
+    };
     let mut out = Vec::new();
     for (i, (block, start)) in blocks.iter().zip(starts.iter()).enumerate() {
-        let next_start = starts.get(i + 1).copied();
+        let next_start = starts.get(i + 1).copied().or(end);
         let mut items = Vec::with_capacity(block.items.len());
         let mut at = *start;
         for (index, what) in block.items.iter().enumerate() {

@@ -46,7 +46,7 @@ nach der Uhrzeit entscheiden.
 drei Tabs, und **Rotationen…** führt zu Einstellungen → Automatisierung, wo
 die Rotationen erstellt werden.
 
-![Der Sendeplan-Editor, Tab Vorlagen: die Vorlagen Base und Weekend links; die Blöcke von Base rechts, jeder mit seinem Beginn, seinen Elementen, Aus Kategorie hinzufügen und der Rotation für die Musik danach](../../images/guide/schedule-templates.png)
+![Der Sendeplan-Editor, Tab Vorlagen: die Vorlagen Base und Weekend links; die Blöcke von Base rechts, jeder mit seinem Beginn, seinen Elementen, Aus Kategorie hinzufügen und der Rotation für die Musik danach](../../images/guide/template-popup.png)
 
 - **Vorlagen.** Eine Vorlage ist ein Tag aus Blöcken; eine neue Installation
   hat eine, „Base“, für jeden Tag. Links kannst du Vorlagen erstellen,
@@ -63,7 +63,7 @@ die Rotationen erstellt werden.
   du kannst ihn trotzdem so lassen.
 - **Wochenplan.** Welche Vorlage jeder Wochentag verwendet.
 
-  ![Der Tab Wochenplan: Base von Montag bis Freitag, Weekend am Samstag und Sonntag](../../images/guide/schedule-week.png)
+  ![Der Tab Wochenplan: Base von Montag bis Freitag, Weekend am Samstag und Sonntag](../../images/guide/settings-plans.png)
 
 - **Tage.** Wähle ein Datum im Kalender (Daten mit Änderungen sind bernsteinfarben).
   Ein Datum kann eine andere Vorlage als die seines Wochentags verwenden (ein
@@ -74,7 +74,7 @@ die Rotationen erstellt werden.
   hinzufügen** fügt einen hinzu. Spätere Änderungen an der Vorlage erreichen
   weiterhin die Blöcke, die du an diesem Datum nicht geändert hast.
 
-  ![Der Tab Tage: der Kalender mit dem gewählten heutigen Tag und den Daten mit Änderungen in Bernstein; der erste Block von heute hat einen Spot mehr, markiert mit „für diesen Tag geändert“, mit Zurück zur Vorlage](../../images/guide/schedule-days.png)
+  ![Der Tab Tage: der Kalender mit dem gewählten heutigen Tag und den Daten mit Änderungen in Bernstein; der erste Block von heute hat einen Spot mehr, markiert mit „für diesen Tag geändert“, mit Zurück zur Vorlage](../../images/guide/settings-plans.png)
 
 ## Der Musikfüller {#the-music-filler}
 

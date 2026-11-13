@@ -44,7 +44,7 @@ escoller segundo a hora.
 **Rotacións…** lévate a Configuración → Automatización, onde se crean as
 rotacións.
 
-![O editor da grella, lapela Modelos: os modelos Base e Weekend á esquerda; os bloques de Base á dereita, cada un co seu inicio, os seus elementos, Engadir de categoría e a rotación da música que vai despois](../../images/guide/schedule-templates.png)
+![O editor da grella, lapela Modelos: os modelos Base e Weekend á esquerda; os bloques de Base á dereita, cada un co seu inicio, os seus elementos, Engadir de categoría e a rotación da música que vai despois](../../images/guide/template-popup.png)
 
 - **Modelos.** Un modelo é un día de bloques; unha instalación nova ten un,
   "Base", para todos os días. Crea, duplica, renomea ou elimina modelos á
@@ -60,7 +60,7 @@ rotacións.
   mantelo.
 - **Semana tipo.** Que modelo usa cada día da semana.
 
-  ![A lapela Semana tipo: Base de luns a venres, Weekend o sábado e o domingo](../../images/guide/schedule-week.png)
+  ![A lapela Semana tipo: Base de luns a venres, Weekend o sábado e o domingo](../../images/guide/settings-plans.png)
 
 - **Días.** Escolle unha data no calendario (as datas con cambios aparecen en
   ámbar). Unha data pode usar outro modelo que o do seu día da semana (un
@@ -70,7 +70,7 @@ rotacións.
   engade un. Os cambios posteriores do modelo seguen chegando aos bloques que
   non cambiaches nesa data.
 
-  ![A lapela Días: o calendario co día de hoxe escollido e as datas con cambios en ámbar; o primeiro bloque de hoxe ten unha cuña máis, marcada "cambiado para este día", con Volver ao modelo](../../images/guide/schedule-days.png)
+  ![A lapela Días: o calendario co día de hoxe escollido e as datas con cambios en ámbar; o primeiro bloque de hoxe ten unha cuña máis, marcada "cambiado para este día", con Volver ao modelo](../../images/guide/settings-plans.png)
 
 ## O musicalizador {#the-music-filler}
 

@@ -56,23 +56,20 @@ pub(super) fn section(
     ui.add_space(4.0);
     note(ui, &t.tr("settings-plans-hint"), theme::NEUTRAL_400);
     ui.add_space(6.0);
+    ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
     ui.horizontal_top(|ui| {
-        ui.spacing_mut().item_spacing = vec2(8.0, 6.0);
-        ui.vertical(|ui| {
-            ui.set_width(220.0);
-            templates(ui, scene, view_state, st);
-        });
-        ui.add_space(16.0);
         ui.vertical(|ui| {
             ui.set_width(240.0);
+            templates(ui, scene, view_state, st);
+        });
+        ui.add_space(24.0);
+        ui.vertical(|ui| {
+            ui.set_width(260.0);
             week(ui, scene);
         });
-        ui.add_space(16.0);
-        ui.vertical(|ui| {
-            ui.set_width(250.0);
-            days(ui, scene, view_state, st);
-        });
     });
+    ui.add_space(12.0);
+    days(ui, scene, view_state, st);
 }
 
 fn heading(ui: &mut Ui, text: &str) {
@@ -201,8 +198,28 @@ fn days(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, st: &mut Pla
     let today = scene.state.local_now.date();
     let date = st.date.unwrap_or(today);
     heading(ui, &t.tr("schedule-editor-days"));
-    month_grid(ui, scene, st, date, today);
-    ui.add_space(6.0);
+    ui.horizontal_top(|ui| {
+        ui.vertical(|ui| {
+            ui.set_width(240.0);
+            month_grid(ui, scene, st, date, today);
+        });
+        ui.add_space(24.0);
+        ui.vertical(|ui| {
+            ui.set_width(260.0);
+            date_part(ui, scene, view_state, date, today);
+        });
+    });
+}
+
+/// The chosen date, its template and Edit day….
+fn date_part(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    date: NaiveDate,
+    today: NaiveDate,
+) {
+    let t = scene.i18n;
     let schedule = &scene.state.schedule;
     ui.label(
         RichText::new(date.format("%Y-%m-%d").to_string())

@@ -44,7 +44,7 @@ według godziny.
 **Rotacje…** prowadzi do Ustawienia → Automatyzacja, gdzie tworzy się
 rotacje.
 
-![Edytor ramówki, karta Szablony: szablony Base i Weekend po lewej; bloki Base po prawej, każdy z początkiem, elementami, Dodaj z kategorii i rotacją muzyki po nim](../../images/guide/schedule-templates.png)
+![Edytor ramówki, karta Szablony: szablony Base i Weekend po lewej; bloki Base po prawej, każdy z początkiem, elementami, Dodaj z kategorii i rotacją muzyki po nim](../../images/guide/template-popup.png)
 
 - **Szablony.** Szablon to dzień bloków; nowa instalacja ma jeden, „Base”, na
   każdy dzień. Szablony tworzysz, powielasz, zmieniasz im nazwy lub usuwasz po
@@ -59,7 +59,7 @@ rotacje.
   możesz go tak zostawić.
 - **Tydzień wzorcowy.** Którego szablonu używa każdy dzień tygodnia.
 
-  ![Karta Tydzień wzorcowy: Base od poniedziałku do piątku, Weekend w sobotę i niedzielę](../../images/guide/schedule-week.png)
+  ![Karta Tydzień wzorcowy: Base od poniedziałku do piątku, Weekend w sobotę i niedzielę](../../images/guide/settings-plans.png)
 
 - **Dni.** Wybierz datę w kalendarzu (daty ze zmianami są bursztynowe). Data
   może używać innego szablonu niż jej dzień tygodnia (święto w czwartek może
@@ -69,7 +69,7 @@ rotacje.
   zmiany szablonu nadal docierają do bloków, których w tej dacie nie
   zmieniłeś.
 
-  ![Karta Dni: kalendarz z wybranym dzisiaj i datami ze zmianami na bursztynowo; pierwszy blok dzisiejszego dnia ma jeden spot więcej, oznaczony „zmienione na ten dzień”, z przyciskiem Wróć do szablonu](../../images/guide/schedule-days.png)
+  ![Karta Dni: kalendarz z wybranym dzisiaj i datami ze zmianami na bursztynowo; pierwszy blok dzisiejszego dnia ma jeden spot więcej, oznaczony „zmienione na ten dzień”, z przyciskiem Wróć do szablonu](../../images/guide/settings-plans.png)
 
 ## Wypełniacz muzyczny {#the-music-filler}
 

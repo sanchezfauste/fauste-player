@@ -44,7 +44,7 @@ triar segons l'hora.
 **Rotacions…** et porta a Configuració → Automatització, on es creen les
 rotacions.
 
-![L'editor de graella, pestanya Plantilles: les plantilles Base i Weekend a l'esquerra; els blocs de Base a la dreta, cadascun amb el seu inici, els seus elements, Afegeix de categoria i la rotació de la música que va després](../../images/guide/schedule-templates.png)
+![L'editor de graella, pestanya Plantilles: les plantilles Base i Weekend a l'esquerra; els blocs de Base a la dreta, cadascun amb el seu inici, els seus elements, Afegeix de categoria i la rotació de la música que va després](../../images/guide/template-popup.png)
 
 - **Plantilles.** Una plantilla és un dia de blocs; una instal·lació nova en
   té una, "Base", per a tots els dies. Crea, duplica, canvia el nom o elimina
@@ -60,7 +60,7 @@ rotacions.
   deixar així.
 - **Setmana tipus.** Quina plantilla fa servir cada dia de la setmana.
 
-  ![La pestanya Setmana tipus: Base de dilluns a divendres, Weekend dissabte i diumenge](../../images/guide/schedule-week.png)
+  ![La pestanya Setmana tipus: Base de dilluns a divendres, Weekend dissabte i diumenge](../../images/guide/settings-plans.png)
 
 - **Dies.** Tria una data al calendari (les dates amb canvis són en ambre).
   Una data pot fer servir una plantilla diferent de la del seu dia de la
@@ -71,7 +71,7 @@ rotacions.
   posteriors a la plantilla continuen arribant als blocs que no vas canviar en
   aquella data.
 
-  ![La pestanya Dies: el calendari amb avui triat i les dates amb canvis en ambre; el primer bloc d'avui té una falca més, marcat com a "canviat per a aquest dia", amb Torna a la plantilla](../../images/guide/schedule-days.png)
+  ![La pestanya Dies: el calendari amb avui triat i les dates amb canvis en ambre; el primer bloc d'avui té una falca més, marcat com a "canviat per a aquest dia", amb Torna a la plantilla](../../images/guide/settings-plans.png)
 
 ## El musicalitzador {#the-music-filler}
 

@@ -256,6 +256,28 @@ if xs:
 ' "$1" "$3" "$5"
 }
 
+# colour_top <x0> <x1> <y0> <y1> <#rrggbb>: the centre "x y" of the topmost
+# patch of that colour in the box (its pixels within 30 rows of the first),
+# or nothing.
+colour_top() {
+    local raw=$work/strip.png
+    x import -window "$win" "$raw"
+    convert "$raw" -crop "$(($2 - $1))x$(($4 - $3))+$1+$3" +repage -depth 8 txt:- | python3 -c '
+import re, sys
+x0, y0, want = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3].upper()
+pts = []
+for line in sys.stdin:
+    m = re.match(r"(\d+),(\d+):.*(#[0-9A-Fa-f]{6})", line)
+    if m and m[3].upper() == want:
+        pts.append((int(m[1]), int(m[2])))
+if pts:
+    top = min(y for _, y in pts)
+    patch = [(x, y) for x, y in pts if y < top + 30]
+    xs = [x for x, _ in patch]; ys = [y for _, y in patch]
+    print(x0 + (min(xs) + max(xs)) // 2, y0 + (min(ys) + max(ys)) // 2)
+' "$1" "$3" "$5"
+}
+
 # capture_window <file> <x> <y> <radius> [left top right bottom]: the window
 # that covers the point (x, y), an empty part of it, found on the screen
 # (scripts/site/window_box.py), widened by the margins. A window's size depends on the language of its
@@ -577,11 +599,12 @@ shoot_guide() {
     click "$library_x" 17
 }
 
-# The automation guide: the Schedule and Music columns running, and the
-# schedule editor's three tabs. The demo session made the schedule (a block
-# every hour, a weekend template, today's first block changed).
+# The automation guide: the Log and Music fill columns running, Settings →
+# Automation's Templates and days, and a template in its popup. The demo
+# session made the schedule (a block every hour, a weekend template, today's
+# first block changed).
 shoot_automation() {
-    local buttons schedule_x music_x header edit_x tabs play
+    local buttons schedule_x music_x play settings_x base
     read -r -a buttons < <(topbar_left_buttons) \
         || die "cannot find the top bar's buttons"
     # Show Schedule and Music, hide P2 to P4: Schedule, Music and P1 share
@@ -599,23 +622,30 @@ shoot_automation() {
     park
     sleep 4
     capture "$guide/automation-columns.png" 1268x880+8+42
-    # The editor (Edit log, the last label of the bar), on Templates.
-    read -r -a header < <(label_centres 12 630 318 334)
-    [[ ${#header[@]} -ge 1 ]] || die "cannot find the Log column's Edit log"
-    edit_x=${header[-1]}
-    click "$edit_x" 325
+    # Settings → Automation, scrolled down to Templates and days.
+    read -r _ settings_x < <(topbar_buttons) \
+        || die "cannot find the Settings button in the top bar"
+    click "$settings_x" 17
+    click 600 579
+    x xdotool mousemove --window "$win" 1000 600
+    sleep 0.3
+    for _ in 1 2 3 4 5; do x xdotool click 5; sleep 0.2; done
     park
-    sleep 1
-    capture_window "$guide/schedule-templates.png" 100 450 6 0 35 0 0
-    # Its tabs: Templates, Week plan, Days, then Rotations… on the right.
-    read -r -a tabs < <(label_centres 20 600 62 77)
-    [[ ${#tabs[@]} -ge 3 ]] || die "cannot find the schedule editor's tabs"
-    click "${tabs[1]}" 69
+    sleep 1.5
+    capture "$guide/settings-plans.png" 900x640+510+220
+    # A double-click on the selected template (its highlight, the topmost
+    # one in the left column) opens it in its popup and closes Settings.
+    read -r -a base < <(colour_top 730 1000 300 800 "#544F7D")
+    [[ ${#base[@]} -eq 2 ]] || die "cannot find the selected template"
+    x xdotool mousemove --window "$win" "${base[0]}" "${base[1]}"
+    sleep 0.3
+    x xdotool click --repeat 2 --delay 80 1
     park
-    capture_window "$guide/schedule-week.png" 600 200 6 0 35 0 0
-    click "${tabs[2]}" 69
-    park
-    capture_window "$guide/schedule-days.png" 100 500 6 0 35 0 0
+    sleep 1.5
+    # The popup opens in the middle of the screen at its default size,
+    # whatever the language: found from its footer (empty right of Add),
+    # widened to the whole window.
+    capture_window "$guide/template-popup.png" 1130 781 6 6 489 6 6
     key Escape
 }
 

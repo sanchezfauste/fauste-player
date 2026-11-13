@@ -46,7 +46,7 @@ parrilla vuelva a elegir según la hora.
 pestañas, y **Rotaciones…** te lleva a Configuración → Automatización, donde
 se crean las rotaciones.
 
-![El editor de parrilla, pestaña Plantillas: las plantillas Base y Weekend a la izquierda; los bloques de Base a la derecha, cada uno con su inicio, sus elementos, Añadir de categoría y la rotación de la música que va después](../../images/guide/schedule-templates.png)
+![El editor de parrilla, pestaña Plantillas: las plantillas Base y Weekend a la izquierda; los bloques de Base a la derecha, cada uno con su inicio, sus elementos, Añadir de categoría y la rotación de la música que va después](../../images/guide/template-popup.png)
 
 - **Plantillas.** Una plantilla es un día de bloques; una instalación nueva
   tiene una, "Base", para todos los días. Crea, duplica, renombra o elimina
@@ -62,7 +62,7 @@ se crean las rotaciones.
   el bloque dice en cuánto, en ámbar; aun así puedes dejarlo así.
 - **Semana tipo.** Qué plantilla usa cada día de la semana.
 
-  ![La pestaña Semana tipo: Base de lunes a viernes, Weekend el sábado y el domingo](../../images/guide/schedule-week.png)
+  ![La pestaña Semana tipo: Base de lunes a viernes, Weekend el sábado y el domingo](../../images/guide/settings-plans.png)
 
 - **Días.** Elige una fecha en el calendario (las fechas con cambios están
   en ámbar). Una fecha puede usar otra plantilla distinta de la de su día de
@@ -73,7 +73,7 @@ se crean las rotaciones.
   posteriores en la plantilla siguen llegando a los bloques que no cambiaste
   en esa fecha.
 
-  ![La pestaña Días: el calendario con hoy elegido y las fechas con cambios en ámbar; el primer bloque de hoy tiene una cuña más, marcado como "cambiado para este día", con Volver a la plantilla](../../images/guide/schedule-days.png)
+  ![La pestaña Días: el calendario con hoy elegido y las fechas con cambios en ámbar; el primer bloque de hoy tiene una cuña más, marcado como "cambiado para este día", con Volver a la plantilla](../../images/guide/settings-plans.png)
 
 ## El musicalizador {#the-music-filler}
 

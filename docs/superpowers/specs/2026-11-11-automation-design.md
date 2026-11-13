@@ -6,6 +6,10 @@
   non-goals ("scheduling / clock-based automation": now a goal); [the track
   library spec](2026-11-01-track-library-design.md) §12 (this is the phase it
   prepared) and its track kinds (a new kind, AU30).
+- **Revised by:** [the automation rework spec](2026-11-13-automation-rework-design.md)
+  (rules `AR<n>`, 2026-11-13): its terms (§3), how the Log is started,
+  stopped and pointed (§5.1) and its screens (§8) replace the ones first
+  written here; those sections now point to it. The rest stands.
 - **Numbering:** rules are `AU<n>`. Each rule is testable and gets at least
   one test (§12).
 - Marks: *(maintainer)* is a decision taken in the brainstorming;
@@ -83,29 +87,15 @@ phase (track library spec §12).
 
 ## 3. Terms
 
-Names chosen in the brainstorming *(maintainer accepted the proposal)*. The
-UI uses the Spanish column in es-ES and the English one in en-US; code and
-docs use the English one.
-
-| Concept | English | Español |
-|---|---|---|
-| The whole system | Automation | Automatización |
-| A day's timed programme | Schedule | Parrilla |
-| A group of items with a start time | Block | Bloque |
-| One thing in a block | Item | Elemento |
-| A reusable day of blocks | Day template | Plantilla |
-| Which template each weekday uses | Week plan | Semana tipo |
-| Blocks changed for one date only | Date override | Cambio del día |
-| The player that plays music between blocks | Music filler | Musicalizador |
-| An ordered, repeating list of category steps | Rotation | Rotación |
-| An item that only makes sense at its time | Time-critical | Puntual |
-| A new track kind (AU30) | Hourly ID | Indicativo horario |
-| How late a time-critical item may still play | Late tolerance | Margen de retraso |
-| A scheduled item that did not air | Missed | No emitido |
-| What actually aired | As-run log | Registro de emisión |
-
-*(my call)* "Music filler" is a working English name; the maintainer may
-rename it before the plans.
+Replaced by the rework spec §3 (the sector's usual terms): **Log**
+(*Parrilla*) for a date's programme and its column, **Template**, **Week
+plan**, **Date changes**, **Block**, **Item**, **Category track**, **Music
+fill** (*Musicalizador*) for both the player between blocks and the item
+that hands over to it, **Rotation**, **Hard start** (*Hora fija*),
+**Missed**, **As-run log**, and **Hourly ID** (*Indicativo horario*, AU30)
+and **Late tolerance** (*Margen de retraso*) as before. Code identifiers
+keep their first names (`schedule`, `filler`, `time_critical`); this spec's
+rules below still say "schedule", "filler" and "time-critical" for them.
 
 ## 4. Model
 
@@ -181,32 +171,18 @@ rename it before the plans.
 
 ### 5.1 Start, stop, next
 
-- **AU15.** Automation has two states, **running** and **stopped**. It is
-  stopped after every start of the application, restart or crash, and leaves
-  stopped only by the operator's **Start** *(maintainer)*.
-- **AU16.** The schedule has a **next** item. While stopped, next follows the
-  clock: the first item of the **next block that has not started yet**, or of
-  a block that started less than the late tolerance ago and has not aired
-  *(my call: Start at 11:01 still plays the 11:00 block)*. A block of the
-  current hour that never aired is not chosen by the clock; it is missed, and
-  the operator may set it as next by hand *(maintainer)*. The operator may
-  set next by hand to **any item, past or future**, of any date shown
-  *(maintainer)*. A next set by hand stays where it was put until Start or
-  another choice; it is not saved, so after a restart next follows the clock
-  again *(my call)*.
-- **AU17.** **Start** plays next at once when it was set by hand
-  *(maintainer: "unless another block is forced")*. When next came from the
-  clock and its block starts later, Start runs the music filler until then
-  and the block starts on time (AU24) *(maintainer: Start at 10:58 → two
-  minutes of music, then the 11:00 block at 11:00)*. **Stop after current**
-  lets the item on air (a schedule item or a filler song) end and then stops
-  the schedule **and the filler**; nothing else plays, so the operator can go live on the
-  auxiliary players *(maintainer)*.
-- **AU18.** While running, items play in order from next to the end of their
-  block, each after the previous one (with the players' crossfade and segue
-  points, as a playlist in continuous mode). A hand-set next is always
-  obeyed; a manually played past block plays in full, its time-critical items
-  included *(maintainer: running a 10:00 block at 11:00 is legitimate)*.
+Replaced by the rework spec §4–§5. In short: the Log column is a player
+with a player's transport (AR3–AR10): **Play** plays what the operator
+selected as next and runs automation; **Pause**, **Stop**, **Fade stop**
+and **Stop at end** stop it; **SINGLE** makes it manual. Automation is
+stopped after every start of the application, restart or crash, and
+starts only by the operator's Play (rule 10; was AU15). Next is what the
+operator selected, else what the clock says (AR11–AR13; was AU16): a next
+set by hand plays at once on Play, one from the clock waits for its block
+with the music fill until then (was AU17). **AU18** stands: while running,
+items play in order from next to the end of their block, each after the
+previous one; a hand-set next is always obeyed, and a past block played by
+hand plays in full.
 
 ### 5.2 After a block
 
@@ -283,11 +259,12 @@ rename it before the plans.
   music: it fades before a block like any other, and a row that cannot end
   before the coming block is flagged in the list *(my call)*.
 - **AU29.** The filler can run **on its own**, without the schedule
-  *(maintainer)*: its column has its own Start, Stop after current and a
-  rotation selector, and it then plays that rotation without end. Starting
-  automation while it runs hands it to the schedule (it plays until the next
-  block, AU20). Stopping automation stops the filler too (AU17). Like the
-  schedule, it never starts by itself (AU15).
+  *(maintainer)*: its column has a player's transport (Play, Stop at end…)
+  and a rotation selector, and it then plays that rotation without end.
+  Starting automation while it runs hands it to the schedule (it plays
+  until the next block, AU20). While it plays for the Log, stopping it
+  stops automation (rework AR8–AR9). Like the Log, it never starts by
+  itself.
 
 ### 6.2 Selection
 
@@ -336,43 +313,19 @@ played order, simple separation rules (track library spec §12, patents).
 
 ## 8. Screens (desktop)
 
-### 8.1 Main window *(maintainer: option C of the mock-ups)*
-
-- Two new **columns shaped like players** — **Schedule** and **Music**
-  (the filler) — with a player's header (big clock, waveform, buttons) and
-  their list below. They sit left of the auxiliary players and are shown or
-  hidden from the top bar like P1–P4; a station that never automates never
-  sees them. The resizable layout includes them.
-- **Schedule column:** the list is the schedule grouped by block (a header
-  row with the start time), today with the end of yesterday and the start of
-  tomorrow reachable by scrolling *(builder's call how far)*. Next is marked
-  as on a player; missed items are struck through. The column holds the
-  automation's **Start** and **Stop after current**, and a clear running /
-  stopped state.
-- **Music column:** the filler list (AU27–AU28), its own controls (AU29) and
-  the rotation in use.
-- Both columns play on the on-air output, as players do *(my call)*.
-
-### 8.2 Schedule editor
-
-A floating window like the library window, opened from the schedule
-column. It edits rotations, day templates, the week plan and dates (a
-calendar: pick a date to see its computed schedule, change blocks for that
-date only, or give the date another template). Items are added by dragging
-tracks and categories from the library.
+Replaced by the rework spec §6–§8: the **Log** and **Music fill** columns
+are players (header, transport, list, footer); the Log's list is a
+playlist with a Time column and block header rows, edited live as changes
+of its date (AR14–AR19); templates, the week plan and dates are managed in
+Settings → Automation, and a template or a date opens in a popup with the
+same list (AR20–AR22). The floating schedule editor first built here is
+gone.
 
 - **AU37.** A block whose items' total length (cue-in to cue-out) exceeds
-  the time to the next block shows a **visible error** on the block, with by
-  how much *(maintainer)*. It does not prevent saving *(my call)*.
-
-The editor's layout is the builder's call, following the Nocturne design
-system; a mock-up in the Claude Design project before the editor's plan is
-recommended. *(My calls, plan 7: three tabs (Templates, Week plan, Days);
-rotations stay in Settings → Automation, reached by a Rotations… button;
-a category item is added from a combo (dragging a category from the
-library tree comes later); the window's place is not saved; a template's
-last block runs to midnight for AU37, a date's to the next day's first
-block.)*
+  the time to the next block shows a **visible error** on its header, with
+  by how much *(maintainer)*. It does not prevent saving *(my call)*. A
+  template's last block runs to midnight, a date's to the next day's first
+  block.
 
 ## 9. Running for weeks
 

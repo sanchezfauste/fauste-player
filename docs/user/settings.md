@@ -274,7 +274,8 @@ changes](library.md#when-a-file-changes).
 
 ## Automation
 
-The [music fill's](automation.md) rotations and rules (not on Android).
+The [music fill's](automation.md) rotations, the Log's templates and days,
+and the music fill's rules (not on Android).
 
 ![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, and the music fill's rules](../images/guide/settings-automation.png)
 
@@ -287,6 +288,12 @@ The [music fill's](automation.md) rotations and rules (not on Android).
   1–99; at least 0 lets the step sit out some turns), **Up**, **Down** and
   **Remove**. **Add step** adds one at the end. A step
   whose category was deleted says so; the music fill skips it.
+- **Templates and days:** the templates, with **Edit…** (it opens the
+  template as a list and closes Settings), **New template**,
+  **Duplicate**, **Delete** and the name; the **week plan**, a template
+  per weekday; and a month of dates (amber: changed), with the chosen
+  date's template and **Edit day…**. See
+  [Templates and days](automation.md#templates-and-days).
 - **Music fill:** how long before the same track may play again (3 hours,
   or once half of the other tracks of its step have aired, whichever comes
   first; 0 turns either off), the same artist (30 minutes), the
