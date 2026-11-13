@@ -81,7 +81,13 @@ pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut Vie
         .vscroll(true)
         .min_scrolled_height(0.0)
         .auto_shrink([false, false])
-        .sense(Sense::click_and_drag())
+        // On touch a finger drag scrolls the list (mobile spec §6), as in
+        // the playlists; rows are moved with a mouse.
+        .sense(if view_state.touch {
+            Sense::click()
+        } else {
+            Sense::click_and_drag()
+        })
         .cell_layout(Layout::left_to_right(Align::Center))
         .column(Column::exact(TIME_WIDTH))
         .column(Column::remainder().clip(true))
@@ -197,6 +203,7 @@ fn block_row(
         status,
         total_secs,
         overrun_secs,
+        count,
         ..
     } = r
     else {
@@ -206,17 +213,10 @@ fn block_row(
         RowStatus::Missed | RowStatus::Aired => theme::NEUTRAL_500,
         _ => theme::TEXT,
     };
-    let count = scene
-        .state
-        .schedule
-        .day(*date)
-        .into_iter()
-        .find(|b| matches!(r, ScheduleRow::Block { block, .. } if *block == b.id))
-        .map_or(0, |b| b.items.len());
     let mut text = t.tr_args(
         "schedule-block-header",
         &[
-            ("count", (count as f64).into()),
+            ("count", (*count as f64).into()),
             ("length", format::clock(*total_secs).into()),
         ],
     );
@@ -607,7 +607,17 @@ fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState
                 }
             }
             ui.horizontal(|ui| {
-                if ui.button(t.tr("schedule-dialog-ok")).clicked() {
+                let ready = match dialog {
+                    LogDialog::Category { choice, .. } => choice.is_some(),
+                    LogDialog::MusicFill { choice, .. } => choice.is_some(),
+                    LogDialog::AddBlock { time, .. } | LogDialog::MoveBlock { time, .. } => {
+                        fp_model::local_time::TimeOfDay::parse(time).is_some()
+                    }
+                };
+                if ui
+                    .add_enabled(ready, egui::Button::new(t.tr("schedule-dialog-ok")))
+                    .clicked()
+                {
                     done = Some(true);
                 }
                 if ui.button(t.tr("schedule-dialog-cancel")).clicked() {

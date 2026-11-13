@@ -151,6 +151,10 @@ pub(crate) fn apply(
             crate::schedule::change_block_on_date(state, date, b)?;
             vec![block]
         }
+        // Onto itself or the row below it: nothing moves.
+        LogEdit::Move { from, to } if from.0 == to.0 && (to.1 == from.1 || to.1 == from.1 + 1) => {
+            return Ok(());
+        }
         LogEdit::Move { from, to } => {
             check(state, date, from.0, from.1)?;
             check(state, date, to.0, to.1)?;

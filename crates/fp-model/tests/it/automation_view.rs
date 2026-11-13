@@ -382,3 +382,51 @@ fn started_between_blocks_the_music_fill_row_is_on_air() {
     };
     assert_eq!(status, RowStatus::OnAir);
 }
+
+#[test]
+fn a_category_items_track_stays_shown_after_its_block() {
+    use fp_model::schedule::Item;
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)]), (11, 0, vec![song(3)])]);
+    r.apply(Command::CreateCategory {
+        parent: None,
+        name: "Spots".into(),
+        color: None,
+        kind: fp_model::TrackKind::Ad,
+    });
+    let cat = r.s.categories.iter().last().unwrap().id;
+    let mut t = fp_model::Track::new(
+        fp_model::TrackId(901),
+        std::path::PathBuf::from("/m/spot.wav"),
+    );
+    t.duration_secs = 30.0;
+    t.category = Some(cat);
+    t.kind = fp_model::TrackKind::Ad;
+    r.s.library.insert(t);
+    let base = r.s.schedule.templates()[0].id;
+    let mut block =
+        r.s.schedule
+            .template(base)
+            .unwrap()
+            .block(r.block(10, 0))
+            .unwrap()
+            .clone();
+    block.items = vec![Item::Category {
+        category: cat,
+        time_critical: false,
+    }];
+    r.apply(Command::UpdateBlock {
+        template: base,
+        block,
+    });
+    r.at_hms(9, 59, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    r.at_hms(10, 0, 0);
+    let log = r.schedule_player();
+    r.end_current(log);
+    r.at_hms(10, 1, 0);
+    let rows = schedule_view(&r.s);
+    let ScheduleRow::Item { track, .. } = item_row(&rows, r.item(today(), 10, 0, 0)) else {
+        unreachable!()
+    };
+    assert_eq!(track, Some(fp_model::TrackId(901)));
+}

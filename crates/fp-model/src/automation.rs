@@ -88,6 +88,10 @@ pub struct AutomationState {
     /// The rotation item whose music is on air for the Log (runtime only):
     /// its row shows on air while the fill is current (rework AR16).
     pub fill_item: Option<ItemRef>,
+    /// The track chosen for each category item that was loaded (runtime
+    /// only, yesterday on): shown after its block too, and kept when the
+    /// block on air is loaded again after an edit (AR15).
+    pub chosen: HashMap<ItemRef, TrackId>,
 }
 
 /// Creates the schedule's player (stopped, hidden, just before the
@@ -126,6 +130,7 @@ pub fn ensure(state: &mut AppState, playlist_name: &str) -> Vec<EngineAction> {
         paused_fill: false,
         fill_on_air: false,
         fill_item: None,
+        chosen: HashMap::new(),
     });
     vec![EngineAction::AddPlayer { player }]
 }
@@ -282,6 +287,7 @@ pub fn settle_next(state: &mut AppState) {
     a.missed.extend(passed);
     a.missed.retain(|i| i.date >= yesterday);
     a.started.retain(|(d, _)| *d >= yesterday);
+    a.chosen.retain(|i, _| i.date >= yesterday);
 }
 
 /// The row below `item` in the Log (AR9, AR10): the next item of its
@@ -323,11 +329,30 @@ pub fn on_air_item(state: &AppState) -> Option<ItemRef> {
 /// AR19b: the block on air was edited; its rows after `on_air` are loaded
 /// again from the edited block, the row on air kept.
 pub(crate) fn reload_after(state: &mut AppState, on_air: ItemRef, out: &mut Vec<EngineAction>) {
-    let Some(run) = state.automation.as_ref().and_then(|a| a.on_air) else {
+    let Some(before) = state.automation.clone() else {
         return;
     };
+    let Some(run) = before.on_air else {
+        return;
+    };
+    // Loaded by hand: an edit never makes a hard-start item late (AR19b).
     let from = crate::log_edit::after(on_air);
-    let _ = load_block(state, from, run.in_order, out);
+    let _ = load_block(state, from, false, out);
+    if let Some(a) = state.automation.as_mut() {
+        // What the edit did not touch stays: next, a hand-over, a hold,
+        // the marks, and how the block was reached (AU21).
+        a.next = before.next;
+        a.next_by_hand = before.next_by_hand;
+        a.handing_over = before.handing_over;
+        a.filler_held = before.filler_held;
+        a.missed = before.missed;
+        for queued in a.rows.values() {
+            a.missed.remove(queued);
+        }
+        if let Some(r) = a.on_air.as_mut() {
+            r.in_order = run.in_order;
+        }
+    }
 }
 
 /// AR10: automation stopped; next stays on the row below what was on air
@@ -627,6 +652,7 @@ pub fn load_block(
     let mut rotation = None;
     let mut first = None;
     let mut planned = Vec::new();
+    let mut chosen = Vec::new();
     let mut rng = state.rng.clone();
     for (index, item) in items.iter().enumerate().skip(from.index) {
         let item_ref = ItemRef {
@@ -647,14 +673,21 @@ pub fn load_block(
                 break;
             }
             Item::Track { track, .. } => Some(*track).filter(|t| state.library.is_playable(*t)),
-            Item::Category { category, .. } => crate::selection::pick(
-                state,
-                &StepSource::Category(*category),
-                state.wall_now,
-                &planned,
-                &mut rng,
-            )
-            .map(|p| p.track),
+            Item::Category { category, .. } => a
+                .chosen
+                .get(&item_ref)
+                .copied()
+                .filter(|t| state.library.is_playable(*t))
+                .or_else(|| {
+                    crate::selection::pick(
+                        state,
+                        &StepSource::Category(*category),
+                        state.wall_now,
+                        &planned,
+                        &mut rng,
+                    )
+                    .map(|p| p.track)
+                }),
         };
         let Some(track) = track else {
             missed.push(item_ref);
@@ -665,6 +698,9 @@ pub fn load_block(
             list.entries.push(PlaylistEntry::new(entry, track));
         }
         rows.insert(entry, item_ref);
+        if matches!(item, Item::Category { .. }) {
+            chosen.push((item_ref, track));
+        }
         planned.push((track, state.wall_now));
         first.get_or_insert(entry);
     }
@@ -688,6 +724,7 @@ pub fn load_block(
             a.missed.remove(queued);
         }
         a.rows = rows;
+        a.chosen.extend(chosen);
         a.missed.extend(missed);
         a.started.insert((from.date, from.block));
         a.on_air = Some(BlockRun {
@@ -1248,6 +1285,7 @@ pub(crate) fn restore(state: &mut AppState, saved: Option<AutomationSession>) {
         paused_fill: false,
         fill_on_air: false,
         fill_item: None,
+        chosen: HashMap::new(),
     });
 }
 
@@ -1275,6 +1313,8 @@ pub enum ScheduleRow {
         total_secs: f64,
         /// AU37: by how much that overruns the time to the next block.
         overrun_secs: Option<f64>,
+        /// How many items it has.
+        count: usize,
     },
     Item {
         item: ItemRef,
@@ -1359,11 +1399,12 @@ pub fn schedule_view(state: &AppState) -> Vec<ScheduleRow> {
         .flatten()
     });
     // A category item's chosen track, while its block is loaded.
-    let chosen: HashMap<ItemRef, TrackId> = a
-        .rows
-        .iter()
-        .filter_map(|(e, item)| state.playlists.entry(*e).map(|en| (*item, en.track)))
-        .collect();
+    let mut chosen: HashMap<ItemRef, TrackId> = a.chosen.clone();
+    chosen.extend(
+        a.rows
+            .iter()
+            .filter_map(|(e, item)| state.playlists.entry(*e).map(|en| (*item, en.track))),
+    );
     let known = |track: TrackId| {
         state.library.get(track).and_then(|t| {
             let range = t.play_range(state.config.players.use_cue_markers);
@@ -1465,6 +1506,7 @@ pub fn schedule_view(state: &AppState) -> Vec<ScheduleRow> {
             status,
             total_secs,
             overrun_secs,
+            count: block.items.len(),
         });
         out.extend(items);
     }

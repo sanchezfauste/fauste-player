@@ -330,7 +330,11 @@ change through `change_block_on_date` and its siblings. `is_locked`:
 a past date (`PastDate`), a block that already played, or, in the block
 on air, the row on air and those before it (`LogRowLocked`). An edit to
 the block on air calls `automation::reload_after`, which loads the
-block again from the row after the one on air.
+block again from the row after the one on air, by hand (so no hard-start
+item turns late), keeping next, a hand-over or hold, the missed marks and
+how the block was reached. `AutomationState::chosen` keeps the track
+chosen for each loaded category item (yesterday on): reused when the
+block is loaded again and shown after it played.
 
 `schedule_view` gives each item row its planned start (`starts_at`: the
 block's start plus the known lengths before it), the track it plays

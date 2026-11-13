@@ -234,3 +234,77 @@ fn hard_start_toggles_on_one_item() {
         index: 0,
     };
 }
+
+// Review of rework plan 4.
+
+fn status_of(r: &Rig, want: ItemRef) -> fp_model::automation::RowStatus {
+    fp_model::automation::schedule_view(&r.s)
+        .into_iter()
+        .find_map(|row| match row {
+            fp_model::automation::ScheduleRow::Item { item, status, .. } if item == want => {
+                Some(status)
+            }
+            _ => None,
+        })
+        .unwrap()
+}
+
+#[test]
+fn rows_queued_again_after_an_edit_are_not_missed() {
+    let mut r = on_air();
+    let block = r.block(10, 0);
+    edit(
+        &mut r,
+        LogEdit::Insert {
+            block,
+            index: 1,
+            items: vec![song(9)],
+        },
+    )
+    .unwrap();
+    let inserted = ItemRef {
+        date: today(),
+        block,
+        index: 1,
+    };
+    assert_ne!(
+        status_of(&r, inserted),
+        fp_model::automation::RowStatus::Missed
+    );
+    assert!(!r.missed().contains(&inserted));
+}
+
+#[test]
+fn an_edit_late_in_the_block_keeps_its_hard_start_items() {
+    use crate::automation_rig::hourly_id;
+    let mut r = Rig::new(vec![(10, 0, vec![song(1), song(2), hourly_id(3)])]);
+    r.at_hms(9, 59, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    r.at_hms(10, 0, 0);
+    r.at_hms(10, 5, 0);
+    let block = r.block(10, 0);
+    edit(&mut r, LogEdit::Remove { block, index: 1 }).unwrap();
+    let log = r.schedule_player();
+    let next = r
+        .player(log)
+        .next
+        .and_then(|e| r.s.playlists.entry(e))
+        .map(|e| e.track);
+    assert_eq!(next, Some(TrackId(3)));
+}
+
+#[test]
+fn moving_a_row_onto_the_one_below_changes_nothing() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    let block = r.block(10, 0);
+    edit(
+        &mut r,
+        LogEdit::Move {
+            from: (block, 0),
+            to: (block, 1),
+        },
+    )
+    .unwrap();
+    assert_eq!(items(&r, today(), 10).1, BlockOrigin::Template);
+}
