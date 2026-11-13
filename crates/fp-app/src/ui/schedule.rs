@@ -112,6 +112,7 @@ pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>) {
                         length_secs,
                         time_critical,
                         status,
+                        ..
                     } => {
                         let response =
                             item_row(ui, scene, what, *length_secs, *time_critical, *status);

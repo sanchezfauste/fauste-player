@@ -216,6 +216,11 @@ and the Edit button.
   rows look like played rows on a player; missed rows are struck through
   (AU23); a hard-start item shows a small clock icon *(my call; from the
   icon set already in use)*.
+- **AR14b. Mock-ups approved** *(maintainer, 2026-11-13; Claude Design
+  `Automatización v2.html`)*, with: a **Time** column (each row's planned
+  start) on the Log only, not on the Music fill, which also runs on its
+  own without automation and keeps its rotation selector (AU29); no
+  "Today's changes" button: live editing is enough for today.
 - **AR15. Category tracks are visible** *(maintainer: "¿Dónde se ve este
   track?")*. A category track row shows the category until its track is
   chosen, then the chosen track like any track row with the category as a

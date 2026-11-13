@@ -214,3 +214,143 @@ fn during_an_overrun_the_overdue_block_is_next() {
         RowStatus::Next
     );
 }
+
+// Rework plan 4: what the Log's list shows (AR11, AR14–AR16).
+
+fn item_row(rows: &[ScheduleRow], want: fp_model::automation::ItemRef) -> ScheduleRow {
+    rows.iter()
+        .find(|r| matches!(r, ScheduleRow::Item { item, .. } if *item == want))
+        .cloned()
+        .unwrap()
+}
+
+#[test]
+fn rows_carry_their_planned_start() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    let rows = schedule_view(&r.s);
+    let ScheduleRow::Item { starts_at, .. } = item_row(&rows, r.item(today(), 10, 0, 1)) else {
+        unreachable!()
+    };
+    // Song 1 is 180 s long.
+    assert_eq!(starts_at, today().and_hms_opt(10, 3, 0).unwrap());
+}
+
+#[test]
+fn a_loaded_category_item_shows_its_track() {
+    use fp_model::schedule::Item;
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)])]);
+    r.apply(Command::CreateCategory {
+        parent: None,
+        name: "Spots".into(),
+        color: None,
+        kind: fp_model::TrackKind::Ad,
+    });
+    let cat = r.s.categories.iter().last().unwrap().id;
+    let mut t = fp_model::Track::new(
+        fp_model::TrackId(901),
+        std::path::PathBuf::from("/m/spot.wav"),
+    );
+    t.duration_secs = 30.0;
+    t.category = Some(cat);
+    t.kind = fp_model::TrackKind::Ad;
+    r.s.library.insert(t);
+    let base = r.s.schedule.templates()[0].id;
+    let mut block =
+        r.s.schedule
+            .template(base)
+            .unwrap()
+            .block(r.block(10, 0))
+            .unwrap()
+            .clone();
+    block.items = vec![Item::Category {
+        category: cat,
+        time_critical: false,
+    }];
+    r.apply(Command::UpdateBlock {
+        template: base,
+        block,
+    });
+    r.at_hms(9, 59, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    r.at_hms(10, 0, 0);
+    let rows = schedule_view(&r.s);
+    let ScheduleRow::Item { track, .. } = item_row(&rows, r.item(today(), 10, 0, 0)) else {
+        unreachable!()
+    };
+    assert_eq!(track, Some(fp_model::TrackId(901)));
+}
+
+#[test]
+fn the_music_fill_row_is_on_air_between_blocks() {
+    use fp_model::schedule::Item;
+    let mut r = rig();
+    let base = r.s.schedule.templates()[0].id;
+    let default = r.s.rotations.default_id().unwrap();
+    let mut block =
+        r.s.schedule
+            .template(base)
+            .unwrap()
+            .block(r.block(10, 0))
+            .unwrap()
+            .clone();
+    block.items.push(Item::Rotation { rotation: default });
+    r.apply(Command::UpdateBlock {
+        template: base,
+        block,
+    });
+    r.at_hms(9, 59, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    r.at_hms(10, 0, 0);
+    let log = r.schedule_player();
+    r.end_current(log);
+    r.end_current(log);
+    r.at_hms(10, 7, 0);
+    assert!(r.playing(r.filler_player()).is_some());
+    let rows = schedule_view(&r.s);
+    let ScheduleRow::Item { status, .. } = item_row(&rows, r.item(today(), 10, 0, 2)) else {
+        unreachable!()
+    };
+    assert_eq!(status, RowStatus::OnAir);
+}
+
+#[test]
+fn a_late_next_is_marked_late() {
+    let mut r = rig();
+    r.at_hms(10, 30, 0);
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 0)));
+    let rows = schedule_view(&r.s);
+    let ScheduleRow::Item { late, .. } = item_row(&rows, r.item(today(), 10, 0, 0)) else {
+        unreachable!()
+    };
+    assert!(late);
+    let ScheduleRow::Item { late, .. } = item_row(&rows, r.item(today(), 12, 0, 0)) else {
+        unreachable!()
+    };
+    assert!(!late);
+}
+
+#[test]
+fn a_block_header_carries_its_total_and_overrun() {
+    let mut r = Rig::new(vec![
+        (10, 0, vec![song(1), song(2)]),
+        (10, 5, vec![song(3)]),
+    ]);
+    r.at_hms(9, 0, 0);
+    let rows = schedule_view(&r.s);
+    let header = rows
+        .iter()
+        .find_map(|row| match row {
+            ScheduleRow::Block {
+                start,
+                total_secs,
+                overrun_secs,
+                ..
+            } if chrono::Timelike::minute(start) == 0 && chrono::Timelike::hour(start) == 10 => {
+                Some((*total_secs, *overrun_secs))
+            }
+            _ => None,
+        })
+        .unwrap();
+    assert_eq!(header, (360.0, Some(60.0)));
+}
