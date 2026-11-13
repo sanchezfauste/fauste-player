@@ -90,7 +90,8 @@ fn row_secs(state: &AppState, entry: EntryId) -> f64 {
 }
 
 /// Where the filler's list stands: the rows before `anchor` are history,
-/// the rows from `anchor` on are ahead.
+/// the rows from `anchor` on are ahead. Next wins over the row on air
+/// (AR13): the rows between them will not play.
 fn anchor(state: &AppState, f: &FillerState) -> usize {
     let Some(list) = state.playlists.get(f.playlist) else {
         return 0;
@@ -98,11 +99,11 @@ fn anchor(state: &AppState, f: &FillerState) -> usize {
     let Some(player) = state.players.iter().find(|p| p.id == f.player) else {
         return list.entries.len();
     };
-    if let Some(i) = player.current.and_then(|c| list.position(c)) {
-        return i + 1;
+    if let Some(i) = player.next.and_then(|n| list.position(n)) {
+        return i;
     }
-    match player.next.and_then(|n| list.position(n)) {
-        Some(i) => i,
+    match player.current.and_then(|c| list.position(c)) {
+        Some(i) => i + 1,
         None => list.entries.len(),
     }
 }
@@ -415,18 +416,19 @@ fn top_up(state: &mut AppState) {
         added.push(entry);
     }
     state.rng = rng;
+    // AR13: whether stopped or with its last row on air, a filler with no
+    // next takes the first new row.
     let player_next_empty = state
         .players
         .iter()
         .find(|p| p.id == f.player)
-        .is_some_and(|p| p.current.is_none() && p.next.is_none());
+        .is_some_and(|p| p.next.is_none());
     if let Some(filler) = state.filler.as_mut() {
         filler.cursor = cursor;
         filler.generated.extend(added.iter().copied());
         filler.starved = starved && ahead.is_empty() && added.is_empty();
         filler.unfitted += unfitted;
     }
-    // A stopped filler whose list ran out starts again at the first new row.
     if player_next_empty
         && let Some(first) = added.first().copied()
         && let Some(p) = state.players.iter_mut().find(|p| p.id == f.player)
