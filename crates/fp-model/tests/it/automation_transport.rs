@@ -320,3 +320,99 @@ fn pausing_the_filler_during_music_stops_automation_and_the_log_resumes_it() {
     assert!(running(&r));
     assert_eq!(r.player(f).transport, fp_model::Transport::Playing);
 }
+
+// Task 5: AR6b, SINGLE on the Log.
+
+fn single(r: &mut Rig) {
+    let log = r.schedule_player();
+    r.apply(Command::SetMode(log, fp_model::PlayMode::Single));
+}
+
+#[test]
+fn single_plays_one_item_and_stops() {
+    let mut r = two_blocks();
+    single(&mut r);
+    r.at_hms(9, 30, 0);
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 0)));
+    let log = r.schedule_player();
+    r.apply(Command::Play(log));
+    assert_eq!(r.playing(log), Some(TrackId(1)));
+    r.end_current(log);
+    r.at_hms(9, 33, 0);
+    assert!(!running(&r));
+    assert_eq!(r.playing(log), None);
+    assert_eq!(r.playing(r.filler_player()), None);
+    assert_eq!(next(&r), Some(r.item(today(), 10, 0, 1)));
+}
+
+#[test]
+fn single_never_starts_a_block_by_itself() {
+    let mut r = two_blocks();
+    single(&mut r);
+    r.at_hms(10, 58, 0);
+    let log = r.schedule_player();
+    r.apply(Command::Play(log));
+    assert_eq!(r.playing(log), Some(TrackId(3)), "next plays at once");
+    r.end_current(log);
+    r.at_hms(11, 5, 0);
+    assert!(!running(&r));
+    assert_eq!(r.playing(r.filler_player()), None);
+}
+
+#[test]
+fn single_play_on_a_music_fill_row_starts_the_filler_only() {
+    use crate::automation_rig::song;
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)]), (11, 0, vec![song(3)])]);
+    let default = r.s.rotations.default_id().unwrap();
+    let base = r.s.schedule.templates()[0].id;
+    let mut block =
+        r.s.schedule
+            .template(base)
+            .unwrap()
+            .block(r.block(10, 0))
+            .unwrap()
+            .clone();
+    block
+        .items
+        .push(fp_model::schedule::Item::Rotation { rotation: default });
+    r.apply(Command::UpdateBlock {
+        template: base,
+        block,
+    });
+    single(&mut r);
+    r.at_hms(10, 10, 0);
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 1)));
+    r.apply(Command::Play(r.schedule_player()));
+    assert!(r.playing(r.filler_player()).is_some());
+    assert!(!running(&r));
+    r.at_hms(11, 0, 0);
+    assert_eq!(r.playing(r.schedule_player()), None);
+}
+
+#[test]
+fn the_log_mode_survives_a_restart() {
+    let mut r = two_blocks();
+    single(&mut r);
+    let s = &r.s;
+    let parts = fp_model::RestoreParts {
+        rotations: s.rotations.clone(),
+        air_times: Default::default(),
+        filler: s.filler_session(|_| 0.0),
+        automation: s.automation_session(|_| 0.0),
+        schedule: s.schedule.clone(),
+        library_view: Default::default(),
+        config: s.config.clone(),
+        library: s.library.clone(),
+        categories: s.categories.clone(),
+        playlists: s.playlists.clone(),
+        cart_pages: s.cartwall.pages.clone(),
+        cartwall_session: s.cartwall.session(),
+        layout: s.layout.clone(),
+        ids: s.ids.clone(),
+    };
+    let (back, _) = fp_model::AppState::restore(parts, &s.sessions(|_| 0.0), "Main");
+    let log = back.automation.as_ref().unwrap().player;
+    let mode = back.players.iter().find(|p| p.id == log).unwrap().mode;
+    assert_eq!(mode, fp_model::PlayMode::Single);
+    assert!(!back.automation.as_ref().unwrap().running);
+}

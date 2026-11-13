@@ -361,6 +361,8 @@ pub(crate) fn log_play(
         if let Some(f) = filler {
             crate::reducer::play(state, f, out)?;
         }
+    } else if log_is_single(state) {
+        return single_play(state, out);
     } else {
         return start(state, out);
     }
@@ -369,6 +371,40 @@ pub(crate) fn log_play(
         a.paused_fill = false;
     }
     Ok(())
+}
+
+/// AR6b: the Log in SINGLE mode is manual.
+fn log_is_single(state: &AppState) -> bool {
+    state
+        .automation
+        .as_ref()
+        .and_then(|a| player_index(state, a.player))
+        .and_then(|i| state.players.get(i))
+        .is_some_and(|p| p.mode == PlayMode::Single)
+}
+
+/// AR6b: Play on a Log in SINGLE plays next at once; a music fill row
+/// starts the filler with its rotation and automation stays stopped.
+fn single_play(state: &mut AppState, out: &mut Vec<EngineAction>) -> Result<(), ModelError> {
+    let Some(next) = state.automation.as_ref().and_then(|a| a.next) else {
+        return Ok(());
+    };
+    let item = block_items(state, next.date, next.block).and_then(|i| i.get(next.index).cloned());
+    if let Some(Item::Rotation { rotation }) = item {
+        crate::filler::set_rotation(state, Some(rotation), out)?;
+        crate::filler::settle(state, out);
+        play_filler(state, out);
+        let below = row_below(state, next);
+        if let Some(a) = state.automation.as_mut() {
+            a.next = below.or(a.next);
+            a.next_by_hand = a.next.is_some();
+        }
+        return Ok(());
+    }
+    if let Some(a) = state.automation.as_mut() {
+        a.next_by_hand = true;
+    }
+    start(state, out)
 }
 
 /// AR5: Pause on the Log pauses what is on air for it and stops
@@ -823,7 +859,7 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
     {
         if !a.running && !a.next_by_hand {
             pin_next_after_stop(state);
-        } else if a.running && a.stop_at_end {
+        } else if a.running && (a.stop_at_end || log_is_single(state)) {
             halt(state);
         }
         let rows: HashSet<EntryId> = state
@@ -1121,7 +1157,6 @@ pub(crate) fn restore(state: &mut AppState, saved: Option<AutomationSession>) {
     list.entries.clear();
     let mut player = crate::session::restore_player(state, &saved.player);
     player.playlist = saved.playlist;
-    player.mode = PlayMode::Continuous;
     player.current = None;
     player.next = None;
     player.pending_start = None;

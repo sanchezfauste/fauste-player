@@ -206,8 +206,9 @@ impl Rig {
     pub fn end_current(&mut self, player: PlayerId) {
         let p = self.player(player).clone();
         let Some(current) = p.current else { return };
+        let continuous = p.mode == fp_model::PlayMode::Continuous;
         let event = match (p.next, p.stop_after_current) {
-            (Some(next), false) => EngineEvent::TransitionStarted {
+            (Some(next), false) if continuous => EngineEvent::TransitionStarted {
                 player,
                 entry: next,
                 normalization: fp_model::Normalization::default(),
