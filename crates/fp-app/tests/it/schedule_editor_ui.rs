@@ -39,7 +39,7 @@ fn with_schedule() -> (AppState, TemplateId, TemplateId) {
 }
 
 fn open(h: &mut egui_kittest::Harness<'_, fp_app::ui::app::AppUi>) {
-    h.get_by_label("Edit schedule").click();
+    h.get_by_label("Edit log").click();
     // The window settles its size over a few frames.
     h.run_steps(6);
 }
@@ -48,9 +48,9 @@ fn open(h: &mut egui_kittest::Harness<'_, fp_app::ui::app::AppUi>) {
 fn the_edit_button_opens_the_editor() {
     let (s, _, _) = with_schedule();
     let (mut h, _fake) = harness(s);
-    assert!(h.query_by_label("Schedule editor").is_none());
+    assert!(h.query_by_label("Log editor").is_none());
     open(&mut h);
-    assert!(h.query_by_label("Schedule editor").is_some());
+    assert!(h.query_by_label("Log editor").is_some());
 }
 
 #[test]
@@ -316,7 +316,7 @@ mod adding {
         let spots = s.categories.iter().find(|c| c.name == "Spots").unwrap().id;
         let (mut h, fake) = harness(s);
         open(&mut h);
-        h.get_by_label("Add from category").click();
+        h.get_by_label("Add category track").click();
         h.run_steps(2);
         h.get_by_label("Spots").click();
         h.run_steps(2);
@@ -338,7 +338,7 @@ mod adding {
         let music: RotationId = s.rotations.default_id().unwrap();
         let (mut h, fake) = harness(s.clone());
         open(&mut h);
-        h.get_by_label("Music after").click();
+        h.get_by_label("Then music fill").click();
         h.run_steps(2);
         h.get_all_by_label("Music").last().unwrap().click();
         h.run_steps(2);
@@ -363,7 +363,7 @@ mod adding {
         .unwrap();
         let (mut h, fake) = harness(s);
         open(&mut h);
-        h.get_by_label("Music after").click();
+        h.get_by_label("Then music fill").click();
         h.run_steps(2);
         h.get_by_label("Default rotation").click();
         h.run_steps(2);
@@ -486,7 +486,7 @@ mod layout {
         let music = s.rotations.default_id().unwrap();
         let (mut h, fake) = harness(s);
         open(&mut h);
-        h.get_all_by_label("Music after").nth(1).unwrap().click();
+        h.get_all_by_label("Then music fill").nth(1).unwrap().click();
         h.run_steps(2);
         h.get_all_by_label("Music").last().unwrap().click();
         h.run_steps(2);
@@ -515,7 +515,7 @@ mod layout {
         s.library.get_mut(fp_model::TrackId(9000)).unwrap().title = LONG.into();
         let (mut h, _fake) = harness(s);
         open(&mut h);
-        let check = h.get_by_label("Time-critical").rect();
+        let check = h.get_by_label("Hard start").rect();
         // The editor's row (the Schedule column lists the title too).
         let title = h
             .query_all_by_value(LONG)
