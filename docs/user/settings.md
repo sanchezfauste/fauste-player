@@ -277,7 +277,7 @@ changes](library.md#when-a-file-changes).
 The [music fill's](automation.md) rotations, the Log's templates and days,
 and the music fill's rules (not on Android).
 
-![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, and the music fill's rules](../images/guide/settings-automation.png)
+![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, and the start of Templates and days](../images/guide/settings-automation.png)
 
 - **Rotations:** the list, the default marked. **New rotation** adds one
   that plays all music, **Make default** makes the selected one the

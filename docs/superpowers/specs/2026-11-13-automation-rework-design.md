@@ -265,14 +265,15 @@ and the Edit button.
   Log: the rotations (as today), the **templates** list (new, duplicate,
   rename, delete), the **week plan** (a template per weekday), and the
   **dates** with changes or another template (a calendar, as today's
-  Days tab). The floating schedule editor window and the column's
-  "Edit…" button are removed.
+  Days tab), where a date can use another template. The floating schedule
+  editor window and the Log column's "Edit log" button are removed.
 - **AR21.** Selecting a template, or a date, opens a **popup window that
   is the same playlist editor as the Log column** (§6, AR14–AR19): block
-  headers, items, the Add menu, drag from the library or the file system,
-  reorder, remove. For a date it edits that date's changes, shows changed
-  blocks as "changed for this day" with "Back to the template" in the row
-  menu, and lets the date use another template. Settings is a modal
+  headers, items, the Add menu, drag from the library (files from the
+  system later, as on the Log, AR17), reorder, remove. For a date it edits
+  that date's changes and shows changed blocks as "changed for this day"
+  with "Back to the template" in the block header's menu; the date's
+  template is chosen in Settings (AR20). Settings is a modal
   dialog, so opening the popup **closes Settings** and the popup is a
   non-modal floating window like the library, which can stay open while
   tracks are dragged into it; closing it leaves the operator where they
@@ -280,6 +281,11 @@ and the Edit button.
 - **AR22.** The popup and the Log column share the list code *(builder's
   call how)*; anything that works in one works in the other, except
   playing (the popup does not play; its rows have no next).
+- **AR22b.** A template edit to a block that is on air today, while today
+  follows the template for that block, first keeps that block as it was
+  loaded as a change of today (AU12); the template's change reaches it
+  from the next day. So the Log's rows always match what plays
+  *(my call, from the final review of plan 5)*.
 
 ## 8. Look and feel
 

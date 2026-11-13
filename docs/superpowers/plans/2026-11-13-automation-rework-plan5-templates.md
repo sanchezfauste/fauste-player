@@ -19,7 +19,7 @@
 
 ## Review Focus
 
-- A template edited while its block is on air today: the on-air block is a date's computed block; a template change reaches it only if the date has no change for that block (AU12) — the reload rule (AR19b) must not fire for template edits.
+- A template edited while its block is on air today: the on-air block is a date's computed block; a template change reaches it only if the date has no change for that block (AU12) — the reload rule (AR19b) must not fire for template edits. *(Executed: AR22b, today keeps the block on air as loaded, as a date change.)*
 - Deleting the template the popup shows closes the popup.
 - The popup and Settings never both open (Settings is modal).
 - Rotations still edited in Settings as today.

@@ -172,7 +172,7 @@ installation has one, **Music**, which plays all your music.
 
 Rotations are made in Settings → Automation:
 
-![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, its counts At least and At most, and the music fill's rules](../images/guide/settings-automation.png)
+![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, its counts At least and At most, and the start of Templates and days](../images/guide/settings-automation.png)
 
 ## How it chooses
 
