@@ -232,9 +232,10 @@ and the Edit button.
   it is current it is shown as on air (the filler plays for it), and the
   filler column's header shows the song.
 - **AR17. Live editing** *(maintainer)*. The Log's list is edited like a
-  playlist: drag tracks from the library (or files from the system, as
-  playlists accept them), reorder by drag, remove, and an **Add** menu with
-  *Track…*, *Category track…*, *Music fill…*, *Block…*. The row menu also
+  playlist: drag tracks from the library (files dropped from the system
+  are a later step: plan 4 left them out), reorder by drag, remove, and an
+  **Add** menu with *Track…*, *Category track…*, *Music fill
+  (rotation)…*, *Block…*. The row menu also
   has the item's *Hard start* toggle and, on a block header, *Change
   time…* and *Remove block*. Every edit is saved at once as **date
   changes** of the date the row belongs to (AU11–AU12; the template is not
@@ -248,9 +249,10 @@ and the Edit button.
   (yesterday), the row on air (as on a player), and rows already played.
   A Music fill item stays the last item of its block (the automation
   spec's model rule); adding one where another exists replaces it.
-- **AR19b. Where a drop or an added row goes** *(my calls)*. Into the
-  block of the row it lands after, before that block's Music fill row if
-  it has one; a drop above the first block header is refused. Editing the
+- **AR19b. Where a drop or an added row goes** *(my calls; plan 4
+  ruling)*. Before the row it lands on, in that row's block (on a block
+  header: at the block's start), never after a Music fill row; Add puts
+  its item at the end of next's block (before its Music fill row). Editing the
   upcoming rows of the block on air takes effect at once (the Log
   player's queue is reloaded after the row on air). A live edit stores
   the whole block as changed for that date (AU12, unchanged): later

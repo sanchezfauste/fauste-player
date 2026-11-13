@@ -360,12 +360,15 @@ sends the plan 3 commands only.
 (§8.1): yesterday's last block, today's blocks and tomorrow's first, in
 time order, widened to keep a block on air from yesterday (an overrun past
 midnight) and the next item's block, with every block between. Each is a
-`ScheduleRow::Block` (date, start, `BlockOrigin`, status) followed by its
-`ScheduleRow::Item`s (`ItemRef`, the item, a track's length when known,
-hard-start, status). The next shown is `AutomationState::next`, except
+`ScheduleRow::Block` (date, start, `BlockOrigin`, status, `total_secs`,
+`overrun_secs`, `count`) followed by its `ScheduleRow::Item`s (`ItemRef`,
+the item, its length when known, hard-start, status, `starts_at`, `track`,
+`late`; see "Editing the Log live"). The next shown is `AutomationState::next`, except
 while a block plays in order: then the block that came due meanwhile
 (`overdue_after`), which is what will play (AU21). A `RowStatus` is
-`OnAir` for the item of the schedule player's current row, `Next`, then
+`OnAir` for the item of the schedule player's current row (or the music
+fill row, `fill_item` or the last started block's rotation item, while
+`fill_is_current`), `Next`, then
 `Missed` when in `missed`, `Aired` for the items before the one on air and
 for a started block no longer on air, else `Coming`. A block is `OnAir`,
 `Next` (next is in it), `Missed` (all its items), `Aired` (started) or

@@ -91,3 +91,9 @@ Columns: Time (`HH:MM:SS`, amber when `late`), Title (hard-start clock icon, the
 ### Task 5: Docs
 
 `docs/user/automation.md` (the Log column section: the list, editing live), `docs/technical/automation.md` (`log_edit.rs`, the new row fields), `docs/technical/ui.md` (`schedule.rs`), the rework spec's AR14 wording if the table reuse differs. **Commit** `docs: the log's list and live editing`.
+
+## Executed as (rulings)
+
+- Strings: `tip-schedule-add` (with `footer-add`), `schedule-add-track`, `schedule-add-category-track`, `schedule-add-music-fill`, `schedule-add-block`, `schedule-block-header`, `schedule-category`, `schedule-dialog-ok`, `schedule-dialog-cancel`, `schedule-next-block`, `schedule-row-remove`, `schedule-block-move`, `schedule-time`, `schedule-until`, `schedule-late`, `error-log-row-locked`, `error-log-past-date`; the block time reuses `schedule-block-start`, removal `schedule-block-remove`, revert `schedule-date-revert`.
+- Add puts items at the end of next's block (the Log has no selection yet).
+- Files dropped from the system onto the Log are left for later.

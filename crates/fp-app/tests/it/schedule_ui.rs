@@ -348,7 +348,7 @@ fn add_music_fill_sends_insert() {
     let (mut h, fake) = harness(s);
     h.get_by_label("Add to the log").click();
     h.run();
-    h.get_by_label("Music fill…").click();
+    h.get_by_label("Music fill (rotation)…").click();
     h.run();
     h.get_by_label("OK").click();
     h.run();
