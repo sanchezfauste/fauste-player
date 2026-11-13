@@ -157,7 +157,7 @@ fn playlist_area(
             .layout(Layout::top_down(Align::Min)),
     );
     if scene.state.is_schedule(id) {
-        super::schedule::schedule_list(&mut table_ui, scene);
+        super::schedule::schedule_list(&mut table_ui, scene, view_state);
     } else {
         table::track_table(&mut table_ui, scene, view_state, id, playlist);
     }
@@ -167,7 +167,11 @@ fn playlist_area(
             .max_rect(footer_rect)
             .layout(Layout::left_to_right(Align::Center)),
     );
-    footer(&mut footer_ui, scene, view_state, id, playlist);
+    if scene.state.is_schedule(id) {
+        super::schedule::log_footer(&mut footer_ui, scene, view_state);
+    } else {
+        footer(&mut footer_ui, scene, view_state, id, playlist);
+    }
 }
 
 /// The phone's Playlists screen for one player (phone layout spec PL8,

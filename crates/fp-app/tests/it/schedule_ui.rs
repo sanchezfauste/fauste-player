@@ -311,3 +311,82 @@ fn a_late_next_says_so() {
     let (h, _fake) = harness(s);
     assert!(h.query_by_label_contains("its time has passed").is_some());
 }
+
+// Rework plan 4, Task 4: editing the Log from its list.
+
+fn edits(sent: &[Command]) -> Vec<fp_model::log_edit::LogEdit> {
+    sent.iter()
+        .filter_map(|c| match c {
+            Command::EditLog { edit, .. } => Some(edit.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn add_block_sends_add_block_with_a_free_time() {
+    let (s, _) = with_block();
+    let (mut h, fake) = harness(s);
+    h.get_by_label("Add to the log").click();
+    h.run();
+    h.get_by_label("Block…").click();
+    h.run();
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::AddBlock {
+            start: fp_model::local_time::TimeOfDay::hms(11, 0, 0).unwrap()
+        }]
+    );
+}
+
+#[test]
+fn add_music_fill_sends_insert() {
+    let (s, item) = with_block();
+    let rotation = s.rotations.default_id().unwrap();
+    let (mut h, fake) = harness(s);
+    h.get_by_label("Add to the log").click();
+    h.run();
+    h.get_by_label("Music fill…").click();
+    h.run();
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Insert {
+            block: item.block,
+            index: usize::MAX,
+            items: vec![fp_model::schedule::Item::Rotation { rotation }],
+        }]
+    );
+}
+
+#[test]
+fn remove_sends_remove() {
+    let (s, item) = with_block();
+    let (mut h, fake) = harness(s);
+    // Today's row (yesterday's and tomorrow's show the same title).
+    let rows: Vec<_> = h.query_all_by_label_contains("Top of the Hour").collect();
+    rows[1].click_secondary();
+    h.run();
+    h.get_by_label("Remove from today's log").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Remove {
+            block: item.block,
+            index: 0
+        }]
+    );
+}
+
+#[test]
+fn a_past_row_has_no_remove() {
+    let (s, _) = with_block();
+    let (mut h, _fake) = harness(s);
+    let rows: Vec<_> = h.query_all_by_label_contains("Top of the Hour").collect();
+    rows[0].click_secondary();
+    h.run();
+    assert!(h.query_by_label("Remove from today's log").is_none());
+}

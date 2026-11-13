@@ -68,6 +68,12 @@ fn locked(state: &AppState, date: NaiveDate, block: BlockId) -> Option<usize> {
     a.started.contains(&(date, block)).then_some(usize::MAX)
 }
 
+/// Whether a row (or, for `index` 0, a block) of `date`'s Log is locked
+/// against live edits (AR19).
+pub fn is_locked(state: &AppState, date: NaiveDate, block: BlockId, index: usize) -> bool {
+    date < state.local_now.date() || check(state, date, block, index).is_err()
+}
+
 fn check(
     state: &AppState,
     date: NaiveDate,

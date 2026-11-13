@@ -7,10 +7,11 @@ use fp_model::Command;
 use fp_model::automation::{ItemRef, RowStatus, ScheduleRow, schedule_view};
 use fp_model::schedule::{BlockOrigin, Item};
 
-use super::app::{Scene, ViewState};
+use super::app::{DragTracks, Scene, ViewState};
 use super::format;
 use super::theme;
 use super::widgets::{font, font_semibold};
+use fp_model::log_edit::LogEdit;
 
 /// The Log's strip where a player has its playlist tabs (`height` tall):
 /// Edit log. Its transport is the player header's (rework AR3).
@@ -40,7 +41,7 @@ pub(crate) fn schedule_bar(
 /// The Log's list (rework AR14): the playlists' table look, a Time
 /// column, block header rows, then each block's items; on air and next as
 /// on a player, missed struck through (AU23), a late next in amber (AR11).
-pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>) {
+pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
     use egui_extras::{Column, TableBuilder};
     let t = scene.i18n;
     let state = scene.state;
@@ -80,7 +81,7 @@ pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>) {
         .vscroll(true)
         .min_scrolled_height(0.0)
         .auto_shrink([false, false])
-        .sense(Sense::click())
+        .sense(Sense::click_and_drag())
         .cell_layout(Layout::left_to_right(Align::Center))
         .column(Column::exact(TIME_WIDTH))
         .column(Column::remainder().clip(true))
@@ -110,10 +111,37 @@ pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>) {
                     return;
                 };
                 match r {
-                    ScheduleRow::Block { .. } => block_row(&mut row, scene, r, today),
+                    ScheduleRow::Block {
+                        date,
+                        block,
+                        start,
+                        origin,
+                        ..
+                    } => {
+                        block_row(&mut row, scene, r, today);
+                        let response = row.response();
+                        block_actions(scene, view_state, &response, *date, *block, *start, *origin);
+                        drop_tracks(scene, &response, *date, *block, 0);
+                    }
                     ScheduleRow::Item { item, .. } => {
                         item_row(&mut row, scene, r);
-                        next_actions(scene, &row.response(), *item);
+                        let response = row.response();
+                        next_actions(scene, &response, *item);
+                        if response.drag_started()
+                            && !fp_model::log_edit::is_locked(
+                                scene.state,
+                                item.date,
+                                item.block,
+                                item.index,
+                            )
+                        {
+                            response.dnd_set_drag_payload(DragLogItem {
+                                date: item.date,
+                                block: item.block,
+                                index: item.index,
+                            });
+                        }
+                        drop_tracks(scene, &response, item.date, item.block, item.index);
                     }
                 }
             });
@@ -256,7 +284,387 @@ fn next_actions(scene: &Scene<'_>, response: &egui::Response, item: ItemRef) {
             scene.ctl.send(Command::ClearScheduleNext);
             ui.close();
         }
+        // AR17, AR19: live edits, unless the row is locked.
+        if fp_model::log_edit::is_locked(scene.state, item.date, item.block, item.index) {
+            return;
+        }
+        let what = fp_model::automation::block_items(scene.state, item.date, item.block)
+            .and_then(|items| items.get(item.index).cloned());
+        ui.separator();
+        if let Some(Item::Track { time_critical, .. } | Item::Category { time_critical, .. }) = what
+        {
+            let mut on = time_critical;
+            if ui
+                .checkbox(&mut on, t.tr("schedule-item-time-critical-check"))
+                .clicked()
+            {
+                send_edit(
+                    scene,
+                    item.date,
+                    LogEdit::SetHardStart {
+                        block: item.block,
+                        index: item.index,
+                        on,
+                    },
+                );
+                ui.close();
+            }
+        }
+        if ui.button(t.tr("schedule-row-remove")).clicked() {
+            send_edit(
+                scene,
+                item.date,
+                LogEdit::Remove {
+                    block: item.block,
+                    index: item.index,
+                },
+            );
+            ui.close();
+        }
     });
+}
+
+fn send_edit(scene: &Scene<'_>, date: chrono::NaiveDate, edit: LogEdit) {
+    scene.ctl.send(Command::EditLog { date, edit });
+}
+
+/// A block header's menu: Change time…, Remove block, Back to the
+/// template (AR17), unless the block is locked.
+fn block_actions(
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    response: &egui::Response,
+    date: chrono::NaiveDate,
+    block: fp_model::BlockId,
+    start: chrono::NaiveDateTime,
+    origin: BlockOrigin,
+) {
+    let t = scene.i18n;
+    if fp_model::log_edit::is_locked(scene.state, date, block, 0) {
+        return;
+    }
+    response.context_menu(|ui| {
+        if ui.button(t.tr("schedule-block-move")).clicked() {
+            view_state.log_dialog = Some(LogDialog::MoveBlock {
+                date,
+                block,
+                time: start.format("%H:%M:%S").to_string(),
+            });
+            ui.close();
+        }
+        if ui.button(t.tr("schedule-block-remove")).clicked() {
+            send_edit(scene, date, LogEdit::RemoveBlock { block });
+            ui.close();
+        }
+        if origin != BlockOrigin::Template && ui.button(t.tr("schedule-date-revert")).clicked() {
+            send_edit(scene, date, LogEdit::Revert { block });
+            ui.close();
+        }
+    });
+}
+
+/// Library tracks dropped on a row go before it, into its block (AR17,
+/// AR19b); a header takes them at the block's start.
+fn drop_tracks(
+    scene: &Scene<'_>,
+    response: &egui::Response,
+    date: chrono::NaiveDate,
+    block: fp_model::BlockId,
+    index: usize,
+) {
+    if fp_model::log_edit::is_locked(scene.state, date, block, index) {
+        return;
+    }
+    if response.dnd_hover_payload::<DragTracks>().is_some()
+        || response.dnd_hover_payload::<DragLogItem>().is_some()
+    {
+        let r = response.rect;
+        response
+            .ctx
+            .layer_painter(egui::LayerId::new(egui::Order::Foreground, response.id))
+            .hline(r.x_range(), r.top(), egui::Stroke::new(2.0, theme::ACCENT));
+    }
+    // A Log row dragged here moves before this row (same date).
+    if let Some(from) = response.dnd_release_payload::<DragLogItem>()
+        && from.date == date
+        && (from.block, from.index) != (block, index)
+    {
+        send_edit(
+            scene,
+            date,
+            LogEdit::Move {
+                from: (from.block, from.index),
+                to: (block, index),
+            },
+        );
+    }
+    if let Some(payload) = response.dnd_release_payload::<DragTracks>() {
+        let items = payload
+            .tracks
+            .iter()
+            .map(|track| Item::Track {
+                track: *track,
+                time_critical: false,
+            })
+            .collect();
+        send_edit(
+            scene,
+            date,
+            LogEdit::Insert {
+                block,
+                index,
+                items,
+            },
+        );
+    }
+}
+
+/// A Log row being dragged (AR17).
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct DragLogItem {
+    date: chrono::NaiveDate,
+    block: fp_model::BlockId,
+    index: usize,
+}
+
+/// The Log's open dialog (AR17).
+#[derive(Debug, Clone, PartialEq)]
+pub(crate) enum LogDialog {
+    Category {
+        date: chrono::NaiveDate,
+        block: fp_model::BlockId,
+        choice: Option<fp_model::CategoryId>,
+    },
+    MusicFill {
+        date: chrono::NaiveDate,
+        block: fp_model::BlockId,
+        choice: Option<fp_model::RotationId>,
+    },
+    AddBlock {
+        date: chrono::NaiveDate,
+        time: String,
+    },
+    MoveBlock {
+        date: chrono::NaiveDate,
+        block: fp_model::BlockId,
+        time: String,
+    },
+}
+
+/// Where Add puts items: the block of next when it is today or later,
+/// else today's first block still to come, else today's last block.
+fn add_target(scene: &Scene<'_>) -> Option<(chrono::NaiveDate, fp_model::BlockId)> {
+    let state = scene.state;
+    let today = state.local_now.date();
+    if let Some(next) = state.automation.as_ref().and_then(|a| a.next)
+        && next.date >= today
+    {
+        return Some((next.date, next.block));
+    }
+    let day = state.schedule.day(today);
+    let now = fp_model::local_time::TimeOfDay::new(chrono::Timelike::num_seconds_from_midnight(
+        &state.local_now.time(),
+    ));
+    day.iter()
+        .find(|b| now.is_some_and(|n| b.start >= n))
+        .or(day.last())
+        .map(|b| (today, b.id))
+}
+
+/// The Log's footer (AR17): Add, with its menu, and when the next block
+/// starts.
+pub(crate) fn log_footer(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+    let t = scene.i18n;
+    let rect = ui.max_rect();
+    ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
+    ui.painter().rect_filled(
+        egui::Rect::from_min_size(rect.left_top(), vec2(rect.width(), 1.0)),
+        0.0,
+        theme::NEUTRAL_800,
+    );
+    ui.add_space(10.0);
+    ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
+    let today = scene.state.local_now.date();
+    let target = add_target(scene);
+    let add = ui
+        .add(egui::Button::new(
+            RichText::new(format!("{} {}", icon::PLUS, t.tr("footer-add"))).font(font(10.0)),
+        ))
+        .on_hover_text(t.tr("tip-schedule-add"));
+    add.widget_info(|| {
+        egui::WidgetInfo::labeled(egui::Role::Button, true, t.tr("tip-schedule-add"))
+    });
+    egui::Popup::menu(&add).show(|ui| {
+        if ui.button(t.tr("schedule-add-track")).clicked() {
+            let mut view = scene.state.library_view.clone();
+            view.open = true;
+            scene.ctl.send(Command::SetLibraryView(Box::new(view)));
+            ui.close();
+        }
+        if let Some((date, block)) = target {
+            if ui.button(t.tr("schedule-add-category-track")).clicked() {
+                let choice = scene.state.categories.iter().next().map(|c| c.id);
+                view_state.log_dialog = Some(LogDialog::Category {
+                    date,
+                    block,
+                    choice,
+                });
+                ui.close();
+            }
+            if ui.button(t.tr("schedule-add-music-fill")).clicked() {
+                let choice = scene.state.rotations.default_id();
+                view_state.log_dialog = Some(LogDialog::MusicFill {
+                    date,
+                    block,
+                    choice,
+                });
+                ui.close();
+            }
+        }
+        ui.separator();
+        if ui.button(t.tr("schedule-add-block")).clicked() {
+            let starts = scene.state.schedule.day(today).into_iter().map(|b| b.start);
+            let time = fp_model::schedule::free_start(starts)
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            view_state.log_dialog = Some(LogDialog::AddBlock { date: today, time });
+            ui.close();
+        }
+    });
+    if let Some(start) = fp_model::automation::coming_start(scene.state) {
+        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+            ui.add_space(10.0);
+            ui.label(
+                RichText::new(t.tr_args(
+                    "schedule-next-block",
+                    &[("time", start.format("%H:%M").to_string().into())],
+                ))
+                .font(font(11.0))
+                .color(theme::NEUTRAL_400),
+            );
+        });
+    }
+    log_dialog(ui.ctx(), scene, view_state);
+}
+
+/// The open dialog of the Log, if any: a combo or a time, then OK.
+fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
+    let t = scene.i18n;
+    let Some(dialog) = view_state.log_dialog.as_mut() else {
+        return;
+    };
+    let title = match dialog {
+        LogDialog::Category { .. } => t.tr("schedule-add-category-track"),
+        LogDialog::MusicFill { .. } => t.tr("schedule-add-music-fill"),
+        LogDialog::AddBlock { .. } => t.tr("schedule-add-block"),
+        LogDialog::MoveBlock { .. } => t.tr("schedule-block-move"),
+    };
+    let mut done: Option<bool> = None;
+    egui::Window::new(title)
+        .collapsible(false)
+        .resizable(false)
+        .show(ctx, |ui| {
+            match dialog {
+                LogDialog::Category { choice, .. } => {
+                    let name = |id: Option<fp_model::CategoryId>| {
+                        id.and_then(|id| scene.state.categories.get(id))
+                            .map(|c| c.name.clone())
+                            .unwrap_or_default()
+                    };
+                    egui::ComboBox::from_label(t.tr("schedule-category"))
+                        .selected_text(name(*choice))
+                        .show_ui(ui, |ui| {
+                            for c in scene.state.categories.iter() {
+                                ui.selectable_value(choice, Some(c.id), c.name.clone());
+                            }
+                        });
+                }
+                LogDialog::MusicFill { choice, .. } => {
+                    let name = |id: Option<fp_model::RotationId>| {
+                        id.and_then(|id| scene.state.rotations.get(id))
+                            .map(|r| r.name.clone())
+                            .unwrap_or_default()
+                    };
+                    egui::ComboBox::from_label(t.tr("filler-rotation"))
+                        .selected_text(name(*choice))
+                        .show_ui(ui, |ui| {
+                            for r in scene.state.rotations.iter() {
+                                ui.selectable_value(choice, Some(r.id), r.name.clone());
+                            }
+                        });
+                }
+                LogDialog::AddBlock { time, .. } | LogDialog::MoveBlock { time, .. } => {
+                    let label = ui.label(t.tr("schedule-block-start"));
+                    ui.add(egui::TextEdit::singleline(time).desired_width(90.0))
+                        .labelled_by(label.id);
+                    if fp_model::local_time::TimeOfDay::parse(time).is_none() {
+                        ui.label(
+                            RichText::new(t.tr("schedule-editor-bad-time"))
+                                .font(font(11.0))
+                                .color(theme::AMBER),
+                        );
+                    }
+                }
+            }
+            ui.horizontal(|ui| {
+                if ui.button(t.tr("schedule-dialog-ok")).clicked() {
+                    done = Some(true);
+                }
+                if ui.button(t.tr("schedule-dialog-cancel")).clicked() {
+                    done = Some(false);
+                }
+            });
+        });
+    match done {
+        Some(true) => {
+            let parse = |s: &str| fp_model::local_time::TimeOfDay::parse(s);
+            match dialog.clone() {
+                LogDialog::Category {
+                    date,
+                    block,
+                    choice: Some(category),
+                } => send_edit(
+                    scene,
+                    date,
+                    LogEdit::Insert {
+                        block,
+                        index: usize::MAX,
+                        items: vec![Item::Category {
+                            category,
+                            time_critical: false,
+                        }],
+                    },
+                ),
+                LogDialog::MusicFill {
+                    date,
+                    block,
+                    choice: Some(rotation),
+                } => send_edit(
+                    scene,
+                    date,
+                    LogEdit::Insert {
+                        block,
+                        index: usize::MAX,
+                        items: vec![Item::Rotation { rotation }],
+                    },
+                ),
+                LogDialog::AddBlock { date, time } => {
+                    if let Some(start) = parse(&time) {
+                        send_edit(scene, date, LogEdit::AddBlock { start });
+                    }
+                }
+                LogDialog::MoveBlock { date, block, time } => {
+                    if let Some(start) = parse(&time) {
+                        send_edit(scene, date, LogEdit::MoveBlock { block, start });
+                    }
+                }
+                _ => {}
+            }
+            view_state.log_dialog = None;
+        }
+        Some(false) => view_state.log_dialog = None,
+        None => {}
+    }
 }
 
 /// What an item plays, in words.
