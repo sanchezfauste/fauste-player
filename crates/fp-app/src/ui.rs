@@ -23,6 +23,7 @@ mod panels;
 pub mod pending;
 pub mod phone_library;
 mod phone_prelisten;
+mod plan_window;
 mod player;
 pub mod playlist_files;
 pub(crate) mod playlist_keys;

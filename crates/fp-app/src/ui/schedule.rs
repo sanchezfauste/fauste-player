@@ -357,7 +357,12 @@ fn row_actions(
                 ui.close();
             }
         }
-        if ui.button(t.tr("schedule-row-remove")).clicked() {
+        let remove = if playing {
+            "schedule-row-remove"
+        } else {
+            "schedule-row-remove-plan"
+        };
+        if ui.button(t.tr(remove)).clicked() {
             send_edit(
                 scene,
                 target,
@@ -579,14 +584,17 @@ pub(crate) fn plan_footer(
     );
     ui.add_space(10.0);
     ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
+    let tip = if playing {
+        "tip-schedule-add"
+    } else {
+        "tip-plan-add"
+    };
     let add = ui
         .add(egui::Button::new(
             RichText::new(format!("{} {}", icon::PLUS, t.tr("footer-add"))).font(font(10.0)),
         ))
-        .on_hover_text(t.tr("tip-schedule-add"));
-    add.widget_info(|| {
-        egui::WidgetInfo::labeled(egui::Role::Button, true, t.tr("tip-schedule-add"))
-    });
+        .on_hover_text(t.tr(tip));
+    add.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, t.tr(tip)));
     egui::Popup::menu(&add).show(|ui| {
         if ui.button(t.tr("schedule-add-track")).clicked() {
             let mut view = scene.state.library_view.clone();

@@ -121,6 +121,8 @@ pub(crate) struct TabScroll {
 pub(crate) struct ViewState {
     /// The Log's open Add or Change time dialog (rework AR17).
     pub log_dialog: Option<super::schedule::LogDialog>,
+    /// The template or date open in its popup (rework AR21).
+    pub plan_window: Option<fp_model::log_edit::EditTarget>,
     /// What a phone shows (mobile spec §6); unused elsewhere.
     pub phone: super::touch::PhoneView,
     /// The phone's Music screen (phone layout spec §9), the Library tab's
@@ -884,6 +886,13 @@ impl AppUi {
         self.clock_millis = Some(millis);
     }
 
+    /// Opens a template or a date in its popup, as Settings does. Used by
+    /// tests.
+    #[cfg(feature = "test-hooks")]
+    pub fn open_plan_window(&mut self, target: fp_model::log_edit::EditTarget) {
+        self.view.plan_window = Some(target);
+    }
+
     /// Makes the next frame panic. Used to test panic isolation.
     #[cfg(feature = "test-hooks")]
     pub fn fail_next_frame(&mut self) {
@@ -1242,6 +1251,7 @@ impl AppUi {
         // dialogs below stay on top.
         super::library::draw(&ctx, &scene, &mut self.view);
         super::schedule_editor::draw(&ctx, &scene, &mut self.view);
+        super::plan_window::draw(&ctx, &scene, &mut self.view);
         super::schedule::log_dialog(&ctx, &scene, &mut self.view);
         cue_window::show_all(&ctx, &scene, &mut self.view);
         super::loudness_edit::popup(&ctx, &scene, &mut self.view);

@@ -55,6 +55,7 @@ mod panel_layout;
 mod panic_isolation;
 mod phone_card_ui;
 mod phone_library_ui;
+mod plan_window_ui;
 mod platform_ui;
 mod play_button_ui;
 mod playlist_files;
