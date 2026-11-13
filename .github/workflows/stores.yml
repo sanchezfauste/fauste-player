@@ -37,6 +37,7 @@ on:
       - scripts/package/aur.sh
       - scripts/package/flathub-manifest.py
       - scripts/package/flatpak-cargo-sources.sh
+      - scripts/package/snap-build.sh
       - scripts/package/metainfo.sh
       - scripts/package/notices.sh
       - scripts/package/play-listing.py
@@ -81,8 +82,12 @@ jobs:
     name: What to publish
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    permissions:
+      contents: read
+      pull-requests: read
     outputs:
       version: ${{ steps.plan.outputs.version }}
+      build_snap: ${{ steps.plan.outputs.build_snap }}
       prerelease: ${{ steps.plan.outputs.prerelease }}
       publish: ${{ steps.plan.outputs.publish }}
       msstore: ${{ steps.plan.outputs.publish == 'true' && steps.plan.outputs.prerelease == 'false' && secrets.MSSTORE_CLIENT_SECRET != '' && vars.MSSTORE_PRODUCT_ID != '' && vars.MSSTORE_IDENTITY_NAME != '' && vars.MSSTORE_PUBLISHER != '' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',msstore,')) }}
@@ -97,7 +102,25 @@ jobs:
           TAG: ${{ inputs.tag }}
           PUBLISH: ${{ github.event_name != 'pull_request' && !inputs.dry_run }}
           EVENT: ${{ github.event_name }}
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ github.token }}
         run: |
+          # A pull request builds the snaps only when it changes what goes
+          # into them: the build depends on the Snap Store, which is often
+          # down, and a translation has nothing to do with it.
+          build_snap=true
+          if [ "${EVENT}" = pull_request ]; then
+            build_snap=false
+            files="$(gh api --paginate "repos/${GITHUB_REPOSITORY}/pulls/${PR}/files" --jq '.[].filename')"
+            while IFS= read -r file; do
+              case "${file}" in
+                snap/* | packaging/linux/* | packaging/icons/* \
+                  | scripts/package/metainfo.sh | scripts/package/notices.sh \
+                  | scripts/package/snap-build.sh | .github/workflows/stores.yml)
+                  build_snap=true ;;
+              esac
+            done <<< "${files}"
+          fi
           if [ "${EVENT}" != pull_request ]; then
             # Only release tags, and only those that carry the store
             # packaging: every job builds from the tag.
@@ -118,6 +141,7 @@ jobs:
             echo "version=${version}"
             echo "prerelease=${prerelease}"
             echo "publish=${PUBLISH}"
+            echo "build_snap=${build_snap}"
           } >> "$GITHUB_OUTPUT"
 
   msstore:
@@ -215,7 +239,7 @@ jobs:
   snap:
     name: Snap Store (${{ matrix.arch }})
     needs: plan
-    if: inputs.only == '' || contains(format(',{0},', inputs.only), ',snap,')
+    if: needs.plan.outputs.build_snap == 'true' && (inputs.only == '' || contains(format(',{0},', inputs.only), ',snap,'))
     strategy:
       fail-fast: false
       matrix:
@@ -225,17 +249,48 @@ jobs:
           - arch: arm64
             os: ubuntu-24.04-arm
     runs-on: ${{ matrix.os }}
-    # A build takes about 10 minutes (25 on a slow day). When the snap
-    # servers stall, snapcraft waits silently for hours: fail instead, so the
-    # job can be re-run.
-    timeout-minutes: 45
+    # A build takes about 10 minutes (25 on a slow day), plus up to about
+    # 15 waiting for the store. When the snap servers stall, snapcraft
+    # waits silently for hours: fail instead, so the job can be re-run.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ inputs.tag }}
-      - uses: snapcore/action-build@v1
+      # snapd, LXD, snapcraft and the build's base and SDK snaps all come
+      # from the Snap Store. When it cannot be reached (scripts/package/
+      # snap-build.sh exits 75), a pull request passes with a warning: the
+      # outage says nothing about the change. A release fails, to be re-run
+      # with `only: snap`.
+      - name: Build the snap
         id: build
-      - uses: actions/upload-artifact@v7
+        env:
+          ARCH: ${{ matrix.arch }}
+          TOLERATE_OUTAGE: ${{ github.event_name == 'pull_request' }}
+          SNAPCRAFT_IMAGE_INFO: '{"build_url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"}'
+        run: |
+          status=0
+          { scripts/package/snap-build.sh setup && scripts/package/snap-build.sh build; } || status=$?
+          if [ "${status}" = 75 ] && [ "${TOLERATE_OUTAGE}" = true ]; then
+            echo "::warning title=Snap Store unreachable::the ${ARCH} snap was not built, so this change is not checked against it; re-run the job when the store is back"
+            {
+              echo "### Snap (${ARCH}): not checked"
+              echo
+              echo "The Snap Store could not be reached, so the snap was not built."
+              echo "Re-run the job when the store is back."
+            } >> "$GITHUB_STEP_SUMMARY"
+            echo "built=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          [ "${status}" = 0 ] || exit "${status}"
+          snaps=(*.snap)
+          [ -f "${snaps[0]}" ] || { echo "::error::snapcraft made no snap"; exit 1; }
+          {
+            echo "built=true"
+            echo "snap=${snaps[0]}"
+          } >> "$GITHUB_OUTPUT"
+      - if: steps.build.outputs.built == 'true'
+        uses: actions/upload-artifact@v7
         with:
           name: snap-${{ matrix.arch }}
           path: ${{ steps.build.outputs.snap }}

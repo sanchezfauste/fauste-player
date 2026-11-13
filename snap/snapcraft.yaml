@@ -1,5 +1,5 @@
 # Snap package for the Snap Store, built by the `stores` workflow
-# (snapcore/action-build) on amd64 and arm64. Built from source like the
+# (scripts/package/snap-build.sh) on amd64 and arm64. Built from source like the
 # Flatpak; the summary and description come from the AppStream metainfo,
 # the version from Cargo.toml. The metainfo has no icon, so it is given here;
 # the stores workflow sends it to the store listing with

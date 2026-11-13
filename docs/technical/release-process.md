@@ -373,7 +373,7 @@ the PE Subsystem field is not 2 (GUI); CI runs that script's `--self-test`
 | `macos-dmg` | universal `.app` (lipo of the two `build` binaries, `PREBUILT_DIR`) in a `.dmg`; it compiles an architecture only when its build failed | `scripts/package/macos.sh` |
 | `flatpak-sources`, `flatpak`, `flatpak-release` | `cargo-sources.json` (flatpak-cargo-generator), then the bundle built offline with flatpak-builder | `packaging/flatpak/com.sanchezfauste.FaustePlayer.yml` |
 | `android` | `fauste-player-<version>-android.apk` and `.aab` (cargo-ndk, Gradle), uploaded only with the Android release key; tags made before the job are skipped | `scripts/package/android.sh release` |
-| `stores` (separate workflow, `stores.yml`) | the Microsoft Store MSIX, the snaps, the Flathub update, WinGet and the AUR (see "Stores") | `scripts/package/msix.sh`, `snap/snapcraft.yaml`, `scripts/package/flathub-manifest.py`, `scripts/package/aur.sh` |
+| `stores` (separate workflow, `stores.yml`) | the Microsoft Store MSIX, the snaps, the Flathub update, WinGet and the AUR (see "Stores") | `scripts/package/msix.sh`, `snap/snapcraft.yaml`, `scripts/package/snap-build.sh`, `scripts/package/flathub-manifest.py`, `scripts/package/aur.sh` |
 | `unsigned-note` | a section in the release notes listing the installers built without their signing secrets, with a link to the user guide's instructions (added once) | `release-build.yml` |
 
 **Shared metadata** lives in `packaging/`, with one application id,
@@ -469,7 +469,7 @@ packaging: the workflow refuses other tags, and tags made before it
 | Job | Store | What it does | Publishes when |
 |---|---|---|---|
 | `msstore` | Microsoft Store | builds an unsigned MSIX (`scripts/package/msix.sh`; the Store signs it) and submits it with the Microsoft Store CLI (`msstore publish`); when the secrets are missing or the submission fails, the job stays green with a warning, and the run's summary links the `msix` artefact to upload by hand | the `MSSTORE_*` secrets and variables are set |
-| `snap` | Snap Store | builds `snap/snapcraft.yaml` on amd64 and arm64 (`snapcore/action-build`), uploads and releases it (`snapcore/action-publish`), and on a release (not a pre-release) sends the amd64 snap's summary, description, title, licence and icon to the store listing (`snapcraft upload-metadata --force`) | `SNAPCRAFT_STORE_CREDENTIALS` is set |
+| `snap` | Snap Store | builds `snap/snapcraft.yaml` on amd64 and arm64 in LXD (`scripts/package/snap-build.sh`, see "Snap Store outages" below), uploads and releases it (`snapcore/action-publish`), and on a release (not a pre-release) sends the amd64 snap's summary, description, title, licence and icon to the store listing (`snapcraft upload-metadata --force`) | `SNAPCRAFT_STORE_CREDENTIALS` is set |
 | `google-play` | Google Play | checks the listing in `packaging/android/play` (`scripts/package/play-listing.py check` and its tests), downloads the release's signed `fauste-player-<version>-android.aab` (checking its `.sha256`) and uploads it to one track with the release notes of `changelogs/default.txt` (`r0adkll/upload-google-play`), then updates the store listing from the same folder: texts, icon, feature graphic and phone screenshots (fastlane's `supply`, pinned with every gem it runs by `packaging/android/fastlane/Gemfile.lock` and installed without the key; it is given the release's track and `versionCode`, from `android.sh --version-code`, and sends only the images that changed) | `GOOGLE_PLAY_SERVICE_ACCOUNT_JSON` is set |
 | `flathub` | Flathub | writes the Flathub manifest (`scripts/package/flathub-manifest.py`: the in-tree manifest with the release's git tag and commit as its source) and `cargo-sources.json`, lints both with `flatpak-builder-lint`, and opens a pull request on `flathub/com.sanchezfauste.FaustePlayer` | `FLATHUB_TOKEN` is set |
 | `winget` | WinGet | opens a pull request on `microsoft/winget-pkgs` with the release's MSI (`vedantmgoyal9/winget-releaser`) | `WINGET_TOKEN` is set |
@@ -478,12 +478,27 @@ packaging: the workflow refuses other tags, and tags made before it
 - **Pre-releases** (a version with `-`) go only to the Snap Store's `beta`
   channel; the other stores skip them.
 - **Dry run:** a pull request that touches `snap/`, `packaging/`, the store
-  scripts or `stores.yml` builds the MSIX and both snaps, lints the Flathub
-  manifest, checks the Google Play listing (and installs the fastlane
-  that uploads it) and the PKGBUILD, and publishes nothing.
-- **Timeout:** a snap build stops after 45 minutes (it takes about 10):
-  when the snap servers stall, snapcraft otherwise waits silently for
-  hours. Re-run the job.
+  scripts or `stores.yml` builds the MSIX, lints the Flathub manifest,
+  checks the Google Play listing (and installs the fastlane that uploads
+  it) and the PKGBUILD, and publishes nothing. It builds the snaps only when
+  it changes what goes into them: `snap/`, `packaging/linux`,
+  `packaging/icons`, `metainfo.sh`, `notices.sh`, `snap-build.sh` or
+  `stores.yml` (the `plan` job lists the pull request's files); a change to
+  the locales or the Play listing alone skips them.
+- **Snap Store outages:** snapd, LXD, snapcraft and the build's base and SDK
+  snaps all come from the Snap Store, which is often unreachable.
+  `scripts/package/snap-build.sh setup` retries each install with a growing
+  wait (6 attempts, about 15 minutes; `SNAP_STORE_ATTEMPTS`,
+  `SNAP_STORE_DELAY`, `SNAP_STORE_TIMEOUT`), uses LXD and snapcraft as they
+  are when installed (a refresh needs the store too), and exits 75 when the
+  store stays down; `build` exits 75 when snapcraft fails with a store
+  error at the end of its log. On a pull request that is a warning and a
+  "not checked" note in the run's summary, and the job passes: the outage
+  says nothing about the change. Any other failure stays red. On a release
+  the job fails: re-run it with `only: snap` when the store is back.
+- **Timeout:** a snap job stops after 60 minutes (a build takes about 10,
+  plus the waits for the store): when the snap servers stall, snapcraft
+  otherwise waits silently for hours. Re-run the job.
 - **Google Play** takes the bundle `release-build.yml` built and signed (the
   `binaries` job runs before `stores`), never a rebuild: a release made
   without the Android release key has no bundle, and the job fails. A
