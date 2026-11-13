@@ -435,3 +435,93 @@ fn the_log_buttons_follow_automation() {
     let a = fp_model::availability(&r.s, log);
     assert!(a.play && a.stop && !a.fade_stop);
 }
+
+// Review of rework plan 3.
+
+#[test]
+fn a_hand_over_cancelled_during_its_fade_keeps_automation_running() {
+    let mut r = two_blocks();
+    r.slow_fades = true;
+    r.at_hms(10, 58, 30);
+    r.apply(Command::Play(r.schedule_player()));
+    let f = r.filler_player();
+    r.at_hms(10, 59, 59);
+    assert!(r.player(f).fade_stopping(), "the hand-over fade runs");
+    // A clock correction back: the hand-over no longer counts.
+    r.jump_hms(10, 50, 0);
+    let current = r.player(f).current.unwrap();
+    let more = fp_model::on_event(
+        &mut r.s,
+        fp_model::EngineEvent::ReachedEnd {
+            player: f,
+            entry: current,
+        },
+    );
+    r.engine(&more);
+    r.at_hms(10, 50, 1);
+    assert!(
+        running(&r),
+        "automation's own fade is not the operator's stop"
+    );
+    assert!(r.playing(f).is_some(), "the music comes back");
+}
+
+#[test]
+fn a_stop_during_music_after_back_to_the_clock_keeps_the_clocks_next() {
+    let mut r = on_air_at_ten();
+    let log = r.schedule_player();
+    r.apply(Command::ToggleStopAfterCurrent(log));
+    r.end_current(log);
+    r.at_hms(10, 55, 0);
+    r.apply(Command::ClearScheduleNext);
+    r.at_hms(10, 55, 1);
+    assert_eq!(next(&r), Some(r.item(today(), 11, 0, 0)));
+    r.apply(Command::Play(log));
+    assert!(r.playing(r.filler_player()).is_some());
+    r.at_hms(10, 57, 0);
+    r.apply(Command::Stop(log));
+    r.at_hms(10, 57, 1);
+    assert_eq!(next(&r), Some(r.item(today(), 11, 0, 0)));
+}
+
+#[test]
+fn play_clears_a_stop_at_end_it_overrides() {
+    let mut r = music_at_half_past_ten();
+    let log = r.schedule_player();
+    r.apply(Command::ToggleStopAfterCurrent(log));
+    r.apply(Command::Play(log));
+    assert!(!r.s.automation.as_ref().unwrap().stop_at_end);
+    assert!(!r.player(r.filler_player()).stop_after_current);
+}
+
+#[test]
+fn single_leaves_the_fillers_rotation_alone() {
+    use crate::automation_rig::song;
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)]), (11, 0, vec![song(3)])]);
+    let base = r.s.schedule.templates()[0].id;
+    let default = r.s.rotations.default_id().unwrap();
+    let mut block =
+        r.s.schedule
+            .template(base)
+            .unwrap()
+            .block(r.block(10, 0))
+            .unwrap()
+            .clone();
+    block
+        .items
+        .push(fp_model::schedule::Item::Rotation { rotation: default });
+    r.apply(Command::UpdateBlock {
+        template: base,
+        block,
+    });
+    let before = r.s.filler.as_ref().unwrap().rotation;
+    single(&mut r);
+    r.at_hms(9, 30, 0);
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 0)));
+    let log = r.schedule_player();
+    r.apply(Command::Play(log));
+    r.end_current(log);
+    r.at_hms(9, 33, 0);
+    assert!(!running(&r));
+    assert_eq!(r.s.filler.as_ref().unwrap().rotation, before);
+}

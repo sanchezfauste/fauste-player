@@ -14,7 +14,7 @@ The **Log** column plays the day's **blocks**: groups of items with a
 start time (an hourly ID, spots, a programme). Show it from the
 **Log** tile on the top bar, as you show a player.
 
-![The Log column running, beside the Music fill column: the day's blocks by start time, each with its station ID (the clock marks it hard-start), spots and the rotation the music fill plays after it; the filler's song on air and the next ones](../images/guide/automation-columns.png)
+![The Log column running, beside the Music fill column: the day's blocks by start time, each with its station ID (the clock marks it hard-start), spots and the rotation the music fill plays after it; the music fill's song on air and the next ones](../images/guide/automation-columns.png)
 
 Its list is the schedule, grouped by block: each block's start time, then
 its items. It shows today, the last block of yesterday and the first of
@@ -122,7 +122,7 @@ bar says so.
 
 ## Rotations
 
-A **rotation** is a short list of **steps** the filler plays in turn, then
+A **rotation** is a short list of **steps** the music fill plays in turn, then
 again from the first. Each step names where its tracks come from (a
 category of the library with its subcategories, or every track of a kind)
 and how many it plays each time, as a range:
@@ -145,7 +145,7 @@ Rotations are made in Settings → Automation:
 
 ## How it chooses
 
-Within a step, the filler prefers the tracks that have gone longest
+Within a step, the music fill prefers the tracks that have gone longest
 without airing, with a little chance among them so the order never becomes
 a fixed cycle. It also keeps apart:
 
@@ -153,14 +153,14 @@ a fixed cycle. It also keeps apart:
   of the other tracks of its step have aired since, whichever comes first;
 - **the same artist:** not within 30 minutes.
 
-Everything that went on air counts, from the filler, a player or the
+Everything that went on air counts, from the music fill, a player or the
 cartwall; pre-listening does not. When a small category cannot keep the
-rules, the filler gives way rather than fall silent: first on the artist,
+rules, the music fill gives way rather than fall silent: first on the artist,
 then on the track. Settings → Automation has every value, and is where
 you make, rename and change rotations (see
 [Settings](settings.md#automation)).
 
-Before a block of the schedule, the filler also chooses its last songs by
+Before a block of the schedule, the music fill also chooses its last songs by
 their length, so the music ends cleanly: the song that fades out when the
 block starts loses at most 30 seconds, and no song starts that would play
 for less than 45 seconds. When no song in the rotation can do both, the

@@ -81,9 +81,9 @@ pub struct AutomationState {
     /// The Log's Pause paused the filler's song playing for the Log
     /// (runtime only): the Log's Play resumes it (AR5).
     pub paused_fill: bool,
-    /// The filler's song was on air for the Log at the last look (runtime
-    /// only): if the filler then stops with no hand-over or hold pending,
-    /// the operator stopped it, and automation stops too (AR7).
+    /// The filler's song on air for the Log carried the operator's own
+    /// Stop at end at the last look (runtime only): when the filler then
+    /// stops with no hand-over or hold pending, automation stops too (AR7).
     pub fill_on_air: bool,
 }
 
@@ -872,9 +872,10 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
             a.on_air = None;
             a.rows.clear();
             a.row_since = None;
+            a.last_on_air = None;
         }
         ended = Some(run);
-        if a.running && !a.stop_at_end {
+        if state.automation.as_ref().is_some_and(|a| a.running) {
             // AU20: the filler plays the block's rotation, or the default.
             let current = state.filler.as_ref().map(|f| f.rotation);
             if current.is_some_and(|r| r != run.rotation) {
@@ -904,7 +905,7 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
     if filler_stopped
         && a.handing_over.is_none()
         && !a.filler_held
-        && (a.stop_at_end || (a.fill_on_air && !starting))
+        && (a.stop_at_end || a.fill_on_air)
     {
         halt(state);
         return;
@@ -987,11 +988,35 @@ fn set_filler_hold(state: &mut AppState, hold: bool) {
     }
 }
 
-/// Remembers whether the filler's song is on air for the Log (AR7).
-fn note_fill(state: &mut AppState) {
+/// Remembers whether the filler's song on air for the Log carries the
+/// operator's own Stop at end (AR7); automation's marks and fades do not
+/// count.
+pub(crate) fn note_fill(state: &mut AppState) {
     let fill = fill_is_current(state);
+    let marked = filler_player(state)
+        .and_then(|f| player_index(state, f))
+        .and_then(|i| state.players.get(i))
+        .is_some_and(|p| p.stop_after_current && !p.fade_stopping());
     if let Some(a) = state.automation.as_mut() {
-        a.fill_on_air = fill;
+        a.fill_on_air = fill && marked && !a.stop_at_end && !a.filler_held;
+    }
+}
+
+/// AR7: Stop or Fade stop on the filler while its song is on air for the
+/// Log stops automation too.
+pub(crate) fn filler_stop(
+    state: &mut AppState,
+    filler: PlayerId,
+    fade: bool,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    if fill_is_current(state) {
+        halt(state);
+    }
+    if fade {
+        crate::reducer::apply_fade_stop(state, filler, out)
+    } else {
+        crate::reducer::apply_stop(state, filler, out)
     }
 }
 
@@ -1000,6 +1025,9 @@ pub(crate) fn start(state: &mut AppState, out: &mut Vec<EngineAction>) -> Result
         return Ok(());
     };
     a.running = true;
+    a.stop_at_end = false;
+    a.paused_fill = false;
+    a.last_on_air = None;
     // Start after Stop after current: what was to stop goes on.
     let players = [Some(a.player), filler_player(state)];
     for player in players.into_iter().flatten() {

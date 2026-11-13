@@ -286,7 +286,7 @@ The [music fill's](automation.md) rotations and rules (not on Android).
   kind), how many it plays each time (**At least** 0–99, **At most**
   1–99; at least 0 lets the step sit out some turns), **Up**, **Down** and
   **Remove**. **Add step** adds one at the end. A step
-  whose category was deleted says so; the filler skips it.
+  whose category was deleted says so; the music fill skips it.
 - **Music fill:** how long before the same track may play again (3 hours,
   or once half of the other tracks of its step have aired, whichever comes
   first; 0 turns either off), the same artist (30 minutes), the

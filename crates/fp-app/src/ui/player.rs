@@ -107,6 +107,7 @@ pub(crate) fn column(
                 scene,
                 covers,
                 shown,
+                id,
                 &pv,
                 &telemetry,
                 !locked,
@@ -312,6 +313,7 @@ fn card_sized(
                 ui,
                 scene,
                 covers,
+                id,
                 id,
                 &pv,
                 &telemetry,
@@ -1157,6 +1159,9 @@ fn top_block(
     scene: &Scene<'_>,
     covers: &mut HashMap<TrackId, TextureHandle>,
     id: PlayerId,
+    // The player the transport acts on: `id`, or the Log while its header
+    // shows the music fill's song (rework AR4-AR6).
+    controls: PlayerId,
     pv: &PlayerView,
     telemetry: &fp_engine::engine::PlayerTelemetry,
     fader: bool,
@@ -1197,7 +1202,14 @@ fn top_block(
         info_row(&mut left_ui, scene, covers, id, pv, telemetry, false);
     }
     let play_size = phone.map_or(PLAY_SIZE, |p| 2.0 * p.button + GAP);
-    transport(&mut left_ui, scene, id, pv, play_size, phone.is_some());
+    transport(
+        &mut left_ui,
+        scene,
+        controls,
+        pv,
+        play_size,
+        phone.is_some(),
+    );
     let mut right_ui = ui.new_child(
         UiBuilder::new()
             .max_rect(right)

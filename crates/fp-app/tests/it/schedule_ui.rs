@@ -217,3 +217,24 @@ fn the_menu_sets_and_clears_next() {
     h.run_steps(2);
     assert!(fake.take_sent().contains(&Command::ClearScheduleNext));
 }
+
+/// Review of rework plan 3: during the music, the Log header's buttons
+/// act on the Log.
+#[test]
+fn during_music_the_log_header_buttons_act_on_the_log() {
+    let mut s = with_schedule();
+    let f = s.filler.as_ref().unwrap().clone();
+    let log = s.automation.as_ref().unwrap().player;
+    let entry = s.playlists.get(f.playlist).unwrap().entries[0].clone();
+    s.automation.as_mut().unwrap().running = true;
+    let p = s.players.iter_mut().find(|p| p.id == f.player).unwrap();
+    p.current = Some(entry.id);
+    p.transport = fp_model::Transport::Playing;
+    let (mut h, fake) = harness(s);
+    // The Log's column is the first one.
+    h.get_all_by_label("Stop").next().unwrap().click();
+    h.run();
+    let sent = fake.take_sent();
+    assert!(sent.contains(&Command::Stop(log)), "{sent:?}");
+    assert!(!sent.contains(&Command::Stop(f.player)));
+}

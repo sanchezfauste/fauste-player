@@ -44,6 +44,12 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
         Command::Pause(id) if state.is_filler(id) => {
             crate::automation::filler_pause(state, id, &mut out)?
         }
+        Command::Stop(id) if state.is_filler(id) => {
+            crate::automation::filler_stop(state, id, false, &mut out)?
+        }
+        Command::FadeStop(id) if state.is_filler(id) => {
+            crate::automation::filler_stop(state, id, true, &mut out)?
+        }
         Command::Play(id) => play(state, id, &mut out)?,
         Command::Pause(id) => pause(state, id, &mut out)?,
         Command::Stop(id) => stop(state, id, &mut out)?,
@@ -121,6 +127,10 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             }
             let player = &mut state.players[i];
             player.stop_after_current = !player.stop_after_current;
+            if state.is_filler(id) {
+                // AR7: the music fill's own Stop at end, noted at once.
+                crate::automation::note_fill(state);
+            }
         }
         Command::ToggleCue(id) => toggle_cue(state, id, &mut out)?,
         Command::SetCue(id, on) => {
@@ -938,8 +948,6 @@ fn fade_stop(
     fade_stop_over(state, id, fade_ms, out)
 }
 
-/// A fade stop over `fade_ms` (the operator's uses `players.fade_stop_ms`;
-/// automation hands over to a block with its own, AU24).
 /// The plain player Pause, Stop and Fade stop, for automation's own use.
 pub(crate) fn apply_pause(
     state: &mut AppState,
@@ -965,6 +973,8 @@ pub(crate) fn apply_fade_stop(
     fade_stop(state, id, out)
 }
 
+/// A fade stop over `fade_ms` (the operator's uses `players.fade_stop_ms`;
+/// automation hands over to a block with its own, AU24).
 pub(crate) fn fade_stop_over(
     state: &mut AppState,
     id: PlayerId,
