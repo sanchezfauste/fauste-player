@@ -354,3 +354,31 @@ fn a_block_header_carries_its_total_and_overrun() {
         .unwrap();
     assert_eq!(header, (360.0, Some(60.0)));
 }
+
+#[test]
+fn started_between_blocks_the_music_fill_row_is_on_air() {
+    use fp_model::schedule::Item;
+    let mut r = rig();
+    let base = r.s.schedule.templates()[0].id;
+    let default = r.s.rotations.default_id().unwrap();
+    let mut block =
+        r.s.schedule
+            .template(base)
+            .unwrap()
+            .block(r.block(10, 0))
+            .unwrap()
+            .clone();
+    block.items.push(Item::Rotation { rotation: default });
+    r.apply(Command::UpdateBlock {
+        template: base,
+        block,
+    });
+    r.at_hms(10, 30, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    assert!(r.playing(r.filler_player()).is_some());
+    let rows = schedule_view(&r.s);
+    let ScheduleRow::Item { status, .. } = item_row(&rows, r.item(today(), 10, 0, 2)) else {
+        unreachable!()
+    };
+    assert_eq!(status, RowStatus::OnAir);
+}

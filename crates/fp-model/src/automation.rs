@@ -1338,6 +1338,26 @@ pub fn schedule_view(state: &AppState) -> Vec<ScheduleRow> {
         .and_then(|p| p.current)
         .and_then(|e| a.rows.get(&e).copied());
     let fill = fill_is_current(state) || a.paused_fill;
+    // The music fill row on air: the one a block handed over to, else (a
+    // start between blocks) the rotation item of the last block that
+    // started by the clock, if it has one.
+    let fill_item = a.fill_item.or_else(|| {
+        fill.then(|| {
+            all.iter()
+                .rev()
+                .find(|(_, start, _)| *start <= state.local_now)
+                .and_then(|(date, _, b)| {
+                    matches!(b.items.last(), Some(crate::schedule::Item::Rotation { .. })).then(
+                        || ItemRef {
+                            date: *date,
+                            block: b.id,
+                            index: b.items.len() - 1,
+                        },
+                    )
+                })
+        })
+        .flatten()
+    });
     // A category item's chosen track, while its block is loaded.
     let chosen: HashMap<ItemRef, TrackId> = a
         .rows
@@ -1367,7 +1387,7 @@ pub fn schedule_view(state: &AppState) -> Vec<ScheduleRow> {
                 block: block.id,
                 index,
             };
-            if on_air_item == Some(item) || (fill && a.fill_item == Some(item)) {
+            if on_air_item == Some(item) || (fill && fill_item == Some(item)) {
                 RowStatus::OnAir
             } else if next == Some(item) {
                 RowStatus::Next
