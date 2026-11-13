@@ -136,3 +136,118 @@ fn unsetting_stop_at_end_lets_automation_go_on() {
     assert!(!r.player(log).stop_after_current);
     assert!(running(&r));
 }
+
+// Task 3: AR3–AR5, AR7b: the Log's Play, Pause, Stop and Fade stop.
+
+#[test]
+fn play_on_the_log_starts_automation() {
+    let mut r = two_blocks();
+    r.at_hms(10, 58, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    assert!(running(&r));
+    assert!(r.playing(r.filler_player()).is_some());
+    r.at_hms(11, 0, 0);
+    assert_eq!(r.playing(r.schedule_player()), Some(TrackId(3)));
+}
+
+#[test]
+fn play_on_the_log_plays_a_pinned_next_at_once() {
+    let mut r = two_blocks();
+    r.at_hms(11, 30, 0);
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 0)));
+    r.apply(Command::Play(r.schedule_player()));
+    assert_eq!(r.playing(r.schedule_player()), Some(TrackId(1)));
+}
+
+#[test]
+fn stop_on_the_log_stops_the_item_and_automation() {
+    let mut r = on_air_at_ten();
+    let log = r.schedule_player();
+    r.apply(Command::Stop(log));
+    r.at_hms(10, 0, 1);
+    assert!(!running(&r));
+    assert_eq!(r.playing(log), None);
+    assert_eq!(next(&r), Some(r.item(today(), 10, 0, 1)));
+    r.at_hms(10, 5, 0);
+    assert_eq!(r.playing(log), None);
+    assert_eq!(r.playing(r.filler_player()), None);
+}
+
+#[test]
+fn fade_stop_on_the_log_fades_the_item_and_stops_automation() {
+    let mut r = on_air_at_ten();
+    let log = r.schedule_player();
+    let actions = r.apply(Command::FadeStop(log));
+    assert!(actions.iter().any(
+        |a| matches!(a, fp_model::EngineAction::FadeOutAndStop { player, .. } if *player == log)
+    ));
+    r.at_hms(10, 0, 1);
+    assert!(!running(&r));
+    assert_eq!(r.playing(log), None);
+}
+
+#[test]
+fn stop_on_the_log_during_music_stops_the_music() {
+    let mut r = two_blocks();
+    r.at_hms(10, 30, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    assert!(r.playing(r.filler_player()).is_some());
+    r.apply(Command::Stop(r.schedule_player()));
+    r.at_hms(10, 30, 1);
+    assert!(!running(&r));
+    assert_eq!(r.playing(r.filler_player()), None);
+    assert_eq!(next(&r), Some(r.item(today(), 11, 0, 0)));
+}
+
+#[test]
+fn pause_and_play_on_the_log_resume_the_item() {
+    let mut r = on_air_at_ten();
+    let log = r.schedule_player();
+    r.apply(Command::Pause(log));
+    assert!(!running(&r));
+    assert_eq!(r.player(log).transport, fp_model::Transport::Paused);
+    r.apply(Command::Play(log));
+    assert!(running(&r));
+    assert_eq!(r.playing(log), Some(TrackId(1)));
+}
+
+#[test]
+fn pause_on_the_log_during_music_pauses_the_filler_and_play_resumes_it() {
+    let mut r = two_blocks();
+    r.at_hms(10, 30, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    let f = r.filler_player();
+    let song = r.playing(f);
+    r.apply(Command::Pause(r.schedule_player()));
+    assert!(!running(&r));
+    assert_eq!(r.player(f).transport, fp_model::Transport::Paused);
+    r.at_hms(10, 30, 5);
+    assert_eq!(r.player(f).transport, fp_model::Transport::Paused);
+    r.apply(Command::Play(r.schedule_player()));
+    assert!(running(&r));
+    assert_eq!(r.player(f).transport, fp_model::Transport::Playing);
+    assert_eq!(r.playing(f), song);
+}
+
+#[test]
+fn a_block_start_passing_while_paused_is_missed() {
+    let mut r = two_blocks();
+    r.at_hms(10, 58, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    r.apply(Command::Pause(r.schedule_player()));
+    r.at_hms(11, 5, 0);
+    assert!(r.missed().contains(&r.item(today(), 11, 0, 0)));
+    assert_eq!(r.playing(r.schedule_player()), None);
+}
+
+#[test]
+fn log_stop_leaves_a_filler_playing_on_its_own_alone() {
+    let mut r = two_blocks();
+    r.at_hms(10, 30, 0);
+    let f = r.filler_player();
+    r.apply(Command::Play(f));
+    assert!(!running(&r));
+    r.apply(Command::Stop(r.schedule_player()));
+    r.at_hms(10, 30, 1);
+    assert!(r.playing(f).is_some());
+}

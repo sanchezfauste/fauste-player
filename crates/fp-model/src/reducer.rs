@@ -30,6 +30,17 @@ pub fn apply(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>
 fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAction>, ModelError> {
     let mut out = Vec::new();
     match command {
+        Command::Play(id) if state.is_schedule(id) => crate::automation::log_play(state, &mut out)?,
+        Command::Pause(id) if state.is_schedule(id) => {
+            crate::automation::log_pause(state, &mut out)?
+        }
+        Command::Stop(id) if state.is_schedule(id) => {
+            crate::automation::log_stop(state, false, &mut out)?
+        }
+        Command::FadeStop(id) if state.is_schedule(id) => {
+            crate::automation::log_stop(state, true, &mut out)?
+        }
+        Command::Previous(id) if state.is_schedule(id) => {}
         Command::Play(id) => play(state, id, &mut out)?,
         Command::Pause(id) => pause(state, id, &mut out)?,
         Command::Stop(id) => stop(state, id, &mut out)?,
@@ -91,7 +102,11 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             crate::automation::toggle_stop_at_end(state);
         }
         Command::SetStopAfterCurrent(id, on) if state.is_schedule(id) => {
-            if state.automation.as_ref().is_some_and(|a| a.stop_at_end != on) {
+            if state
+                .automation
+                .as_ref()
+                .is_some_and(|a| a.stop_at_end != on)
+            {
                 crate::automation::toggle_stop_at_end(state);
             }
         }
@@ -922,6 +937,31 @@ fn fade_stop(
 
 /// A fade stop over `fade_ms` (the operator's uses `players.fade_stop_ms`;
 /// automation hands over to a block with its own, AU24).
+/// The plain player Pause, Stop and Fade stop, for automation's own use.
+pub(crate) fn apply_pause(
+    state: &mut AppState,
+    id: PlayerId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    pause(state, id, out)
+}
+
+pub(crate) fn apply_stop(
+    state: &mut AppState,
+    id: PlayerId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    stop(state, id, out)
+}
+
+pub(crate) fn apply_fade_stop(
+    state: &mut AppState,
+    id: PlayerId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    fade_stop(state, id, out)
+}
+
 pub(crate) fn fade_stop_over(
     state: &mut AppState,
     id: PlayerId,
