@@ -325,7 +325,10 @@ fn next_actions(scene: &Scene<'_>, response: &egui::Response, item: ItemRef) {
 }
 
 fn send_edit(scene: &Scene<'_>, date: chrono::NaiveDate, edit: LogEdit) {
-    scene.ctl.send(Command::EditLog { date, edit });
+    scene.ctl.send(Command::EditPlan {
+        target: fp_model::log_edit::EditTarget::Date(date),
+        edit,
+    });
 }
 
 /// A block header's menu: Change time…, Remove block, Back to the

@@ -2,7 +2,7 @@
 //! Automation rework AR17–AR19: the Log edited live, as date changes.
 
 use fp_model::automation::ItemRef;
-use fp_model::log_edit::LogEdit;
+use fp_model::log_edit::{EditTarget, LogEdit};
 use fp_model::schedule::{BlockOrigin, Item};
 use fp_model::{Command, ModelError, TrackId, apply};
 
@@ -18,8 +18,8 @@ fn rig() -> Rig {
 fn edit(r: &mut Rig, edit: LogEdit) -> Result<(), ModelError> {
     apply(
         &mut r.s,
-        Command::EditLog {
-            date: today(),
+        Command::EditPlan {
+            target: EditTarget::Date(today()),
             edit,
         },
     )
@@ -146,8 +146,8 @@ fn yesterday_cannot_be_edited() {
     assert_eq!(
         apply(
             &mut r.s,
-            Command::EditLog {
-                date: yesterday,
+            Command::EditPlan {
+                target: EditTarget::Date(yesterday),
                 edit: LogEdit::Remove { block, index: 0 }
             }
         )
@@ -307,6 +307,124 @@ fn moving_a_row_onto_the_one_below_changes_nothing() {
     )
     .unwrap();
     assert_eq!(items(&r, today(), 10).1, BlockOrigin::Template);
+}
+
+fn base(r: &Rig) -> fp_model::TemplateId {
+    r.s.schedule.templates()[0].id
+}
+
+fn edit_template(r: &mut Rig, edit: LogEdit) -> Result<(), ModelError> {
+    let template = base(r);
+    apply(
+        &mut r.s,
+        Command::EditPlan {
+            target: EditTarget::Template(template),
+            edit,
+        },
+    )
+    .map(|actions| r.engine(&actions))
+}
+
+fn template_items(r: &Rig, h: u32) -> Vec<Item> {
+    r.s.schedule
+        .template(base(r))
+        .unwrap()
+        .blocks
+        .iter()
+        .find(|b| b.start == tod(h, 0))
+        .unwrap()
+        .items
+        .clone()
+}
+
+#[test]
+fn a_template_edit_changes_the_template_only() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    let block = r.block(11, 0);
+    edit_template(
+        &mut r,
+        LogEdit::Insert {
+            block,
+            index: 0,
+            items: vec![song(7)],
+        },
+    )
+    .unwrap();
+    assert_eq!(template_items(&r, 11), vec![song(7), song(3)]);
+    // No date change: today follows the template.
+    let (today_items, origin) = items(&r, today(), 11);
+    assert_eq!(today_items, vec![song(7), song(3)]);
+    assert_eq!(origin, BlockOrigin::Template);
+    assert!(r.s.schedule.date_plan(today()).is_none());
+    edit_template(&mut r, LogEdit::Remove { block, index: 1 }).unwrap();
+    assert_eq!(template_items(&r, 11), vec![song(7)]);
+}
+
+#[test]
+fn a_template_block_can_be_added_and_removed() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    edit_template(&mut r, LogEdit::AddBlock { start: tod(23, 30) }).unwrap();
+    let added =
+        r.s.schedule
+            .template(base(&r))
+            .unwrap()
+            .blocks
+            .iter()
+            .find(|b| b.start == tod(23, 30))
+            .map(|b| b.id)
+            .unwrap();
+    edit_template(
+        &mut r,
+        LogEdit::MoveBlock {
+            block: added,
+            start: tod(23, 45),
+        },
+    )
+    .unwrap();
+    assert!(
+        r.s.schedule
+            .template(base(&r))
+            .unwrap()
+            .block(added)
+            .is_some_and(|b| b.start == tod(23, 45))
+    );
+    edit_template(&mut r, LogEdit::RemoveBlock { block: added }).unwrap();
+    assert!(
+        r.s.schedule
+            .template(base(&r))
+            .unwrap()
+            .block(added)
+            .is_none()
+    );
+    assert_eq!(
+        edit_template(&mut r, LogEdit::Revert { block: added }).err(),
+        Some(ModelError::UnknownBlock(added))
+    );
+}
+
+#[test]
+fn template_edits_are_never_locked() {
+    let mut r = on_air();
+    let block = r.block(10, 0);
+    let log = r.schedule_player();
+    // The template's first item is on air today; the template still changes.
+    edit_template(&mut r, LogEdit::Remove { block, index: 0 }).unwrap();
+    assert_eq!(template_items(&r, 10), vec![song(2)]);
+    // The loaded block is not reloaded: the Log goes on as it was loaded.
+    edit_template(
+        &mut r,
+        LogEdit::Insert {
+            block,
+            index: 0,
+            items: vec![song(9)],
+        },
+    )
+    .unwrap();
+    assert_eq!(r.playing(log), Some(TrackId(1)));
+    r.end_current(log);
+    assert_eq!(r.playing(log), Some(TrackId(2)));
 }
 
 #[test]

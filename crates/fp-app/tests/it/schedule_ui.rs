@@ -317,7 +317,7 @@ fn a_late_next_says_so() {
 fn edits(sent: &[Command]) -> Vec<fp_model::log_edit::LogEdit> {
     sent.iter()
         .filter_map(|c| match c {
-            Command::EditLog { edit, .. } => Some(edit.clone()),
+            Command::EditPlan { edit, .. } => Some(edit.clone()),
             _ => None,
         })
         .collect()
@@ -533,8 +533,8 @@ fn a_changed_block_goes_back_to_the_template() {
     let (mut s, item) = with_block();
     apply(
         &mut s,
-        Command::EditLog {
-            date: item.date,
+        Command::EditPlan {
+            target: fp_model::log_edit::EditTarget::Date(item.date),
             edit: fp_model::log_edit::LogEdit::SetHardStart {
                 block: item.block,
                 index: 0,

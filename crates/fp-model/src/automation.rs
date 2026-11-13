@@ -1512,3 +1512,97 @@ pub fn schedule_view(state: &AppState) -> Vec<ScheduleRow> {
     }
     out
 }
+
+/// The rows of a template or a date as Settings edits them (rework AR20–
+/// AR22): the same rows as the Log's, for one day, and never playing (every
+/// row is coming; nothing is next or on air). A template's rows are dated
+/// today, and its blocks' origin is the template's.
+pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<ScheduleRow> {
+    use crate::log_edit::EditTarget;
+    let (date, blocks): (NaiveDate, Vec<DayBlock>) = match target {
+        EditTarget::Date(date) => (date, state.schedule.day(date)),
+        EditTarget::Template(template) => {
+            let mut blocks: Vec<DayBlock> = state
+                .schedule
+                .template(template)
+                .map(|t| {
+                    t.blocks
+                        .iter()
+                        .map(|b| DayBlock {
+                            id: b.id,
+                            start: b.start,
+                            items: b.items.clone(),
+                            origin: crate::schedule::BlockOrigin::Template,
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            blocks.sort_by_key(|b| b.start);
+            (state.local_now.date(), blocks)
+        }
+    };
+    let known = |track: TrackId| {
+        state.library.get(track).and_then(|t| {
+            let range = t.play_range(state.config.players.use_cue_markers);
+            range.known_end().map(|_| range.length())
+        })
+    };
+    let starts: Vec<NaiveDateTime> = blocks
+        .iter()
+        .filter_map(|b| {
+            chrono::NaiveTime::from_num_seconds_from_midnight_opt(b.start.secs(), 0)
+                .map(|t| date.and_time(t))
+        })
+        .collect();
+    let mut out = Vec::new();
+    for (i, (block, start)) in blocks.iter().zip(starts.iter()).enumerate() {
+        let next_start = starts.get(i + 1).copied();
+        let mut items = Vec::with_capacity(block.items.len());
+        let mut at = *start;
+        for (index, what) in block.items.iter().enumerate() {
+            let track = match what {
+                crate::schedule::Item::Track { track, .. } => Some(*track),
+                _ => None,
+            };
+            let length_secs = match what {
+                crate::schedule::Item::Rotation { .. } => next_start
+                    .map(|n| (n - at).num_milliseconds() as f64 / 1000.0)
+                    .filter(|s| *s > 0.0),
+                _ => track.and_then(known),
+            };
+            items.push(ScheduleRow::Item {
+                item: ItemRef {
+                    date,
+                    block: block.id,
+                    index,
+                },
+                what: what.clone(),
+                length_secs,
+                time_critical: what.is_time_critical(state),
+                status: RowStatus::Coming,
+                starts_at: at,
+                track,
+                late: false,
+            });
+            if !matches!(what, crate::schedule::Item::Rotation { .. }) {
+                at += TimeDelta::milliseconds((length_secs.unwrap_or(0.0) * 1000.0) as i64);
+            }
+        }
+        let total_secs = (at - *start).num_milliseconds() as f64 / 1000.0;
+        let overrun_secs = next_start
+            .map(|n| total_secs - (n - *start).num_milliseconds() as f64 / 1000.0)
+            .filter(|excess| *excess > 0.0);
+        out.push(ScheduleRow::Block {
+            date,
+            block: block.id,
+            start: *start,
+            origin: block.origin,
+            status: RowStatus::Coming,
+            total_secs,
+            overrun_secs,
+            count: block.items.len(),
+        });
+        out.extend(items);
+    }
+    out
+}
