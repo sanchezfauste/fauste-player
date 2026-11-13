@@ -90,7 +90,7 @@ fn row_secs(state: &AppState, entry: EntryId) -> f64 {
 }
 
 /// Where the filler's list stands: the rows before `anchor` are history,
-/// the rows from `anchor` on are ahead. Next wins over the row on air
+/// the rows from `anchor` on are ahead. A next after the row on air wins
 /// (AR13): the rows between them will not play.
 fn anchor(state: &AppState, f: &FillerState) -> usize {
     let Some(list) = state.playlists.get(f.playlist) else {
@@ -99,13 +99,29 @@ fn anchor(state: &AppState, f: &FillerState) -> usize {
     let Some(player) = state.players.iter().find(|p| p.id == f.player) else {
         return list.entries.len();
     };
-    if let Some(i) = player.next.and_then(|n| list.position(n)) {
-        return i;
+    let current = player.current.and_then(|c| list.position(c));
+    let next = player.next.and_then(|n| list.position(n));
+    match (current, next) {
+        // A next back before the row on air: the rows after the row on air
+        // stay ahead, so the row on air is never among them.
+        (Some(c), Some(n)) if n <= c => c + 1,
+        (_, Some(n)) => n,
+        (Some(c), None) => c + 1,
+        (None, None) => list.entries.len(),
     }
-    match player.current.and_then(|c| list.position(c)) {
-        Some(i) => i + 1,
-        None => list.entries.len(),
-    }
+}
+
+/// The rows before `played_end` have played: those before the row on air,
+/// or before `anchor` when nothing is on air. Rows skipped by a next
+/// further down are not history.
+fn played_end(state: &AppState, f: &FillerState) -> usize {
+    let current = state
+        .players
+        .iter()
+        .find(|p| p.id == f.player)
+        .and_then(|p| p.current)
+        .and_then(|c| state.playlists.get(f.playlist)?.position(c));
+    current.unwrap_or_else(|| anchor(state, f))
 }
 
 /// AU27, AU28: trims the played rows beyond `filler_played_kept` and tops
@@ -319,7 +335,7 @@ fn trim(state: &mut AppState, f: &FillerState, out: &mut Vec<EngineAction>) {
         .iter()
         .find(|p| p.id == f.player)
         .and_then(|p| p.current);
-    let history = anchor(state, f).saturating_sub(usize::from(current.is_some()));
+    let history = played_end(state, f);
     let kept = state.config.automation.filler_played_kept as usize;
     let drop: HashSet<EntryId> = list
         .entries

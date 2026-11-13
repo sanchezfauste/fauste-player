@@ -496,3 +496,22 @@ fn a_next_before_the_row_on_air_still_tops_up() {
     );
     assert_eq!(s.player(player).unwrap().next, Some(first));
 }
+
+/// Review of rework plan 1: rows skipped by a next far ahead are not
+/// history; they stay in the list.
+#[test]
+fn rows_skipped_by_a_next_far_ahead_are_not_trimmed() {
+    let mut s = filled(80, 180.0);
+    s.config.automation.filler_played_kept = 10;
+    s.config.automation.filler_lookahead_mins = 240;
+    settle(&mut s);
+    let (player, _) = filler(&s);
+    apply(&mut s, Command::Play(player)).unwrap();
+    let before = rows(&s);
+    assert!(before.len() > 31);
+    apply(&mut s, Command::SetNext(player, before[30])).unwrap();
+    let after = rows(&s);
+    for e in &before[..=30] {
+        assert!(after.contains(e), "row {e:?} was trimmed");
+    }
+}
