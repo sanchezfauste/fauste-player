@@ -81,6 +81,10 @@ pub struct AutomationState {
     /// The Log's Pause paused the filler's song playing for the Log
     /// (runtime only): the Log's Play resumes it (AR5).
     pub paused_fill: bool,
+    /// The filler's song was on air for the Log at the last look (runtime
+    /// only): if the filler then stops with no hand-over or hold pending,
+    /// the operator stopped it, and automation stops too (AR7).
+    pub fill_on_air: bool,
 }
 
 /// Creates the schedule's player (stopped, hidden, just before the
@@ -117,6 +121,7 @@ pub fn ensure(state: &mut AppState, playlist_name: &str) -> Vec<EngineAction> {
         last_on_air: None,
         stop_at_end: false,
         paused_fill: false,
+        fill_on_air: false,
     });
     vec![EngineAction::AddPlayer { player }]
 }
@@ -386,6 +391,25 @@ pub(crate) fn log_pause(
         a.stop_at_end = false;
         a.handing_over = None;
         a.paused_fill = fill;
+    }
+    Ok(())
+}
+
+/// AR7: Pause on the filler while its song is on air for the Log stops
+/// automation too; the Log's Play resumes it.
+pub(crate) fn filler_pause(
+    state: &mut AppState,
+    filler: PlayerId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let fill = fill_is_current(state);
+    crate::reducer::apply_pause(state, filler, out)?;
+    if fill && let Some(a) = state.automation.as_mut() {
+        a.running = false;
+        a.stop_at_end = false;
+        a.handing_over = None;
+        a.fill_on_air = false;
+        a.paused_fill = true;
     }
     Ok(())
 }
@@ -678,6 +702,7 @@ fn halt(state: &mut AppState) {
         a.stop_at_end = false;
         a.handing_over = None;
         a.filler_held = false;
+        a.fill_on_air = false;
     }
 }
 
@@ -836,9 +861,15 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
     if a.on_air.is_some() {
         return;
     }
-    // AR6: the filler's song for the Log ended under Stop at end, before
-    // any hand-over: automation stops.
-    if a.stop_at_end && a.handing_over.is_none() && !is_playing(state, filler_player(state)) {
+    // AR6, AR7: the filler's song for the Log ended under Stop at end, or
+    // the operator stopped the filler, before any hand-over or hold:
+    // automation stops.
+    let filler_stopped = !is_playing(state, filler_player(state));
+    if filler_stopped
+        && a.handing_over.is_none()
+        && !a.filler_held
+        && (a.stop_at_end || (a.fill_on_air && !starting))
+    {
         halt(state);
         return;
     }
@@ -920,6 +951,14 @@ fn set_filler_hold(state: &mut AppState, hold: bool) {
     }
 }
 
+/// Remembers whether the filler's song is on air for the Log (AR7).
+fn note_fill(state: &mut AppState) {
+    let fill = fill_is_current(state);
+    if let Some(a) = state.automation.as_mut() {
+        a.fill_on_air = fill;
+    }
+}
+
 pub(crate) fn start(state: &mut AppState, out: &mut Vec<EngineAction>) -> Result<(), ModelError> {
     let Some(a) = state.automation.as_mut() else {
         return Ok(());
@@ -935,6 +974,7 @@ pub(crate) fn start(state: &mut AppState, out: &mut Vec<EngineAction>) -> Result
         }
     }
     drive(state, out, true);
+    note_fill(state);
     Ok(())
 }
 
@@ -975,6 +1015,7 @@ pub fn tick(state: &mut AppState) -> (Vec<EngineAction>, bool) {
         settle_next(state);
     }
     drive(state, &mut out, false);
+    note_fill(state);
     let second_changed = before
         .as_ref()
         .and_then(|a| a.seen)
@@ -1104,6 +1145,7 @@ pub(crate) fn restore(state: &mut AppState, saved: Option<AutomationSession>) {
         last_on_air: None,
         stop_at_end: false,
         paused_fill: false,
+        fill_on_air: false,
     });
 }
 

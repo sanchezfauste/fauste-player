@@ -251,3 +251,72 @@ fn log_stop_leaves_a_filler_playing_on_its_own_alone() {
     r.at_hms(10, 30, 1);
     assert!(r.playing(f).is_some());
 }
+
+// Task 4: AR7, the music fill's own transport.
+
+/// Automation running at 10:30, the filler's song on air for the Log.
+fn music_at_half_past_ten() -> Rig {
+    let mut r = two_blocks();
+    r.at_hms(10, 30, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    assert!(r.playing(r.filler_player()).is_some());
+    r
+}
+
+#[test]
+fn stopping_the_filler_during_music_stops_automation() {
+    let mut r = music_at_half_past_ten();
+    r.apply(Command::Stop(r.filler_player()));
+    r.at_hms(10, 30, 1);
+    assert!(!running(&r));
+    assert_eq!(r.playing(r.filler_player()), None);
+    r.at_hms(11, 0, 0);
+    assert_eq!(r.playing(r.schedule_player()), None);
+}
+
+#[test]
+fn the_fillers_stop_at_end_stops_automation_when_its_song_ends_first() {
+    let mut r = music_at_half_past_ten();
+    let f = r.filler_player();
+    r.apply(Command::ToggleStopAfterCurrent(f));
+    r.end_current(f);
+    r.at_hms(10, 31, 0);
+    assert_eq!(r.playing(f), None);
+    assert!(!running(&r));
+    r.at_hms(11, 0, 0);
+    assert_eq!(r.playing(r.schedule_player()), None);
+}
+
+#[test]
+fn the_fillers_stop_at_end_is_cleared_when_a_block_comes_first() {
+    let mut r = two_blocks();
+    r.at_hms(10, 58, 30);
+    r.apply(Command::Play(r.schedule_player()));
+    let f = r.filler_player();
+    r.apply(Command::ToggleStopAfterCurrent(f));
+    r.at_hms(11, 0, 0);
+    assert_eq!(r.playing(r.schedule_player()), Some(TrackId(3)));
+    assert!(!r.player(f).stop_after_current);
+    assert!(running(&r));
+}
+
+#[test]
+fn play_on_the_filler_while_a_block_plays_mixes() {
+    let mut r = on_air_at_ten();
+    let f = r.filler_player();
+    r.apply(Command::Play(f));
+    assert!(r.playing(f).is_some());
+    assert_eq!(r.playing(r.schedule_player()), Some(TrackId(1)));
+    assert!(running(&r));
+}
+
+#[test]
+fn pausing_the_filler_during_music_stops_automation_and_the_log_resumes_it() {
+    let mut r = music_at_half_past_ten();
+    let f = r.filler_player();
+    r.apply(Command::Pause(f));
+    assert!(!running(&r));
+    r.apply(Command::Play(r.schedule_player()));
+    assert!(running(&r));
+    assert_eq!(r.player(f).transport, fp_model::Transport::Playing);
+}
