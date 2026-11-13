@@ -47,7 +47,7 @@ Programazio zutabeko **Editatu programazioa** botoiak editorea irekitzen du.
 Hiru fitxa ditu, eta **Errotazioak…** botoiak Ezarpenak → Automatizazioa
 atalera eramaten zaitu, errotazioak egiten diren tokira.
 
-![Programazio-editorea, Txantiloiak fitxa: Base eta Weekend txantiloiak ezkerrean; Base-ren blokeak eskuinean, bakoitza bere hasierarekin, bere elementuekin, Gehitu kategoriatik botoiarekin eta ondoren datorren musikaren errotazioarekin](../../images/guide/schedule-templates.png)
+![Programazio-editorea, Txantiloiak fitxa: Base eta Weekend txantiloiak ezkerrean; Base-ren blokeak eskuinean, bakoitza bere hasierarekin, bere elementuekin, Gehitu kategoriatik botoiarekin eta ondoren datorren musikaren errotazioarekin](../../images/guide/template-popup.png)
 
 - **Txantiloiak.** Txantiloi bat bloke-egun bat da; instalazio berri batek bat
   du, "Base", egun guztietarako. Sortu, bikoiztu, aldatu izena edo ezabatu
@@ -63,7 +63,7 @@ atalera eramaten zaitu, errotazioak egiten diren tokira.
   zenbat gainditzen duen esaten du, anbarrez; hala ere horrela utz dezakezu.
 - **Aste mota.** Asteko egun bakoitzak zein txantiloi erabiltzen duen.
 
-  ![Aste mota fitxa: Base astelehenetik ostiralera, Weekend larunbatean eta igandean](../../images/guide/schedule-week.png)
+  ![Aste mota fitxa: Base astelehenetik ostiralera, Weekend larunbatean eta igandean](../../images/guide/settings-plans.png)
 
 - **Egunak.** Aukeratu data bat egutegian (aldaketak dituzten datak anbarrezkoak
   dira). Data batek bere asteguneko txantiloiaz bestelako bat erabil dezake
@@ -74,7 +74,7 @@ atalera eramaten zaitu, errotazioak egiten diren tokira.
   du. Txantiloiaren geroko aldaketek data horretan aldatu ez dituzun blokeei
   eragiten diete.
 
-  ![Egunak fitxa: egutegia gaur aukeratuta eta aldaketak dituzten datak anbarrez; gaurko lehen blokeak iragarki bat gehiago du, "egun honetarako aldatua" markatuta, Itzuli txantiloira botoiarekin](../../images/guide/schedule-days.png)
+  ![Egunak fitxa: egutegia gaur aukeratuta eta aldaketak dituzten datak anbarrez; gaurko lehen blokeak iragarki bat gehiago du, "egun honetarako aldatua" markatuta, Itzuli txantiloira botoiarekin](../../images/guide/settings-plans.png)
 
 ## Musika-betegarria {#the-music-filler}
 

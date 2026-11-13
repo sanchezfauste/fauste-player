@@ -317,7 +317,7 @@ fn a_late_next_says_so() {
 fn edits(sent: &[Command]) -> Vec<fp_model::log_edit::LogEdit> {
     sent.iter()
         .filter_map(|c| match c {
-            Command::EditLog { edit, .. } => Some(edit.clone()),
+            Command::EditPlan { edit, .. } => Some(edit.clone()),
             _ => None,
         })
         .collect()
@@ -533,8 +533,8 @@ fn a_changed_block_goes_back_to_the_template() {
     let (mut s, item) = with_block();
     apply(
         &mut s,
-        Command::EditLog {
-            date: item.date,
+        Command::EditPlan {
+            target: fp_model::log_edit::EditTarget::Date(item.date),
             edit: fp_model::log_edit::LogEdit::SetHardStart {
                 block: item.block,
                 index: 0,
@@ -584,4 +584,34 @@ fn the_footer_says_when_the_next_block_starts() {
     a.next = Some(item);
     let (h, _fake) = harness(s);
     assert!(h.query_by_label_contains("Next block 10:00").is_some());
+}
+
+#[test]
+fn library_tracks_dropped_on_a_row_go_before_it() {
+    let (s, item) = with_block();
+    let (mut h, fake) = harness(s);
+    let rows: Vec<_> = h.query_all_by_label_contains("Top of the Hour").collect();
+    let at = rows[1].rect().center();
+    h.event(egui::Event::PointerMoved(at));
+    h.run();
+    fp_app::ui::app::AppUi::start_track_drag(&h.ctx, vec![fp_model::TrackId(1)]);
+    h.run();
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Insert {
+            block: item.block,
+            index: 0,
+            items: vec![fp_model::schedule::Item::Track {
+                track: fp_model::TrackId(1),
+                time_critical: false,
+            }],
+        }]
+    );
 }

@@ -3,8 +3,8 @@
 Automation keeps the station on air when nobody is in the studio. This
 version has the **music fill**, a player that chooses music by itself,
 from rules you set, and never stops for lack of a list, and the
-**Log** column, which runs the day's timed blocks, with the editor
-where you make them.
+**Log** column, which runs the day's timed blocks, made from templates in
+Settings.
 The players you already use (P1 … Pn) are untouched: they stay yours for
 shows you prepare and play live.
 
@@ -73,39 +73,45 @@ and Play plays it, whatever the time: you choose. To change what plays
 next, double-click an item, or right-click it and choose **Play next**.
 **Back to the clock**, in the same menu, sets next to what the time says.
 
-## Editing the log
+## Templates and days
 
-**Edit log**, on the Log column, opens the editor. It has three
-tabs, and **Rotations…** takes you to Settings → Automation, where
-rotations are made.
+The Log plays each day from a **template**: a day of blocks. A new
+installation has one, "Base", for every day. Templates are made in
+Settings → **Automation**, under **Templates and days** (not on
+Android); the Log column changes only today, as above.
 
-![The log editor, Templates tab: the Base and Weekend templates on the left; Base's blocks on the right, each with its start, its items, Add category track and the rotation for the music after it](../images/guide/schedule-templates.png)
+![Settings, Automation, Templates and days: the Base and Weekend templates with Edit…, New template, Duplicate, Delete and the name; the week plan, Base from Monday to Friday and Weekend on Saturday and Sunday; the month with today chosen, the dates with changes in amber, the date's template and Edit day…](../images/guide/settings-plans.png)
 
-- **Templates.** A template is a day of blocks; a new installation has
-  one, "Base", for every day. Make, duplicate, rename or delete templates
-  on the left; the chosen one's blocks are on the right. Type a block's
-  start as `HH:MM:SS` (a time that does not exist is kept in the field
-  with a note, and nothing changes). Drag tracks from the library onto a
-  block to add them; **Add category track** adds an item that plays one
-  track of that category, a different one each time; **Then music fill**
-  chooses the rotation the music fill plays after the block (the
-  default rotation when none is chosen). Each item can be marked
-  **Hard start**, moved or removed. When a block's items are longer
-  than the time to the next block, the block says by how much, in amber;
-  you can still keep it so.
+- **Templates.** Choose one and press **Edit…** (or double-click it) to
+  open it; **New template**, **Duplicate** and **Delete** are beside it,
+  and its name is below.
 - **Week plan.** Which template each weekday uses.
-
-  ![The Week plan tab: Base from Monday to Friday, Weekend on Saturday and Sunday](../images/guide/schedule-week.png)
-
 - **Days.** Pick a date on the calendar (dates with changes are amber).
   A date can use another template than its weekday's (a holiday on a
-  Thursday can use the weekend's). Its blocks can be changed for that date
-  only: the change is marked, and **Back to the template** undoes it.
-  **Not on this day** removes a block from that date alone, and **Add
-  block on this day** adds one. Later changes to the template still reach
-  the blocks you did not change on that date.
+  Thursday can use the weekend's). **Edit day…** opens that date, to
+  change its blocks for that date only; past dates cannot be changed.
 
-  ![The Days tab: the calendar with today chosen and the dates with changes in amber; today's first block has one more spot, marked "changed for this day", with Back to the template](../images/guide/schedule-days.png)
+A template or a date opens in its own window, which closes Settings. It
+is the same list as the Log column, and you change it the same way:
+**Add** at its bottom (Track…, Category track…, Music fill (rotation)…,
+Block…), tracks dragged from the library onto a row, rows dragged to
+move them, and the right-click menus of rows and block headers. It never
+plays, and it can stay open beside the library.
+
+![A template open in its window: the Base template's blocks by start time, each with its station ID, its spots and the music fill after it, and Add at the bottom](../images/guide/template-popup.png)
+
+A **category track** in a template plays one track of that category, a
+different one each time. The **Music fill** item chooses the rotation the
+music fill plays after the block (the default rotation when the block
+has none). When a block's items are longer than the time to the next
+block, its header says by how much, in amber; you can still keep it so.
+
+A change to a date is marked "changed for this day" on its block, and
+**Back to the template**, on the block header's menu, undoes it. Later
+changes to the template still reach the blocks you did not change on
+that date. A change to a template made while one of its blocks is on air
+leaves that block as it is for today (it shows "changed for this day");
+the change reaches it from the next day.
 
 ## The music fill
 
@@ -166,7 +172,7 @@ installation has one, **Music**, which plays all your music.
 
 Rotations are made in Settings → Automation:
 
-![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, its counts At least and At most, and the music fill's rules](../images/guide/settings-automation.png)
+![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, its counts At least and At most, and the start of Templates and days](../images/guide/settings-automation.png)
 
 ## How it chooses
 

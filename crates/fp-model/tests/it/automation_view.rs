@@ -430,3 +430,75 @@ fn a_category_items_track_stays_shown_after_its_block() {
     };
     assert_eq!(track, Some(fp_model::TrackId(901)));
 }
+
+#[test]
+fn plan_view_lists_a_templates_blocks() {
+    let mut r = rig();
+    r.at_hms(10, 0, 30);
+    let base = r.s.schedule.templates()[0].id;
+    let rows =
+        fp_model::automation::plan_view(&r.s, fp_model::log_edit::EditTarget::Template(base));
+    let starts: Vec<(u32, usize)> = rows
+        .iter()
+        .filter_map(|row| match row {
+            ScheduleRow::Block { start, count, .. } => {
+                Some((chrono::Timelike::hour(start), *count))
+            }
+            ScheduleRow::Item { .. } => None,
+        })
+        .collect();
+    assert_eq!(starts, vec![(10, 2), (12, 1)]);
+    // A template never plays: every row is coming, nothing is next.
+    assert!(rows.iter().all(|row| match row {
+        ScheduleRow::Block { status, .. } | ScheduleRow::Item { status, .. } =>
+            *status == RowStatus::Coming,
+    }));
+    assert_eq!(rows.len(), 5);
+}
+
+#[test]
+fn plan_view_of_a_date_has_its_changes() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    let tomorrow = today().checked_add_days(Days::new(1)).unwrap();
+    let block = r.block(12, 0);
+    r.apply(Command::EditPlan {
+        target: fp_model::log_edit::EditTarget::Date(tomorrow),
+        edit: fp_model::log_edit::LogEdit::Insert {
+            block,
+            index: 0,
+            items: vec![song(7)],
+        },
+    });
+    let rows =
+        fp_model::automation::plan_view(&r.s, fp_model::log_edit::EditTarget::Date(tomorrow));
+    let changed = rows.iter().find_map(|row| match row {
+        ScheduleRow::Block {
+            block: b,
+            origin,
+            date,
+            count,
+            ..
+        } if *b == block => Some((*origin, *date, *count)),
+        _ => None,
+    });
+    assert_eq!(
+        changed,
+        Some((fp_model::schedule::BlockOrigin::Changed, tomorrow, 2))
+    );
+}
+
+#[test]
+fn plan_view_runs_a_templates_last_block_to_midnight() {
+    let mut r = Rig::new(vec![(23, 59, vec![song(1), song(2)])]);
+    r.at_hms(9, 0, 0);
+    let base = r.s.schedule.templates()[0].id;
+    let rows =
+        fp_model::automation::plan_view(&r.s, fp_model::log_edit::EditTarget::Template(base));
+    let overrun = rows.iter().find_map(|row| match row {
+        ScheduleRow::Block { overrun_secs, .. } => Some(*overrun_secs),
+        ScheduleRow::Item { .. } => None,
+    });
+    // Two songs of known length in one minute before midnight.
+    assert!(overrun.flatten().is_some_and(|secs| secs > 0.0));
+}

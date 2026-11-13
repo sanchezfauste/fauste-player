@@ -121,6 +121,11 @@ pub(crate) struct TabScroll {
 pub(crate) struct ViewState {
     /// The Log's open Add or Change time dialog (rework AR17).
     pub log_dialog: Option<super::schedule::LogDialog>,
+    /// The template or date open in its popup (rework AR21).
+    pub plan_window: Option<fp_model::log_edit::EditTarget>,
+    /// Settings asked for `plan_window` this frame (Edit…, Edit day…): it
+    /// closes, whatever was open before.
+    pub plan_requested: bool,
     /// What a phone shows (mobile spec §6); unused elsewhere.
     pub phone: super::touch::PhoneView,
     /// The phone's Music screen (phone layout spec §9), the Library tab's
@@ -226,10 +231,6 @@ pub(crate) struct ViewState {
     /// Open Settings on Audio outputs (a place that needs a route set up,
     /// such as the library's CUE).
     pub open_outputs: bool,
-    /// Open Settings on Automation (the schedule editor's Rotations…).
-    pub open_automation_settings: bool,
-    /// The schedule editor (automation spec §8.2).
-    pub schedule_editor: super::schedule_editor::EditorState,
     /// A track whose tags the operator asked to edit (feedback 2 spec O23);
     /// the next frame opens the editor.
     pub edit_tags: Option<TrackId>,
@@ -884,6 +885,20 @@ impl AppUi {
         self.clock_millis = Some(millis);
     }
 
+    /// Starts dragging library tracks, as the library's table does when
+    /// its rows are dragged. Used by tests.
+    #[cfg(feature = "test-hooks")]
+    pub fn start_track_drag(ctx: &egui::Context, tracks: Vec<TrackId>) {
+        egui::DragAndDrop::set_payload(ctx, DragTracks { tracks });
+    }
+
+    /// Opens a template or a date in its popup, as Settings does. Used by
+    /// tests.
+    #[cfg(feature = "test-hooks")]
+    pub fn open_plan_window(&mut self, target: fp_model::log_edit::EditTarget) {
+        self.view.plan_window = Some(target);
+    }
+
     /// Makes the next frame panic. Used to test panic isolation.
     #[cfg(feature = "test-hooks")]
     pub fn fail_next_frame(&mut self) {
@@ -1241,7 +1256,8 @@ impl AppUi {
         // The library window and the CUE windows float over the screen; the
         // dialogs below stay on top.
         super::library::draw(&ctx, &scene, &mut self.view);
-        super::schedule_editor::draw(&ctx, &scene, &mut self.view);
+        super::plan_window::draw(&ctx, &scene, &mut self.view);
+        super::schedule::log_dialog(&ctx, &scene, &mut self.view);
         cue_window::show_all(&ctx, &scene, &mut self.view);
         super::loudness_edit::popup(&ctx, &scene, &mut self.view);
         // Once, at start-up: tracks an earlier version analysed wait for
@@ -1256,7 +1272,7 @@ impl AppUi {
         // PL19b: while a phone's Music screen answers a picker Settings
         // asked, Settings waits (its state kept) instead of covering it.
         let picking = self.view.phone_active && self.view.music.pick.is_some();
-        if self.view.open_outputs || self.view.open_automation_settings {
+        if self.view.open_outputs {
             self.view.settings_open = true;
         }
         if self.view.settings_open && !picking {
@@ -1269,9 +1285,6 @@ impl AppUi {
             }
             if std::mem::take(&mut self.view.open_outputs) {
                 self.settings.show_outputs();
-            }
-            if std::mem::take(&mut self.view.open_automation_settings) {
-                self.settings.show_automation();
             }
             let pending_tip = {
                 let names = |d: &fp_model::OutputDevice| self.settings.device_label(d);

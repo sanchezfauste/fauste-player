@@ -1,18 +1,27 @@
-//! Editing the Log live (automation rework AR17–AR19): every edit is a
-//! change of its date (AU11–AU12); the template is never touched. Rows of
-//! past dates, the row on air and played rows are locked.
+//! Editing the Log live (automation rework AR17–AR19), and a template or a
+//! date from Settings (AR20–AR22), with the same edits. An edit of a date
+//! is a change of that date (AU11–AU12) and leaves the template alone;
+//! rows of past dates, the row on air and played rows are locked. An edit
+//! of a template changes the template and is never locked.
 
 use chrono::NaiveDate;
 
 use crate::automation::ItemRef;
 use crate::command::EngineAction;
 use crate::error::ModelError;
-use crate::ids::BlockId;
+use crate::ids::{BlockId, TemplateId};
 use crate::local_time::TimeOfDay;
 use crate::schedule::{Block, Item};
 use crate::state::AppState;
 
-/// One live edit of a date's Log.
+/// What an edit changes: a date's Log, or a template.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
+pub enum EditTarget {
+    Date(NaiveDate),
+    Template(TemplateId),
+}
+
+/// One edit of a date's Log or a template.
 #[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum LogEdit {
     /// Items inserted before `index` of the block (at its end, before a
@@ -47,7 +56,7 @@ pub enum LogEdit {
     RemoveBlock {
         block: BlockId,
     },
-    /// Back to the template.
+    /// Back to the template (dates only).
     Revert {
         block: BlockId,
     },
@@ -86,19 +95,97 @@ fn check(
     }
 }
 
-/// The block as it is on `date`.
-fn block_on(state: &AppState, date: NaiveDate, block: BlockId) -> Result<Block, ModelError> {
-    state
+/// The block as it is on the target.
+fn block_on(state: &AppState, target: EditTarget, block: BlockId) -> Result<Block, ModelError> {
+    match target {
+        EditTarget::Date(date) => state
+            .schedule
+            .day(date)
+            .into_iter()
+            .find(|b| b.id == block)
+            .map(|b| Block {
+                id: b.id,
+                start: b.start,
+                items: b.items,
+            }),
+        EditTarget::Template(template) => state
+            .schedule
+            .template(template)
+            .and_then(|t| t.block(block))
+            .cloned(),
+    }
+    .ok_or(ModelError::UnknownBlock(block))
+}
+
+/// Stores a block on the target: a date change, or the template's block.
+fn put(state: &mut AppState, target: EditTarget, block: Block) -> Result<(), ModelError> {
+    match target {
+        EditTarget::Date(date) => crate::schedule::change_block_on_date(state, date, block),
+        EditTarget::Template(template) => crate::schedule::update_block(state, template, block),
+    }
+}
+
+/// Fails when the row may not change: only a date's rows are ever locked.
+fn check_target(
+    state: &AppState,
+    target: EditTarget,
+    block: BlockId,
+    index: usize,
+) -> Result<(), ModelError> {
+    match target {
+        EditTarget::Date(date) => check(state, date, block, index),
+        EditTarget::Template(_) => Ok(()),
+    }
+}
+
+/// The blocks an edit changes.
+fn blocks_of(edit: &LogEdit) -> Vec<BlockId> {
+    match edit {
+        LogEdit::Insert { block, .. }
+        | LogEdit::Remove { block, .. }
+        | LogEdit::SetHardStart { block, .. }
+        | LogEdit::MoveBlock { block, .. }
+        | LogEdit::RemoveBlock { block }
+        | LogEdit::Revert { block } => vec![*block],
+        LogEdit::Move { from, to } => vec![from.0, to.0],
+        LogEdit::AddBlock { .. } => Vec::new(),
+    }
+}
+
+/// A template edit to the block on air, while its date follows the
+/// template for it: that date first keeps the block as it was loaded (a
+/// change of the date, AU12), so the Log's rows still match what plays;
+/// the template's change reaches the days after.
+fn keep_on_air_as_loaded(
+    state: &mut AppState,
+    template: TemplateId,
+    edit: &LogEdit,
+) -> Result<(), ModelError> {
+    let Some(run) = state.automation.as_ref().and_then(|a| a.on_air) else {
+        return Ok(());
+    };
+    if !blocks_of(edit).contains(&run.block)
+        || state.schedule.template_for(run.date) != Some(template)
+    {
+        return Ok(());
+    }
+    let Some(day_block) = state
         .schedule
-        .day(date)
+        .day(run.date)
         .into_iter()
-        .find(|b| b.id == block)
-        .map(|b| Block {
-            id: b.id,
-            start: b.start,
-            items: b.items,
-        })
-        .ok_or(ModelError::UnknownBlock(block))
+        .find(|b| b.id == run.block && b.origin == crate::schedule::BlockOrigin::Template)
+    else {
+        return Ok(());
+    };
+    crate::schedule::change_block_on_date(
+        state,
+        run.date,
+        Block {
+            id: day_block.id,
+            start: day_block.start,
+            items: day_block.items,
+        },
+    )
 }
 
 /// `items` inserted before `index`, a Music fill kept last (AU6).
@@ -121,12 +208,17 @@ fn inserted(mut list: Vec<Item>, index: usize, items: Vec<Item>) -> Vec<Item> {
 
 pub(crate) fn apply(
     state: &mut AppState,
-    date: NaiveDate,
+    target: EditTarget,
     edit: LogEdit,
     out: &mut Vec<EngineAction>,
 ) -> Result<(), ModelError> {
-    if date < state.local_now.date() {
+    if let EditTarget::Date(date) = target
+        && date < state.local_now.date()
+    {
         return Err(ModelError::PastDate);
+    }
+    if let EditTarget::Template(template) = target {
+        keep_on_air_as_loaded(state, template, &edit)?;
     }
     let touched: Vec<BlockId> = match edit {
         LogEdit::Insert {
@@ -134,21 +226,21 @@ pub(crate) fn apply(
             index,
             items,
         } => {
-            let mut b = block_on(state, date, block)?;
+            let mut b = block_on(state, target, block)?;
             let at = index.min(b.items.len());
-            check(state, date, block, at)?;
+            check_target(state, target, block, at)?;
             b.items = inserted(b.items, at, items);
-            crate::schedule::change_block_on_date(state, date, b)?;
+            put(state, target, b)?;
             vec![block]
         }
         LogEdit::Remove { block, index } => {
-            check(state, date, block, index)?;
-            let mut b = block_on(state, date, block)?;
+            check_target(state, target, block, index)?;
+            let mut b = block_on(state, target, block)?;
             if index >= b.items.len() {
                 return Err(ModelError::UnknownItem);
             }
             b.items.remove(index);
-            crate::schedule::change_block_on_date(state, date, b)?;
+            put(state, target, b)?;
             vec![block]
         }
         // Onto itself or the row below it: nothing moves.
@@ -156,9 +248,9 @@ pub(crate) fn apply(
             return Ok(());
         }
         LogEdit::Move { from, to } => {
-            check(state, date, from.0, from.1)?;
-            check(state, date, to.0, to.1)?;
-            let mut source = block_on(state, date, from.0)?;
+            check_target(state, target, from.0, from.1)?;
+            check_target(state, target, to.0, to.1)?;
+            let mut source = block_on(state, target, from.0)?;
             if from.1 >= source.items.len() {
                 return Err(ModelError::UnknownItem);
             }
@@ -166,53 +258,70 @@ pub(crate) fn apply(
             if from.0 == to.0 {
                 let at = if to.1 > from.1 { to.1 - 1 } else { to.1 };
                 source.items = inserted(source.items, at, vec![item]);
-                crate::schedule::change_block_on_date(state, date, source)?;
+                put(state, target, source)?;
                 vec![from.0]
             } else {
-                let mut target = block_on(state, date, to.0)?;
-                target.items = inserted(target.items, to.1, vec![item]);
-                crate::schedule::change_block_on_date(state, date, source)?;
-                crate::schedule::change_block_on_date(state, date, target)?;
+                let mut dest = block_on(state, target, to.0)?;
+                dest.items = inserted(dest.items, to.1, vec![item]);
+                put(state, target, source)?;
+                put(state, target, dest)?;
                 vec![from.0, to.0]
             }
         }
         LogEdit::SetHardStart { block, index, on } => {
-            check(state, date, block, index)?;
-            let mut b = block_on(state, date, block)?;
+            check_target(state, target, block, index)?;
+            let mut b = block_on(state, target, block)?;
             match b.items.get_mut(index) {
                 Some(Item::Track { time_critical, .. } | Item::Category { time_critical, .. }) => {
                     *time_critical = on;
                 }
                 _ => return Err(ModelError::UnknownItem),
             }
-            crate::schedule::change_block_on_date(state, date, b)?;
+            put(state, target, b)?;
             vec![block]
         }
         LogEdit::AddBlock { start } => {
-            crate::schedule::add_block_on_date(state, date, start)?;
+            match target {
+                EditTarget::Date(date) => crate::schedule::add_block_on_date(state, date, start)?,
+                EditTarget::Template(template) => {
+                    crate::schedule::add_block(state, template, start)?;
+                }
+            }
             Vec::new()
         }
         LogEdit::MoveBlock { block, start } => {
-            check(state, date, block, 0)?;
-            let mut b = block_on(state, date, block)?;
+            check_target(state, target, block, 0)?;
+            let mut b = block_on(state, target, block)?;
             b.start = start;
-            crate::schedule::change_block_on_date(state, date, b)?;
+            put(state, target, b)?;
             vec![block]
         }
         LogEdit::RemoveBlock { block } => {
-            check(state, date, block, 0)?;
-            crate::schedule::remove_block_on_date(state, date, block)?;
+            check_target(state, target, block, 0)?;
+            match target {
+                EditTarget::Date(date) => {
+                    crate::schedule::remove_block_on_date(state, date, block)?;
+                }
+                EditTarget::Template(template) => {
+                    crate::schedule::remove_block(state, template, block)?;
+                }
+            }
             Vec::new()
         }
         LogEdit::Revert { block } => {
-            check(state, date, block, 0)?;
+            check_target(state, target, block, 0)?;
+            let EditTarget::Date(date) = target else {
+                return Err(ModelError::UnknownBlock(block));
+            };
             crate::schedule::revert_block_on_date(state, date, block)?;
             vec![block]
         }
     };
     // AR19b: an edit to the block on air takes effect at once, after the
-    // row on air.
-    if let Some(item) = crate::automation::on_air_item(state)
+    // row on air. A template edit never reloads (AU12: it reaches a date
+    // through the computed day, not the loaded block).
+    if let EditTarget::Date(date) = target
+        && let Some(item) = crate::automation::on_air_item(state)
         && item.date == date
         && touched.contains(&item.block)
     {

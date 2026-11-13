@@ -4,7 +4,8 @@ The design is the [automation spec](../superpowers/specs/2026-11-11-automation-d
 (rules `AU<n>`). This page describes what is implemented so far: the music
 filler's selection rules and player, the schedule's data model, running
 the schedule and its as-run log, pure functions in `fp-model`. The
-Log column and the log editor are described in [ui](ui.md).
+Log column, the template and date popup and Settings → Automation are
+described in [ui](ui.md).
 
 ## Time and randomness (`wall_time.rs`)
 
@@ -88,7 +89,7 @@ time.
 The counts behind the percentage come from the pool's sorted air times
 (a binary search), so one choice is O(n log n) in the pool's size.
 `eligible` returns the tracks that meet both rules, in that order, for
-tests and for the editor.
+tests.
 
 ## Walking a rotation (`rotation_cursor.rs`)
 
@@ -320,13 +321,22 @@ rules for the Log (`log_availability`).
 - A Log in `PlayMode::Single` halts when its row ends (`drive`); `restore`
   keeps the saved mode.
 
-## Editing the Log live (`log_edit.rs`)
+## Editing the Log, a template or a date (`log_edit.rs`)
 
-`Command::EditLog { date, edit: LogEdit }` (rework AR17–AR19): `Insert`
+`Command::EditPlan { target: EditTarget, edit: LogEdit }` (rework
+AR17–AR22). `EditTarget::Date(date)` is the Log (live) or a date's popup;
+`EditTarget::Template(id)` is a template's popup: its edits go through
+`update_block`, `add_block` and `remove_block`, are never locked and never
+reload the Log (a template reaches a date through `Schedule::day`, AU12).
+An edit to the template's block on air, while its date follows the
+template for it, first stores that block as it is as a change of the date
+(`keep_on_air_as_loaded`), so the Log's rows, read by index, still match
+what plays; `Revert` has no meaning there
+(`UnknownBlock`). The edits: `Insert`
 (before an index; past a final rotation item it goes before it; a
 rotation item replaces the block's), `Remove`, `Move`, `SetHardStart`,
 `AddBlock`, `MoveBlock`, `RemoveBlock`, `Revert`. Every edit is a date
-change through `change_block_on_date` and its siblings. `is_locked`:
+change through `change_block_on_date` and its siblings. `is_locked` (dates):
 a past date (`PastDate`), a block that already played, or, in the block
 on air, the row on air and those before it (`LogRowLocked`). An edit to
 the block on air calls `automation::reload_after`, which loads the
@@ -344,6 +354,11 @@ block's start plus the known lengths before it), the track it plays
 too costly per frame). `fill_item` is the rotation item whose music is
 on air, shown `OnAir` while `fill_is_current`.
 
+`automation::plan_view(state, target)` gives the same rows for one
+template (its blocks by start, dated today, origin `Template`) or one date
+(`Schedule::day`), every row `Coming`, nothing next or late: the popup
+never plays.
+
 ## Editing helpers (`schedule.rs`)
 
 `schedule::overrun_secs(state, items, start, next_start)` is AU37's figure:
@@ -351,8 +366,7 @@ the items' known lengths (a track's play range, a category's shortest
 playable track, a rotation nothing) against the time to `next_start`
 (midnight when `None`, the next day's when not after `start`); `Some` only
 when positive. `schedule::with_tracks(items, tracks)` adds track items
-before a final rotation item, else at the end. The editor (`ui/schedule_editor.rs`)
-sends the plan 3 commands only.
+before a final rotation item, else at the end.
 
 ## The Log column's rows (`schedule_view`)
 

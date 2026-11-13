@@ -29,6 +29,8 @@ mod meters;
 #[cfg(not(target_os = "android"))]
 mod midi;
 #[cfg(not(target_os = "android"))]
+mod plans;
+#[cfg(not(target_os = "android"))]
 mod remote;
 use super::format;
 use super::theme;
@@ -148,17 +150,6 @@ impl SettingsState {
         self.section = Section::Outputs;
         self.phone_section = true;
         self.reveal_library_route = true;
-    }
-
-    /// Opens the Automation section (the schedule editor's Rotations…).
-    /// The section is desktop only, as the editor is; on Android nothing
-    /// opens it.
-    pub(crate) fn show_automation(&mut self) {
-        #[cfg(not(target_os = "android"))]
-        {
-            self.section = Section::Automation;
-            self.phone_section = true;
-        }
     }
 
     /// Back on a phone (PL20): from a section to the list. False on the
@@ -458,6 +449,11 @@ pub(crate) fn show(
     if modal.should_close() && !capturing {
         open = false;
     }
+    // AR21: a template or a date opened from Automation closes Settings
+    // (it is modal; the popup floats over the main window).
+    if std::mem::take(&mut view_state.plan_requested) {
+        open = false;
+    }
     Outcome { open, apply_now }
 }
 
@@ -501,7 +497,9 @@ fn body(
                             Section::Cartwall => carts::section(ui, scene, st),
                             Section::Library => library::section(ui, scene, view_state, st),
                             #[cfg(not(target_os = "android"))]
-                            Section::Automation => automation::section(ui, scene, st),
+                            Section::Automation => {
+                                automation::section(ui, scene, view_state, st);
+                            }
                             Section::Shortcuts => keys::section(ui, scene, st),
                             #[cfg(not(target_os = "android"))]
                             Section::Midi => midi::section(ui, scene, st, deps.midi),

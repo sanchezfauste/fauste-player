@@ -21,7 +21,7 @@ by themselves.
 | [Cartwall](cartwall.md) | Instant carts: firing, pages, loops, exclusive carts, setup |
 | [Library](library.md) | The track library window: categories, kinds, search, pre-listen, the external editor and changed files |
 | [Layout](layout.md) | Showing and hiding panels, player widths, moving and resizing the cartwall, maximizing a panel, the layout menu |
-| [Automation](automation.md) | The Log column, its editor, the music fill and its rotations |
+| [Automation](automation.md) | The Log column, its templates and days, the music fill and its rotations |
 | [Markers and mixing](markers-and-mixing.md) | Cue in/out, the MIX point, intro and outro, automatic analysis |
 | [Settings](settings.md) | Audio outputs, players, analysis, playlists, MIDI, remote control |
 | [Loudness normalization](loudness.md) | Every track and cart at the same loudness with a fixed gain per track: the gain badge, excluding and trimming a track, bit-perfect outputs |

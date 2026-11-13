@@ -43,7 +43,7 @@ hora.
 **Rotações…** leva-o a Definições → Automatização, onde as rotações são
 criadas.
 
-![O editor da grelha, separador Modelos: os modelos Base e Weekend à esquerda; os blocos de Base à direita, cada um com o seu início, os seus elementos, Adicionar de categoria e a rotação para a música depois dele](../../images/guide/schedule-templates.png)
+![O editor da grelha, separador Modelos: os modelos Base e Weekend à esquerda; os blocos de Base à direita, cada um com o seu início, os seus elementos, Adicionar de categoria e a rotação para a música depois dele](../../images/guide/template-popup.png)
 
 - **Modelos.** Um modelo é um dia de blocos; uma instalação nova tem um,
   "Base", para todos os dias. Crie, duplique, renomeie ou elimine modelos à
@@ -59,7 +59,7 @@ criadas.
   assim na mesma.
 - **Semana tipo.** Que modelo usa cada dia da semana.
 
-  ![O separador Semana tipo: Base de segunda a sexta, Weekend ao sábado e ao domingo](../../images/guide/schedule-week.png)
+  ![O separador Semana tipo: Base de segunda a sexta, Weekend ao sábado e ao domingo](../../images/guide/settings-plans.png)
 
 - **Dias.** Escolha uma data no calendário (as datas com alterações aparecem a
   âmbar). Uma data pode usar outro modelo que não o do seu dia da semana (um
@@ -69,7 +69,7 @@ criadas.
   **Adicionar bloco neste dia** adiciona um. As alterações posteriores ao
   modelo continuam a chegar aos blocos que não alterou nessa data.
 
-  ![O separador Dias: o calendário com hoje escolhido e as datas com alterações a âmbar; o primeiro bloco de hoje tem mais um spot, marcado "alterado para este dia", com Voltar ao modelo](../../images/guide/schedule-days.png)
+  ![O separador Dias: o calendário com hoje escolhido e as datas com alterações a âmbar; o primeiro bloco de hoje tem mais um spot, marcado "alterado para este dia", com Voltar ao modelo](../../images/guide/settings-plans.png)
 
 ## O musicalizador {#the-music-filler}
 

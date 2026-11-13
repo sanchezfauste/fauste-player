@@ -45,7 +45,7 @@ nuovo in base all'ora.
 schede, e **Rotazioni…** ti porta a Impostazioni → Automazione, dove si
 creano le rotazioni.
 
-![L'editor del palinsesto, scheda Modelli: i modelli Base e Weekend a sinistra; i blocchi di Base a destra, ciascuno con il suo inizio, i suoi elementi, Aggiungi da categoria e la rotazione per la musica che segue](../../images/guide/schedule-templates.png)
+![L'editor del palinsesto, scheda Modelli: i modelli Base e Weekend a sinistra; i blocchi di Base a destra, ciascuno con il suo inizio, i suoi elementi, Aggiungi da categoria e la rotazione per la musica che segue](../../images/guide/template-popup.png)
 
 - **Modelli.** Un modello è un giorno di blocchi; una nuova installazione ne
   ha uno, "Base", per tutti i giorni. Crea, duplica, rinomina o elimina i
@@ -62,7 +62,7 @@ creano le rotazioni.
   così.
 - **Settimana tipo.** Quale modello usa ogni giorno della settimana.
 
-  ![La scheda Settimana tipo: Base da lunedì a venerdì, Weekend il sabato e la domenica](../../images/guide/schedule-week.png)
+  ![La scheda Settimana tipo: Base da lunedì a venerdì, Weekend il sabato e la domenica](../../images/guide/settings-plans.png)
 
 - **Giorni.** Scegli una data sul calendario (le date con modifiche sono in
   ambra). Una data può usare un modello diverso da quello del suo giorno
@@ -73,7 +73,7 @@ creano le rotazioni.
   aggiunge uno. Le modifiche successive al modello raggiungono comunque i
   blocchi che non hai cambiato in quella data.
 
-  ![La scheda Giorni: il calendario con oggi scelto e le date con modifiche in ambra; il primo blocco di oggi ha uno spot in più, segnato "modificato per questo giorno", con Torna al modello](../../images/guide/schedule-days.png)
+  ![La scheda Giorni: il calendario con oggi scelto e le date con modifiche in ambra; il primo blocco di oggi ha uno spot in più, segnato "modificato per questo giorno", con Torna al modello](../../images/guide/settings-plans.png)
 
 ## Il riempitivo musicale {#the-music-filler}
 

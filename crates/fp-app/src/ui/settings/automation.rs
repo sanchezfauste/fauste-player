@@ -1,5 +1,6 @@
-//! Settings → Automation (automation spec §8.2, the rotation part, and
-//! §11): the rotations and their steps, then the music filler's rules.
+//! Settings → Automation (automation spec §8.2, §11; rework AR20): the
+//! templates and days, the rotations and their steps, then the music
+//! fill's rules.
 //! Every edit sends the whole rotation (`UpdateRotation`); the model checks
 //! it and a refusal shows like any other.
 
@@ -9,7 +10,7 @@ use fp_model::rotation::{STEP_MAX_RANGE, STEP_MIN_RANGE};
 use fp_model::{Command, Rotation, RotationId, RotationStep, StepSource, TrackKind};
 
 use super::{SettingsState, caption, fitted_combo, note, row, slider, update};
-use crate::ui::app::Scene;
+use crate::ui::app::{Scene, ViewState};
 use crate::ui::library::category_dialog::{KINDS, kind_key};
 use crate::ui::theme;
 use crate::ui::widgets::{self, TileStyle, font};
@@ -19,10 +20,18 @@ use crate::ui::widgets::{self, TileStyle, font};
 pub(crate) struct AutomationState {
     selected: Option<RotationId>,
     name: Option<(RotationId, String)>,
+    plans: super::plans::PlansState,
 }
 
-pub(super) fn section(ui: &mut Ui, scene: &Scene<'_>, st: &mut SettingsState) {
+pub(super) fn section(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    st: &mut SettingsState,
+) {
     rotations(ui, scene, &mut st.automation);
+    ui.add_space(16.0);
+    super::plans::section(ui, scene, view_state, &mut st.automation.plans);
     ui.add_space(16.0);
     rules(ui, scene);
 }
