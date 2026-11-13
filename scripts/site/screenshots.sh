@@ -238,6 +238,24 @@ print(*[x0 + (a + b) // 2 for a, b in groups])
 ' "$1"
 }
 
+# colour_centre <x0> <x1> <y0> <y1> <#rrggbb>: the centre "x y" of the
+# pixels of that colour in the box, or nothing.
+colour_centre() {
+    local raw=$work/strip.png
+    x import -window "$win" "$raw"
+    convert "$raw" -crop "$(($2 - $1))x$(($4 - $3))+$1+$3" +repage -depth 8 txt:- | python3 -c '
+import re, sys
+x0, y0, want = int(sys.argv[1]), int(sys.argv[2]), sys.argv[3].upper()
+xs, ys = [], []
+for line in sys.stdin:
+    m = re.match(r"(\d+),(\d+):.*(#[0-9A-Fa-f]{6})", line)
+    if m and m[3].upper() == want:
+        xs.append(int(m[1])); ys.append(int(m[2]))
+if xs:
+    print(x0 + (min(xs) + max(xs)) // 2, y0 + (min(ys) + max(ys)) // 2)
+' "$1" "$3" "$5"
+}
+
 # capture_window <file> <x> <y> <radius> [left top right bottom]: the window
 # that covers the point (x, y), an empty part of it, found on the screen
 # (scripts/site/window_box.py), widened by the margins. A window's size depends on the language of its
@@ -563,7 +581,7 @@ shoot_guide() {
 # schedule editor's three tabs. The demo session made the schedule (a block
 # every hour, a weekend template, today's first block changed).
 shoot_automation() {
-    local buttons schedule_x music_x header edit_x tabs
+    local buttons schedule_x music_x header edit_x tabs play
     read -r -a buttons < <(topbar_left_buttons) \
         || die "cannot find the top bar's buttons"
     # Show Schedule and Music, hide P2 to P4: Schedule, Music and P1 share
@@ -573,15 +591,17 @@ shoot_automation() {
     click "$schedule_x" 17
     click "$music_x" 17
     for i in 3 4 5; do click "${buttons[$i]}" 17; done
-    # Start (the first label of the Schedule column's bar), then the music
-    # filler's first song is on air.
-    read -r -a header < <(label_centres 12 630 318 334)
-    [[ ${#header[@]} -ge 4 ]] || die "cannot find the Schedule column's buttons"
-    click "${header[0]}" 325
+    # Play on the Log column's header (its green tile) runs automation;
+    # then the music fill's first song is on air.
+    read -r -a play < <(colour_centre 8 430 60 316 "#146D34")
+    [[ ${#play[@]} -eq 2 ]] || die "cannot find the Log column's Play"
+    click "${play[0]}" "${play[1]}"
     park
     sleep 4
     capture "$guide/automation-columns.png" 1268x880+8+42
-    # The editor (the last label of the bar), on Templates.
+    # The editor (Edit log, the last label of the bar), on Templates.
+    read -r -a header < <(label_centres 12 630 318 334)
+    [[ ${#header[@]} -ge 1 ]] || die "cannot find the Log column's Edit log"
     edit_x=${header[-1]}
     click "$edit_x" 325
     park

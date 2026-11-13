@@ -78,7 +78,7 @@ choosing it again (for example after swapping two devices) keeps them.
 | Audio system | The last choice, **No output (silent)**, plays nothing: timelines run at real-time pace with no sound card (for a machine without one, or to rehearse). Linux: PipeWire (in builds that include it), PulseAudio, JACK or ALSA. Windows: WASAPI, ASIO (in builds that include it) or JACK. macOS: Core Audio or JACK. Systems missing on this computer, or with no output device (a JACK server that is not running), are shown as unavailable. "System default" uses the first available one in that order. |
 | Sample rate | The rate every output runs at unless a device has its own (Advanced); files are converted to it with high-quality resampling. Bit-perfect devices start at their rate and then follow the files. |
 | Buffer size | Frames per audio block, unless a device has its own; the resulting latency is shown below it. Outputs through a sound server or a system mixer (PulseAudio, the ALSA `default` device) ask for at least 50 ms whatever this size, or as much as the device takes, so that a busy computer is not heard; the latency then says so (`shared_buffer_ms` in the configuration file) |
-| Outputs per player | For each player, and for the **Music** column (the [music filler](automation.md)), a **Main** (on-air) device and a **Cue** (pre-listen) device, each with a channel pair. A sound card that offers several output profiles (ALSA lists front, surround, direct hardware…) shows each as *card — profile*; two entries that would still read the same get their device id in brackets. Multichannel interfaces can carry several players on different pairs. A Cue output that shares an on-air output (any player's Main or the cartwall's) is allowed: a note under it says its pre-listen is heard on air and asks first while something plays there. |
+| Outputs per player | For each player, and for the **Music fill** column (the [music fill](automation.md)), a **Main** (on-air) device and a **Cue** (pre-listen) device, each with a channel pair. A sound card that offers several output profiles (ALSA lists front, surround, direct hardware…) shows each as *card — profile*; two entries that would still read the same get their device id in brackets. Multichannel interfaces can carry several players on different pairs. A Cue output that shares an on-air output (any player's Main or the cartwall's) is allowed: a note under it says its pre-listen is heard on air and asks first while something plays there. |
 | Test Main / Test Cue | Plays a short tone (1 kHz on Main, 440 Hz on Cue, 1.5 s, −18 dBFS) on the chosen output, so you can check the wiring before going on air |
 | Library | The library's Cue output, with its own **Test Cue**: where the library window's [pre-listen](library.md#pre-listening) (on a phone, the Library tab's) is heard. Without it the preview bar's Play is dimmed. On Android its empty choice reads *System default* instead of *None*: the pre-listen and **Test Cue** then play on the default output (see [Android → Library](android.md#library)). A Library output on an on-air output works as a player's Cue does: a note under it says its pre-listen is heard on air and asks first while something plays there. It is in the Basic and Advanced views, also on a phone |
 | Cartwall | The cartwall's Main and Cue outputs. Main defaults to the system output. Without a Cue there is no cart pre-listen; a Cue on an on-air output works as for players. |
@@ -274,9 +274,9 @@ changes](library.md#when-a-file-changes).
 
 ## Automation
 
-The [music filler's](automation.md) rotations and rules (not on Android).
+The [music fill's](automation.md) rotations and rules (not on Android).
 
-![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, and the music filler's rules](../images/guide/settings-automation.png)
+![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, and the music fill's rules](../images/guide/settings-automation.png)
 
 - **Rotations:** the list, the default marked. **New rotation** adds one
   that plays all music, **Make default** makes the selected one the
@@ -286,8 +286,8 @@ The [music filler's](automation.md) rotations and rules (not on Android).
   kind), how many it plays each time (**At least** 0–99, **At most**
   1–99; at least 0 lets the step sit out some turns), **Up**, **Down** and
   **Remove**. **Add step** adds one at the end. A step
-  whose category was deleted says so; the filler skips it.
-- **Music filler:** how long before the same track may play again (3 hours,
+  whose category was deleted says so; the music fill skips it.
+- **Music fill:** how long before the same track may play again (3 hours,
   or once half of the other tracks of its step have aired, whichever comes
   first; 0 turns either off), the same artist (30 minutes), the
   **look-ahead** (30 minutes of music queued) and the **played tracks kept**

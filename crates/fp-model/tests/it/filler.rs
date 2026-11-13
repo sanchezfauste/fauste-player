@@ -444,3 +444,74 @@ fn deleting_the_default_retargets_a_filler_on_the_default() {
     assert_eq!(Some(f.cursor.rotation), s.rotations.default_id());
     assert_ne!(f.cursor.rotation, old);
 }
+
+#[test]
+fn choosing_the_last_row_as_next_tops_up_after_it() {
+    let mut s = filled(40, 180.0);
+    let (player, _) = filler(&s);
+    fp_model::apply(&mut s, fp_model::Command::Play(player)).unwrap();
+    let last = *rows(&s).last().unwrap();
+    fp_model::apply(&mut s, fp_model::Command::SetNext(player, last)).unwrap();
+    let after = rows(&s);
+    let at = after.iter().position(|e| *e == last).unwrap();
+    assert!(
+        after.len() - at > 9,
+        "30 min of 3-min songs after the chosen next: {} rows",
+        after.len() - at - 1
+    );
+    assert_eq!(s.player(player).unwrap().next, Some(last));
+}
+
+#[test]
+fn rows_added_after_the_last_row_on_air_become_next() {
+    let mut s = filled(40, 180.0);
+    let (player, _) = filler(&s);
+    fp_model::apply(&mut s, fp_model::Command::Play(player)).unwrap();
+    let last = *rows(&s).last().unwrap();
+    fp_model::apply(&mut s, fp_model::Command::SetNext(player, last)).unwrap();
+    next(&mut s, player);
+    let p = s.player(player).unwrap();
+    assert_eq!(p.current, Some(last));
+    let list = rows(&s);
+    let at = list.iter().position(|e| *e == last).unwrap();
+    assert!(p.next.is_some());
+    assert_eq!(p.next, list.get(at + 1).copied());
+}
+
+#[test]
+fn a_next_before_the_row_on_air_still_tops_up() {
+    let mut s = filled(40, 180.0);
+    let (player, _) = filler(&s);
+    fp_model::apply(&mut s, fp_model::Command::Play(player)).unwrap();
+    next(&mut s, player);
+    next(&mut s, player);
+    let first = rows(&s)[0];
+    fp_model::apply(&mut s, fp_model::Command::SetNext(player, first)).unwrap();
+    let len = rows(&s).len();
+    settle(&mut s);
+    assert_eq!(
+        rows(&s).len(),
+        len,
+        "the rows from next on already cover 30 min"
+    );
+    assert_eq!(s.player(player).unwrap().next, Some(first));
+}
+
+/// Review of rework plan 1: rows skipped by a next far ahead are not
+/// history; they stay in the list.
+#[test]
+fn rows_skipped_by_a_next_far_ahead_are_not_trimmed() {
+    let mut s = filled(80, 180.0);
+    s.config.automation.filler_played_kept = 10;
+    s.config.automation.filler_lookahead_mins = 240;
+    settle(&mut s);
+    let (player, _) = filler(&s);
+    apply(&mut s, Command::Play(player)).unwrap();
+    let before = rows(&s);
+    assert!(before.len() > 31);
+    apply(&mut s, Command::SetNext(player, before[30])).unwrap();
+    let after = rows(&s);
+    for e in &before[..=30] {
+        assert!(after.contains(e), "row {e:?} was trimmed");
+    }
+}

@@ -341,3 +341,26 @@ fn far_from_a_block_a_track_of_unknown_length_may_play() {
     assert_eq!(p.track, TrackId(901));
     assert!(!p.unfitted);
 }
+
+/// Review of rework plan 1: a next set before the row on air, with a block
+/// coming, never takes the row on air out of the music fill's list.
+#[test]
+fn a_next_before_the_row_on_air_keeps_it_in_the_list() {
+    let mut r = Rig::new(vec![(12, 0, vec![song(1)])]);
+    r.at_hms(11, 40, 0);
+    r.apply(Command::StartAutomation);
+    let filler = r.filler_player();
+    r.end_current(filler);
+    r.end_current(filler);
+    r.end_current(filler);
+    r.at_hms(11, 51, 0);
+    let list = r.s.filler.as_ref().unwrap().playlist;
+    let current = r.player(filler).current.unwrap();
+    let first = r.s.playlists.get(list).unwrap().entries[0].id;
+    assert_ne!(first, current);
+    r.apply(Command::SetNext(filler, first));
+    r.at_hms(11, 51, 1);
+    let rows = &r.s.playlists.get(list).unwrap().entries;
+    assert!(rows.iter().any(|e| e.id == current), "the row on air stays");
+    assert_eq!(r.player(filler).current, Some(current));
+}

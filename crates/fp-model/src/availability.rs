@@ -29,6 +29,9 @@ pub fn availability(state: &AppState, player: PlayerId) -> Availability {
     let Ok(p) = state.player(player) else {
         return Availability::default();
     };
+    if state.is_schedule(player) {
+        return log_availability(state, p);
+    }
     let playing = p.transport == Transport::Playing;
     let paused = p.transport == Transport::Paused;
     let has_previous = p.history.iter().any(|e| {
@@ -91,5 +94,29 @@ pub fn command_available(state: &AppState, command: &Command) -> bool {
                         .is_some_and(|t| state.library.is_playable(t)))
         }
         _ => true,
+    }
+}
+
+/// The Log's buttons (automation rework AR3–AR6): they act on what is on
+/// air for the Log, its row or the music fill's song; Previous never.
+fn log_availability(state: &AppState, p: &crate::player::PlayerState) -> Availability {
+    let Some(a) = state.automation.as_ref() else {
+        return Availability::default();
+    };
+    let fill = crate::automation::fill_is_current(state);
+    let row = p.transport != Transport::Stopped;
+    let playing = p.transport == Transport::Playing || fill;
+    let paused = p.transport == Transport::Paused || a.paused_fill;
+    Availability {
+        play: paused || a.next.is_some() || (row && p.next.is_some()),
+        pause: playing,
+        stop: row || fill || a.paused_fill,
+        fade_stop: playing,
+        restart: row && !p.fade_stopping(),
+        previous: false,
+        stop_after_current: a.running
+            && (p.mode == PlayMode::Continuous || crate::reducer::repeat_entry(state, p)),
+        cue: (p.next.is_some() && state.config.outputs.player_has_cue(p.id)) || p.cue.is_some(),
+        fader: !crate::bit_perfect::fader_locked(state, p.id),
     }
 }

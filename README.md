@@ -56,18 +56,18 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   while it is paused), maximize one for a moment, and
   lock the layout against stray drags. The layout is saved with the
   session.
-- **Music filler:** a **Music** column that fills itself from rotations of
+- **Music fill:** a **Music fill** column that fills itself from rotations of
   library categories (two or three current hits, a station ID, a gold…),
   keeps tracks and artists apart, prefers what has gone longest without
   airing, and trims what it played, so it can run for weeks; you can still
   add, move and remove its tracks by hand. See the
   [automation guide](docs/user/automation.md).
-- **Schedule:** a **Schedule** column that plays the day's timed blocks
-  (hourly IDs, spots, shows) with the music filler between them, from day
+- **Log:** a **Log** column that plays the day's timed blocks
+  (hourly IDs, spots, shows) with the music fill between them, from day
   templates, a week plan and per-date changes made in its editor. The
   operator starts and stops it; nothing runs by itself after a start. What
   aired and what was missed is kept in an as-run log. See
-  [the Schedule column](docs/user/automation.md#the-schedule-column).
+  [the Log column](docs/user/automation.md#the-log-column).
 - **Track library window:** a floating **Library** window from the top bar
   with a category tree (colours, kinds, nesting, drag to reorder), a table
   of the library's tracks (the playlists' columns plus category and kind),
@@ -406,7 +406,7 @@ See [Release process](docs/technical/release-process.md).
 | 7. Website and guide | Project website on GitHub Pages with per-platform downloads, the landing page, privacy policy and user guide online (mdBook) in every interface language with AI translations and a shared language menu, screenshots of every screen from a scripted scene | done |
 | 8. Stores | Publishing every release to the Microsoft Store, the Snap Store, Google Play, Flathub, WinGet and the AUR from CI | in progress (the Snap Store since 0.11.0; the Microsoft Store since 0.11.0 with the MSIX CI builds uploaded by hand, since an Individual Partner Center account cannot use the submission API; Google Play ready, with its listing and screenshots in every interface language, for the first release with the Android app; Flathub, WinGet and the AUR not yet submitted) |
 | 9. Mobile | An Android app on the same Rust core: one or more players and the cartwall with music on the device, a foreground service so playout survives the screen and the app switcher, a touch layout; iOS later ([mobile spec](docs/superpowers/specs/2026-10-25-mobile-design.md)) | in progress (the app, its touch layout, output choice, music browser and library tab are built, and releases are signed; the first Google Play release and checks on real phones are next) |
-| 10. Automation | A music filler that fills itself from rotations of library categories with separation rules; a daily schedule of timed blocks (hourly IDs, spots, shows) from day templates, a week plan and per-date changes, started and stopped by the operator ([automation spec](docs/superpowers/specs/2026-11-11-automation-design.md)) | done (the music filler, rotations, the schedule with its editor and Schedule column, and the as-run log; it still needs a long run on a real station) |
+| 10. Automation | A music fill that fills itself from rotations of library categories with separation rules; a daily schedule of timed blocks (hourly IDs, spots, shows) from day templates, a week plan and per-date changes, started and stopped by the operator ([automation spec](docs/superpowers/specs/2026-11-11-automation-design.md)) | done (the music fill, rotations, the schedule with its editor and Log column, and the as-run log; it still needs a long run on a real station) |
 
 ## Documentation
 

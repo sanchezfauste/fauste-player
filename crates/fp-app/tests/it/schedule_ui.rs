@@ -27,31 +27,49 @@ fn with_schedule() -> AppState {
 }
 
 #[test]
-fn start_sends_start_automation() {
-    let (mut h, fake) = harness(with_schedule());
-    h.get_by_label("Start").click();
-    h.run();
-    assert!(fake.take_sent().contains(&Command::StartAutomation));
-}
-
-#[test]
-fn stop_after_current_sends_its_command_while_running() {
-    let mut s = with_schedule();
-    s.automation.as_mut().unwrap().running = true;
-    let (mut h, fake) = harness(s);
-    assert!(h.query_by_label("Running").is_some());
-    h.get_by_label("Stop after current").click();
-    h.run();
-    assert!(
-        fake.take_sent()
-            .contains(&Command::StopAutomationAfterCurrent)
-    );
-}
-
-#[test]
-fn the_state_says_stopped_after_a_start_of_the_app() {
+fn the_log_has_no_start_button() {
     let (h, _fake) = harness(with_schedule());
-    assert!(h.query_by_label("Stopped").is_some());
+    assert!(h.query_by_label("Start").is_none());
+    assert!(h.query_by_label("Stop after current").is_none());
+    assert!(h.query_by_label("Running").is_none());
+}
+
+#[test]
+fn play_on_the_log_sends_play() {
+    let mut s = with_schedule();
+    let log = s.automation.as_ref().unwrap().player;
+    // A next to play: today's clock gives none without blocks, so pin one.
+    s.automation.as_mut().unwrap().next = Some(fp_model::automation::ItemRef {
+        date: s.local_now.date(),
+        block: fp_model::BlockId(1),
+        index: 0,
+    });
+    let (mut h, fake) = harness(s);
+    h.get_all_by_label("Play").next().unwrap().click();
+    h.run();
+    assert!(fake.take_sent().contains(&Command::Play(log)));
+}
+
+#[test]
+fn during_music_the_log_header_shows_the_song() {
+    let mut s = with_schedule();
+    let f = s.filler.as_ref().unwrap().clone();
+    let entry = s.playlists.get(f.playlist).unwrap().entries[0].clone();
+    let before = {
+        let (h, _fake) = harness(s.clone());
+        h.query_all_by_label("Fade into the next track").count()
+    };
+    s.automation.as_mut().unwrap().running = true;
+    let p = s.players.iter_mut().find(|p| p.id == f.player).unwrap();
+    p.current = Some(entry.id);
+    p.transport = fp_model::Transport::Playing;
+    // The filler's own column stays hidden: only the Log shows it on air
+    // (Play becomes Next).
+    let (h, _fake) = harness(s);
+    assert_eq!(
+        h.query_all_by_label("Fade into the next track").count(),
+        before + 1
+    );
 }
 
 /// Today at 08:00, a 10:00 block with "Top of the Hour" (id 9000) and a
@@ -198,4 +216,25 @@ fn the_menu_sets_and_clears_next() {
     h.get_by_label("Back to the clock").click();
     h.run_steps(2);
     assert!(fake.take_sent().contains(&Command::ClearScheduleNext));
+}
+
+/// Review of rework plan 3: during the music, the Log header's buttons
+/// act on the Log.
+#[test]
+fn during_music_the_log_header_buttons_act_on_the_log() {
+    let mut s = with_schedule();
+    let f = s.filler.as_ref().unwrap().clone();
+    let log = s.automation.as_ref().unwrap().player;
+    let entry = s.playlists.get(f.playlist).unwrap().entries[0].clone();
+    s.automation.as_mut().unwrap().running = true;
+    let p = s.players.iter_mut().find(|p| p.id == f.player).unwrap();
+    p.current = Some(entry.id);
+    p.transport = fp_model::Transport::Playing;
+    let (mut h, fake) = harness(s);
+    // The Log's column is the first one.
+    h.get_all_by_label("Stop").next().unwrap().click();
+    h.run();
+    let sent = fake.take_sent();
+    assert!(sent.contains(&Command::Stop(log)), "{sent:?}");
+    assert!(!sent.contains(&Command::Stop(f.player)));
 }

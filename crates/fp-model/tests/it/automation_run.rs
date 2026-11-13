@@ -60,9 +60,11 @@ fn stop_after_current_ends_the_item_and_stops() {
     r.at_hms(10, 0, 0);
     let p = r.schedule_player();
     r.apply(Command::StopAutomationAfterCurrent);
-    assert!(!r.s.automation.as_ref().unwrap().running);
+    // Rework AR6: running until what is on air ends.
+    assert!(r.s.automation.as_ref().unwrap().running);
     r.end_current(p);
     r.at_hms(10, 3, 0);
+    assert!(!r.s.automation.as_ref().unwrap().running);
     assert_eq!(r.playing(p), None);
     assert_eq!(r.playing(r.filler_player()), None);
 }

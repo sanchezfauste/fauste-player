@@ -45,6 +45,9 @@ pub struct Rig {
     pub blocks: HashMap<(u32, u32), BlockId>,
     /// Every engine action sent so far.
     pub log: Vec<EngineAction>,
+    /// A fade out runs until the test ends it (`ReachedEnd`), instead of
+    /// ending at once.
+    pub slow_fades: bool,
 }
 
 impl Rig {
@@ -105,6 +108,7 @@ impl Rig {
             base,
             blocks: map,
             log: Vec::new(),
+            slow_fades: false,
         };
         rig.set_time(today().and_hms_opt(0, 0, 0).unwrap());
         rig
@@ -185,6 +189,7 @@ impl Rig {
                     entry: request.entry,
                     normalization: fp_model::Normalization::default(),
                 },
+                EngineAction::FadeOutAndStop { .. } if self.slow_fades => continue,
                 EngineAction::FadeOutAndStop { player, .. } => {
                     let Some(entry) = self.player(*player).current else {
                         continue;
@@ -206,8 +211,9 @@ impl Rig {
     pub fn end_current(&mut self, player: PlayerId) {
         let p = self.player(player).clone();
         let Some(current) = p.current else { return };
+        let continuous = p.mode == fp_model::PlayMode::Continuous;
         let event = match (p.next, p.stop_after_current) {
-            (Some(next), false) => EngineEvent::TransitionStarted {
+            (Some(next), false) if continuous => EngineEvent::TransitionStarted {
                 player,
                 entry: next,
                 normalization: fp_model::Normalization::default(),

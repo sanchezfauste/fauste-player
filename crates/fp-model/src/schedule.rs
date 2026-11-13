@@ -526,6 +526,29 @@ pub(crate) fn delete_template(
     Ok(())
 }
 
+/// Where a new block goes (AR18): the first free whole hour after the
+/// last block, else the first free half hour, quarter hour, five minutes
+/// or minute after it (before midnight), else the same from 00:00; `None`
+/// when every minute of the day is taken.
+pub fn free_start(starts: impl IntoIterator<Item = TimeOfDay>) -> Option<TimeOfDay> {
+    const DAY_MINS: u32 = 24 * 60;
+    let taken: std::collections::BTreeSet<u32> = starts.into_iter().map(TimeOfDay::secs).collect();
+    let free = |min: u32| {
+        (!taken.contains(&(min * 60)))
+            .then(|| TimeOfDay::new(min * 60))
+            .flatten()
+    };
+    let steps = [60, 30, 15, 5, 1];
+    let after_last = taken.last().map(|last| last / 60 + 1);
+    let search = |from: u32| {
+        steps.iter().find_map(|step| {
+            let first = from.div_ceil(*step) * step;
+            (first..DAY_MINS).step_by(*step as usize).find_map(free)
+        })
+    };
+    after_last.and_then(search).or_else(|| search(0))
+}
+
 pub(crate) fn add_block(
     state: &mut AppState,
     template: TemplateId,

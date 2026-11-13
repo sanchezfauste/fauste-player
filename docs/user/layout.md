@@ -9,9 +9,9 @@ under them.
 
 ## Show and hide panels
 
-The tiles on the left of the top bar, **Schedule** and **Music** (the
-[schedule](automation.md#the-schedule-column) and the
-[music filler](automation.md#the-music-filler), both hidden until you show
+The tiles on the left of the top bar, **Log** and **Music fill** (the
+[schedule](automation.md#the-log-column) and the
+[music fill](automation.md#the-music-fill), both hidden until you show
 them), **P1** … **Pn** and **Cartwall**, show which panels are on screen: a
 lit tile is shown. Click a tile to hide or show its panel. With many
 players, the tiles scroll sideways (scroll the mouse wheel over them) and

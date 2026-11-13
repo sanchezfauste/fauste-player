@@ -3,7 +3,7 @@
 
 use chrono::Weekday;
 use fp_model::local_time::TimeOfDay;
-use fp_model::schedule::{Block, Item, ensure_default};
+use fp_model::schedule::{Block, Item, ensure_default, free_start};
 use fp_model::{AppState, Command, Config, ModelError, RotationId, TemplateId, TrackId, apply};
 
 const DAYS: [Weekday; 7] = [
@@ -286,4 +286,23 @@ fn template_names_are_trimmed_and_required() {
     )
     .unwrap();
     assert_eq!(s.schedule.template(base).unwrap().name, "Weekend");
+}
+
+#[test]
+fn free_start_finds_a_slot_after_the_last_block() {
+    let t = |h, m| TimeOfDay::hms(h, m, 0).unwrap();
+    assert_eq!(free_start([t(8, 0)]), Some(t(9, 0)));
+    assert_eq!(
+        free_start([t(8, 0), t(23, 0)]),
+        Some(t(23, 30)),
+        "the reported case"
+    );
+    assert_eq!(free_start([]), Some(t(0, 0)));
+    let every_hour: Vec<_> = (0..24).map(|h| t(h, 0)).collect();
+    assert_eq!(free_start(every_hour.clone()), Some(t(23, 30)));
+    let mut more = every_hour;
+    more.push(t(23, 30));
+    assert_eq!(free_start(more), Some(t(23, 45)));
+    let all: Vec<_> = (0..1440).map(|m| t(m / 60, m % 60)).collect();
+    assert_eq!(free_start(all), None);
 }

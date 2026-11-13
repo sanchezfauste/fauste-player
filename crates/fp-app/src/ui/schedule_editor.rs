@@ -9,7 +9,7 @@ use egui::{Align, Layout, RichText, Ui, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::local_time::TimeOfDay;
 use fp_model::schedule::{
-    Block, CategoryLengths, Item, category_lengths, overrun_secs, with_tracks,
+    Block, CategoryLengths, Item, category_lengths, free_start, overrun_secs, with_tracks,
 };
 use fp_model::{BlockId, Command, TemplateId};
 
@@ -290,20 +290,6 @@ fn template_blocks(ui: &mut Ui, scene: &Scene<'_>, editor: &mut EditorState, id:
             start,
         });
     }
-}
-
-/// A whole hour after the last block, or the first free whole hour.
-pub(crate) fn free_start(starts: impl Iterator<Item = TimeOfDay>) -> Option<TimeOfDay> {
-    let taken: Vec<TimeOfDay> = starts.collect();
-    let after_last = taken
-        .iter()
-        .max()
-        .and_then(|last| TimeOfDay::hms(last.secs() / 3600 + 1, 0, 0));
-    after_last.filter(|s| !taken.contains(s)).or_else(|| {
-        (0..24)
-            .filter_map(|h| TimeOfDay::hms(h, 0, 0))
-            .find(|s| !taken.contains(s))
-    })
 }
 
 /// One block: its start, AU37's overrun, its items and Remove block.

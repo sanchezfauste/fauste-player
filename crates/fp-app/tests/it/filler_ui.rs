@@ -38,7 +38,7 @@ fn the_music_column_is_hidden_until_shown_from_the_top_bar() {
     let f = filler(&s);
     let (mut h, _fake) = harness(s);
     assert!(h.state().player_rects().iter().all(|(p, _)| *p != f));
-    h.get_by_label("Show Music").click();
+    h.get_by_label("Show Music fill").click();
     h.run();
     let rects = h.state().player_rects();
     assert_eq!(rects.first().map(|(p, _)| *p), Some(f), "left of P1");
@@ -50,7 +50,7 @@ fn the_auxiliary_players_keep_their_numbers() {
     for n in 1..=4 {
         assert!(h.query_by_label(&format!("Hide P{n}")).is_some(), "P{n}");
     }
-    assert!(h.query_by_label("Hide Music").is_some());
+    assert!(h.query_by_label("Hide Music fill").is_some());
     assert!(h.query_by_label("Hide P5").is_none());
 }
 

@@ -17,6 +17,7 @@ mod automation_player;
 mod automation_review;
 mod automation_rig;
 mod automation_run;
+mod automation_transport;
 mod automation_view;
 mod availability;
 mod bit_perfect_rules;
