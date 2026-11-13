@@ -320,6 +320,26 @@ rules for the Log (`log_availability`).
 - A Log in `PlayMode::Single` halts when its row ends (`drive`); `restore`
   keeps the saved mode.
 
+## Editing the Log live (`log_edit.rs`)
+
+`Command::EditLog { date, edit: LogEdit }` (rework AR17–AR19): `Insert`
+(before an index; past a final rotation item it goes before it; a
+rotation item replaces the block's), `Remove`, `Move`, `SetHardStart`,
+`AddBlock`, `MoveBlock`, `RemoveBlock`, `Revert`. Every edit is a date
+change through `change_block_on_date` and its siblings. `is_locked`:
+a past date (`PastDate`), a block that already played, or, in the block
+on air, the row on air and those before it (`LogRowLocked`). An edit to
+the block on air calls `automation::reload_after`, which loads the
+block again from the row after the one on air.
+
+`schedule_view` gives each item row its planned start (`starts_at`: the
+block's start plus the known lengths before it), the track it plays
+(`track`: a category item's chosen track while its block is loaded, from
+`rows`), `late` (AR11) and each block row its `total_secs` and
+`overrun_secs` (known lengths only; the library-wide category lengths are
+too costly per frame). `fill_item` is the rotation item whose music is
+on air, shown `OnAir` while `fill_is_current`.
+
 ## Editing helpers (`schedule.rs`)
 
 `schedule::overrun_secs(state, items, start, next_start)` is AU37's figure:
