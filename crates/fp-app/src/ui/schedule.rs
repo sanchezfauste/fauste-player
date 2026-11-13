@@ -1,5 +1,5 @@
-//! The Schedule column (automation spec §8.1): automation's Start, Stop
-//! after current and state above the schedule's list.
+//! The Log column's list (automation spec §8.1) and the strip above it;
+//! its transport is the player header's (automation rework AR3).
 
 use egui::{Align, Color32, Layout, RichText, Sense, Ui, UiBuilder, vec2};
 use egui_phosphor::regular as icon;

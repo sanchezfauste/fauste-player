@@ -238,10 +238,13 @@ AU40). The schedule plays through its own player and list, made by
 - **Next** (`ItemRef`: a date, a block and an item index) follows the clock
   (`clock_next`): the first block of yesterday, today or tomorrow that has
   not started and starts after `local_now − automation.late_tolerance_secs`.
-  The operator may set it by hand (`SetScheduleNext`), and it stays until
-  Start or `ClearScheduleNext`. `settle_next` runs after every step.
+  The operator may set it by hand (`SetScheduleNext`), and every stop
+  pins it on the row below (`pin_next_after_stop`, rework AR10); a pinned
+  next stays until Start or `ClearScheduleNext`. `settle_next` runs after
+  every step.
 - **Missed blocks:** a block whose start passes since the last look (`seen`)
-  is marked missed in `missed` when automation is stopped, between blocks,
+  is marked missed in `missed` when automation is stopped (or paused),
+  between blocks,
   or while a block chosen away from its time plays. A start that passes
   while a block plays in order waits for it (AU21).
 - **Start** (`StartAutomation`): a next set by hand plays at once, with the
@@ -279,9 +282,9 @@ AU40). The schedule plays through its own player and list, made by
   coming block, and generated rows that would start after the fade leave
   the list.
 - **No fragments (AU25):** see "Fitting the last songs" below.
-- **Stop after current** (`StopAutomationAfterCurrent`) sets
-  `stop_after_current` on whichever of the two players plays, and stops
-  automation. Nothing then plays by itself.
+- **Stop after current** (`StopAutomationAfterCurrent`) turns on the
+  Log's Stop at end (`stop_at_end`, see "The Log's transport"): what is
+  on air ends, then automation stops. Nothing then plays by itself.
 
 The hand-over is exact to one conductor tick (`tuning.conductor_tick_ms`),
 not to the sample, as the spec's AU24 accepts. `AutomationSession` (the `kv`

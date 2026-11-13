@@ -44,9 +44,9 @@ cartwall-title = "Cartwall"
 cartwall = """Pages of instant carts for jingles, effects and spots, with loops,
         exclusive carts and their own Main and Cue outputs."""
 automation-title = "Automation"
-automation = """A music filler that fills itself from rotations of your library's
-        categories, and a daily schedule of timed blocks for station IDs, spots
-        and shows, started and stopped by the operator."""
+automation = """A music fill that fills itself from rotations of your library's
+        categories, and a daily log of timed blocks for station IDs, spots
+        and shows, played and stopped by the operator from its player."""
 bit-perfect-title = "Bit-perfect and DSD"
 bit-perfect = """Exclusive access follows each file's sample rate; DSD tracks reach the
         converter unchanged as DoP or native DSD."""

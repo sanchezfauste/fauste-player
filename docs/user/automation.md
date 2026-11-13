@@ -16,7 +16,7 @@ start time (an hourly ID, spots, a programme). Show it from the
 
 ![The Log column running, beside the Music fill column: the day's blocks by start time, each with its station ID (the clock marks it hard-start), spots and the rotation the music fill plays after it; the music fill's song on air and the next ones](../images/guide/automation-columns.png)
 
-Its list is the schedule, grouped by block: each block's start time, then
+Its list is the log, grouped by block: each block's start time, then
 its items. It shows today, the last block of yesterday and the first of
 tomorrow. A block changed for one day says so. The item on air and the
 next one are marked as on a player; items that already aired are dimmed,
@@ -37,6 +37,7 @@ player:
 - **Stop at end** lets what is on air end, and then automation stops. If
   the music is playing and a block's time comes first, the block starts
   on time and automation stops after its first item.
+- **Previous** does nothing on the Log.
 - **SINGLE** makes the Log manual: Play plays the next item, and it stops
   after it; no block starts by itself.
 
@@ -48,7 +49,7 @@ and Play plays it, whatever the time: you choose. To change what plays
 next, double-click an item, or right-click it and choose **Play next**.
 **Back to the clock**, in the same menu, sets next to what the time says.
 
-## Editing the schedule
+## Editing the log
 
 **Edit log**, on the Log column, opens the editor. It has three
 tabs, and **Rotations…** takes you to Settings → Automation, where
@@ -95,7 +96,7 @@ list:
   hour ahead (*look-ahead*, in Settings → Automation);
 - it **trims itself**: it keeps the last 50 tracks it played and removes
   older ones, so it can run for weeks;
-- before a block of the schedule it may **swap songs it chose itself**
+- before a block of the log it may **swap songs it chose itself**
   for others whose length fits the time left (see below); the songs you
   added are never touched;
 - you can still **change it by hand**: drag tracks from the library,
@@ -160,7 +161,7 @@ then on the track. Settings → Automation has every value, and is where
 you make, rename and change rotations (see
 [Settings](settings.md#automation)).
 
-Before a block of the schedule, the music fill also chooses its last songs by
+Before a block of the log, the music fill also chooses its last songs by
 their length, so the music ends cleanly: the song that fades out when the
 block starts loses at most 30 seconds, and no song starts that would play
 for less than 45 seconds. When no song in the rotation can do both, the

@@ -62,7 +62,7 @@ The user guide is in English, with AI translations into Català, Deutsch, Españ
   airing, and trims what it played, so it can run for weeks; you can still
   add, move and remove its tracks by hand. See the
   [automation guide](docs/user/automation.md).
-- **Schedule:** a **Log** column that plays the day's timed blocks
+- **Log:** a **Log** column that plays the day's timed blocks
   (hourly IDs, spots, shows) with the music fill between them, from day
   templates, a week plan and per-date changes made in its editor. The
   operator starts and stops it; nothing runs by itself after a start. What
