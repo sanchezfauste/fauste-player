@@ -1242,6 +1242,7 @@ impl AppUi {
         // dialogs below stay on top.
         super::library::draw(&ctx, &scene, &mut self.view);
         super::schedule_editor::draw(&ctx, &scene, &mut self.view);
+        super::schedule::log_dialog(&ctx, &scene, &mut self.view);
         cue_window::show_all(&ctx, &scene, &mut self.view);
         super::loudness_edit::popup(&ctx, &scene, &mut self.view);
         // Once, at start-up: tracks an earlier version analysed wait for

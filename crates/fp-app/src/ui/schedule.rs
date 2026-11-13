@@ -11,7 +11,8 @@ use super::app::{DragTracks, Scene, ViewState};
 use super::format;
 use super::theme;
 use super::widgets::{font, font_semibold};
-use fp_model::log_edit::LogEdit;
+use fp_model::ids::TemplateId;
+use fp_model::log_edit::{EditTarget, LogEdit};
 
 /// The Log's strip where a player has its playlist tabs (`height` tall):
 /// Edit log. Its transport is the player header's (rework AR3).
@@ -38,18 +39,48 @@ pub(crate) fn schedule_bar(
     }
 }
 
-/// The Log's list (rework AR14): the playlists' table look, a Time
-/// column, block header rows, then each block's items; on air and next as
-/// on a player, missed struck through (AU23), a late next in amber (AR11).
+/// The Log's list (rework AR14), over the rows of `schedule_view`.
 pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+    let rows = schedule_view(scene.state);
+    log_table(ui, scene, view_state, &rows, None, true);
+}
+
+/// What a row of a table edits: the template it shows, else the row's
+/// date (the Log, or a date's popup).
+fn target_of(template: Option<TemplateId>, date: chrono::NaiveDate) -> EditTarget {
+    template.map_or(EditTarget::Date(date), EditTarget::Template)
+}
+
+/// Whether a row may not change (AR19): only a date's rows are locked.
+fn locked(scene: &Scene<'_>, target: EditTarget, block: fp_model::BlockId, index: usize) -> bool {
+    match target {
+        EditTarget::Date(date) => fp_model::log_edit::is_locked(scene.state, date, block, index),
+        EditTarget::Template(_) => false,
+    }
+}
+
+/// The table of the Log and of the template and date popups (rework AR14,
+/// AR20–AR22): the playlists' table look, a Time column, block header
+/// rows, then each block's items. When `playing` (the Log): on air and
+/// next as on a player, missed struck through (AU23), a late next in amber
+/// (AR11), the date of yesterday's and tomorrow's blocks, and the menu
+/// that sets next. `template`: the rows are that template's, else each
+/// row edits its date.
+pub(crate) fn log_table(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    rows: &[ScheduleRow],
+    template: Option<TemplateId>,
+    playing: bool,
+) {
     use egui_extras::{Column, TableBuilder};
     let t = scene.i18n;
     let state = scene.state;
-    let rows = schedule_view(state);
     let today = state.local_now.date();
     let has_today = rows
         .iter()
-        .any(|r| matches!(r, ScheduleRow::Block { date, .. } if *date == today));
+        .any(|r| matches!(r, ScheduleRow::Block { date, .. } if *date == today || !playing));
     // Scroll to the row on air, else next, once each time it changes.
     let target = rows.iter().find_map(|r| match r {
         ScheduleRow::Item {
@@ -59,7 +90,9 @@ pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut Vie
         } => Some(*item),
         _ => None,
     });
-    let target = target.or_else(|| state.automation.as_ref().and_then(|a| a.next));
+    let target = target
+        .or_else(|| state.automation.as_ref().and_then(|a| a.next))
+        .filter(|_| playing);
     let memory = ui.scope_id().with("schedule-scrolled");
     let scrolled: Option<ItemRef> = ui.data(|d| d.get_temp(memory)).flatten();
     let scroll_now = target.is_some() && target != scrolled;
@@ -75,7 +108,7 @@ pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut Vie
     let width = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
     let artist_width = (width * 0.28).max(60.0);
     let mut builder = TableBuilder::new(ui)
-        .id_salt("schedule-list")
+        .id_salt(("schedule-list", template, playing))
         .striped(false)
         .resizable(false)
         .vscroll(true)
@@ -124,30 +157,26 @@ pub(crate) fn schedule_list(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut Vie
                         origin,
                         ..
                     } => {
-                        block_row(&mut row, scene, r, today);
+                        let edits = target_of(template, *date);
+                        block_row(&mut row, scene, r, playing.then_some(today));
                         let response = row.response();
-                        block_actions(scene, view_state, &response, *date, *block, *start, *origin);
-                        drop_tracks(scene, &response, *date, *block, 0);
+                        block_actions(scene, view_state, &response, edits, *block, *start, *origin);
+                        drop_tracks(scene, &response, edits, *block, 0);
                     }
                     ScheduleRow::Item { item, .. } => {
+                        let edits = target_of(template, item.date);
                         item_row(&mut row, scene, r);
                         let response = row.response();
-                        next_actions(scene, &response, *item);
-                        if response.drag_started()
-                            && !fp_model::log_edit::is_locked(
-                                scene.state,
-                                item.date,
-                                item.block,
-                                item.index,
-                            )
+                        row_actions(scene, &response, edits, *item, playing);
+                        if response.drag_started() && !locked(scene, edits, item.block, item.index)
                         {
                             response.dnd_set_drag_payload(DragLogItem {
-                                date: item.date,
+                                target: edits,
                                 block: item.block,
                                 index: item.index,
                             });
                         }
-                        drop_tracks(scene, &response, item.date, item.block, item.index);
+                        drop_tracks(scene, &response, edits, item.block, item.index);
                     }
                 }
             });
@@ -193,7 +222,7 @@ fn block_row(
     row: &mut egui_extras::TableRow<'_, '_>,
     scene: &Scene<'_>,
     r: &ScheduleRow,
-    today: chrono::NaiveDate,
+    today: Option<chrono::NaiveDate>,
 ) {
     let t = scene.i18n;
     let ScheduleRow::Block {
@@ -220,10 +249,14 @@ fn block_row(
             ("length", format::clock(*total_secs).into()),
         ],
     );
-    if *date < today {
-        text = format!("{text} · {}", t.tr("schedule-yesterday"));
-    } else if *date > today {
-        text = format!("{text} · {}", t.tr("schedule-tomorrow"));
+    match today {
+        Some(today) if *date < today => {
+            text = format!("{text} · {}", t.tr("schedule-yesterday"));
+        }
+        Some(today) if *date > today => {
+            text = format!("{text} · {}", t.tr("schedule-tomorrow"));
+        }
+        _ => {}
     }
     if *origin != BlockOrigin::Template {
         text = format!("{text} · {}", t.tr("schedule-changed-for-date"));
@@ -263,11 +296,18 @@ fn block_row(
     row.col(|ui| row_fill(ui, theme::NEUTRAL_900));
 }
 
-/// Setting next from the list: a double-click or the menu's "Play next";
-/// on a next set by hand, the menu's "Back to the clock" (AU16).
-fn next_actions(scene: &Scene<'_>, response: &egui::Response, item: ItemRef) {
+/// A row's menu. On the Log (`playing`), setting next: a double-click or
+/// the menu's "Play next"; on a next set by hand, "Back to the clock"
+/// (AU16). Then the edits (AR17), unless the row is locked (AR19).
+fn row_actions(
+    scene: &Scene<'_>,
+    response: &egui::Response,
+    target: EditTarget,
+    item: ItemRef,
+    playing: bool,
+) {
     let t = scene.i18n;
-    if response.double_clicked() {
+    if playing && response.double_clicked() {
         scene.ctl.send(Command::SetScheduleNext(item));
     }
     let by_hand = scene
@@ -275,22 +315,29 @@ fn next_actions(scene: &Scene<'_>, response: &egui::Response, item: ItemRef) {
         .automation
         .as_ref()
         .is_some_and(|a| a.next_by_hand && a.next == Some(item));
+    let editable = !locked(scene, target, item.block, item.index);
+    if !playing && !editable {
+        return;
+    }
     response.context_menu(|ui| {
-        if ui.button(t.tr("schedule-set-next")).clicked() {
-            scene.ctl.send(Command::SetScheduleNext(item));
-            ui.close();
+        if playing {
+            if ui.button(t.tr("schedule-set-next")).clicked() {
+                scene.ctl.send(Command::SetScheduleNext(item));
+                ui.close();
+            }
+            if by_hand && ui.button(t.tr("schedule-clear-next")).clicked() {
+                scene.ctl.send(Command::ClearScheduleNext);
+                ui.close();
+            }
         }
-        if by_hand && ui.button(t.tr("schedule-clear-next")).clicked() {
-            scene.ctl.send(Command::ClearScheduleNext);
-            ui.close();
-        }
-        // AR17, AR19: live edits, unless the row is locked.
-        if fp_model::log_edit::is_locked(scene.state, item.date, item.block, item.index) {
+        if !editable {
             return;
         }
-        let what = fp_model::automation::block_items(scene.state, item.date, item.block)
-            .and_then(|items| items.get(item.index).cloned());
-        ui.separator();
+        let what =
+            items_of(scene, target, item.block).and_then(|items| items.get(item.index).cloned());
+        if playing {
+            ui.separator();
+        }
         if let Some(Item::Track { time_critical, .. } | Item::Category { time_critical, .. }) = what
         {
             let mut on = time_critical;
@@ -300,7 +347,7 @@ fn next_actions(scene: &Scene<'_>, response: &egui::Response, item: ItemRef) {
             {
                 send_edit(
                     scene,
-                    item.date,
+                    target,
                     LogEdit::SetHardStart {
                         block: item.block,
                         index: item.index,
@@ -313,7 +360,7 @@ fn next_actions(scene: &Scene<'_>, response: &egui::Response, item: ItemRef) {
         if ui.button(t.tr("schedule-row-remove")).clicked() {
             send_edit(
                 scene,
-                item.date,
+                target,
                 LogEdit::Remove {
                     block: item.block,
                     index: item.index,
@@ -324,11 +371,21 @@ fn next_actions(scene: &Scene<'_>, response: &egui::Response, item: ItemRef) {
     });
 }
 
-fn send_edit(scene: &Scene<'_>, date: chrono::NaiveDate, edit: LogEdit) {
-    scene.ctl.send(Command::EditPlan {
-        target: fp_model::log_edit::EditTarget::Date(date),
-        edit,
-    });
+/// A block's items on the target.
+fn items_of(scene: &Scene<'_>, target: EditTarget, block: fp_model::BlockId) -> Option<Vec<Item>> {
+    match target {
+        EditTarget::Date(date) => fp_model::automation::block_items(scene.state, date, block),
+        EditTarget::Template(template) => scene
+            .state
+            .schedule
+            .template(template)
+            .and_then(|t| t.block(block))
+            .map(|b| b.items.clone()),
+    }
+}
+
+fn send_edit(scene: &Scene<'_>, target: EditTarget, edit: LogEdit) {
+    scene.ctl.send(Command::EditPlan { target, edit });
 }
 
 /// A block header's menu: Change time…, Remove block, Back to the
@@ -337,30 +394,30 @@ fn block_actions(
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     response: &egui::Response,
-    date: chrono::NaiveDate,
+    target: EditTarget,
     block: fp_model::BlockId,
     start: chrono::NaiveDateTime,
     origin: BlockOrigin,
 ) {
     let t = scene.i18n;
-    if fp_model::log_edit::is_locked(scene.state, date, block, 0) {
+    if locked(scene, target, block, 0) {
         return;
     }
     response.context_menu(|ui| {
         if ui.button(t.tr("schedule-block-move")).clicked() {
             view_state.log_dialog = Some(LogDialog::MoveBlock {
-                date,
+                target,
                 block,
                 time: start.format("%H:%M:%S").to_string(),
             });
             ui.close();
         }
         if ui.button(t.tr("schedule-block-remove")).clicked() {
-            send_edit(scene, date, LogEdit::RemoveBlock { block });
+            send_edit(scene, target, LogEdit::RemoveBlock { block });
             ui.close();
         }
         if origin != BlockOrigin::Template && ui.button(t.tr("schedule-date-revert")).clicked() {
-            send_edit(scene, date, LogEdit::Revert { block });
+            send_edit(scene, target, LogEdit::Revert { block });
             ui.close();
         }
     });
@@ -371,11 +428,11 @@ fn block_actions(
 fn drop_tracks(
     scene: &Scene<'_>,
     response: &egui::Response,
-    date: chrono::NaiveDate,
+    target: EditTarget,
     block: fp_model::BlockId,
     index: usize,
 ) {
-    if fp_model::log_edit::is_locked(scene.state, date, block, index) {
+    if locked(scene, target, block, index) {
         return;
     }
     if response.dnd_hover_payload::<DragTracks>().is_some()
@@ -387,14 +444,14 @@ fn drop_tracks(
             .layer_painter(egui::LayerId::new(egui::Order::Foreground, response.id))
             .hline(r.x_range(), r.top(), egui::Stroke::new(2.0, theme::ACCENT));
     }
-    // A Log row dragged here moves before this row (same date).
+    // A row dragged here moves before this row (same date or template).
     if let Some(from) = response.dnd_release_payload::<DragLogItem>()
-        && from.date == date
+        && from.target == target
         && (from.block, from.index) != (block, index)
     {
         send_edit(
             scene,
-            date,
+            target,
             LogEdit::Move {
                 from: (from.block, from.index),
                 to: (block, index),
@@ -412,7 +469,7 @@ fn drop_tracks(
             .collect();
         send_edit(
             scene,
-            date,
+            target,
             LogEdit::Insert {
                 block,
                 index,
@@ -422,10 +479,10 @@ fn drop_tracks(
     }
 }
 
-/// A Log row being dragged (AR17).
+/// A row of a Log, template or date table being dragged (AR17).
 #[derive(Debug, Clone, Copy, PartialEq)]
 struct DragLogItem {
-    date: chrono::NaiveDate,
+    target: EditTarget,
     block: fp_model::BlockId,
     index: usize,
 }
@@ -434,21 +491,21 @@ struct DragLogItem {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LogDialog {
     Category {
-        date: chrono::NaiveDate,
+        target: EditTarget,
         block: fp_model::BlockId,
         choice: Option<fp_model::CategoryId>,
     },
     MusicFill {
-        date: chrono::NaiveDate,
+        target: EditTarget,
         block: fp_model::BlockId,
         choice: Option<fp_model::RotationId>,
     },
     AddBlock {
-        date: chrono::NaiveDate,
+        target: EditTarget,
         time: String,
     },
     MoveBlock {
-        date: chrono::NaiveDate,
+        target: EditTarget,
         block: fp_model::BlockId,
         time: String,
     },
@@ -456,13 +513,13 @@ pub(crate) enum LogDialog {
 
 /// Where Add puts items: the block of next when it is today or later,
 /// else today's first block still to come, else today's last block.
-fn add_target(scene: &Scene<'_>) -> Option<(chrono::NaiveDate, fp_model::BlockId)> {
+fn add_target(scene: &Scene<'_>) -> Option<(EditTarget, fp_model::BlockId)> {
     let state = scene.state;
     let today = state.local_now.date();
     if let Some(next) = state.automation.as_ref().and_then(|a| a.next)
         && next.date >= today
     {
-        return Some((next.date, next.block));
+        return Some((EditTarget::Date(next.date), next.block));
     }
     let day = state.schedule.day(today);
     let now = fp_model::local_time::TimeOfDay::new(chrono::Timelike::num_seconds_from_midnight(
@@ -471,12 +528,47 @@ fn add_target(scene: &Scene<'_>) -> Option<(chrono::NaiveDate, fp_model::BlockId
     day.iter()
         .find(|b| now.is_some_and(|n| b.start >= n))
         .or(day.last())
-        .map(|b| (today, b.id))
+        .map(|b| (EditTarget::Date(today), b.id))
 }
 
 /// The Log's footer (AR17): Add, with its menu, and when the next block
 /// starts.
 pub(crate) fn log_footer(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState) {
+    let today = EditTarget::Date(scene.state.local_now.date());
+    let add_to = add_target(scene);
+    plan_footer(ui, scene, view_state, today, add_to, true);
+}
+
+/// The starts of the target's blocks.
+fn starts_of(scene: &Scene<'_>, target: EditTarget) -> Vec<fp_model::local_time::TimeOfDay> {
+    match target {
+        EditTarget::Date(date) => scene
+            .state
+            .schedule
+            .day(date)
+            .into_iter()
+            .map(|b| b.start)
+            .collect(),
+        EditTarget::Template(template) => scene
+            .state
+            .schedule
+            .template(template)
+            .map(|t| t.blocks.iter().map(|b| b.start).collect())
+            .unwrap_or_default(),
+    }
+}
+
+/// A Log, template or date footer (AR17, AR21): Add, with its menu, whose
+/// items go to `add_to`'s block and whose Block… adds to `blocks`; on the
+/// Log (`playing`), when the next block starts.
+pub(crate) fn plan_footer(
+    ui: &mut Ui,
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    blocks: EditTarget,
+    add_to: Option<(EditTarget, fp_model::BlockId)>,
+    playing: bool,
+) {
     let t = scene.i18n;
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
@@ -487,8 +579,6 @@ pub(crate) fn log_footer(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewSt
     );
     ui.add_space(10.0);
     ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
-    let today = scene.state.local_now.date();
-    let target = add_target(scene);
     let add = ui
         .add(egui::Button::new(
             RichText::new(format!("{} {}", icon::PLUS, t.tr("footer-add"))).font(font(10.0)),
@@ -504,11 +594,11 @@ pub(crate) fn log_footer(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewSt
             scene.ctl.send(Command::SetLibraryView(Box::new(view)));
             ui.close();
         }
-        if let Some((date, block)) = target {
+        if let Some((target, block)) = add_to {
             if ui.button(t.tr("schedule-add-category-track")).clicked() {
                 let choice = scene.state.categories.iter().next().map(|c| c.id);
                 view_state.log_dialog = Some(LogDialog::Category {
-                    date,
+                    target,
                     block,
                     choice,
                 });
@@ -517,7 +607,7 @@ pub(crate) fn log_footer(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewSt
             if ui.button(t.tr("schedule-add-music-fill")).clicked() {
                 let choice = scene.state.rotations.default_id();
                 view_state.log_dialog = Some(LogDialog::MusicFill {
-                    date,
+                    target,
                     block,
                     choice,
                 });
@@ -526,15 +616,17 @@ pub(crate) fn log_footer(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewSt
         }
         ui.separator();
         if ui.button(t.tr("schedule-add-block")).clicked() {
-            let starts = scene.state.schedule.day(today).into_iter().map(|b| b.start);
-            let time = fp_model::schedule::free_start(starts)
+            let time = fp_model::schedule::free_start(starts_of(scene, blocks))
                 .map(|s| s.to_string())
                 .unwrap_or_default();
-            view_state.log_dialog = Some(LogDialog::AddBlock { date: today, time });
+            view_state.log_dialog = Some(LogDialog::AddBlock {
+                target: blocks,
+                time,
+            });
             ui.close();
         }
     });
-    if let Some(start) = fp_model::automation::coming_start(scene.state) {
+    if let Some(start) = fp_model::automation::coming_start(scene.state).filter(|_| playing) {
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.add_space(10.0);
             ui.label(
@@ -547,11 +639,11 @@ pub(crate) fn log_footer(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewSt
             );
         });
     }
-    log_dialog(ui.ctx(), scene, view_state);
 }
 
-/// The open dialog of the Log, if any: a combo or a time, then OK.
-fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
+/// The open dialog of the Log or a popup, if any: a combo or a time, then
+/// OK. Drawn once a frame by the app.
+pub(crate) fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
     let t = scene.i18n;
     let Some(dialog) = view_state.log_dialog.as_mut() else {
         return;
@@ -633,12 +725,12 @@ fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState
             let parse = |s: &str| fp_model::local_time::TimeOfDay::parse(s);
             match dialog.clone() {
                 LogDialog::Category {
-                    date,
+                    target,
                     block,
                     choice: Some(category),
                 } => send_edit(
                     scene,
-                    date,
+                    target,
                     LogEdit::Insert {
                         block,
                         index: usize::MAX,
@@ -649,26 +741,30 @@ fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState
                     },
                 ),
                 LogDialog::MusicFill {
-                    date,
+                    target,
                     block,
                     choice: Some(rotation),
                 } => send_edit(
                     scene,
-                    date,
+                    target,
                     LogEdit::Insert {
                         block,
                         index: usize::MAX,
                         items: vec![Item::Rotation { rotation }],
                     },
                 ),
-                LogDialog::AddBlock { date, time } => {
+                LogDialog::AddBlock { target, time } => {
                     if let Some(start) = parse(&time) {
-                        send_edit(scene, date, LogEdit::AddBlock { start });
+                        send_edit(scene, target, LogEdit::AddBlock { start });
                     }
                 }
-                LogDialog::MoveBlock { date, block, time } => {
+                LogDialog::MoveBlock {
+                    target,
+                    block,
+                    time,
+                } => {
                     if let Some(start) = parse(&time) {
-                        send_edit(scene, date, LogEdit::MoveBlock { block, start });
+                        send_edit(scene, target, LogEdit::MoveBlock { block, start });
                     }
                 }
                 _ => {}
