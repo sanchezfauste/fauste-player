@@ -57,17 +57,28 @@ pub(crate) fn column(
         return;
     };
     let id = player.id;
+    // Rework AR16: while the music fill's song is on air for the Log, the
+    // Log's header shows that song; its buttons still act on the Log.
+    let shown = log_shows_fill(scene.state, id).unwrap_or(id);
     let telemetry = scene
         .telemetry
         .players
         .iter()
-        .find(|(p, _)| *p == id)
+        .find(|(p, _)| *p == shown)
         .map(|(_, t)| *t)
         .unwrap_or_default();
-    let Some(mut pv) = view::player_view(scene.state, id, telemetry.position_secs, scene.time)
+    let Some(mut pv) = view::player_view(scene.state, shown, telemetry.position_secs, scene.time)
     else {
         return;
     };
+    if shown != id {
+        pv.mode = player.mode;
+        pv.stop_after_current = scene
+            .state
+            .automation
+            .as_ref()
+            .is_some_and(|a| a.stop_at_end);
+    }
     pv.bit_perfect = telemetry.bit_perfect;
     pv.dsd = telemetry.dsd;
     let rect = ui.available_rect_before_wrap();
@@ -95,16 +106,26 @@ pub(crate) fn column(
                 ui,
                 scene,
                 covers,
-                id,
+                shown,
                 &pv,
                 &telemetry,
                 !locked,
                 BlockSize::Desktop,
             );
-            wave_sized(ui, scene, view_state, id, &pv, WAVE_HEIGHT, true, locked);
+            wave_sized(ui, scene, view_state, shown, &pv, WAVE_HEIGHT, true, locked);
             time_row(ui, scene, &pv);
         });
     playlist_area(ui, scene, view_state, id, player.playlist);
+}
+
+/// The filler, when `id` is the Log and the music fill's song is on air
+/// (or paused) for it.
+fn log_shows_fill(state: &fp_model::AppState, id: PlayerId) -> Option<PlayerId> {
+    let a = state.automation.as_ref()?;
+    let fill = fp_model::automation::fill_is_current(state) || a.paused_fill;
+    (state.is_schedule(id) && fill)
+        .then(|| state.filler.as_ref().map(|f| f.player))
+        .flatten()
 }
 
 /// A player's playlist tabs, track table and footer, filling `ui`.

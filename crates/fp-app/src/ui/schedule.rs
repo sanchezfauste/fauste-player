@@ -12,8 +12,8 @@ use super::format;
 use super::theme;
 use super::widgets::{font, font_semibold};
 
-/// Start, Stop after current and the running/stopped state, in the strip
-/// where a player has its playlist tabs (`height` tall).
+/// The Log's strip where a player has its playlist tabs (`height` tall):
+/// Edit log. Its transport is the player header's (rework AR3).
 pub(crate) fn schedule_bar(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -21,9 +21,9 @@ pub(crate) fn schedule_bar(
     height: f32,
 ) {
     let t = scene.i18n;
-    let Some(a) = scene.state.automation.as_ref() else {
+    if scene.state.automation.is_none() {
         return;
-    };
+    }
     let (strip, _) = ui.allocate_exact_size(vec2(ui.available_width(), height), Sense::hover());
     ui.painter().rect_filled(strip, 0.0, theme::NEUTRAL_900);
     let mut bar = ui.new_child(
@@ -32,27 +32,6 @@ pub(crate) fn schedule_bar(
             .layout(Layout::left_to_right(Align::Center)),
     );
     bar.spacing_mut().item_spacing = vec2(8.0, 0.0);
-    let start = bar
-        .add_enabled(!a.running, egui::Button::new(t.tr("schedule-start")))
-        .on_hover_text(t.tr("tip-schedule-start"));
-    if start.clicked() {
-        scene.ctl.send(Command::StartAutomation);
-    }
-    let stop = bar
-        .add_enabled(
-            a.running,
-            egui::Button::new(t.tr("schedule-stop-after-current")),
-        )
-        .on_hover_text(t.tr("tip-schedule-stop-after-current"));
-    if stop.clicked() {
-        scene.ctl.send(Command::StopAutomationAfterCurrent);
-    }
-    let (text, colour) = if a.running {
-        (t.tr("schedule-running"), theme::PLAY)
-    } else {
-        (t.tr("schedule-stopped"), theme::NEUTRAL_400)
-    };
-    bar.add(egui::Label::new(RichText::new(text).font(font(11.0)).color(colour)).truncate());
     if !view_state.phone_active && bar.button(t.tr("schedule-edit")).clicked() {
         view_state.schedule_editor.open = true;
     }

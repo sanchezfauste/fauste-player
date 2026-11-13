@@ -416,3 +416,22 @@ fn the_log_mode_survives_a_restart() {
     assert_eq!(mode, fp_model::PlayMode::Single);
     assert!(!back.automation.as_ref().unwrap().running);
 }
+
+// Task 6: the Log header's buttons.
+
+#[test]
+fn the_log_buttons_follow_automation() {
+    let mut r = two_blocks();
+    r.at_hms(10, 30, 0);
+    let log = r.schedule_player();
+    let a = fp_model::availability(&r.s, log);
+    assert!(a.play, "a next to play");
+    assert!(!a.stop && !a.pause && !a.fade_stop && !a.previous);
+    r.apply(Command::Play(log));
+    let a = fp_model::availability(&r.s, log);
+    assert!(a.play && a.stop && a.pause && a.fade_stop && a.stop_after_current);
+    assert!(!a.previous);
+    r.apply(Command::Pause(log));
+    let a = fp_model::availability(&r.s, log);
+    assert!(a.play && a.stop && !a.fade_stop);
+}

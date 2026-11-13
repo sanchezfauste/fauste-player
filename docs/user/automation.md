@@ -23,18 +23,30 @@ next one are marked as on a player; items that already aired are dimmed,
 and an item that did not air (**missed**) is struck through. A clock
 marks a **hard start** item, which plays only at its time.
 
-Above the list:
+The Log column has a player's header and buttons, and they work as on a
+player:
 
-- **Start** runs the schedule: each block plays at its time, and the
-  music fill plays between blocks. Nothing runs by itself: after every
-  start of the application, automation is stopped until you press Start.
-- **Stop after current** lets what is on air end, and then nothing more
-  plays by itself.
-- **Running** or **Stopped** says which.
+- **Play** plays the item marked next and runs automation: each block
+  then plays at its time, and the music fill plays between blocks. When
+  next was chosen by the clock and its block starts later, the music
+  plays until then. Nothing runs by itself: after every start of the
+  application, automation is stopped until you press Play.
+- **Pause**, **Stop** and **Fade stop** act on what is on air for the Log
+  (its item, or the music fill's song between blocks) and stop
+  automation. Play after Pause goes on from where it was.
+- **Stop at end** lets what is on air end, and then automation stops. If
+  the music is playing and a block's time comes first, the block starts
+  on time and automation stops after its first item.
+- **SINGLE** makes the Log manual: Play plays the next item, and it stops
+  after it; no block starts by itself.
 
-To change what plays next, double-click an item, or right-click it and
-choose **Play next**; it follows the song on air. **Back to the clock**,
-in the same menu, lets the schedule choose by the time again.
+While the music fill plays between blocks, the Log's header shows its
+song.
+
+When automation stops, next stays on the item below the one that played,
+and Play plays it, whatever the time: you choose. To change what plays
+next, double-click an item, or right-click it and choose **Play next**.
+**Back to the clock**, in the same menu, sets next to what the time says.
 
 ## Editing the schedule
 
@@ -95,9 +107,12 @@ Its outputs are set in Settings → Audio outputs, on the **Music fill** row, as
 for any player. It has no number, no keyboard shortcuts or MIDI bindings,
 and remote control does not see it.
 
-Press **Play** to start it and **Stop after current** to let the song on air
+Press **Play** to start it and **Stop at end** to let the song on air
 end and stop. Like every player, it never starts by itself, not even after
-a restart.
+a restart. While it plays for the Log between blocks, stopping or pausing
+it stops automation too, and its Stop at end stops automation when the
+song ends; if a block's time comes first, the block plays and the mark is
+cleared.
 
 Above its list, where a player has its playlist tabs, the Music fill column
 shows the **rotation** it plays. Choose another one there: the songs it had

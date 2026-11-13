@@ -288,6 +288,35 @@ not to the sample, as the spec's AU24 accepts. `AutomationSession` (the `kv`
 value `automation`) keeps the schedule's player and list ids across a
 restart. Automation always comes back stopped.
 
+### The Log's transport (rework spec §4–§5)
+
+The reducer sends the player commands aimed at the Log
+(`AppState::is_schedule`) to `automation.rs` instead of the plain player
+handling: `Play` → `log_play` (resume a paused Log row, or the filler's
+song the Log paused, `paused_fill`; a row on air goes to next as on a
+player; a Log in SINGLE plays next at once with `single_play`, a music
+fill row starting the filler alone; else `start`), `Pause` → `log_pause`,
+`Stop` / `FadeStop` → `log_stop`, `Previous` → nothing;
+`ToggleStopAfterCurrent` / `SetStopAfterCurrent` → `toggle_stop_at_end`.
+`Pause` on the filler goes to `filler_pause`. `availability` has its own
+rules for the Log (`log_availability`).
+
+- `stop_at_end` (the Log's Stop at end) puts `stop_after_current` on the
+  Log's row on air, or on the filler's song while the fill is current
+  (`fill_is_current`); `play_schedule` moves it to a block's first row
+  when the block comes first. When the Log's row or the filler's song
+  ends under it, `halt` stops automation. `StopAutomationAfterCurrent`
+  turns it on.
+- `halt` (and `log_stop`) pin next with `pin_next_after_stop`: the Log's
+  loaded next row, else `row_below(last_on_air)`, else the next it had,
+  with `next_by_hand` set, so `settle_next` keeps it while stopped (AR10).
+  At start-up next comes from the clock (AR12).
+- `fill_on_air`, kept by `note_fill` after each tick and start, tells the
+  operator's stop of the filler (it stops with no `handing_over` or
+  `filler_held` pending) from a hand-over: `drive` then halts (AR7).
+- A Log in `PlayMode::Single` halts when its row ends (`drive`); `restore`
+  keeps the saved mode.
+
 ## Editing helpers (`schedule.rs`)
 
 `schedule::overrun_secs(state, items, start, next_start)` is AU37's figure:

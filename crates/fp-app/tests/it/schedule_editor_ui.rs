@@ -486,7 +486,10 @@ mod layout {
         let music = s.rotations.default_id().unwrap();
         let (mut h, fake) = harness(s);
         open(&mut h);
-        h.get_all_by_label("Then music fill").nth(1).unwrap().click();
+        h.get_all_by_label("Then music fill")
+            .nth(1)
+            .unwrap()
+            .click();
         h.run_steps(2);
         h.get_all_by_label("Music").last().unwrap().click();
         h.run_steps(2);
