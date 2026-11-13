@@ -238,3 +238,76 @@ fn during_music_the_log_header_buttons_act_on_the_log() {
     assert!(sent.contains(&Command::Stop(log)), "{sent:?}");
     assert!(!sent.contains(&Command::Stop(f.player)));
 }
+
+// Rework plan 4: the Log's list is drawn as a playlist.
+
+#[test]
+fn the_log_list_has_the_playlist_columns() {
+    let (s, _) = with_block();
+    let (h, _fake) = harness(s);
+    // Time is the Log's own; the players' tables have the others too.
+    assert_eq!(h.query_all_by_label("TIME").count(), 1);
+    for label in ["TITLE", "ARTIST", "DUR."] {
+        assert!(h.query_all_by_label(label).count() >= 2, "{label}");
+    }
+}
+
+#[test]
+fn a_category_row_shows_its_track() {
+    use fp_model::schedule::{Block, Item};
+    let (mut s, item) = with_block();
+    apply(
+        &mut s,
+        Command::CreateCategory {
+            parent: None,
+            name: "Spots".into(),
+            color: None,
+            kind: fp_model::TrackKind::Ad,
+        },
+    )
+    .unwrap();
+    let cat = s.categories.iter().last().unwrap().id;
+    let mut t = fp_model::Track::new(fp_model::TrackId(9100), "/m/bakery.wav".into());
+    t.title = "Riverside Bakery".into();
+    t.duration_secs = 20.0;
+    s.library.insert(t);
+    let base = s.schedule.templates()[0].id;
+    let start = fp_model::local_time::TimeOfDay::hms(10, 0, 0).unwrap();
+    apply(
+        &mut s,
+        Command::UpdateBlock {
+            template: base,
+            block: Block {
+                id: item.block,
+                start,
+                items: vec![Item::Category {
+                    category: cat,
+                    time_critical: false,
+                }],
+            },
+        },
+    )
+    .unwrap();
+    // Its block is loaded: the Log's list holds the chosen track.
+    let a = s.automation.clone().unwrap();
+    let entry = fp_model::EntryId(77_777);
+    s.playlists
+        .get_mut(a.playlist)
+        .unwrap()
+        .entries
+        .push(fp_model::PlaylistEntry::new(entry, fp_model::TrackId(9100)));
+    s.automation.as_mut().unwrap().rows.insert(entry, item);
+    let (h, _fake) = harness(s);
+    assert!(h.query_by_label_contains("Riverside Bakery").is_some());
+}
+
+#[test]
+fn a_late_next_says_so() {
+    let (mut s, item) = with_block();
+    s.local_now = item.date.and_hms_opt(10, 30, 0).unwrap();
+    let a = s.automation.as_mut().unwrap();
+    a.next = Some(item);
+    a.next_by_hand = true;
+    let (h, _fake) = harness(s);
+    assert!(h.query_by_label_contains("its time has passed").is_some());
+}
