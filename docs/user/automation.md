@@ -58,7 +58,8 @@ player:
   application, automation is stopped until you press Play.
 - **Pause**, **Stop** and **Fade stop** act on what is on air for the Log
   (its item, or the music fill's song between blocks) and stop
-  automation. Play after Pause goes on from where it was.
+  automation. Play after Pause goes on from where it was; while paused,
+  next does not move.
 - **Stop at end** lets what is on air end, and then automation stops. If
   the music is playing and a block's time comes first, the block starts
   on time and automation stops after its first item.
@@ -69,7 +70,7 @@ player:
 While the music fill plays between blocks, the Log's header shows its
 song.
 
-When automation stops (or pauses), next stays on the item below the one that played,
+When automation stops, next stays on the item below the one that played,
 and Play plays it, whatever the time: you choose. To change what plays
 next, double-click an item, or right-click it and choose **Play next**.
 **Back to the clock**, in the same menu, sets next to what the time says.

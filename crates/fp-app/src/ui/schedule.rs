@@ -164,7 +164,7 @@ pub(crate) fn log_table(
                         block_actions(scene, view_state, &response, edits, *block, *start, *origin);
                         drop_tracks(scene, &response, edits, *block, 0, false);
                     }
-                    ScheduleRow::Item { item, .. } => {
+                    ScheduleRow::Item { item, what, .. } => {
                         let edits = target_of(template, item.date);
                         item_row(&mut row, scene, r);
                         let response = row.response();
@@ -177,7 +177,9 @@ pub(crate) fn log_table(
                                 index: item.index,
                             });
                         }
-                        drop_tracks(scene, &response, edits, item.block, item.index, true);
+                        // Nothing goes after a Music fill row (AU6).
+                        let fill = matches!(what, Item::Rotation { .. });
+                        drop_tracks(scene, &response, edits, item.block, item.index, !fill);
                     }
                 }
             });
@@ -574,7 +576,9 @@ fn add_target(scene: &Scene<'_>) -> Option<(EditTarget, fp_model::BlockId)> {
     ));
     let target = EditTarget::Date(today);
     day.iter()
-        .find(|b| now.is_some_and(|n| b.start >= n))
+        .find(|b| {
+            now.is_some_and(|n| b.start >= n) && open_at_end(scene, target, b.id, b.items.len())
+        })
         .or_else(|| {
             day.iter()
                 .rev()

@@ -81,6 +81,10 @@ pub struct AutomationState {
     /// The Log's Pause paused the filler's song playing for the Log
     /// (runtime only): the Log's Play resumes it (AR5).
     pub paused_fill: bool,
+    /// The clock's next that the Log's Pause pinned (runtime only): while
+    /// stopped next stays where it is (AR10); the Play that resumes gives
+    /// it back to the clock if it is still next (AR9).
+    pub paused_next: Option<ItemRef>,
     /// The filler's song on air for the Log carried the operator's own
     /// Stop at end at the last look (runtime only): when the filler then
     /// stops with no hand-over or hold pending, automation stops too (AR7).
@@ -128,6 +132,7 @@ pub fn ensure(state: &mut AppState, playlist_name: &str) -> Vec<EngineAction> {
         last_on_air: None,
         stop_at_end: false,
         paused_fill: false,
+        paused_next: None,
         fill_on_air: false,
         fill_item: None,
         chosen: HashMap::new(),
@@ -425,6 +430,7 @@ pub(crate) fn log_play(
     if let Some(a) = state.automation.as_mut() {
         a.running = true;
         a.paused_fill = false;
+        unpin_on_resume(a);
     }
     Ok(())
 }
@@ -464,6 +470,22 @@ fn single_play(state: &mut AppState, out: &mut Vec<EngineAction>) -> Result<(), 
     start(state, out)
 }
 
+/// A pause pins next (AR10), noting a next the clock chose so that the
+/// Play that resumes gives it back (`unpin_on_resume`).
+fn pin_on_pause(a: &mut AutomationState) {
+    a.paused_next = if a.next_by_hand { None } else { a.next };
+    a.next_by_hand = a.next.is_some();
+}
+
+/// Resuming after a pause: a next the pause pinned, and still next,
+/// follows the clock again (AR9).
+fn unpin_on_resume(a: &mut AutomationState) {
+    if a.paused_next.is_some() && a.paused_next == a.next {
+        a.next_by_hand = false;
+    }
+    a.paused_next = None;
+}
+
 /// AR5: Pause on the Log pauses what is on air for it and stops
 /// automation; the row stays current.
 pub(crate) fn log_pause(
@@ -485,7 +507,7 @@ pub(crate) fn log_pause(
         a.handing_over = None;
         a.paused_fill = fill;
         // AR10: while stopped, next stays where it is.
-        a.next_by_hand = a.next.is_some();
+        pin_on_pause(a);
     }
     Ok(())
 }
@@ -502,6 +524,7 @@ pub(crate) fn filler_play(
         && !a.running
     {
         a.paused_fill = false;
+        a.paused_next = None;
     }
     Ok(())
 }
@@ -522,7 +545,7 @@ pub(crate) fn filler_pause(
         a.fill_on_air = false;
         a.paused_fill = true;
         // AR10: while stopped, next stays where it is.
-        a.next_by_hand = a.next.is_some();
+        pin_on_pause(a);
     }
     Ok(())
 }
@@ -549,6 +572,7 @@ pub(crate) fn log_stop(
     }
     if let Some(a) = state.automation.as_mut() {
         a.paused_fill = false;
+        a.paused_next = None;
     }
     match target {
         Some(p) if fade => crate::reducer::apply_fade_stop(state, p, out),
@@ -1310,6 +1334,7 @@ pub(crate) fn restore(state: &mut AppState, saved: Option<AutomationSession>) {
         last_on_air: None,
         stop_at_end: false,
         paused_fill: false,
+        paused_next: None,
         fill_on_air: false,
         fill_item: None,
         chosen: HashMap::new(),

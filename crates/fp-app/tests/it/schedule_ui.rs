@@ -662,3 +662,16 @@ fn library_tracks_dropped_on_a_rows_lower_half_go_after_it() {
         }]
     );
 }
+
+#[test]
+fn add_skips_a_coming_block_already_played_by_hand() {
+    let (mut s, item) = with_block();
+    // 08:00: the 10:00 block was played early by hand; nothing is next.
+    let a = s.automation.as_mut().unwrap();
+    a.started.insert((item.date, item.block));
+    a.next = None;
+    let (mut h, _fake) = harness(s);
+    h.get_by_label("Add to the log").click();
+    h.run();
+    assert!(h.query_by_label("Category track…").is_none());
+}

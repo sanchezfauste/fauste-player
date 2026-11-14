@@ -579,3 +579,37 @@ fn play_during_the_logs_fade_stop_does_nothing_as_on_a_player() {
     assert_eq!(r.playing(log), Some(TrackId(1)));
     assert_eq!(next(&r), next_before);
 }
+
+#[test]
+fn after_pause_and_play_the_next_block_waits_for_its_time() {
+    let mut r = two_blocks();
+    let log = r.schedule_player();
+    r.at_hms(9, 59, 0);
+    r.apply(Command::Play(log));
+    r.at_hms(10, 0, 0);
+    assert_eq!(r.playing(log), Some(TrackId(1)));
+    r.apply(Command::Pause(log));
+    r.apply(Command::Play(log));
+    assert!(running(&r));
+    assert!(!r.s.automation.as_ref().unwrap().next_by_hand);
+    r.end_current(log);
+    r.end_current(log);
+    r.at_hms(10, 10, 0);
+    // The 11:00 block is not played early: the clock gives it.
+    assert_ne!(r.playing(log), Some(TrackId(3)));
+}
+
+#[test]
+fn after_pausing_the_music_the_next_block_waits_for_its_time() {
+    let mut r = two_blocks();
+    r.at_hms(10, 30, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    let f = r.filler_player();
+    r.apply(Command::Pause(f));
+    r.apply(Command::Play(r.schedule_player()));
+    assert!(running(&r));
+    assert!(!r.s.automation.as_ref().unwrap().next_by_hand);
+    r.end_current(f);
+    r.at_hms(10, 35, 0);
+    assert_eq!(r.playing(r.schedule_player()), None);
+}

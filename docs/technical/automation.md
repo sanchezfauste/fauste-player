@@ -304,7 +304,9 @@ fill row starting the filler alone; else `start`), `Pause` → `log_pause`,
 `ToggleStopAfterCurrent` / `SetStopAfterCurrent` → `toggle_stop_at_end`.
 `log_play` does nothing while the Log's player fades out (`fade_stopping`)
 with automation stopped, as on a player. `log_pause` and `filler_pause`
-pin next (`next_by_hand`, AR10). `Play` on the filler goes to
+pin next (`next_by_hand`, AR10); a next the clock had chosen is noted in
+`paused_next`, and the `log_play` that resumes gives it back to the clock
+if it is still next (AR9), so the next block keeps its time. `Play` on the filler goes to
 `filler_play` (it clears `paused_fill` while automation is stopped: the
 song plays on its own), `Pause` to `filler_pause`. `availability` has its own
 rules for the Log (`log_availability`).
@@ -360,9 +362,9 @@ on air, shown `OnAir` while `fill_is_current`.
 
 `automation::plan_view(state, target)` gives the same rows for one
 template (its blocks by start, dated today, origin `Template`) or one date
-(`day_starts`), every row `Coming`, nothing next or late: the popup
-never plays. Today's rows are `schedule_view`'s for today, statuses
-included.
+(`day_starts`). Today's rows are `schedule_view`'s for today, statuses
+included; a template's and any other date's are all `Coming`, with
+nothing next or late (the popup never plays).
 
 `log_edit::apply` restores the schedule when an edit is refused
 (`Command` contract: on `Err` the state is unchanged), since a move
