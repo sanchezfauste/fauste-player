@@ -174,7 +174,8 @@ fn tracks_dropped_on_the_popup_go_into_the_template() {
     let block = s.schedule.template(base).unwrap().blocks[0].id;
     let (mut h, fake) = open(s, EditTarget::Template(base));
     fake.take_sent();
-    let at = h.get_by_label_contains("Top of the Hour").rect().center();
+    // The row's upper half: before it.
+    let at = h.get_by_label_contains("Top of the Hour").rect().left_top() + egui::vec2(4.0, 1.0);
     h.event(egui::Event::PointerMoved(at));
     h.run();
     fp_app::ui::app::AppUi::start_track_drag(&h.ctx, vec![fp_model::TrackId(1)]);

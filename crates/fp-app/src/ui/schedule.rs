@@ -162,7 +162,7 @@ pub(crate) fn log_table(
                         block_row(&mut row, scene, r, playing.then_some(today));
                         let response = row.response();
                         block_actions(scene, view_state, &response, edits, *block, *start, *origin);
-                        drop_tracks(scene, &response, edits, *block, 0);
+                        drop_tracks(scene, &response, edits, *block, 0, false);
                     }
                     ScheduleRow::Item { item, .. } => {
                         let edits = target_of(template, item.date);
@@ -177,7 +177,7 @@ pub(crate) fn log_table(
                                 index: item.index,
                             });
                         }
-                        drop_tracks(scene, &response, edits, item.block, item.index);
+                        drop_tracks(scene, &response, edits, item.block, item.index, true);
                     }
                 }
             });
@@ -430,25 +430,38 @@ fn block_actions(
 }
 
 /// Library tracks dropped on a row go before it, into its block (AR17,
-/// AR19b); a header takes them at the block's start.
+/// AR19b), or after it on its lower half (as on a playlist), so a block's
+/// end takes them too; a header takes them at the block's start.
 fn drop_tracks(
     scene: &Scene<'_>,
     response: &egui::Response,
     target: EditTarget,
     block: fp_model::BlockId,
     index: usize,
+    item: bool,
 ) {
+    let r = response.rect;
+    let after = item
+        && response
+            .ctx
+            .pointer_interact_pos()
+            .is_some_and(|p| p.y > r.center().y);
+    let index = index + usize::from(after);
     if locked(scene, target, block, index) {
         return;
     }
+    // A row only moves within its own date or template: elsewhere no
+    // insertion line promises a drop.
     if response.dnd_hover_payload::<DragTracks>().is_some()
-        || response.dnd_hover_payload::<DragLogItem>().is_some()
+        || response
+            .dnd_hover_payload::<DragLogItem>()
+            .is_some_and(|from| from.target == target)
     {
-        let r = response.rect;
+        let y = if after { r.bottom() - 1.0 } else { r.top() };
         response
             .ctx
             .layer_painter(egui::LayerId::new(egui::Order::Foreground, response.id))
-            .hline(r.x_range(), r.top(), egui::Stroke::new(2.0, theme::ACCENT));
+            .hline(r.x_range(), y, egui::Stroke::new(2.0, theme::ACCENT));
     }
     // A row dragged here moves before this row (same date or template).
     // `dnd_release_payload` takes the payload whatever its type: ask for

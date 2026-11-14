@@ -544,3 +544,16 @@ fn a_template_edit_keeps_todays_block_on_air_as_loaded() {
         .collect();
     assert_eq!(on_air, vec![Some(TrackId(1))]);
 }
+
+#[test]
+fn a_refused_template_edit_changes_nothing() {
+    let mut r = on_air();
+    let block = r.block(10, 0);
+    let before = r.s.schedule.clone();
+    assert_eq!(
+        edit_template(&mut r, LogEdit::Remove { block, index: 9 }),
+        Err(ModelError::UnknownItem)
+    );
+    // Today did not keep the block as loaded for an edit that never was.
+    assert_eq!(r.s.schedule, before);
+}

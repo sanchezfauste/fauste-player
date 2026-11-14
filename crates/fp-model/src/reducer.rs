@@ -41,6 +41,9 @@ fn apply_command(state: &mut AppState, command: Command) -> Result<Vec<EngineAct
             crate::automation::log_stop(state, true, &mut out)?
         }
         Command::Previous(id) if state.is_schedule(id) => {}
+        Command::Play(id) if state.is_filler(id) => {
+            crate::automation::filler_play(state, id, &mut out)?
+        }
         Command::Pause(id) if state.is_filler(id) => {
             crate::automation::filler_pause(state, id, &mut out)?
         }

@@ -404,6 +404,13 @@ pub(crate) fn log_play(
     };
     let log = transport_of(state, Some(a.player));
     let filler = filler_player(state);
+    let fading = player_index(state, a.player)
+        .and_then(|i| state.players.get(i))
+        .is_some_and(|p| p.transport == Transport::Playing && p.fade_stopping());
+    if fading && !a.running {
+        // A fade stop in progress: Play does nothing, as on a player.
+        return Ok(());
+    }
     if log == Transport::Paused || (a.running && log == Transport::Playing) {
         crate::reducer::play(state, a.player, out)?;
     } else if a.paused_fill && transport_of(state, filler) == Transport::Paused {
@@ -477,6 +484,24 @@ pub(crate) fn log_pause(
         a.stop_at_end = false;
         a.handing_over = None;
         a.paused_fill = fill;
+        // AR10: while stopped, next stays where it is.
+        a.next_by_hand = a.next.is_some();
+    }
+    Ok(())
+}
+
+/// AR7: Play on the filler plays it on its own: a song the Log paused is
+/// no longer the Log's to resume or stop.
+pub(crate) fn filler_play(
+    state: &mut AppState,
+    filler: PlayerId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    crate::reducer::play(state, filler, out)?;
+    if let Some(a) = state.automation.as_mut()
+        && !a.running
+    {
+        a.paused_fill = false;
     }
     Ok(())
 }
@@ -496,6 +521,8 @@ pub(crate) fn filler_pause(
         a.handing_over = None;
         a.fill_on_air = false;
         a.paused_fill = true;
+        // AR10: while stopped, next stays where it is.
+        a.next_by_hand = a.next.is_some();
     }
     Ok(())
 }
