@@ -241,7 +241,8 @@ AU40). The schedule plays through its own player and list, made by
   not started and starts after `local_now − automation.late_tolerance_secs`.
   The operator may set it by hand (`SetScheduleNext`), and every stop
   pins it on the row below (`pin_next_after_stop`, rework AR10); a pinned
-  next stays until Start or `ClearScheduleNext`. `settle_next` runs after
+  next stays until Start or `ClearScheduleNext` (a pause's pin of the
+  clock's next also ends with the Play that resumes, `paused_next`). `settle_next` runs after
   every step.
 - **Missed blocks:** a block whose start passes since the last look (`seen`)
   is marked missed in `missed` when automation is stopped (or paused),
@@ -302,7 +303,13 @@ player; a Log in SINGLE plays next at once with `single_play`, a music
 fill row starting the filler alone; else `start`), `Pause` → `log_pause`,
 `Stop` / `FadeStop` → `log_stop`, `Previous` → nothing;
 `ToggleStopAfterCurrent` / `SetStopAfterCurrent` → `toggle_stop_at_end`.
-`Pause` on the filler goes to `filler_pause`. `availability` has its own
+`log_play` does nothing while the Log's player fades out (`fade_stopping`)
+with automation stopped, as on a player. `log_pause` and `filler_pause`
+pin next (`next_by_hand`, AR10); a next the clock had chosen is noted in
+`paused_next`, and the `log_play` that resumes gives it back to the clock
+if it is still next (AR9), so the next block keeps its time. `Play` on the filler goes to
+`filler_play` (it clears `paused_fill` while automation is stopped: the
+song plays on its own), `Pause` to `filler_pause`. `availability` has its own
 rules for the Log (`log_availability`).
 
 - `stop_at_end` (the Log's Stop at end) puts `stop_after_current` on the
@@ -356,8 +363,14 @@ on air, shown `OnAir` while `fill_is_current`.
 
 `automation::plan_view(state, target)` gives the same rows for one
 template (its blocks by start, dated today, origin `Template`) or one date
-(`Schedule::day`), every row `Coming`, nothing next or late: the popup
-never plays.
+(`day_starts`). Today's rows are `schedule_view`'s for today, statuses
+included; a template's and any other date's are all `Coming`, with
+nothing next or late (the popup never plays).
+
+`log_edit::apply` restores the schedule when an edit is refused
+(`Command` contract: on `Err` the state is unchanged), since a move
+between blocks or a template edit with AR22b's `keep_on_air_as_loaded`
+stores more than one block.
 
 ## Editing helpers (`schedule.rs`)
 

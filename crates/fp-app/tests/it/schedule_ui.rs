@@ -591,7 +591,8 @@ fn library_tracks_dropped_on_a_row_go_before_it() {
     let (s, item) = with_block();
     let (mut h, fake) = harness(s);
     let rows: Vec<_> = h.query_all_by_label_contains("Top of the Hour").collect();
-    let at = rows[1].rect().center();
+    // The row's upper half.
+    let at = rows[1].rect().left_top() + egui::vec2(4.0, 1.0);
     h.event(egui::Event::PointerMoved(at));
     h.run();
     fp_app::ui::app::AppUi::start_track_drag(&h.ctx, vec![fp_model::TrackId(1)]);
@@ -614,4 +615,63 @@ fn library_tracks_dropped_on_a_row_go_before_it() {
             }],
         }]
     );
+}
+
+#[test]
+fn add_skips_todays_block_that_already_played() {
+    let (mut s, item) = with_block();
+    // 11:00: the 10:00 block played and nothing is next.
+    s.local_now = item.date.and_hms_opt(11, 0, 0).unwrap();
+    let a = s.automation.as_mut().unwrap();
+    a.started.insert((item.date, item.block));
+    a.next = None;
+    let (mut h, _fake) = harness(s);
+    h.get_by_label("Add to the log").click();
+    h.run();
+    assert!(h.query_by_label("Block…").is_some());
+    assert!(h.query_by_label("Category track…").is_none());
+}
+
+#[test]
+fn library_tracks_dropped_on_a_rows_lower_half_go_after_it() {
+    let (s, item) = with_block();
+    let (mut h, fake) = harness(s);
+    let rows: Vec<_> = h.query_all_by_label_contains("Top of the Hour").collect();
+    // The lower half of the block's last row: the block's end.
+    let at = rows[1].rect().left_bottom() + egui::vec2(4.0, -1.0);
+    h.event(egui::Event::PointerMoved(at));
+    h.run();
+    fp_app::ui::app::AppUi::start_track_drag(&h.ctx, vec![fp_model::TrackId(1)]);
+    h.run();
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Insert {
+            block: item.block,
+            index: 1,
+            items: vec![fp_model::schedule::Item::Track {
+                track: fp_model::TrackId(1),
+                time_critical: false,
+            }],
+        }]
+    );
+}
+
+#[test]
+fn add_skips_a_coming_block_already_played_by_hand() {
+    let (mut s, item) = with_block();
+    // 08:00: the 10:00 block was played early by hand; nothing is next.
+    let a = s.automation.as_mut().unwrap();
+    a.started.insert((item.date, item.block));
+    a.next = None;
+    let (mut h, _fake) = harness(s);
+    h.get_by_label("Add to the log").click();
+    h.run();
+    assert!(h.query_by_label("Category track…").is_none());
 }

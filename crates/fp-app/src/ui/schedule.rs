@@ -94,8 +94,13 @@ pub(crate) fn log_table(
     let scroll_now = target.is_some() && target != scrolled;
     if !has_today {
         ui.add_space(6.0);
+        let empty = if playing {
+            "schedule-empty"
+        } else {
+            "plan-window-empty"
+        };
         ui.label(
-            RichText::new(t.tr("schedule-empty"))
+            RichText::new(t.tr(empty))
                 .font(font(12.0))
                 .color(theme::NEUTRAL_500),
         );
@@ -157,9 +162,9 @@ pub(crate) fn log_table(
                         block_row(&mut row, scene, r, playing.then_some(today));
                         let response = row.response();
                         block_actions(scene, view_state, &response, edits, *block, *start, *origin);
-                        drop_tracks(scene, &response, edits, *block, 0);
+                        drop_tracks(scene, &response, edits, *block, 0, false);
                     }
-                    ScheduleRow::Item { item, .. } => {
+                    ScheduleRow::Item { item, what, .. } => {
                         let edits = target_of(template, item.date);
                         item_row(&mut row, scene, r);
                         let response = row.response();
@@ -172,7 +177,9 @@ pub(crate) fn log_table(
                                 index: item.index,
                             });
                         }
-                        drop_tracks(scene, &response, edits, item.block, item.index);
+                        // Nothing goes after a Music fill row (AU6).
+                        let fill = matches!(what, Item::Rotation { .. });
+                        drop_tracks(scene, &response, edits, item.block, item.index, !fill);
                     }
                 }
             });
@@ -279,7 +286,7 @@ fn block_row(
         row_fill(ui, theme::NEUTRAL_900);
         if let Some(excess) = overrun_secs {
             let over = t.tr_args(
-                "schedule-editor-overrun",
+                "schedule-block-overrun",
                 &[("time", format::clock(*excess).into())],
             );
             cell(
@@ -425,25 +432,38 @@ fn block_actions(
 }
 
 /// Library tracks dropped on a row go before it, into its block (AR17,
-/// AR19b); a header takes them at the block's start.
+/// AR19b), or after it on its lower half (as on a playlist), so a block's
+/// end takes them too; a header takes them at the block's start.
 fn drop_tracks(
     scene: &Scene<'_>,
     response: &egui::Response,
     target: EditTarget,
     block: fp_model::BlockId,
     index: usize,
+    item: bool,
 ) {
+    let r = response.rect;
+    let after = item
+        && response
+            .ctx
+            .pointer_interact_pos()
+            .is_some_and(|p| p.y > r.center().y);
+    let index = index + usize::from(after);
     if locked(scene, target, block, index) {
         return;
     }
+    // A row only moves within its own date or template: elsewhere no
+    // insertion line promises a drop.
     if response.dnd_hover_payload::<DragTracks>().is_some()
-        || response.dnd_hover_payload::<DragLogItem>().is_some()
+        || response
+            .dnd_hover_payload::<DragLogItem>()
+            .is_some_and(|from| from.target == target)
     {
-        let r = response.rect;
+        let y = if after { r.bottom() - 1.0 } else { r.top() };
         response
             .ctx
             .layer_painter(egui::LayerId::new(egui::Order::Foreground, response.id))
-            .hline(r.x_range(), r.top(), egui::Stroke::new(2.0, theme::ACCENT));
+            .hline(r.x_range(), y, egui::Stroke::new(2.0, theme::ACCENT));
     }
     // A row dragged here moves before this row (same date or template).
     // `dnd_release_payload` takes the payload whatever its type: ask for
@@ -516,8 +536,32 @@ pub(crate) enum LogDialog {
     },
 }
 
+impl LogDialog {
+    /// The date or template the dialog edits.
+    pub(crate) fn target(&self) -> EditTarget {
+        match self {
+            Self::Category { target, .. }
+            | Self::MusicFill { target, .. }
+            | Self::AddBlock { target, .. }
+            | Self::MoveBlock { target, .. } => *target,
+        }
+    }
+}
+
+/// Whether items may still be added at the end of a block (AR19): not to
+/// a block that already played.
+pub(crate) fn open_at_end(
+    scene: &Scene<'_>,
+    target: EditTarget,
+    block: fp_model::BlockId,
+    len: usize,
+) -> bool {
+    !locked(scene, target, block, len)
+}
+
 /// Where Add puts items: the block of next when it is today or later,
-/// else today's first block still to come, else today's last block.
+/// else today's first block still to come, else today's last block that
+/// has not played.
 fn add_target(scene: &Scene<'_>) -> Option<(EditTarget, fp_model::BlockId)> {
     let state = scene.state;
     let today = state.local_now.date();
@@ -530,10 +574,17 @@ fn add_target(scene: &Scene<'_>) -> Option<(EditTarget, fp_model::BlockId)> {
     let now = fp_model::local_time::TimeOfDay::new(chrono::Timelike::num_seconds_from_midnight(
         &state.local_now.time(),
     ));
+    let target = EditTarget::Date(today);
     day.iter()
-        .find(|b| now.is_some_and(|n| b.start >= n))
-        .or(day.last())
-        .map(|b| (EditTarget::Date(today), b.id))
+        .find(|b| {
+            now.is_some_and(|n| b.start >= n) && open_at_end(scene, target, b.id, b.items.len())
+        })
+        .or_else(|| {
+            day.iter()
+                .rev()
+                .find(|b| open_at_end(scene, target, b.id, b.items.len()))
+        })
+        .map(|b| (target, b.id))
 }
 
 /// The Log's footer (AR17): Add, with its menu, and when the next block
@@ -653,6 +704,13 @@ pub(crate) fn plan_footer(
 /// OK. Drawn once a frame by the app.
 pub(crate) fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
     let t = scene.i18n;
+    // A dialog left open past midnight edits a date that may no longer
+    // change (AR19).
+    if view_state.log_dialog.as_ref().is_some_and(
+        |d| matches!(d.target(), EditTarget::Date(d) if d < scene.state.local_now.date()),
+    ) {
+        view_state.log_dialog = None;
+    }
     let Some(dialog) = view_state.log_dialog.as_mut() else {
         return;
     };
@@ -702,7 +760,7 @@ pub(crate) fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mu
                         .labelled_by(label.id);
                     if fp_model::local_time::TimeOfDay::parse(time).is_none() {
                         ui.label(
-                            RichText::new(t.tr("schedule-editor-bad-time"))
+                            RichText::new(t.tr("schedule-bad-time"))
                                 .font(font(11.0))
                                 .color(theme::AMBER),
                         );

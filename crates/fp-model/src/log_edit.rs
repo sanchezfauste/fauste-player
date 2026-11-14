@@ -206,7 +206,24 @@ fn inserted(mut list: Vec<Item>, index: usize, items: Vec<Item>) -> Vec<Item> {
     list
 }
 
+/// Applies one edit. On `Err` the schedule is unchanged: a move between
+/// blocks, or a template edit that first keeps today's block on air as
+/// loaded (AR22b), stores more than one block.
 pub(crate) fn apply(
+    state: &mut AppState,
+    target: EditTarget,
+    edit: LogEdit,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    let before = state.schedule.clone();
+    let result = apply_edit(state, target, edit, out);
+    if result.is_err() {
+        state.schedule = before;
+    }
+    result
+}
+
+fn apply_edit(
     state: &mut AppState,
     target: EditTarget,
     edit: LogEdit,

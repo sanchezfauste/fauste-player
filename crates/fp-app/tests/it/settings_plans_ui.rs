@@ -183,3 +183,36 @@ fn edit_on_the_open_template_still_closes_settings() {
     );
     assert!(h.query_by_label("Template · Base").is_some());
 }
+
+#[test]
+fn a_name_typed_before_edit_is_kept() {
+    let (s, _, weekend) = with_templates();
+    let (mut h, fake) = open(s);
+    reveal(&mut h, "Weekend");
+    h.get_by_label("Weekend").click();
+    h.run_steps(2);
+    reveal(&mut h, "Edit…");
+    h.get(
+        egui_kittest::kittest::by()
+            .role(Role::TextInput)
+            .value("Weekend"),
+    )
+    .focus();
+    h.run_steps(2);
+    h.event(egui::Event::Key {
+        key: egui::Key::End,
+        physical_key: None,
+        pressed: true,
+        repeat: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.event(egui::Event::Text(" days".into()));
+    h.run_steps(2);
+    reveal(&mut h, "Edit…");
+    h.get_by_label("Edit…").click();
+    h.run_steps(4);
+    assert!(fake.take_sent().contains(&Command::RenameTemplate {
+        template: weekend,
+        name: "Weekend days".into(),
+    }));
+}

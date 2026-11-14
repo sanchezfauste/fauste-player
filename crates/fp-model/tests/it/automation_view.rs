@@ -502,3 +502,20 @@ fn plan_view_runs_a_templates_last_block_to_midnight() {
     // Two songs of known length in one minute before midnight.
     assert!(overrun.flatten().is_some_and(|secs| secs > 0.0));
 }
+
+#[test]
+fn plan_view_of_today_marks_what_aired_and_what_plays() {
+    let mut r = rig();
+    r.at_hms(9, 59, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(10, 0, 0);
+    let p = r.schedule_player();
+    r.end_current(p);
+    let rows = fp_model::automation::plan_view(&r.s, fp_model::log_edit::EditTarget::Date(today()));
+    assert_eq!(item_status(&rows, today(), 10, 0, &r), RowStatus::Aired);
+    assert_eq!(item_status(&rows, today(), 10, 1, &r), RowStatus::OnAir);
+    assert_eq!(item_status(&rows, today(), 12, 0, &r), RowStatus::Next);
+    // Only today's blocks: not yesterday's last nor tomorrow's first.
+    assert!(blocks(&rows).iter().all(|(d, _, _)| *d == today()));
+    assert_eq!(blocks(&rows).len(), 2);
+}

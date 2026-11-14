@@ -81,6 +81,10 @@ pub struct AutomationState {
     /// The Log's Pause paused the filler's song playing for the Log
     /// (runtime only): the Log's Play resumes it (AR5).
     pub paused_fill: bool,
+    /// The clock's next that the Log's Pause pinned (runtime only): while
+    /// stopped next stays where it is (AR10); the Play that resumes gives
+    /// it back to the clock if it is still next (AR9).
+    pub paused_next: Option<ItemRef>,
     /// The filler's song on air for the Log carried the operator's own
     /// Stop at end at the last look (runtime only): when the filler then
     /// stops with no hand-over or hold pending, automation stops too (AR7).
@@ -128,6 +132,7 @@ pub fn ensure(state: &mut AppState, playlist_name: &str) -> Vec<EngineAction> {
         last_on_air: None,
         stop_at_end: false,
         paused_fill: false,
+        paused_next: None,
         fill_on_air: false,
         fill_item: None,
         chosen: HashMap::new(),
@@ -404,6 +409,13 @@ pub(crate) fn log_play(
     };
     let log = transport_of(state, Some(a.player));
     let filler = filler_player(state);
+    let fading = player_index(state, a.player)
+        .and_then(|i| state.players.get(i))
+        .is_some_and(|p| p.transport == Transport::Playing && p.fade_stopping());
+    if fading && !a.running {
+        // A fade stop in progress: Play does nothing, as on a player.
+        return Ok(());
+    }
     if log == Transport::Paused || (a.running && log == Transport::Playing) {
         crate::reducer::play(state, a.player, out)?;
     } else if a.paused_fill && transport_of(state, filler) == Transport::Paused {
@@ -418,6 +430,7 @@ pub(crate) fn log_play(
     if let Some(a) = state.automation.as_mut() {
         a.running = true;
         a.paused_fill = false;
+        unpin_on_resume(a);
     }
     Ok(())
 }
@@ -457,6 +470,22 @@ fn single_play(state: &mut AppState, out: &mut Vec<EngineAction>) -> Result<(), 
     start(state, out)
 }
 
+/// A pause pins next (AR10), noting a next the clock chose so that the
+/// Play that resumes gives it back (`unpin_on_resume`).
+fn pin_on_pause(a: &mut AutomationState) {
+    a.paused_next = if a.next_by_hand { None } else { a.next };
+    a.next_by_hand = a.next.is_some();
+}
+
+/// Resuming after a pause: a next the pause pinned, and still next,
+/// follows the clock again (AR9).
+fn unpin_on_resume(a: &mut AutomationState) {
+    if a.paused_next.is_some() && a.paused_next == a.next {
+        a.next_by_hand = false;
+    }
+    a.paused_next = None;
+}
+
 /// AR5: Pause on the Log pauses what is on air for it and stops
 /// automation; the row stays current.
 pub(crate) fn log_pause(
@@ -477,6 +506,25 @@ pub(crate) fn log_pause(
         a.stop_at_end = false;
         a.handing_over = None;
         a.paused_fill = fill;
+        // AR10: while stopped, next stays where it is.
+        pin_on_pause(a);
+    }
+    Ok(())
+}
+
+/// AR7: Play on the filler plays it on its own: a song the Log paused is
+/// no longer the Log's to resume or stop.
+pub(crate) fn filler_play(
+    state: &mut AppState,
+    filler: PlayerId,
+    out: &mut Vec<EngineAction>,
+) -> Result<(), ModelError> {
+    crate::reducer::play(state, filler, out)?;
+    if let Some(a) = state.automation.as_mut()
+        && !a.running
+    {
+        a.paused_fill = false;
+        a.paused_next = None;
     }
     Ok(())
 }
@@ -496,6 +544,8 @@ pub(crate) fn filler_pause(
         a.handing_over = None;
         a.fill_on_air = false;
         a.paused_fill = true;
+        // AR10: while stopped, next stays where it is.
+        pin_on_pause(a);
     }
     Ok(())
 }
@@ -522,6 +572,7 @@ pub(crate) fn log_stop(
     }
     if let Some(a) = state.automation.as_mut() {
         a.paused_fill = false;
+        a.paused_next = None;
     }
     match target {
         Some(p) if fade => crate::reducer::apply_fade_stop(state, p, out),
@@ -1283,6 +1334,7 @@ pub(crate) fn restore(state: &mut AppState, saved: Option<AutomationSession>) {
         last_on_air: None,
         stop_at_end: false,
         paused_fill: false,
+        paused_next: None,
         fill_on_air: false,
         fill_item: None,
         chosen: HashMap::new(),
@@ -1514,13 +1566,24 @@ pub fn schedule_view(state: &AppState) -> Vec<ScheduleRow> {
 }
 
 /// The rows of a template or a date as Settings edits them (rework AR20–
-/// AR22): the same rows as the Log's, for one day, and never playing (every
-/// row is coming; nothing is next or on air). A template's rows are dated
-/// today, and its blocks' origin is the template's.
+/// AR22): the same rows as the Log's, for one day. Today's rows stand as
+/// on the Log (aired, on air, next, missed); any other day's, and a
+/// template's, are all coming. A template's rows are dated today, and its
+/// blocks' origin is the template's.
 pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<ScheduleRow> {
     use crate::log_edit::EditTarget;
-    let (date, blocks): (NaiveDate, Vec<DayBlock>) = match target {
-        EditTarget::Date(date) => (date, state.schedule.day(date)),
+    let today = state.local_now.date();
+    if target == EditTarget::Date(today) && state.automation.is_some() {
+        return schedule_view(state)
+            .into_iter()
+            .filter(|row| match row {
+                ScheduleRow::Block { date, .. } => *date == today,
+                ScheduleRow::Item { item, .. } => item.date == today,
+            })
+            .collect();
+    }
+    let (date, blocks): (NaiveDate, Vec<(NaiveDateTime, DayBlock)>) = match target {
+        EditTarget::Date(date) => (date, day_starts(state, date)),
         EditTarget::Template(template) => {
             let mut blocks: Vec<DayBlock> = state
                 .schedule
@@ -1538,7 +1601,14 @@ pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<S
                 })
                 .unwrap_or_default();
             blocks.sort_by_key(|b| b.start);
-            (state.local_now.date(), blocks)
+            let blocks = blocks
+                .into_iter()
+                .filter_map(|b| {
+                    chrono::NaiveTime::from_num_seconds_from_midnight_opt(b.start.secs(), 0)
+                        .map(|t| (today.and_time(t), b))
+                })
+                .collect();
+            (today, blocks)
         }
     };
     let known = |track: TrackId| {
@@ -1547,13 +1617,7 @@ pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<S
             range.known_end().map(|_| range.length())
         })
     };
-    let starts: Vec<NaiveDateTime> = blocks
-        .iter()
-        .filter_map(|b| {
-            chrono::NaiveTime::from_num_seconds_from_midnight_opt(b.start.secs(), 0)
-                .map(|t| date.and_time(t))
-        })
-        .collect();
+    let starts: Vec<NaiveDateTime> = blocks.iter().map(|(start, _)| *start).collect();
     // AU37: a template's last block runs to midnight, a date's to the next
     // day's first block.
     let tomorrow = date.succ_opt();
@@ -1567,7 +1631,7 @@ pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<S
         }),
     };
     let mut out = Vec::new();
-    for (i, (block, start)) in blocks.iter().zip(starts.iter()).enumerate() {
+    for (i, (start, block)) in blocks.iter().enumerate() {
         let next_start = starts.get(i + 1).copied().or(end);
         let mut items = Vec::with_capacity(block.items.len());
         let mut at = *start;

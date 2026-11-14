@@ -525,3 +525,91 @@ fn single_leaves_the_fillers_rotation_alone() {
     assert!(!running(&r));
     assert_eq!(r.s.filler.as_ref().unwrap().rotation, before);
 }
+
+#[test]
+fn next_stays_where_it_is_while_the_log_is_paused() {
+    let mut r = on_air_at_ten();
+    let log = r.schedule_player();
+    r.apply(Command::Pause(log));
+    let before = next(&r);
+    assert!(before.is_some());
+    r.at_hms(11, 30, 0);
+    assert_eq!(next(&r), before);
+    assert!(r.s.automation.as_ref().unwrap().next_by_hand);
+}
+
+#[test]
+fn next_stays_where_it_is_while_the_music_is_paused() {
+    let mut r = two_blocks();
+    r.at_hms(10, 30, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    r.apply(Command::Pause(r.filler_player()));
+    let before = next(&r);
+    assert!(before.is_some());
+    r.at_hms(11, 30, 0);
+    assert_eq!(next(&r), before);
+}
+
+#[test]
+fn play_on_the_filler_after_a_log_pause_plays_it_on_its_own() {
+    let mut r = two_blocks();
+    r.at_hms(10, 30, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    r.apply(Command::Pause(r.schedule_player()));
+    let f = r.filler_player();
+    r.apply(Command::Play(f));
+    assert!(!running(&r));
+    assert!(!r.s.automation.as_ref().unwrap().paused_fill);
+    // The Log no longer owns the song: its Stop leaves it playing.
+    r.apply(Command::Stop(r.schedule_player()));
+    r.at_hms(10, 30, 1);
+    assert!(r.playing(f).is_some());
+}
+
+#[test]
+fn play_during_the_logs_fade_stop_does_nothing_as_on_a_player() {
+    let mut r = on_air_at_ten();
+    let log = r.schedule_player();
+    // The fade is still running: the fake engine does not end it.
+    fp_model::apply(&mut r.s, Command::FadeStop(log)).unwrap();
+    assert!(r.player(log).fade_stopping());
+    let next_before = next(&r);
+    r.apply(Command::Play(log));
+    assert!(!running(&r));
+    assert_eq!(r.playing(log), Some(TrackId(1)));
+    assert_eq!(next(&r), next_before);
+}
+
+#[test]
+fn after_pause_and_play_the_next_block_waits_for_its_time() {
+    let mut r = two_blocks();
+    let log = r.schedule_player();
+    r.at_hms(9, 59, 0);
+    r.apply(Command::Play(log));
+    r.at_hms(10, 0, 0);
+    assert_eq!(r.playing(log), Some(TrackId(1)));
+    r.apply(Command::Pause(log));
+    r.apply(Command::Play(log));
+    assert!(running(&r));
+    assert!(!r.s.automation.as_ref().unwrap().next_by_hand);
+    r.end_current(log);
+    r.end_current(log);
+    r.at_hms(10, 10, 0);
+    // The 11:00 block is not played early: the clock gives it.
+    assert_ne!(r.playing(log), Some(TrackId(3)));
+}
+
+#[test]
+fn after_pausing_the_music_the_next_block_waits_for_its_time() {
+    let mut r = two_blocks();
+    r.at_hms(10, 30, 0);
+    r.apply(Command::Play(r.schedule_player()));
+    let f = r.filler_player();
+    r.apply(Command::Pause(f));
+    r.apply(Command::Play(r.schedule_player()));
+    assert!(running(&r));
+    assert!(!r.s.automation.as_ref().unwrap().next_by_hand);
+    r.end_current(f);
+    r.at_hms(10, 35, 0);
+    assert_eq!(r.playing(r.schedule_player()), None);
+}

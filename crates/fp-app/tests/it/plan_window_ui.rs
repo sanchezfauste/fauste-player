@@ -174,7 +174,8 @@ fn tracks_dropped_on_the_popup_go_into_the_template() {
     let block = s.schedule.template(base).unwrap().blocks[0].id;
     let (mut h, fake) = open(s, EditTarget::Template(base));
     fake.take_sent();
-    let at = h.get_by_label_contains("Top of the Hour").rect().center();
+    // The row's upper half: before it.
+    let at = h.get_by_label_contains("Top of the Hour").rect().left_top() + egui::vec2(4.0, 1.0);
     h.event(egui::Event::PointerMoved(at));
     h.run();
     fp_app::ui::app::AppUi::start_track_drag(&h.ctx, vec![fp_model::TrackId(1)]);
@@ -200,4 +201,57 @@ fn tracks_dropped_on_the_popup_go_into_the_template() {
             }
         )]
     );
+}
+
+#[test]
+fn an_empty_template_has_no_blocks_not_none_today() {
+    let (s, _, weekend) = with_templates();
+    let (h, _fake) = open(s, EditTarget::Template(weekend));
+    assert!(h.query_by_label("Template · Weekend").is_some());
+    assert!(h.query_by_label("No blocks yet").is_some());
+    assert!(h.query_by_label("No blocks today").is_none());
+}
+
+#[test]
+fn a_past_dates_popup_closes() {
+    let (s, _, _) = with_templates();
+    let monday = chrono::NaiveDate::from_ymd_opt(2026, 11, 16).unwrap();
+    let (h, _fake) = open(s, EditTarget::Date(monday));
+    assert!(h.query_by_label_contains("Day ·").is_none());
+}
+
+#[test]
+fn closing_the_popup_drops_its_open_dialog() {
+    let (s, base, _) = with_templates();
+    let (mut h, fake) = open(s, EditTarget::Template(base));
+    h.get_by_label("Add to the list").click();
+    h.run();
+    h.get_by_label("Block…").click();
+    h.run();
+    assert!(h.query_by_label("OK").is_some());
+    h.get_by_label("Close window").click();
+    h.run();
+    h.run();
+    assert!(h.query_by_label_contains("Template ·").is_none());
+    assert!(h.query_by_label("OK").is_none(), "the dialog went with it");
+    fake.take_sent();
+}
+
+#[test]
+fn todays_popup_adds_nothing_to_a_block_that_already_played() {
+    let (mut s, _, _) = with_templates();
+    let today = s.local_now.date();
+    s.local_now = today.and_hms_opt(11, 0, 0).unwrap();
+    let block = s.schedule.day(today)[0].id;
+    s.automation
+        .as_mut()
+        .unwrap()
+        .started
+        .insert((today, block));
+    let (mut h, _fake) = open(s, EditTarget::Date(today));
+    assert!(h.query_by_label("Day · 2026-11-17").is_some());
+    h.get_by_label("Add to the list").click();
+    h.run();
+    assert!(h.query_by_label("Block…").is_some());
+    assert!(h.query_by_label("Category track…").is_none());
 }
