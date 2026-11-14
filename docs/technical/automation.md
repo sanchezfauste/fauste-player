@@ -241,7 +241,8 @@ AU40). The schedule plays through its own player and list, made by
   not started and starts after `local_now − automation.late_tolerance_secs`.
   The operator may set it by hand (`SetScheduleNext`), and every stop
   pins it on the row below (`pin_next_after_stop`, rework AR10); a pinned
-  next stays until Start or `ClearScheduleNext`. `settle_next` runs after
+  next stays until Start or `ClearScheduleNext` (a pause's pin of the
+  clock's next also ends with the Play that resumes, `paused_next`). `settle_next` runs after
   every step.
 - **Missed blocks:** a block whose start passes since the last look (`seen`)
   is marked missed in `missed` when automation is stopped (or paused),

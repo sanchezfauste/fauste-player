@@ -132,7 +132,9 @@ and the Edit button.
   includes the filler's song while a music fill row is current: Stop on the
   Log while music plays stops the music. Pause then Play resumes the
   paused audio and runs automation again; while paused, next stays where
-  it is (AR10). Play during the Log's fade stop does nothing, as on a
+  it is (AR10), and the Play that resumes gives a next the clock had
+  chosen back to the clock if it is still next, so the next block keeps
+  its time (AR9) *(my call, final review of the minors)*. Play during the Log's fade stop does nothing, as on a
   player *(my call, deferred minor of plan 3)*.
 - **AR6. Stop at end** is the player's own toggle and badge. On the Log it
   means: what is on air for the Log (an item, or the filler's current song)

@@ -59,7 +59,7 @@ player:
 - **Pause**, **Stop** and **Fade stop** act on what is on air for the Log
   (its item, or the music fill's song between blocks) and stop
   automation. Play after Pause goes on from where it was; while paused,
-  next does not move.
+  next does not move, and once you resume the next block keeps its time.
 - **Stop at end** lets what is on air end, and then automation stops. If
   the music is playing and a block's time comes first, the block starts
   on time and automation stops after its first item.
