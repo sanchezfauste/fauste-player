@@ -370,7 +370,11 @@ nothing next or late (the popup never plays).
 `log_edit::apply` restores the schedule when an edit is refused
 (`Command` contract: on `Err` the state is unchanged), since a move
 between blocks or a template edit with AR22b's `keep_on_air_as_loaded`
-stores more than one block.
+stores more than one block. `LogEdit::InsertPaths` (files dropped from
+the system, AR17) is checked against the block and its lock first, then
+each path becomes a library track (`library_rules::track_for_path`) and
+the edit goes on as an `Insert`, so a refused drop adds nothing to the
+library.
 
 ## Editing helpers (`schedule.rs`)
 

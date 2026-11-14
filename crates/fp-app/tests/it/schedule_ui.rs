@@ -675,3 +675,55 @@ fn add_skips_a_coming_block_already_played_by_hand() {
     h.run();
     assert!(h.query_by_label("Category track…").is_none());
 }
+
+#[derive(Debug)]
+struct Dropped(std::path::PathBuf);
+
+impl egui::DroppedFile for Dropped {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|e| e.to_string())
+    }
+}
+
+#[test]
+fn files_dropped_on_a_log_row_go_before_it() {
+    let dir = tempfile::tempdir().unwrap();
+    // The paths come back canonical (macOS temp dirs are symlinks).
+    let file = std::fs::canonicalize(dir.path()).unwrap().join("new.wav");
+    std::fs::write(&file, b"x").unwrap();
+    let (s, item) = with_block();
+    let (mut h, fake) = harness(s);
+    let rows: Vec<_> = h.query_all_by_label_contains("Top of the Hour").collect();
+    let at = rows[1].rect().left_top() + egui::vec2(4.0, 1.0);
+    h.hover_at(at);
+    h.step();
+    fake.take_sent();
+    h.input_mut()
+        .dropped_files
+        .push(std::sync::Arc::new(Dropped(file.clone())));
+    // Dropped paths are read on a helper thread: give it time to answer.
+    for _ in 0..40 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let sent = fake.take_sent();
+    assert!(
+        sent.iter().any(|c| matches!(
+            c,
+            Command::EditPlan {
+                target: fp_model::log_edit::EditTarget::Date(d),
+                edit: fp_model::log_edit::LogEdit::InsertPaths { block, index: 0, paths },
+            } if *d == item.date && *block == item.block && paths == &vec![file.clone()]
+        )),
+        "{sent:?}"
+    );
+    assert!(
+        !sent
+            .iter()
+            .any(|c| matches!(c, Command::InsertPaths { .. })),
+        "not into a player's list"
+    );
+}

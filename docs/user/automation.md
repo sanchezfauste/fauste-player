@@ -39,7 +39,8 @@ day only: the template stays as it is.
   drag tracks onto the list; **Category track…** and **Music fill
   (rotation)…** ask which one and add it to the coming block; **Block…**
   asks for a time, with the first free one already filled in.
-- Drag tracks from the library onto a row to put them before it (or
+- Drag tracks from the library, or audio files from your file manager,
+  onto a row to put them before it (or
   after it, on the row's lower half, as on a playlist: that is how they
   go at a block's end), and drag rows within the same day to move them.
 - Right-click a row for **Hard start** and **Remove from today's log**;
@@ -96,7 +97,8 @@ Android); the Log column changes only today, as above.
 A template or a date opens in its own window, which closes Settings. It
 is the same list as the Log column, and you change it the same way:
 **Add** at its bottom (Track…, Category track…, Music fill (rotation)…,
-Block…), tracks dragged from the library onto a row, rows dragged to
+Block…), tracks dragged from the library (or files from your file
+manager) onto a row, rows dragged to
 move them, and the right-click menus of rows and block headers. It never
 plays, and it can stay open beside the library. Today's window shows
 what played and what plays, as the Log does; a day's window closes at

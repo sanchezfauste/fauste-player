@@ -162,7 +162,7 @@ pub(crate) fn log_table(
                         block_row(&mut row, scene, r, playing.then_some(today));
                         let response = row.response();
                         block_actions(scene, view_state, &response, edits, *block, *start, *origin);
-                        drop_tracks(scene, &response, edits, *block, 0, false);
+                        drop_tracks(scene, view_state, &response, edits, *block, 0, false);
                     }
                     ScheduleRow::Item { item, what, .. } => {
                         let edits = target_of(template, item.date);
@@ -179,7 +179,9 @@ pub(crate) fn log_table(
                         }
                         // Nothing goes after a Music fill row (AU6).
                         let fill = matches!(what, Item::Rotation { .. });
-                        drop_tracks(scene, &response, edits, item.block, item.index, !fill);
+                        drop_tracks(
+                            scene, view_state, &response, edits, item.block, item.index, !fill,
+                        );
                     }
                 }
             });
@@ -434,8 +436,10 @@ fn block_actions(
 /// Library tracks dropped on a row go before it, into its block (AR17,
 /// AR19b), or after it on its lower half (as on a playlist), so a block's
 /// end takes them too; a header takes them at the block's start.
+#[allow(clippy::too_many_arguments)]
 fn drop_tracks(
     scene: &Scene<'_>,
+    view_state: &mut ViewState,
     response: &egui::Response,
     target: EditTarget,
     block: fp_model::BlockId,
@@ -443,18 +447,30 @@ fn drop_tracks(
     item: bool,
 ) {
     let r = response.rect;
-    let after = item
-        && response
-            .ctx
-            .pointer_interact_pos()
-            .is_some_and(|p| p.y > r.center().y);
+    let ctx = &response.ctx;
+    let pointer = ctx
+        .pointer_hover_pos()
+        .or_else(|| ctx.pointer_interact_pos());
+    let after = item && pointer.is_some_and(|p| p.y > r.center().y);
     let index = index + usize::from(after);
+    // Files from the system go where the pointer is, on this row's own
+    // layer (not under a window over it), as on a playlist (Q4.6).
+    let files_here =
+        pointer.is_some_and(|p| r.contains(p) && ctx.layer_id_at(p) == Some(response.layer_id));
     if locked(scene, target, block, index) {
+        if files_here {
+            view_state.file_drop_refused = true;
+        }
         return;
     }
+    if files_here {
+        view_state.log_file_drop = Some((target, block, index));
+    }
+    let files_hovering = ctx.input(|i| !i.raw.hovered_files.is_empty());
     // A row only moves within its own date or template: elsewhere no
     // insertion line promises a drop.
-    if response.dnd_hover_payload::<DragTracks>().is_some()
+    if (files_here && files_hovering)
+        || response.dnd_hover_payload::<DragTracks>().is_some()
         || response
             .dnd_hover_payload::<DragLogItem>()
             .is_some_and(|from| from.target == target)
