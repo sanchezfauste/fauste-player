@@ -94,8 +94,13 @@ pub(crate) fn log_table(
     let scroll_now = target.is_some() && target != scrolled;
     if !has_today {
         ui.add_space(6.0);
+        let empty = if playing {
+            "schedule-empty"
+        } else {
+            "plan-window-empty"
+        };
         ui.label(
-            RichText::new(t.tr("schedule-empty"))
+            RichText::new(t.tr(empty))
                 .font(font(12.0))
                 .color(theme::NEUTRAL_500),
         );
@@ -279,7 +284,7 @@ fn block_row(
         row_fill(ui, theme::NEUTRAL_900);
         if let Some(excess) = overrun_secs {
             let over = t.tr_args(
-                "schedule-editor-overrun",
+                "schedule-block-overrun",
                 &[("time", format::clock(*excess).into())],
             );
             cell(
@@ -516,8 +521,32 @@ pub(crate) enum LogDialog {
     },
 }
 
+impl LogDialog {
+    /// The date or template the dialog edits.
+    pub(crate) fn target(&self) -> EditTarget {
+        match self {
+            Self::Category { target, .. }
+            | Self::MusicFill { target, .. }
+            | Self::AddBlock { target, .. }
+            | Self::MoveBlock { target, .. } => *target,
+        }
+    }
+}
+
+/// Whether items may still be added at the end of a block (AR19): not to
+/// a block that already played.
+pub(crate) fn open_at_end(
+    scene: &Scene<'_>,
+    target: EditTarget,
+    block: fp_model::BlockId,
+    len: usize,
+) -> bool {
+    !locked(scene, target, block, len)
+}
+
 /// Where Add puts items: the block of next when it is today or later,
-/// else today's first block still to come, else today's last block.
+/// else today's first block still to come, else today's last block that
+/// has not played.
 fn add_target(scene: &Scene<'_>) -> Option<(EditTarget, fp_model::BlockId)> {
     let state = scene.state;
     let today = state.local_now.date();
@@ -530,10 +559,15 @@ fn add_target(scene: &Scene<'_>) -> Option<(EditTarget, fp_model::BlockId)> {
     let now = fp_model::local_time::TimeOfDay::new(chrono::Timelike::num_seconds_from_midnight(
         &state.local_now.time(),
     ));
+    let target = EditTarget::Date(today);
     day.iter()
         .find(|b| now.is_some_and(|n| b.start >= n))
-        .or(day.last())
-        .map(|b| (EditTarget::Date(today), b.id))
+        .or_else(|| {
+            day.iter()
+                .rev()
+                .find(|b| open_at_end(scene, target, b.id, b.items.len()))
+        })
+        .map(|b| (target, b.id))
 }
 
 /// The Log's footer (AR17): Add, with its menu, and when the next block
@@ -653,6 +687,13 @@ pub(crate) fn plan_footer(
 /// OK. Drawn once a frame by the app.
 pub(crate) fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
     let t = scene.i18n;
+    // A dialog left open past midnight edits a date that may no longer
+    // change (AR19).
+    if view_state.log_dialog.as_ref().is_some_and(
+        |d| matches!(d.target(), EditTarget::Date(d) if d < scene.state.local_now.date()),
+    ) {
+        view_state.log_dialog = None;
+    }
     let Some(dialog) = view_state.log_dialog.as_mut() else {
         return;
     };
@@ -702,7 +743,7 @@ pub(crate) fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mu
                         .labelled_by(label.id);
                     if fp_model::local_time::TimeOfDay::parse(time).is_none() {
                         ui.label(
-                            RichText::new(t.tr("schedule-editor-bad-time"))
+                            RichText::new(t.tr("schedule-bad-time"))
                                 .font(font(11.0))
                                 .color(theme::AMBER),
                         );

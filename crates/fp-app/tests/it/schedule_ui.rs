@@ -615,3 +615,18 @@ fn library_tracks_dropped_on_a_row_go_before_it() {
         }]
     );
 }
+
+#[test]
+fn add_skips_todays_block_that_already_played() {
+    let (mut s, item) = with_block();
+    // 11:00: the 10:00 block played and nothing is next.
+    s.local_now = item.date.and_hms_opt(11, 0, 0).unwrap();
+    let a = s.automation.as_mut().unwrap();
+    a.started.insert((item.date, item.block));
+    a.next = None;
+    let (mut h, _fake) = harness(s);
+    h.get_by_label("Add to the log").click();
+    h.run();
+    assert!(h.query_by_label("Block…").is_some());
+    assert!(h.query_by_label("Category track…").is_none());
+}

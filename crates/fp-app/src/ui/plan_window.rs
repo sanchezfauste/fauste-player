@@ -30,24 +30,46 @@ fn title(scene: &Scene<'_>, target: EditTarget) -> Option<String> {
     }
 }
 
-/// Where the popup's Add puts items: its last block.
-fn add_to(rows: &[ScheduleRow], target: EditTarget) -> Option<(EditTarget, fp_model::BlockId)> {
+/// Where the popup's Add puts items: its last block that has not played.
+fn add_to(
+    scene: &Scene<'_>,
+    rows: &[ScheduleRow],
+    target: EditTarget,
+) -> Option<(EditTarget, fp_model::BlockId)> {
     rows.iter()
         .rev()
         .find_map(|r| match r {
-            ScheduleRow::Block { block, .. } => Some(*block),
-            ScheduleRow::Item { .. } => None,
+            ScheduleRow::Block { block, count, .. }
+                if super::schedule::open_at_end(scene, target, *block, *count) =>
+            {
+                Some(*block)
+            }
+            _ => None,
         })
         .map(|block| (target, block))
 }
 
-/// Draws the open popup, if any; closes it when its template is gone.
+/// Closes the popup, and the dialog it opened.
+fn close(view_state: &mut ViewState, target: EditTarget) {
+    view_state.plan_window = None;
+    if view_state
+        .log_dialog
+        .as_ref()
+        .is_some_and(|d| d.target() == target)
+    {
+        view_state.log_dialog = None;
+    }
+}
+
+/// Draws the open popup, if any; closes it when its template is gone or
+/// its date has passed (past dates are not edited, AR19).
 pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut ViewState) {
     let Some(target) = view_state.plan_window else {
         return;
     };
-    let Some(title) = title(scene, target) else {
-        view_state.plan_window = None;
+    let past = matches!(target, EditTarget::Date(d) if d < scene.state.local_now.date());
+    let Some(title) = title(scene, target).filter(|_| !past) else {
+        close(view_state, target);
         return;
     };
     let rows = plan_view(scene.state, target);
@@ -89,12 +111,12 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
                 scene,
                 view_state,
                 target,
-                add_to(&rows, target),
+                add_to(scene, &rows, target),
                 false,
             );
             ui.allocate_rect(area, egui::Sense::hover());
         });
     if !open {
-        view_state.plan_window = None;
+        close(view_state, target);
     }
 }

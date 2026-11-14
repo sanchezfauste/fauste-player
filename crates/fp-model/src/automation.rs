@@ -1514,13 +1514,24 @@ pub fn schedule_view(state: &AppState) -> Vec<ScheduleRow> {
 }
 
 /// The rows of a template or a date as Settings edits them (rework AR20–
-/// AR22): the same rows as the Log's, for one day, and never playing (every
-/// row is coming; nothing is next or on air). A template's rows are dated
-/// today, and its blocks' origin is the template's.
+/// AR22): the same rows as the Log's, for one day. Today's rows stand as
+/// on the Log (aired, on air, next, missed); any other day's, and a
+/// template's, are all coming. A template's rows are dated today, and its
+/// blocks' origin is the template's.
 pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<ScheduleRow> {
     use crate::log_edit::EditTarget;
-    let (date, blocks): (NaiveDate, Vec<DayBlock>) = match target {
-        EditTarget::Date(date) => (date, state.schedule.day(date)),
+    let today = state.local_now.date();
+    if target == EditTarget::Date(today) && state.automation.is_some() {
+        return schedule_view(state)
+            .into_iter()
+            .filter(|row| match row {
+                ScheduleRow::Block { date, .. } => *date == today,
+                ScheduleRow::Item { item, .. } => item.date == today,
+            })
+            .collect();
+    }
+    let (date, blocks): (NaiveDate, Vec<(NaiveDateTime, DayBlock)>) = match target {
+        EditTarget::Date(date) => (date, day_starts(state, date)),
         EditTarget::Template(template) => {
             let mut blocks: Vec<DayBlock> = state
                 .schedule
@@ -1538,7 +1549,14 @@ pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<S
                 })
                 .unwrap_or_default();
             blocks.sort_by_key(|b| b.start);
-            (state.local_now.date(), blocks)
+            let blocks = blocks
+                .into_iter()
+                .filter_map(|b| {
+                    chrono::NaiveTime::from_num_seconds_from_midnight_opt(b.start.secs(), 0)
+                        .map(|t| (today.and_time(t), b))
+                })
+                .collect();
+            (today, blocks)
         }
     };
     let known = |track: TrackId| {
@@ -1547,13 +1565,7 @@ pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<S
             range.known_end().map(|_| range.length())
         })
     };
-    let starts: Vec<NaiveDateTime> = blocks
-        .iter()
-        .filter_map(|b| {
-            chrono::NaiveTime::from_num_seconds_from_midnight_opt(b.start.secs(), 0)
-                .map(|t| date.and_time(t))
-        })
-        .collect();
+    let starts: Vec<NaiveDateTime> = blocks.iter().map(|(start, _)| *start).collect();
     // AU37: a template's last block runs to midnight, a date's to the next
     // day's first block.
     let tomorrow = date.succ_opt();
@@ -1567,7 +1579,7 @@ pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<S
         }),
     };
     let mut out = Vec::new();
-    for (i, (block, start)) in blocks.iter().zip(starts.iter()).enumerate() {
+    for (i, (start, block)) in blocks.iter().enumerate() {
         let next_start = starts.get(i + 1).copied().or(end);
         let mut items = Vec::with_capacity(block.items.len());
         let mut at = *start;

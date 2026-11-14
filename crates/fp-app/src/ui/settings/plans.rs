@@ -36,8 +36,10 @@ pub(crate) struct PlansState {
     month: Option<NaiveDate>,
 }
 
-/// Opens a template or a date in its popup; Settings then closes.
-fn open(view_state: &mut ViewState, target: EditTarget) {
+/// Opens a template or a date in its popup; Settings then closes, so a
+/// name being typed is sent first.
+fn open(scene: &Scene<'_>, view_state: &mut ViewState, st: &mut PlansState, target: EditTarget) {
+    send_name(scene, st);
     view_state.plan_window = Some(target);
     view_state.plan_requested = true;
 }
@@ -91,7 +93,7 @@ fn heading(ui: &mut Ui, text: &str) {
 fn templates(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, st: &mut PlansState) {
     let t = scene.i18n;
     let schedule = &scene.state.schedule;
-    heading(ui, &t.tr("schedule-editor-templates"));
+    heading(ui, &t.tr("settings-plans-templates"));
     let selected = st
         .template
         .filter(|id| schedule.template(*id).is_some())
@@ -102,11 +104,11 @@ fn templates(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, st: &mu
             RichText::new(template.name.as_str()).font(font(13.0)),
         );
         if response.clicked() {
+            send_name(scene, st);
             st.template = Some(template.id);
-            st.name_draft = None;
         }
         if response.double_clicked() {
-            open(view_state, EditTarget::Template(template.id));
+            open(scene, view_state, st, EditTarget::Template(template.id));
         }
     }
     ui.add_space(6.0);
@@ -114,7 +116,7 @@ fn templates(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, st: &mu
         if let Some(id) = selected
             && ui.button(t.tr("settings-plan-edit")).clicked()
         {
-            open(view_state, EditTarget::Template(id));
+            open(scene, view_state, st, EditTarget::Template(id));
         }
         if ui.button(t.tr("schedule-template-new")).clicked() {
             scene.ctl.send(Command::CreateTemplate {
@@ -155,15 +157,23 @@ fn rename(ui: &mut Ui, scene: &Scene<'_>, st: &mut PlansState, id: TemplateId) {
         .add(egui::TextEdit::singleline(draft).desired_width(200.0))
         .labelled_by(label.id);
     if response.lost_focus() {
-        let name = draft.trim().to_owned();
-        if !name.is_empty() && name != current {
-            scene
-                .ctl
-                .send(Command::RenameTemplate { template: id, name });
-        }
-        st.name_draft = None;
+        send_name(scene, st);
     } else if !response.has_focus() {
         st.name_draft = None;
+    }
+}
+
+/// Sends the name being typed, if it changes the template's, and forgets
+/// it.
+fn send_name(scene: &Scene<'_>, st: &mut PlansState) {
+    let Some((id, draft)) = st.name_draft.take() else {
+        return;
+    };
+    let name = draft.trim().to_owned();
+    if !name.is_empty() && name != template_name(scene, id) {
+        scene
+            .ctl
+            .send(Command::RenameTemplate { template: id, name });
     }
 }
 
@@ -171,7 +181,7 @@ fn rename(ui: &mut Ui, scene: &Scene<'_>, st: &mut PlansState, id: TemplateId) {
 fn week(ui: &mut Ui, scene: &Scene<'_>) {
     let t = scene.i18n;
     let schedule = &scene.state.schedule;
-    heading(ui, &t.tr("schedule-editor-week"));
+    heading(ui, &t.tr("settings-plans-week"));
     for (weekday, key) in WEEKDAYS {
         let current = schedule.week().get(weekday);
         let mut choice = current;
@@ -203,7 +213,7 @@ fn days(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, st: &mut Pla
     let t = scene.i18n;
     let today = scene.state.local_now.date();
     let date = st.date.unwrap_or(today);
-    heading(ui, &t.tr("schedule-editor-days"));
+    heading(ui, &t.tr("settings-plans-days"));
     ui.horizontal_top(|ui| {
         ui.vertical(|ui| {
             ui.set_width(240.0);
@@ -212,7 +222,7 @@ fn days(ui: &mut Ui, scene: &Scene<'_>, view_state: &mut ViewState, st: &mut Pla
         ui.add_space(24.0);
         ui.vertical(|ui| {
             ui.set_width(260.0);
-            date_part(ui, scene, view_state, date, today);
+            date_part(ui, scene, view_state, st, date, today);
         });
     });
 }
@@ -222,6 +232,7 @@ fn date_part(
     ui: &mut Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
+    st: &mut PlansState,
     date: NaiveDate,
     today: NaiveDate,
 ) {
@@ -269,7 +280,7 @@ fn date_part(
         )
         .clicked()
     {
-        open(view_state, EditTarget::Date(date));
+        open(scene, view_state, st, EditTarget::Date(date));
     }
 }
 
