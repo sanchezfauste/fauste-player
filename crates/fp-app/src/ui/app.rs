@@ -86,6 +86,13 @@ pub(crate) enum PickTarget {
     /// The folder a category watches (track library spec LB19): the one
     /// path the folder dialog chose, canonical.
     WatchedFolder(CategoryId),
+    /// Inserted before `index` of `block` of a date's Log or a template
+    /// (rework AR17).
+    Log {
+        target: fp_model::log_edit::EditTarget,
+        block: fp_model::BlockId,
+        index: usize,
+    },
 }
 
 /// Files chosen in a file dialog or dropped on the window, read on a
@@ -162,6 +169,9 @@ pub(crate) struct ViewState {
     /// header, a column edge, the scroll bar, or a window over it): files
     /// dropped there are not inserted anywhere (Q4.6).
     pub file_drop_refused: bool,
+    /// Where files dropped from the system go on the Log or a template or
+    /// day popup (rework AR17): before `index` of `block` of the target.
+    pub log_file_drop: Option<(fp_model::log_edit::EditTarget, fp_model::BlockId, usize)>,
     /// The pixel widths of each player's table columns in the last frame,
     /// in the order of `ui.table_columns`.
     pub widths: HashMap<PlayerId, Vec<f32>>,
@@ -1012,6 +1022,7 @@ impl AppUi {
         self.view.dropouts.observe(&telemetry, time);
         self.view.file_drop = None;
         self.view.file_drop_refused = false;
+        self.view.log_file_drop = None;
         let (hovering, moved) = ctx.input(|i| {
             (
                 !i.raw.hovered_files.is_empty(),
@@ -1079,6 +1090,18 @@ impl AppUi {
                 PickTarget::WatchedFolder(category) => Command::SetWatchedFolder {
                     category,
                     folder: paths.into_iter().next(),
+                },
+                PickTarget::Log {
+                    target,
+                    block,
+                    index,
+                } => Command::EditPlan {
+                    target,
+                    edit: fp_model::log_edit::LogEdit::InsertPaths {
+                        block,
+                        index,
+                        paths,
+                    },
                 },
             });
         }
@@ -2045,6 +2068,19 @@ impl AppUi {
                 return;
             }
             _ => {}
+        }
+        // On a row of the Log or a popup: into its block.
+        if let Some((target, block, index)) = self.view.log_file_drop {
+            self.read_dropped(
+                ctx,
+                PickTarget::Log {
+                    target,
+                    block,
+                    index,
+                },
+                dropped,
+            );
+            return;
         }
         // Over a table but not on a target: nothing is inserted (Q4.6).
         if self.view.file_drop.is_none() && self.view.file_drop_refused {

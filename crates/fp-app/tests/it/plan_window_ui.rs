@@ -255,3 +255,53 @@ fn todays_popup_adds_nothing_to_a_block_that_already_played() {
     assert!(h.query_by_label("Block…").is_some());
     assert!(h.query_by_label("Category track…").is_none());
 }
+
+#[derive(Debug)]
+struct Dropped(std::path::PathBuf);
+
+impl egui::DroppedFile for Dropped {
+    fn path(&self) -> &std::path::Path {
+        &self.0
+    }
+    fn bytes(&self) -> Result<Vec<u8>, String> {
+        std::fs::read(&self.0).map_err(|e| e.to_string())
+    }
+}
+
+#[test]
+fn files_dropped_on_the_popup_go_into_the_template() {
+    let dir = tempfile::tempdir().unwrap();
+    let file = fp_app::ui::files::canonical_path(dir.path()).join("new.wav");
+    std::fs::write(&file, b"x").unwrap();
+    let (s, base, _) = with_templates();
+    let block = s.schedule.template(base).unwrap().blocks[0].id;
+    let (mut h, fake) = open(s, EditTarget::Template(base));
+    let at = h.get_by_label_contains("Top of the Hour").rect().left_top() + egui::vec2(4.0, 1.0);
+    h.hover_at(at);
+    h.step();
+    fake.take_sent();
+    h.input_mut()
+        .dropped_files
+        .push(std::sync::Arc::new(Dropped(file.clone())));
+    for _ in 0..40 {
+        h.run_steps(1);
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    let sent = fake.take_sent();
+    assert_eq!(
+        edits(&sent),
+        vec![(
+            EditTarget::Template(base),
+            LogEdit::InsertPaths {
+                block,
+                index: 0,
+                paths: vec![file],
+            }
+        )]
+    );
+    assert!(
+        !sent
+            .iter()
+            .any(|c| matches!(c, Command::InsertPaths { .. }))
+    );
+}

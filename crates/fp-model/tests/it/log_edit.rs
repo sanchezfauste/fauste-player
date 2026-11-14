@@ -557,3 +557,47 @@ fn a_refused_template_edit_changes_nothing() {
     // Today did not keep the block as loaded for an edit that never was.
     assert_eq!(r.s.schedule, before);
 }
+
+#[test]
+fn dropped_files_become_tracks_of_the_block() {
+    let mut r = rig();
+    r.at_hms(9, 0, 0);
+    let block = r.block(11, 0);
+    edit(
+        &mut r,
+        LogEdit::InsertPaths {
+            block,
+            index: 0,
+            paths: vec!["/music/new.flac".into()],
+        },
+    )
+    .unwrap();
+    let items = items(&r, today(), 11).0;
+    let Some(Item::Track { track, .. }) = items.first() else {
+        panic!("a track first: {items:?}");
+    };
+    assert_eq!(
+        r.s.library.get(*track).unwrap().path,
+        std::path::PathBuf::from("/music/new.flac")
+    );
+    assert_eq!(items.len(), 2);
+}
+
+#[test]
+fn files_dropped_on_a_locked_row_add_nothing() {
+    let mut r = on_air();
+    let block = r.block(10, 0);
+    let before = r.s.library.len();
+    assert_eq!(
+        edit(
+            &mut r,
+            LogEdit::InsertPaths {
+                block,
+                index: 0,
+                paths: vec!["/music/new.flac".into()],
+            },
+        ),
+        Err(ModelError::LogRowLocked)
+    );
+    assert_eq!(r.s.library.len(), before);
+}

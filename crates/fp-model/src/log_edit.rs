@@ -32,6 +32,13 @@ pub enum LogEdit {
         index: usize,
         items: Vec<Item>,
     },
+    /// Files dropped from the system (AR17): each becomes a track of the
+    /// library (added when new), inserted as `Insert` does.
+    InsertPaths {
+        block: BlockId,
+        index: usize,
+        paths: Vec<std::path::PathBuf>,
+    },
     Remove {
         block: BlockId,
         index: usize,
@@ -142,6 +149,7 @@ fn check_target(
 fn blocks_of(edit: &LogEdit) -> Vec<BlockId> {
     match edit {
         LogEdit::Insert { block, .. }
+        | LogEdit::InsertPaths { block, .. }
         | LogEdit::Remove { block, .. }
         | LogEdit::SetHardStart { block, .. }
         | LogEdit::MoveBlock { block, .. }
@@ -234,6 +242,31 @@ fn apply_edit(
     {
         return Err(ModelError::PastDate);
     }
+    // Dropped files are checked before they join the library, so a
+    // refused drop adds nothing.
+    let edit = match edit {
+        LogEdit::InsertPaths {
+            block,
+            index,
+            paths,
+        } => {
+            let b = block_on(state, target, block)?;
+            check_target(state, target, block, index.min(b.items.len()))?;
+            let items = paths
+                .into_iter()
+                .map(|path| Item::Track {
+                    track: crate::library_rules::track_for_path(state, path),
+                    time_critical: false,
+                })
+                .collect();
+            LogEdit::Insert {
+                block,
+                index,
+                items,
+            }
+        }
+        other => other,
+    };
     if let EditTarget::Template(template) = target {
         keep_on_air_as_loaded(state, template, &edit)?;
     }
@@ -250,6 +283,8 @@ fn apply_edit(
             put(state, target, b)?;
             vec![block]
         }
+        // Made an `Insert` above.
+        LogEdit::InsertPaths { block, .. } => vec![block],
         LogEdit::Remove { block, index } => {
             check_target(state, target, block, index)?;
             let mut b = block_on(state, target, block)?;

@@ -237,8 +237,9 @@ and the Edit button.
   it is current it is shown as on air (the filler plays for it), and the
   filler column's header shows the song.
 - **AR17. Live editing** *(maintainer)*. The Log's list is edited like a
-  playlist: drag tracks from the library (files dropped from the system
-  are a later step: plan 4 left them out), reorder by drag, remove, and an
+  playlist: drag tracks from the library or files from the system (each
+  file joins the library as a playlist drop does; a drop on a locked row
+  goes nowhere, Q4.6), reorder by drag, remove, and an
   **Add** menu with *Track…*, *Category track…*, *Music fill
   (rotation)…*, *Block…*. The row menu also
   has the item's *Hard start* toggle and, on a block header, *Change
@@ -278,8 +279,8 @@ and the Edit button.
   editor window and the Log column's "Edit log" button are removed.
 - **AR21.** Selecting a template, or a date, opens a **popup window that
   is the same playlist editor as the Log column** (§6, AR14–AR19): block
-  headers, items, the Add menu, drag from the library (files from the
-  system later, as on the Log, AR17), reorder, remove. For a date it edits
+  headers, items, the Add menu, drag from the library and files from
+  the system (as on the Log, AR17), reorder, remove. For a date it edits
   that date's changes and shows changed blocks as "changed for this day"
   with "Back to the template" in the block header's menu; the date's
   template is chosen in Settings (AR20). Settings is a modal
