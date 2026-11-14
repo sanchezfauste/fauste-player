@@ -39,8 +39,9 @@ day only: the template stays as it is.
   drag tracks onto the list; **Category track…** and **Music fill
   (rotation)…** ask which one and add it to the coming block; **Block…**
   asks for a time, with the first free one already filled in.
-- Drag tracks from the library onto a row to put them before it, and
-  drag rows within the Log to move them.
+- Drag tracks from the library onto a row to put them before it (or
+  after it, on the row's lower half, as on a playlist: that is how they
+  go at a block's end), and drag rows within the same day to move them.
 - Right-click a row for **Hard start** and **Remove from today's log**;
   right-click a block header for **Change time…**, **Remove block** and,
   on a changed block, **Back to the template**.
@@ -68,7 +69,7 @@ player:
 While the music fill plays between blocks, the Log's header shows its
 song.
 
-When automation stops, next stays on the item below the one that played,
+When automation stops (or pauses), next stays on the item below the one that played,
 and Play plays it, whatever the time: you choose. To change what plays
 next, double-click an item, or right-click it and choose **Play next**.
 **Back to the clock**, in the same menu, sets next to what the time says.
@@ -96,7 +97,9 @@ is the same list as the Log column, and you change it the same way:
 **Add** at its bottom (Track…, Category track…, Music fill (rotation)…,
 Block…), tracks dragged from the library onto a row, rows dragged to
 move them, and the right-click menus of rows and block headers. It never
-plays, and it can stay open beside the library.
+plays, and it can stay open beside the library. Today's window shows
+what played and what plays, as the Log does; a day's window closes at
+midnight, when that day can no longer change.
 
 ![A template open in its window: the Base template's blocks by start time, each with its station ID, its spots and the music fill after it, and Add at the bottom](../images/guide/template-popup.png)
 
@@ -143,7 +146,9 @@ end and stop. Like every player, it never starts by itself, not even after
 a restart. While it plays for the Log between blocks, stopping or pausing
 it stops automation too, and its Stop at end stops automation when the
 song ends; if a block's time comes first, the block plays and the mark is
-cleared.
+cleared. After the Log was paused during the music, Play on the Music
+fill column plays the song on its own: the Log's Play no longer resumes
+it, and its Stop no longer stops it.
 
 Above its list, where a player has its playlist tabs, the Music fill column
 shows the **rotation** it plays. Choose another one there: the songs it had

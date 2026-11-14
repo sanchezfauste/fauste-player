@@ -302,7 +302,11 @@ player; a Log in SINGLE plays next at once with `single_play`, a music
 fill row starting the filler alone; else `start`), `Pause` → `log_pause`,
 `Stop` / `FadeStop` → `log_stop`, `Previous` → nothing;
 `ToggleStopAfterCurrent` / `SetStopAfterCurrent` → `toggle_stop_at_end`.
-`Pause` on the filler goes to `filler_pause`. `availability` has its own
+`log_play` does nothing while the Log's player fades out (`fade_stopping`)
+with automation stopped, as on a player. `log_pause` and `filler_pause`
+pin next (`next_by_hand`, AR10). `Play` on the filler goes to
+`filler_play` (it clears `paused_fill` while automation is stopped: the
+song plays on its own), `Pause` to `filler_pause`. `availability` has its own
 rules for the Log (`log_availability`).
 
 - `stop_at_end` (the Log's Stop at end) puts `stop_after_current` on the
@@ -356,8 +360,14 @@ on air, shown `OnAir` while `fill_is_current`.
 
 `automation::plan_view(state, target)` gives the same rows for one
 template (its blocks by start, dated today, origin `Template`) or one date
-(`Schedule::day`), every row `Coming`, nothing next or late: the popup
-never plays.
+(`day_starts`), every row `Coming`, nothing next or late: the popup
+never plays. Today's rows are `schedule_view`'s for today, statuses
+included.
+
+`log_edit::apply` restores the schedule when an edit is refused
+(`Command` contract: on `Err` the state is unchanged), since a move
+between blocks or a template edit with AR22b's `keep_on_air_as_loaded`
+stores more than one block.
 
 ## Editing helpers (`schedule.rs`)
 

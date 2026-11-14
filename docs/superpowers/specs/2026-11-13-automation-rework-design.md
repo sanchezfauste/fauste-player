@@ -131,7 +131,9 @@ and the Edit button.
   is on air **for the Log**, and stop automation. "On air for the Log"
   includes the filler's song while a music fill row is current: Stop on the
   Log while music plays stops the music. Pause then Play resumes the
-  paused audio and runs automation again.
+  paused audio and runs automation again; while paused, next stays where
+  it is (AR10). Play during the Log's fade stop does nothing, as on a
+  player *(my call, deferred minor of plan 3)*.
 - **AR6. Stop at end** is the player's own toggle and badge. On the Log it
   means: what is on air for the Log (an item, or the filler's current song)
   ends, then automation stops and nothing else plays. Unmarking it before
@@ -150,7 +152,8 @@ and the Edit button.
   fill row starts it). Stop at end follows the players' SINGLE rule.
 - **AR7. The Music fill column is a player too**, with the same header.
   Its Play starts the filler on its own with the rotation chosen in its
-  strip (AU29); its Pause, Stop, Fade stop and Stop at end act like a
+  strip (AU29), also after the Log paused it during music: the song is
+  then no longer the Log's to resume or stop *(my call)*; its Pause, Stop, Fade stop and Stop at end act like a
   player's. **Stopping the filler leaves silence**: nothing else starts by
   itself. If the filler was playing for the Log (a music fill row
   current), stopping it also stops automation *(my call: otherwise the
@@ -250,9 +253,13 @@ and the Edit button.
   A Music fill item stays the last item of its block (the automation
   spec's model rule); adding one where another exists replaces it.
 - **AR19b. Where a drop or an added row goes** *(my calls; plan 4
-  ruling)*. Before the row it lands on, in that row's block (on a block
-  header: at the block's start), never after a Music fill row; Add puts
-  its item at the end of next's block (before its Music fill row). Editing the
+  ruling)*. Before the row it lands on, in that row's block, or after it
+  when it lands on the row's lower half (as on a playlist), so a block's
+  end takes a drop too; on a block header: at the block's start; never
+  after a Music fill row. A row dragged onto another date's rows does not
+  move (no insertion line is shown there). Add puts its item at the end
+  of next's block (before its Music fill row), never in a block that
+  already played. A refused edit changes nothing. Editing the
   upcoming rows of the block on air takes effect at once (the Log
   player's queue is reloaded after the row on air). A live edit stores
   the whole block as changed for that date (AU12, unchanged): later
@@ -280,7 +287,11 @@ and the Edit button.
   were *(my call)*.
 - **AR22.** The popup and the Log column share the list code *(builder's
   call how)*; anything that works in one works in the other, except
-  playing (the popup does not play; its rows have no next).
+  playing (the popup does not play; its rows have no next). Today's
+  popup shows its rows as the Log does (aired, on air, next, missed);
+  a template's and another day's rows are all to come. A date's popup
+  closes when its date has passed (midnight), and a popup's open dialog
+  closes with it *(my calls, final review of plan 5)*.
 - **AR22b.** A template edit to a block that is on air today, while today
   follows the template for that block, first keeps that block as it was
   loaded as a change of today (AU12); the template's change reaches it
