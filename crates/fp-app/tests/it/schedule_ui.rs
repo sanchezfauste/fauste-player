@@ -692,7 +692,7 @@ impl egui::DroppedFile for Dropped {
 fn files_dropped_on_a_log_row_go_before_it() {
     let dir = tempfile::tempdir().unwrap();
     // The paths come back canonical (macOS temp dirs are symlinks).
-    let file = std::fs::canonicalize(dir.path()).unwrap().join("new.wav");
+    let file = fp_app::ui::files::canonical_path(dir.path()).join("new.wav");
     std::fs::write(&file, b"x").unwrap();
     let (s, item) = with_block();
     let (mut h, fake) = harness(s);

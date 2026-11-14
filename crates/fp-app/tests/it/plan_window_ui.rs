@@ -271,7 +271,7 @@ impl egui::DroppedFile for Dropped {
 #[test]
 fn files_dropped_on_the_popup_go_into_the_template() {
     let dir = tempfile::tempdir().unwrap();
-    let file = std::fs::canonicalize(dir.path()).unwrap().join("new.wav");
+    let file = fp_app::ui::files::canonical_path(dir.path()).join("new.wav");
     std::fs::write(&file, b"x").unwrap();
     let (s, base, _) = with_templates();
     let block = s.schedule.template(base).unwrap().blocks[0].id;
