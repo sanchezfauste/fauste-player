@@ -105,8 +105,6 @@ fn add_block_in_the_popup_edits_the_template() {
     let (s, base, _) = with_templates();
     let (mut h, fake) = open(s, EditTarget::Template(base));
     fake.take_sent();
-    h.get_by_label("Add to the list").click();
-    h.run();
     h.get_by_label("Block…").click();
     h.run();
     h.get_by_label("OK").click();
@@ -221,20 +219,28 @@ fn a_past_dates_popup_closes() {
 }
 
 #[test]
-fn closing_the_popup_drops_its_open_dialog() {
+fn the_popups_close_button_closes_it() {
     let (s, base, _) = with_templates();
-    let (mut h, fake) = open(s, EditTarget::Template(base));
-    h.get_by_label("Add to the list").click();
-    h.run();
-    h.get_by_label("Block…").click();
-    h.run();
-    assert!(h.query_by_label("OK").is_some());
+    let (mut h, _fake) = open(s, EditTarget::Template(base));
     h.get_by_label("Close window").click();
     h.run();
     h.run();
     assert!(h.query_by_label_contains("Template ·").is_none());
-    assert!(h.query_by_label("OK").is_none(), "the dialog went with it");
+}
+
+#[test]
+fn escape_cancels_the_popups_dialog_and_keeps_the_popup() {
+    let (s, base, _) = with_templates();
+    let (mut h, fake) = open(s, EditTarget::Template(base));
     fake.take_sent();
+    h.get_by_label("Block…").click();
+    h.run();
+    assert!(h.query_by_label("OK").is_some());
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(h.query_by_label("OK").is_none());
+    assert!(h.query_by_label("Template · Base").is_some());
+    assert!(edits(&fake.take_sent()).is_empty());
 }
 
 #[test]
@@ -248,10 +254,8 @@ fn todays_popup_adds_nothing_to_a_block_that_already_played() {
         .unwrap()
         .started
         .insert((today, block));
-    let (mut h, _fake) = open(s, EditTarget::Date(today));
+    let (h, _fake) = open(s, EditTarget::Date(today));
     assert!(h.query_by_label("Day · 2026-11-17").is_some());
-    h.get_by_label("Add to the list").click();
-    h.run();
     assert!(h.query_by_label("Block…").is_some());
     assert!(h.query_by_label("Category track…").is_none());
 }
@@ -304,4 +308,19 @@ fn files_dropped_on_the_popup_go_into_the_template() {
             .iter()
             .any(|c| matches!(c, Command::InsertPaths { .. }))
     );
+}
+
+#[test]
+fn the_popups_footer_shows_every_add_button() {
+    let (s, base, _) = with_templates();
+    let (h, _fake) = open(s, EditTarget::Template(base));
+    for label in [
+        "Track…",
+        "Category track…",
+        "Music fill (rotation)…",
+        "Block…",
+    ] {
+        assert!(h.query_by_label(label).is_some(), "{label}");
+    }
+    assert!(h.query_by_label("More to add").is_none());
 }

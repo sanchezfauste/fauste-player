@@ -1,16 +1,17 @@
 //! The Log column's list (automation spec §8.1) and the strip above it;
 //! its transport is the player header's (automation rework AR3).
 
-use egui::{Align, Color32, Layout, RichText, Sense, Ui, UiBuilder, vec2};
+use egui::{Align, Align2, Color32, Layout, RichText, Sense, Ui, UiBuilder, vec2};
 use egui_phosphor::regular as icon;
 use fp_model::Command;
 use fp_model::automation::{ItemRef, RowStatus, ScheduleRow, schedule_view};
 use fp_model::schedule::{BlockOrigin, Item};
 
 use super::app::{DragTracks, Scene, ViewState};
+use super::exit_guard::button;
 use super::format;
 use super::theme;
-use super::widgets::{font, font_semibold};
+use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 use fp_model::ids::TemplateId;
 use fp_model::log_edit::{EditTarget, LogEdit};
 
@@ -156,12 +157,20 @@ pub(crate) fn log_table(
                         block,
                         start,
                         origin,
+                        count,
                         ..
                     } => {
                         let edits = target_of(template, *date);
                         block_row(&mut row, scene, r, playing.then_some(today));
                         let response = row.response();
-                        block_actions(scene, view_state, &response, edits, *block, *start, *origin);
+                        let header = BlockHeader {
+                            target: edits,
+                            block: *block,
+                            start: *start,
+                            origin: *origin,
+                            count: *count,
+                        };
+                        block_actions(scene, view_state, &response, header);
                         drop_tracks(scene, view_state, &response, edits, *block, 0, false);
                     }
                     ScheduleRow::Item { item, what, .. } => {
@@ -398,22 +407,59 @@ fn send_edit(scene: &Scene<'_>, target: EditTarget, edit: LogEdit) {
     scene.ctl.send(Command::EditPlan { target, edit });
 }
 
-/// A block header's menu: Change time…, Remove block, Back to the
-/// template (AR17), unless the block is locked.
-fn block_actions(
-    scene: &Scene<'_>,
-    view_state: &mut ViewState,
-    response: &egui::Response,
+/// What a block header's menu acts on.
+#[derive(Debug, Clone, Copy)]
+struct BlockHeader {
     target: EditTarget,
     block: fp_model::BlockId,
     start: chrono::NaiveDateTime,
     origin: BlockOrigin,
+    count: usize,
+}
+
+/// A block header's menu, on a click or a right-click: add a track, a
+/// category track or a Music fill at its end, unless it already played
+/// (AR19); then Change time…, Remove block and Back to the template
+/// (AR17), unless it is locked.
+fn block_actions(
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    response: &egui::Response,
+    header: BlockHeader,
 ) {
-    let t = scene.i18n;
-    if locked(scene, target, block, 0) {
+    let BlockHeader {
+        target,
+        block,
+        start,
+        origin,
+        count,
+    } = header;
+    let addable = open_at_end(scene, target, block, count);
+    let editable = !locked(scene, target, block, 0);
+    if !addable && !editable {
         return;
     }
-    response.context_menu(|ui| {
+    let t = scene.i18n;
+    let menu = |ui: &mut Ui, view_state: &mut ViewState| {
+        if addable {
+            for kind in [AddKind::Track, AddKind::CategoryTrack, AddKind::MusicFill] {
+                let text = t.tr(kind.key());
+                let item = ui.button(format!("{}  {text}", icon::PLUS));
+                item.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::Button, true, text.clone())
+                });
+                if item.clicked() {
+                    start_add(scene, view_state, kind, target, Some((target, block)));
+                    ui.close();
+                }
+            }
+        }
+        if !editable {
+            return;
+        }
+        if addable {
+            ui.separator();
+        }
         if ui.button(t.tr("schedule-block-move")).clicked() {
             view_state.log_dialog = Some(LogDialog::MoveBlock {
                 target,
@@ -430,12 +476,18 @@ fn block_actions(
             send_edit(scene, target, LogEdit::Revert { block });
             ui.close();
         }
-    });
+    };
+    // Its own id: the right-click menu's is the response's popup id.
+    egui::Popup::menu(response)
+        .id(response.id.with("block-click-menu"))
+        .show(|ui| menu(ui, view_state));
+    response.context_menu(|ui| menu(ui, view_state));
 }
 
 /// Library tracks dropped on a row go before it, into its block (AR17,
 /// AR19b), or after it on its lower half (as on a playlist), so a block's
-/// end takes them too; a header takes them at the block's start.
+/// end takes them too; a header takes them at the block's start, and its
+/// insertion line is under it.
 #[allow(clippy::too_many_arguments)]
 fn drop_tracks(
     scene: &Scene<'_>,
@@ -475,7 +527,13 @@ fn drop_tracks(
             .dnd_hover_payload::<DragLogItem>()
             .is_some_and(|from| from.target == target)
     {
-        let y = if after { r.bottom() - 1.0 } else { r.top() };
+        // A header takes them at its block's start: the line goes under
+        // it, never on the previous block's end.
+        let y = if after || !item {
+            r.bottom() - 1.0
+        } else {
+            r.top()
+        };
         response
             .ctx
             .layer_painter(egui::LayerId::new(egui::Order::Foreground, response.id))
@@ -630,9 +688,84 @@ fn starts_of(scene: &Scene<'_>, target: EditTarget) -> Vec<fp_model::local_time:
     }
 }
 
-/// A Log, template or date footer (AR17, AR21): Add, with its menu, whose
-/// items go to `add_to`'s block and whose Block… adds to `blocks`; on the
-/// Log (`playing`), when the next block starts.
+/// What an Add button adds.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum AddKind {
+    /// Opens the library, to drag tracks from.
+    Track,
+    CategoryTrack,
+    MusicFill,
+    Block,
+}
+
+impl AddKind {
+    pub(crate) fn key(self) -> &'static str {
+        match self {
+            Self::Track => "schedule-add-track",
+            Self::CategoryTrack => "schedule-add-category-track",
+            Self::MusicFill => "schedule-add-music-fill",
+            Self::Block => "schedule-add-block",
+        }
+    }
+}
+
+/// Starts adding `kind`: items go to the end of `add_to`'s block, a block
+/// to `blocks`.
+pub(crate) fn start_add(
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    kind: AddKind,
+    blocks: EditTarget,
+    add_to: Option<(EditTarget, fp_model::BlockId)>,
+) {
+    match (kind, add_to) {
+        (AddKind::Track, _) => {
+            let mut view = scene.state.library_view.clone();
+            view.open = true;
+            scene.ctl.send(Command::SetLibraryView(Box::new(view)));
+        }
+        (AddKind::CategoryTrack, Some((target, block))) => {
+            let choice = scene.state.categories.iter().next().map(|c| c.id);
+            view_state.log_dialog = Some(LogDialog::Category {
+                target,
+                block,
+                choice,
+            });
+        }
+        (AddKind::MusicFill, Some((target, block))) => {
+            let choice = scene.state.rotations.default_id();
+            view_state.log_dialog = Some(LogDialog::MusicFill {
+                target,
+                block,
+                choice,
+            });
+        }
+        (AddKind::Block, _) => {
+            let time = fp_model::schedule::free_start(starts_of(scene, blocks))
+                .map(|s| s.to_string())
+                .unwrap_or_default();
+            view_state.log_dialog = Some(LogDialog::AddBlock {
+                target: blocks,
+                time,
+            });
+        }
+        (AddKind::CategoryTrack | AddKind::MusicFill, None) => {}
+    }
+}
+
+/// A footer tile's width for `shown`.
+fn footer_tile_width(ui: &Ui, shown: &str) -> f32 {
+    ui.painter()
+        .layout_no_wrap(shown.to_owned(), font(10.0), theme::NEUTRAL_300)
+        .size()
+        .x
+        + 26.0
+}
+
+/// A Log, template or date footer (AR17, AR21): one Add tile per kind
+/// (a playlist footer's look), whose items go to `add_to`'s block and
+/// whose Block… adds to `blocks`; the tiles that do not fit go behind ⋯.
+/// On the Log (`playing`), when the next block starts, if it fits.
 pub(crate) fn plan_footer(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -650,69 +783,117 @@ pub(crate) fn plan_footer(
         theme::NEUTRAL_800,
     );
     ui.add_space(10.0);
-    ui.spacing_mut().item_spacing = vec2(6.0, 0.0);
-    let tip = if playing {
+    const GAP: f32 = 6.0;
+    ui.spacing_mut().item_spacing = vec2(GAP, 0.0);
+    let tip = t.tr(if playing {
         "tip-schedule-add"
     } else {
         "tip-plan-add"
-    };
-    let add = ui
-        .add(egui::Button::new(
-            RichText::new(format!("{} {}", icon::PLUS, t.tr("footer-add"))).font(font(10.0)),
-        ))
-        .on_hover_text(t.tr(tip));
-    add.widget_info(|| egui::WidgetInfo::labeled(egui::Role::Button, true, t.tr(tip)));
-    egui::Popup::menu(&add).show(|ui| {
-        if ui.button(t.tr("schedule-add-track")).clicked() {
-            let mut view = scene.state.library_view.clone();
-            view.open = true;
-            scene.ctl.send(Command::SetLibraryView(Box::new(view)));
-            ui.close();
-        }
-        if let Some((target, block)) = add_to {
-            if ui.button(t.tr("schedule-add-category-track")).clicked() {
-                let choice = scene.state.categories.iter().next().map(|c| c.id);
-                view_state.log_dialog = Some(LogDialog::Category {
-                    target,
-                    block,
-                    choice,
-                });
-                ui.close();
-            }
-            if ui.button(t.tr("schedule-add-music-fill")).clicked() {
-                let choice = scene.state.rotations.default_id();
-                view_state.log_dialog = Some(LogDialog::MusicFill {
-                    target,
-                    block,
-                    choice,
-                });
-                ui.close();
-            }
-        }
-        ui.separator();
-        if ui.button(t.tr("schedule-add-block")).clicked() {
-            let time = fp_model::schedule::free_start(starts_of(scene, blocks))
-                .map(|s| s.to_string())
-                .unwrap_or_default();
-            view_state.log_dialog = Some(LogDialog::AddBlock {
-                target: blocks,
-                time,
-            });
-            ui.close();
-        }
     });
-    if let Some(start) = fp_model::automation::coming_start(scene.state).filter(|_| playing) {
-        ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.add_space(10.0);
-            ui.label(
-                RichText::new(t.tr_args(
-                    "schedule-next-block",
-                    &[("time", start.format("%H:%M").to_string().into())],
-                ))
-                .font(font(11.0))
-                .color(theme::NEUTRAL_400),
-            );
+    let kinds: Vec<AddKind> = [
+        AddKind::Track,
+        AddKind::CategoryTrack,
+        AddKind::MusicFill,
+        AddKind::Block,
+    ]
+    .into_iter()
+    .filter(|k| add_to.is_some() || !matches!(k, AddKind::CategoryTrack | AddKind::MusicFill))
+    .collect();
+    let tiles: Vec<(AddKind, String, String, f32)> = kinds
+        .iter()
+        .map(|&kind| {
+            let text = t.tr(kind.key());
+            let shown = format!("{} {text}", icon::PLUS);
+            let width = footer_tile_width(ui, &shown);
+            (kind, text, shown, width)
+        })
+        .collect();
+    // All of them, or as many as fit beside the ⋯ tile.
+    let room = ui.available_width() - 10.0;
+    let total: f32 = tiles.iter().map(|(.., w)| w + GAP).sum();
+    let shown_count = if total <= room {
+        tiles.len()
+    } else {
+        let mut used = 18.0 + GAP;
+        tiles
+            .iter()
+            .take_while(|(.., w)| {
+                used += w + GAP;
+                used <= room
+            })
+            .count()
+    };
+    let mut chosen = None;
+    for (kind, text, shown, width) in tiles.iter().take(shown_count) {
+        let clicked = widgets::tile_without_tooltip(
+            ui,
+            vec2(*width, 18.0),
+            text,
+            true,
+            TileStyle::plain(),
+            |p, r, c| {
+                p.text(r.center(), Align2::CENTER_CENTER, shown, font(10.0), c);
+            },
+        )
+        .on_hover_text(&tip)
+        .clicked();
+        if clicked {
+            chosen = Some(*kind);
+        }
+    }
+    if let Some(rest) = tiles.get(shown_count..).filter(|r| !r.is_empty()) {
+        let more = widgets::tile(
+            ui,
+            vec2(18.0, 18.0),
+            &t.tr("tip-schedule-add-more"),
+            true,
+            TileStyle::plain(),
+            |p, r, c| {
+                p.text(
+                    r.center(),
+                    Align2::CENTER_CENTER,
+                    icon::DOTS_THREE,
+                    font(12.0),
+                    c,
+                );
+            },
+        );
+        egui::Popup::menu(&more).show(|ui| {
+            for (kind, text, shown, _) in rest {
+                let item = ui.button(RichText::new(shown).font(font(12.0)));
+                item.widget_info(|| {
+                    egui::WidgetInfo::labeled(egui::Role::Button, true, text.clone())
+                });
+                if item.clicked() {
+                    chosen = Some(*kind);
+                    ui.close();
+                }
+            }
         });
+    }
+    if let Some(kind) = chosen {
+        start_add(scene, view_state, kind, blocks, add_to);
+    }
+    if let Some(start) = fp_model::automation::coming_start(scene.state).filter(|_| playing) {
+        let text = RichText::new(t.tr_args(
+            "schedule-next-block",
+            &[("time", start.format("%H:%M").to_string().into())],
+        ))
+        .font(font(11.0))
+        .color(theme::NEUTRAL_400);
+        // Shown when it fits after the buttons, never over them.
+        let needed = ui
+            .painter()
+            .layout_no_wrap(text.text().to_owned(), font(11.0), theme::NEUTRAL_400)
+            .size()
+            .x
+            + 16.0;
+        if ui.available_width() >= needed {
+            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                ui.add_space(10.0);
+                ui.add(egui::Label::new(text).selectable(false));
+            });
+        }
     }
 }
 
@@ -737,10 +918,25 @@ pub(crate) fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mu
         LogDialog::MoveBlock { .. } => t.tr("schedule-block-move"),
     };
     let mut done: Option<bool> = None;
-    egui::Window::new(title)
-        .collapsible(false)
-        .resizable(false)
+    let width = (ctx.content_rect().width() - 48.0).clamp(280.0, 380.0);
+    // The look of the app's other dialogs: a title, labelled fields, then
+    // Cancel and OK. Enter confirms; Esc or the backdrop cancels.
+    let modal = egui::Modal::new(egui::Id::unique("log-dialog"))
+        .frame(egui::Frame::new().fill(theme::SURFACE).inner_margin(20.0))
+        .backdrop_color(theme::NEUTRAL_900.gamma_multiply(0.7))
         .show(ctx, |ui| {
+            ui.set_width(width);
+            ui.spacing_mut().item_spacing = vec2(8.0, 10.0);
+            ui.add(
+                egui::Label::new(
+                    RichText::new(title.trim_end_matches('…'))
+                        .font(font_medium(18.0))
+                        .color(theme::TEXT),
+                )
+                .selectable(false)
+                .truncate(),
+            );
+            let mut enter = false;
             match dialog {
                 LogDialog::Category { choice, .. } => {
                     let name = |id: Option<fp_model::CategoryId>| {
@@ -748,13 +944,18 @@ pub(crate) fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mu
                             .map(|c| c.name.clone())
                             .unwrap_or_default()
                     };
-                    egui::ComboBox::from_label(t.tr("schedule-category"))
-                        .selected_text(name(*choice))
-                        .show_ui(ui, |ui| {
-                            for c in scene.state.categories.iter() {
-                                ui.selectable_value(choice, Some(c.id), c.name.clone());
-                            }
-                        });
+                    field(ui, &t.tr("schedule-category"), |ui, label| {
+                        egui::ComboBox::from_id_salt("log-dialog-category")
+                            .width(ui.available_width())
+                            .selected_text(name(*choice))
+                            .show_ui(ui, |ui| {
+                                for c in scene.state.categories.iter() {
+                                    ui.selectable_value(choice, Some(c.id), c.name.clone());
+                                }
+                            })
+                            .response
+                            .labelled_by(label);
+                    });
                 }
                 LogDialog::MusicFill { choice, .. } => {
                     let name = |id: Option<fp_model::RotationId>| {
@@ -762,46 +963,63 @@ pub(crate) fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mu
                             .map(|r| r.name.clone())
                             .unwrap_or_default()
                     };
-                    egui::ComboBox::from_label(t.tr("filler-rotation"))
-                        .selected_text(name(*choice))
-                        .show_ui(ui, |ui| {
-                            for r in scene.state.rotations.iter() {
-                                ui.selectable_value(choice, Some(r.id), r.name.clone());
-                            }
-                        });
+                    field(ui, &t.tr("filler-rotation"), |ui, label| {
+                        egui::ComboBox::from_id_salt("log-dialog-rotation")
+                            .width(ui.available_width())
+                            .selected_text(name(*choice))
+                            .show_ui(ui, |ui| {
+                                for r in scene.state.rotations.iter() {
+                                    ui.selectable_value(choice, Some(r.id), r.name.clone());
+                                }
+                            })
+                            .response
+                            .labelled_by(label);
+                    });
                 }
                 LogDialog::AddBlock { time, .. } | LogDialog::MoveBlock { time, .. } => {
-                    let label = ui.label(t.tr("schedule-block-start"));
-                    ui.add(egui::TextEdit::singleline(time).desired_width(90.0))
-                        .labelled_by(label.id);
-                    if fp_model::local_time::TimeOfDay::parse(time).is_none() {
-                        ui.label(
-                            RichText::new(t.tr("schedule-bad-time"))
-                                .font(font(11.0))
-                                .color(theme::AMBER),
-                        );
-                    }
+                    field(ui, &t.tr("schedule-block-start"), |ui, label| {
+                        let edit = ui
+                            .add(egui::TextEdit::singleline(time).desired_width(90.0))
+                            .labelled_by(label);
+                        enter = edit.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
+                        if fp_model::local_time::TimeOfDay::parse(time).is_none() {
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(t.tr("schedule-bad-time"))
+                                        .font(font(11.0))
+                                        .color(theme::AMBER),
+                                )
+                                .selectable(false),
+                            );
+                        }
+                    });
                 }
             }
-            ui.horizontal(|ui| {
-                let ready = match dialog {
-                    LogDialog::Category { choice, .. } => choice.is_some(),
-                    LogDialog::MusicFill { choice, .. } => choice.is_some(),
-                    LogDialog::AddBlock { time, .. } | LogDialog::MoveBlock { time, .. } => {
-                        fp_model::local_time::TimeOfDay::parse(time).is_some()
-                    }
-                };
-                if ui
-                    .add_enabled(ready, egui::Button::new(t.tr("schedule-dialog-ok")))
-                    .clicked()
-                {
-                    done = Some(true);
+            let ready = match dialog {
+                LogDialog::Category { choice, .. } => choice.is_some(),
+                LogDialog::MusicFill { choice, .. } => choice.is_some(),
+                LogDialog::AddBlock { time, .. } | LogDialog::MoveBlock { time, .. } => {
+                    fp_model::local_time::TimeOfDay::parse(time).is_some()
                 }
-                if ui.button(t.tr("schedule-dialog-cancel")).clicked() {
+            };
+            ui.add_space(4.0);
+            ui.horizontal(|ui| {
+                if button(ui, &t.tr("schedule-dialog-cancel"), None) {
                     done = Some(false);
                 }
+                ui.add_enabled_ui(ready, |ui| {
+                    if button(ui, &t.tr("schedule-dialog-ok"), Some(theme::ACCENT)) {
+                        done = Some(true);
+                    }
+                });
             });
+            if enter && ready {
+                done = Some(true);
+            }
         });
+    if done.is_none() && modal.should_close() {
+        done = Some(false);
+    }
     match done {
         Some(true) => {
             let parse = |s: &str| fp_model::local_time::TimeOfDay::parse(s);
@@ -856,6 +1074,22 @@ pub(crate) fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mu
         Some(false) => view_state.log_dialog = None,
         None => {}
     }
+}
+
+/// One labelled row of a dialog: the label, then `content`, which is
+/// given the label's id to name its control.
+fn field(ui: &mut Ui, label: &str, content: impl FnOnce(&mut Ui, egui::Id)) {
+    ui.horizontal(|ui| {
+        let label = ui.add(
+            egui::Label::new(
+                RichText::new(label)
+                    .font(font(12.0))
+                    .color(theme::NEUTRAL_400),
+            )
+            .selectable(false),
+        );
+        content(ui, label.id);
+    });
 }
 
 /// What an item plays, in words.

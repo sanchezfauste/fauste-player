@@ -397,6 +397,15 @@ pub fn fill_is_current(state: &AppState) -> bool {
         && transport_of(state, filler_player(state)) != Transport::Stopped
 }
 
+/// The rotation the filler plays, which a Log on music fill names (AR16):
+/// the one a rotation item gave it, else the default (AU4, AU20).
+pub fn fill_rotation(state: &AppState) -> Option<&crate::rotation::Rotation> {
+    let chosen = state.filler.as_ref().and_then(|f| f.rotation);
+    chosen
+        .or_else(|| state.rotations.default_id())
+        .and_then(|id| state.rotations.get(id))
+}
+
 /// AR4: Play on the Log. A paused Log row, or a filler song the Log
 /// paused, resumes; a row on air goes to next as on a player; else
 /// automation starts from next.

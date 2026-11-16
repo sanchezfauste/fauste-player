@@ -58,27 +58,31 @@ pub(crate) fn column(
     };
     let id = player.id;
     // Rework AR16: while the music fill's song is on air for the Log, the
-    // Log's header shows that song; its buttons still act on the Log.
-    let shown = log_shows_fill(scene.state, id).unwrap_or(id);
-    let telemetry = scene
-        .telemetry
-        .players
-        .iter()
-        .find(|(p, _)| *p == shown)
-        .map(|(_, t)| *t)
-        .unwrap_or_default();
-    let Some(mut pv) = view::player_view(scene.state, shown, telemetry.position_secs, scene.time)
-    else {
+    // Log's header names the fill and shows the filler's transport state;
+    // its buttons still act on the Log. The song, its meter and its
+    // waveform are the filler column's.
+    let fill = log_shows_fill(scene.state, id);
+    let telemetry_of = |player: PlayerId| {
+        scene
+            .telemetry
+            .players
+            .iter()
+            .find(|(p, _)| *p == player)
+            .map(|(_, t)| *t)
+            .unwrap_or_default()
+    };
+    let telemetry = telemetry_of(id);
+    let pv = match fill {
+        Some(filler) => {
+            let position = telemetry_of(filler).position_secs;
+            view::player_view(scene.state, filler, position, scene.time)
+                .map(|pv| fill_view(scene, player, pv))
+        }
+        None => view::player_view(scene.state, id, telemetry.position_secs, scene.time),
+    };
+    let Some(mut pv) = pv else {
         return;
     };
-    if shown != id {
-        pv.mode = player.mode;
-        pv.stop_after_current = scene
-            .state
-            .automation
-            .as_ref()
-            .is_some_and(|a| a.stop_at_end);
-    }
     pv.bit_perfect = telemetry.bit_perfect;
     pv.dsd = telemetry.dsd;
     let rect = ui.available_rect_before_wrap();
@@ -106,17 +110,55 @@ pub(crate) fn column(
                 ui,
                 scene,
                 covers,
-                shown,
+                id,
                 id,
                 &pv,
                 &telemetry,
                 !locked,
                 BlockSize::Desktop,
             );
-            wave_sized(ui, scene, view_state, shown, &pv, WAVE_HEIGHT, true, locked);
+            wave_sized(ui, scene, view_state, id, &pv, WAVE_HEIGHT, true, locked);
             time_row(ui, scene, &pv);
         });
     playlist_area(ui, scene, view_state, id, player.playlist);
+}
+
+/// The Log's header while the music fill plays for it: the filler's
+/// transport state under the fill's name ("Music fill · Music"), with
+/// nothing of the song.
+fn fill_view(scene: &Scene<'_>, log: &fp_model::PlayerState, filler: PlayerView) -> PlayerView {
+    let name = fp_model::automation::fill_rotation(scene.state)
+        .map(|r| r.name.clone())
+        .unwrap_or_default();
+    PlayerView {
+        title: Some(
+            scene
+                .i18n
+                .tr_args("schedule-item-rotation", &[("name", name.into())]),
+        ),
+        artist: Some(String::new()),
+        next_line: None,
+        elapsed: 0.0,
+        total: None,
+        remaining: 0.0,
+        end_warning: false,
+        intro: None,
+        intro_blink: None,
+        outro: None,
+        markers: view::MarkerFractions::default(),
+        mode: log.mode,
+        stop_after_current: scene
+            .state
+            .automation
+            .as_ref()
+            .is_some_and(|a| a.stop_at_end),
+        entry_notice: None,
+        bit_perfect: false,
+        dsd: false,
+        gain: None,
+        fill: true,
+        ..filler
+    }
 }
 
 /// The filler, when `id` is the Log and the music fill's song is on air
@@ -1440,6 +1482,7 @@ fn info_row(
 ) {
     let t = scene.i18n;
     let current_track = view::shown_entry(scene.state, id)
+        .filter(|_| !pv.fill)
         .and_then(|e| scene.state.playlists.entry(e))
         .map(|e| e.track);
     ui.allocate_ui_with_layout(
@@ -1868,7 +1911,7 @@ fn wave_sized(
     locked: bool,
 ) {
     // The current track, or the next one waiting while stopped.
-    let entry = view::shown_entry(scene.state, id);
+    let entry = view::shown_entry(scene.state, id).filter(|_| !pv.fill);
     let track = entry
         .and_then(|e| scene.state.playlists.entry(e))
         .map(|e| e.track);

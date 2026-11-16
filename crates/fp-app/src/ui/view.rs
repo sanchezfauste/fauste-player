@@ -85,6 +85,10 @@ pub struct PlayerView {
     /// stopped (loudness normalization spec N18). It shows what the model
     /// asked the engine for when the source started.
     pub gain: Option<GainBadge>,
+    /// The Log's header while the music fill plays for it (rework AR16):
+    /// the fill's name, the transport and nothing of the song (no cover,
+    /// waveform or times; the filler's column shows them).
+    pub fill: bool,
 }
 
 fn fraction(value: Option<f64>, total: f64) -> Option<f32> {
@@ -373,6 +377,7 @@ pub fn player_view(
         dsd: false,
         dsd_holds_others: fp_model::dsd_holds_others(state, player),
         gain: None,
+        fill: false,
     };
     if p.transport != Transport::Stopped
         && let (Some(n), Some(on_air)) =

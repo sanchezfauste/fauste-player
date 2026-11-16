@@ -519,3 +519,27 @@ fn plan_view_of_today_marks_what_aired_and_what_plays() {
     assert!(blocks(&rows).iter().all(|(d, _, _)| *d == today()));
     assert_eq!(blocks(&rows).len(), 2);
 }
+
+#[test]
+fn the_logs_fill_names_the_fillers_rotation_or_the_default() {
+    let mut r = rig();
+    assert_eq!(
+        fp_model::automation::fill_rotation(&r.s).map(|x| x.name.as_str()),
+        Some("Music")
+    );
+    let steps = r.s.rotations.default_rotation().unwrap().steps.clone();
+    fp_model::apply(
+        &mut r.s,
+        Command::CreateRotation {
+            name: "Night".into(),
+            steps,
+        },
+    )
+    .unwrap();
+    let night = r.s.rotations.iter().find(|x| x.name == "Night").unwrap().id;
+    r.s.filler.as_mut().unwrap().rotation = Some(night);
+    assert_eq!(
+        fp_model::automation::fill_rotation(&r.s).map(|x| x.name.as_str()),
+        Some("Night")
+    );
+}
