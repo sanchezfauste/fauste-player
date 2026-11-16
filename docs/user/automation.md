@@ -25,8 +25,11 @@ block of yesterday and the first of tomorrow. The item on air and the
 next one are marked as on a player; items that already aired are dimmed,
 and an item that did not air (**missed**) is struck through. A clock
 marks a **hard start** item, which plays only at its time. A **category
-track** shows the track chosen for it once its block is loaded, with the
-category after it. The **music fill** row says until when it plays, and
+track** shows the track chosen for it as soon as it is next (or comes
+after next in its block), with the category after it: that is the track
+that plays. If the category has no track that can play (none assigned to
+it, or their files are missing), the row says so in amber, and the item
+will be missed. Assign tracks to a category in the library. The **music fill** row says until when it plays, and
 shows as on air while the music fill plays for the Log. A next whose
 time has passed shows its time in amber. Drag the line between two
 column headers to resize the columns, as on a playlist; the template and

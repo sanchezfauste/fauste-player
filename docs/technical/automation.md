@@ -350,13 +350,20 @@ the block on air calls `automation::reload_after`, which loads the
 block again from the row after the one on air, by hand (so no hard-start
 item turns late), keeping next, a hand-over or hold, the missed marks and
 how the block was reached. `AutomationState::chosen` keeps the track
-chosen for each loaded category item (yesterday on): reused when the
-block is loaded again and shown after it played.
+chosen for each category item (yesterday on): reused when the block is
+loaded (again) while `still_fits` (playable and still in the category's
+subtree), and shown after it played. `choose_ahead`, run by
+`reducer::settle_all` after `settle_next`, chooses it as soon as the item
+is next or after next in a block not yet loaded, so the Log shows what
+will play; the items whose category has nothing to play go into
+`nothing_to_play`. After a date edit `log_edit::keep_chosen` gives each
+category item of the touched blocks a track chosen for its category back,
+wherever the item moved.
 
 `schedule_view` gives each item row its planned start (`starts_at`: the
 block's start plus the known lengths before it), the track it plays
-(`track`: a category item's chosen track while its block is loaded, from
-`rows`), `late` (AR11) and each block row its `total_secs` and
+(`track`: a category item's chosen track, from `chosen` and `rows`),
+`nothing_to_play`, `late` (AR11) and each block row its `total_secs` and
 `overrun_secs` (known lengths only; the library-wide category lengths are
 too costly per frame). `fill_item` is the rotation item whose music is
 on air, shown `OnAir` while `fill_is_current`.

@@ -774,3 +774,44 @@ fn files_dropped_on_a_log_row_go_before_it() {
         "not into a player's list"
     );
 }
+
+#[test]
+fn a_category_with_nothing_to_play_says_so_on_the_log() {
+    let (mut s, item) = with_block();
+    apply(
+        &mut s,
+        Command::CreateCategory {
+            parent: None,
+            name: "Spots".into(),
+            color: None,
+            kind: fp_model::TrackKind::Ad,
+        },
+    )
+    .unwrap();
+    let spots = s.categories.iter().last().unwrap().id;
+    apply(
+        &mut s,
+        Command::EditPlan {
+            target: fp_model::log_edit::EditTarget::Date(item.date),
+            edit: fp_model::log_edit::LogEdit::Insert {
+                block: item.block,
+                index: usize::MAX,
+                items: vec![fp_model::schedule::Item::Category {
+                    category: spots,
+                    time_critical: false,
+                }],
+            },
+        },
+    )
+    .unwrap();
+    apply(
+        &mut s,
+        Command::SetScheduleNext(fp_model::automation::ItemRef { index: 1, ..item }),
+    )
+    .unwrap();
+    let (h, _fake) = harness(s);
+    assert!(
+        h.query_by_label("No track to play in this category")
+            .is_some()
+    );
+}

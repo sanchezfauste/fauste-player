@@ -822,6 +822,7 @@ pub(crate) fn settle_all(state: &mut AppState, out: &mut Vec<EngineAction>) {
     fill_empty_next(state);
     crate::filler::settle(state, out);
     crate::automation::settle_next(state);
+    crate::automation::choose_ahead(state);
     reconcile(state, out);
     crate::live::dispatch_due(state, out);
     crate::as_run::record(state);

@@ -92,10 +92,14 @@ pub struct AutomationState {
     /// The rotation item whose music is on air for the Log (runtime only):
     /// its row shows on air while the fill is current (rework AR16).
     pub fill_item: Option<ItemRef>,
-    /// The track chosen for each category item that was loaded (runtime
-    /// only, yesterday on): shown after its block too, and kept when the
-    /// block on air is loaded again after an edit (AR15).
+    /// The track chosen for each category item that was loaded, or that
+    /// is next or after next in a block not yet loaded (runtime only,
+    /// yesterday on): shown from then on, played when the block loads, and
+    /// kept when the block on air is loaded again after an edit (AR15).
     pub chosen: HashMap<ItemRef, TrackId>,
+    /// Category items from next on whose category has nothing to play
+    /// (runtime only): the Log says so before they are missed (AR15).
+    pub nothing_to_play: BTreeSet<ItemRef>,
 }
 
 /// Creates the schedule's player (stopped, hidden, just before the
@@ -136,6 +140,7 @@ pub fn ensure(state: &mut AppState, playlist_name: &str) -> Vec<EngineAction> {
         fill_on_air: false,
         fill_item: None,
         chosen: HashMap::new(),
+        nothing_to_play: BTreeSet::new(),
     });
     vec![EngineAction::AddPlayer { player }]
 }
@@ -404,6 +409,105 @@ pub fn fill_rotation(state: &AppState) -> Option<&crate::rotation::Rotation> {
     chosen
         .or_else(|| state.rotations.default_id())
         .and_then(|id| state.rotations.get(id))
+}
+
+/// A track chosen for a category item can still play for it: it plays,
+/// and it is still in that category or one under it.
+fn still_fits(state: &AppState, track: TrackId, category: crate::CategoryId) -> bool {
+    state.library.get(track).is_some_and(|t| {
+        t.file_state.is_playable()
+            && t.category
+                .is_some_and(|c| state.categories.subtree(category).contains(&c))
+    })
+}
+
+/// AR15: the category items of next's block, from next on, get their
+/// track as soon as they are ahead of a block not yet loaded, so the Log
+/// shows what will play; loading the block plays those tracks (if still
+/// playable). Items whose category has nothing to play are noted.
+pub(crate) fn choose_ahead(state: &mut AppState) {
+    let Some(a) = state.automation.as_ref() else {
+        return;
+    };
+    let Some(next) = a.next else {
+        if let Some(a) = state.automation.as_mut() {
+            a.nothing_to_play.clear();
+        }
+        return;
+    };
+    // The block on air already has its rows.
+    let loaded = a
+        .on_air
+        .is_some_and(|r| (r.date, r.block) == (next.date, next.block));
+    let items = if loaded {
+        Vec::new()
+    } else {
+        block_items(state, next.date, next.block).unwrap_or_default()
+    };
+    let mut rng = state.rng.clone();
+    let mut planned: Vec<(TrackId, crate::WallTime)> = Vec::new();
+    let mut chosen = Vec::new();
+    let mut stale = Vec::new();
+    let mut empty = BTreeSet::new();
+    for (index, item) in items.iter().enumerate().skip(next.index) {
+        let at = ItemRef {
+            date: next.date,
+            block: next.block,
+            index,
+        };
+        let track = match item {
+            Item::Rotation { .. } => break,
+            Item::Track { track, .. } => Some(*track),
+            Item::Category { category, .. } => {
+                let kept = a
+                    .chosen
+                    .get(&at)
+                    .copied()
+                    .filter(|t| still_fits(state, *t, *category));
+                let track = kept.or_else(|| {
+                    crate::selection::pick(
+                        state,
+                        &StepSource::Category(*category),
+                        state.wall_now,
+                        &planned,
+                        &mut rng,
+                    )
+                    .map(|p| p.track)
+                });
+                match track {
+                    Some(t) if kept.is_none() => chosen.push((at, t)),
+                    Some(_) => {}
+                    None => {
+                        empty.insert(at);
+                        if a.chosen.contains_key(&at) {
+                            stale.push(at);
+                        }
+                    }
+                }
+                track
+            }
+        };
+        if let Some(track) = track {
+            planned.push((track, state.wall_now));
+        }
+    }
+    if chosen.is_empty()
+        && stale.is_empty()
+        && state
+            .automation
+            .as_ref()
+            .is_some_and(|a| a.nothing_to_play == empty)
+    {
+        return;
+    }
+    state.rng = rng;
+    if let Some(a) = state.automation.as_mut() {
+        for at in stale {
+            a.chosen.remove(&at);
+        }
+        a.chosen.extend(chosen);
+        a.nothing_to_play = empty;
+    }
 }
 
 /// AR4: Play on the Log. A paused Log row, or a filler song the Log
@@ -737,7 +841,7 @@ pub fn load_block(
                 .chosen
                 .get(&item_ref)
                 .copied()
-                .filter(|t| state.library.is_playable(*t))
+                .filter(|t| still_fits(state, *t, *category))
                 .or_else(|| {
                     crate::selection::pick(
                         state,
@@ -1347,6 +1451,7 @@ pub(crate) fn restore(state: &mut AppState, saved: Option<AutomationSession>) {
         fill_on_air: false,
         fill_item: None,
         chosen: HashMap::new(),
+        nothing_to_play: BTreeSet::new(),
     });
 }
 
@@ -1394,6 +1499,9 @@ pub enum ScheduleRow {
         /// AR11: next, automation stopped, and its block's start plus the
         /// late tolerance has passed.
         late: bool,
+        /// A category item from next on whose category has nothing to
+        /// play: it will be missed (AR15).
+        nothing_to_play: bool,
     },
 }
 
@@ -1550,6 +1658,7 @@ pub fn schedule_view(state: &AppState) -> Vec<ScheduleRow> {
                 starts_at: at,
                 track,
                 late: item_status == RowStatus::Next && late_block,
+                nothing_to_play: a.nothing_to_play.contains(&item),
             });
             if !matches!(what, crate::schedule::Item::Rotation { .. }) {
                 at += TimeDelta::milliseconds((length_secs.unwrap_or(0.0) * 1000.0) as i64);
@@ -1668,6 +1777,7 @@ pub fn plan_view(state: &AppState, target: crate::log_edit::EditTarget) -> Vec<S
                 starts_at: at,
                 track,
                 late: false,
+                nothing_to_play: false,
             });
             if !matches!(what, crate::schedule::Item::Rotation { .. }) {
                 at += TimeDelta::milliseconds((length_secs.unwrap_or(0.0) * 1000.0) as i64);

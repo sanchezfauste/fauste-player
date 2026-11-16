@@ -1153,6 +1153,7 @@ fn item_row(row: &mut egui_extras::TableRow<'_, '_>, scene: &Scene<'_>, r: &Sche
         starts_at,
         track,
         late,
+        nothing_to_play,
         ..
     } = r
     else {
@@ -1193,7 +1194,17 @@ fn item_row(row: &mut egui_extras::TableRow<'_, '_>, scene: &Scene<'_>, r: &Sche
             tr.artist.clone(),
         ),
         (_, Some(tr)) => (tr.title.clone(), tr.artist.clone()),
+        // AR15: it will be missed; the Log says why beforehand.
+        (Item::Category { .. }, None) if *nothing_to_play => (
+            item_text(scene, what),
+            t.tr("schedule-category-nothing-to-play"),
+        ),
         (_, None) => (item_text(scene, what), String::new()),
+    };
+    let second = if *nothing_to_play && !hi {
+        theme::AMBER
+    } else {
+        second
     };
     row.col(|ui| {
         row_fill(ui, fill);
