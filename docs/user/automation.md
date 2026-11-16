@@ -28,7 +28,9 @@ marks a **hard start** item, which plays only at its time. A **category
 track** shows the track chosen for it once its block is loaded, with the
 category after it. The **music fill** row says until when it plays, and
 shows as on air while the music fill plays for the Log. A next whose
-time has passed shows its time in amber.
+time has passed shows its time in amber. Drag the line between two
+column headers to resize the columns, as on a playlist; the template and
+day windows use the same widths.
 
 ### Changing today's log
 

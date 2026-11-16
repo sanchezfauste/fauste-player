@@ -220,7 +220,10 @@ and the Edit button.
   its total length, plus the overrun error of AU37 when it applies. Past
   rows look like played rows on a player; missed rows are struck through
   (AU23); a hard-start item shows a small clock icon *(my call; from the
-  icon set already in use)*.
+  icon set already in use)*. Its columns have the playlists' separator
+  lines and resize the same way, by dragging an edge; their widths are
+  stored as the Log player's (Time in the place of `#`) and shared by the
+  Log and its template and date popups *(maintainer)*.
 - **AR14b. Mock-ups approved** *(maintainer, 2026-11-13; Claude Design
   `Automatización v2.html`)*, with: a **Time** column (each row's planned
   start) on the Log only, not on the Music fill, which also runs on its

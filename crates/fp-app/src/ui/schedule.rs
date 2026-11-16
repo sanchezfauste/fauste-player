@@ -10,6 +10,7 @@ use fp_model::schedule::{BlockOrigin, Item};
 use super::app::{DragTracks, Scene, ViewState};
 use super::exit_guard::button;
 use super::format;
+use super::table_layout;
 use super::theme;
 use super::widgets::{self, TileStyle, font, font_medium, font_semibold};
 use fp_model::ids::TemplateId;
@@ -108,7 +109,30 @@ pub(crate) fn log_table(
     }
     ui.spacing_mut().item_spacing = vec2(0.0, 0.0);
     let width = (ui.available_width() - ui.spacing().scroll.allocated_width()).max(0.0);
-    let artist_width = (width * 0.28).max(60.0);
+    // The playlists' column widths (O16): stored as the Log player's,
+    // shared by the Log and its popups, resized by dragging an edge.
+    let owner = state.automation.as_ref().map(|a| a.player);
+    let stored = owner
+        .and_then(|p| state.player(p).ok())
+        .map(|p| p.columns.clone())
+        .unwrap_or_default();
+    let from_model = table_layout::log_px(&stored, width);
+    let px = match owner {
+        Some(owner) => super::table::live_widths(
+            ui,
+            scene,
+            view_state,
+            owner,
+            &table_layout::LOG_COLUMNS,
+            &table_layout::log_mins(),
+            &stored,
+            width,
+            from_model,
+        ),
+        None => from_model,
+    };
+    let area = egui::Rect::from_min_max(ui.cursor().min, ui.max_rect().max);
+    let column = |i: usize| Column::exact(px.get(i).copied().unwrap_or(0.0).max(0.0)).clip(true);
     let mut builder = TableBuilder::new(ui)
         .id_salt(("schedule-list", template, playing))
         .striped(false)
@@ -124,10 +148,10 @@ pub(crate) fn log_table(
             Sense::click_and_drag()
         })
         .cell_layout(Layout::left_to_right(Align::Center))
-        .column(Column::exact(TIME_WIDTH))
-        .column(Column::remainder().clip(true))
-        .column(Column::exact(artist_width).clip(true))
-        .column(Column::exact(DURATION_WIDTH));
+        .column(column(0))
+        .column(column(1))
+        .column(column(2))
+        .column(column(3));
     if scroll_now
         && let Some(index) = rows
             .iter()
@@ -198,11 +222,10 @@ pub(crate) fn log_table(
     if scroll_now {
         ui.data_mut(|d| d.insert_temp(memory, target));
     }
+    if let Some(owner) = owner {
+        super::table::resize_handles(ui, view_state, owner, &table_layout::LOG_COLUMNS, &px, area);
+    }
 }
-
-/// The Time column's width (`HH:MM:SS` with room) and the duration's.
-const TIME_WIDTH: f32 = 76.0;
-const DURATION_WIDTH: f32 = 60.0;
 
 /// A cell's text, left (or right) aligned, never selectable (the row
 /// takes the clicks).

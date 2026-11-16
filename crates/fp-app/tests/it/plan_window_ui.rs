@@ -324,3 +324,56 @@ fn the_popups_footer_shows_every_add_button() {
     }
     assert!(h.query_by_label("More to add").is_none());
 }
+
+#[test]
+fn a_column_edge_of_the_list_resizes_like_a_playlists() {
+    let (s, base, _) = with_templates();
+    let log = s.automation.as_ref().unwrap().player;
+    let (mut h, fake) = open(s, EditTarget::Template(base));
+    // The popup's header: the one with a Time column.
+    let time = h.get_by_label("TIME").rect();
+    let artist = h
+        .query_all_by_label("ARTIST")
+        .map(|n| n.rect())
+        .find(|r| (r.center().y - time.center().y).abs() < 1.0)
+        .unwrap();
+    let from = egui::pos2(artist.left() - 8.0, artist.center().y);
+    h.event(egui::Event::PointerMoved(from));
+    h.run_steps(1);
+    let press = |h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+                 pos: egui::Pos2,
+                 pressed: bool| {
+        h.event(egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+    };
+    press(&mut h, from, true);
+    h.run_steps(2);
+    fake.take_sent();
+    let to = egui::pos2(from.x + 60.0, from.y);
+    for step in 1..=6 {
+        h.event(egui::Event::PointerMoved(egui::pos2(
+            from.x + step as f32 * 10.0,
+            from.y,
+        )));
+        h.run_steps(1);
+    }
+    press(&mut h, to, false);
+    h.run_steps(2);
+    let sent: Vec<_> = fake
+        .take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::SetColumnWidths(player, widths) => Some((player, widths)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert_eq!(sent[0].0, log);
+    let title = sent[0].1.fraction(fp_model::TableColumn::Title).unwrap();
+    let artist = sent[0].1.fraction(fp_model::TableColumn::Artist).unwrap();
+    assert!(title > artist, "{:?}", sent[0].1);
+}
