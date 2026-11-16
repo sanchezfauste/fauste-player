@@ -235,7 +235,11 @@ and the Edit button.
   secondary line or cell; after airing it shows what aired. The track is
   chosen when the block is loaded for play *(today's behaviour, kept)*;
   the builder may choose it earlier (for example when the block becomes
-  next) if that is cheap, so the operator sees it before Play.
+  next) if that is cheap, so the operator sees it before Play. A live
+  edit that inserts, removes or moves rows of a loaded block keeps each
+  chosen track with its category item, wherever the item now is (items
+  of one category are interchangeable), so a reload never plays a track
+  chosen for another item.
 - **AR16.** A music fill row shows "Music fill · *rotation name*"; while
   it is current it is shown as on air (the filler plays for it), and the
   filler column's header shows the song. The Log's header then says

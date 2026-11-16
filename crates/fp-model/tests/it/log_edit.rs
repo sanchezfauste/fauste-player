@@ -601,3 +601,118 @@ fn files_dropped_on_a_locked_row_add_nothing() {
     );
     assert_eq!(r.s.library.len(), before);
 }
+
+/// 10:00: song 1, a "Spots" category item (only 901) and a "Jingles" one
+/// (only 902), on air from 10:00.
+fn with_categories() -> Rig {
+    use fp_model::{Track, TrackKind};
+    let mut r = Rig::new(vec![(11, 0, vec![song(3)])]);
+    let category = |r: &mut Rig, name: &str, track: u64| {
+        r.apply(Command::CreateCategory {
+            parent: None,
+            name: name.into(),
+            color: None,
+            kind: TrackKind::Ad,
+        });
+        let id = r.s.categories.iter().last().unwrap().id;
+        let mut t = Track::new(TrackId(track), format!("/m/{track}.wav").into());
+        t.duration_secs = 30.0;
+        t.category = Some(id);
+        t.kind = TrackKind::Ad;
+        r.s.library.insert(t);
+        id
+    };
+    let spots = category(&mut r, "Spots", 901);
+    let jingles = category(&mut r, "Jingles", 902);
+    let base = r.base;
+    r.apply(Command::AddBlock {
+        template: base,
+        start: tod(10, 0),
+    });
+    let id =
+        r.s.schedule
+            .template(base)
+            .unwrap()
+            .blocks
+            .iter()
+            .find(|b| b.start == tod(10, 0))
+            .unwrap()
+            .id;
+    r.blocks.insert((10, 0), id);
+    r.apply(Command::UpdateBlock {
+        template: base,
+        block: fp_model::schedule::Block {
+            id,
+            start: tod(10, 0),
+            items: vec![
+                song(1),
+                Item::Category {
+                    category: spots,
+                    time_critical: false,
+                },
+                Item::Category {
+                    category: jingles,
+                    time_critical: false,
+                },
+            ],
+        },
+    });
+    r.at_hms(9, 59, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(10, 0, 0);
+    assert_eq!(r.playing(r.schedule_player()), Some(TrackId(1)));
+    r
+}
+
+/// The Log's rows after the one on air.
+fn queued(r: &Rig) -> Vec<TrackId> {
+    let a = r.s.automation.as_ref().unwrap();
+    let current = r.player(a.player).current;
+    let list = r.s.playlists.get(a.playlist).unwrap();
+    list.entries
+        .iter()
+        .skip_while(|e| Some(e.id) != current)
+        .skip(1)
+        .map(|e| e.track)
+        .collect()
+}
+
+#[test]
+fn a_row_inserted_before_category_items_keeps_their_chosen_tracks() {
+    let mut r = with_categories();
+    assert_eq!(queued(&r), vec![TrackId(901), TrackId(902)]);
+    let block = r.block(10, 0);
+    edit(
+        &mut r,
+        LogEdit::Insert {
+            block,
+            index: 1,
+            items: vec![song(3)],
+        },
+    )
+    .unwrap();
+    assert_eq!(queued(&r), vec![TrackId(3), TrackId(901), TrackId(902)]);
+}
+
+#[test]
+fn a_removed_row_before_category_items_keeps_their_chosen_tracks() {
+    let mut r = with_categories();
+    let block = r.block(10, 0);
+    edit(&mut r, LogEdit::Remove { block, index: 1 }).unwrap();
+    assert_eq!(queued(&r), vec![TrackId(902)]);
+}
+
+#[test]
+fn moved_category_items_keep_their_chosen_tracks() {
+    let mut r = with_categories();
+    let block = r.block(10, 0);
+    edit(
+        &mut r,
+        LogEdit::Move {
+            from: (block, 2),
+            to: (block, 1),
+        },
+    )
+    .unwrap();
+    assert_eq!(queued(&r), vec![TrackId(902), TrackId(901)]);
+}

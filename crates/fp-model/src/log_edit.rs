@@ -9,7 +9,7 @@ use chrono::NaiveDate;
 use crate::automation::ItemRef;
 use crate::command::EngineAction;
 use crate::error::ModelError;
-use crate::ids::{BlockId, TemplateId};
+use crate::ids::{BlockId, TemplateId, TrackId};
 use crate::local_time::TimeOfDay;
 use crate::schedule::{Block, Item};
 use crate::state::AppState;
@@ -270,6 +270,15 @@ fn apply_edit(
     if let EditTarget::Template(template) = target {
         keep_on_air_as_loaded(state, template, &edit)?;
     }
+    // The items before the edit, to give each category item its chosen
+    // track back wherever the edit put it.
+    let earlier: Vec<(BlockId, Vec<Item>)> = match target {
+        EditTarget::Date(date) => blocks_of(&edit)
+            .into_iter()
+            .filter_map(|b| crate::automation::block_items(state, date, b).map(|i| (b, i)))
+            .collect(),
+        EditTarget::Template(_) => Vec::new(),
+    };
     let touched: Vec<BlockId> = match edit {
         LogEdit::Insert {
             block,
@@ -369,6 +378,9 @@ fn apply_edit(
             vec![block]
         }
     };
+    if let EditTarget::Date(date) = target {
+        keep_chosen(state, date, &earlier);
+    }
     // AR19b: an edit to the block on air takes effect at once, after the
     // row on air. A template edit never reloads (AU12: it reaches a date
     // through the computed day, not the loaded block).
@@ -380,6 +392,51 @@ fn apply_edit(
         crate::automation::reload_after(state, item, out);
     }
     Ok(())
+}
+
+/// AR15 after an edit of `date`: the tracks chosen for the category items
+/// of the blocks the edit touched (`earlier`: their items before it) stay
+/// with those items, wherever they now are. Each category item takes, in
+/// order, a track chosen for an item of the same category; items of one
+/// category are interchangeable. A chosen track kept by index would go to
+/// whichever item now has that index.
+fn keep_chosen(state: &mut AppState, date: NaiveDate, earlier: &[(BlockId, Vec<Item>)]) {
+    let Some(a) = state.automation.as_ref() else {
+        return;
+    };
+    let mut pool: Vec<(crate::CategoryId, TrackId)> = Vec::new();
+    for (block, items) in earlier {
+        for (index, item) in items.iter().enumerate() {
+            let at = ItemRef {
+                date,
+                block: *block,
+                index,
+            };
+            if let (Item::Category { category, .. }, Some(track)) = (item, a.chosen.get(&at)) {
+                pool.push((*category, *track));
+            }
+        }
+    }
+    let now: Vec<(BlockId, Vec<Item>)> = earlier
+        .iter()
+        .filter_map(|(b, _)| crate::automation::block_items(state, date, *b).map(|i| (*b, i)))
+        .collect();
+    let Some(a) = state.automation.as_mut() else {
+        return;
+    };
+    a.chosen
+        .retain(|at, _| at.date != date || !earlier.iter().any(|(b, _)| *b == at.block));
+    for (block, items) in now {
+        for (index, item) in items.iter().enumerate() {
+            let Item::Category { category, .. } = item else {
+                continue;
+            };
+            if let Some(i) = pool.iter().position(|(c, _)| c == category) {
+                let (_, track) = pool.remove(i);
+                a.chosen.insert(ItemRef { date, block, index }, track);
+            }
+        }
+    }
 }
 
 /// The item after `item` in its block, for tests and the UI.
