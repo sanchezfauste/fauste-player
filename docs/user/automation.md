@@ -192,6 +192,11 @@ the next. A range from **0** lets a step sit out some turns: with Gold at
 The most is always at least 1. One rotation is the **default**: a new
 installation has one, **Music**, which plays all your music.
 
+A step whose category has no track that can play (an empty category, or
+files that are missing) plays a song of the default rotation in its turn
+(any music, if the step is the default rotation's own), so the other
+steps keep their place: a station ID still comes between songs.
+
 Rotations are made in Settings → Automation:
 
 ![Settings, Automation: the rotations Music (the default) and Hits, the selected Music with its one step over all music, its counts At least and At most, and the start of Templates and days](../images/guide/settings-automation.png)

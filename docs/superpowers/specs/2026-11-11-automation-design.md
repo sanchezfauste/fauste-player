@@ -290,7 +290,11 @@ played order, simple separation rules (track library spec §12, patents).
   methods.
 - **AU34.** **Relaxing.** If no track is eligible, artist separation is
   relaxed first, then track separation (least recently played wins); a step
-  whose category has no playable track at all is skipped with a log line. If
+  whose category has no playable track at all plays, with a log line, a
+  stand-in in its turn: the default rotation's track, or any music for a
+  step of the default rotation itself; only when that yields nothing too
+  is it skipped *(maintainer: a rotation of music 1–5 and a station ID
+  whose music category was empty queued the ID over and over)*. If
   the whole rotation yields nothing, the default rotation is used; if that
   yields nothing either, the filler stops after the current song and shows an
   alert in its column *(my call)*. Missing or unreadable files are never

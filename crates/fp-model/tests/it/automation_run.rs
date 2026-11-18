@@ -380,3 +380,89 @@ fn during_the_fill_an_empty_category_set_as_next_says_so() {
     };
     assert!(nothing_to_play);
 }
+
+/// The longest run of `track` in a row in the filler's list.
+fn longest_run(r: &Rig, track: TrackId) -> usize {
+    let f = r.s.filler.as_ref().unwrap();
+    let list = r.s.playlists.get(f.playlist).unwrap();
+    let (mut best, mut run) = (0, 0);
+    for e in &list.entries {
+        if e.track == track {
+            run += 1;
+            best = best.max(run);
+        } else {
+            run = 0;
+        }
+    }
+    best
+}
+
+/// A rotation of an empty "Music" category (1–5) and a station ID (1),
+/// as the default rotation or as another one the filler plays.
+fn id_rotation(as_default: bool) -> Rig {
+    use fp_model::rotation::{RotationStep, StepSource};
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)])]);
+    let category = |r: &mut Rig, name: &str| {
+        r.apply(Command::CreateCategory {
+            parent: None,
+            name: name.into(),
+            color: None,
+            kind: TrackKind::Music,
+        });
+        r.s.categories.iter().last().unwrap().id
+    };
+    let empty: CategoryId = category(&mut r, "Music");
+    let ids: CategoryId = category(&mut r, "ID");
+    let mut t = Track::new(TrackId(950), PathBuf::from("/m/id.wav"));
+    t.duration_secs = 5.0;
+    t.category = Some(ids);
+    t.kind = TrackKind::Jingle;
+    r.s.library.insert(t);
+    let steps = vec![
+        RotationStep {
+            source: StepSource::Category(empty),
+            min: 1,
+            max: 5,
+        },
+        RotationStep {
+            source: StepSource::Category(ids),
+            min: 1,
+            max: 1,
+        },
+    ];
+    if as_default {
+        let rot = r.s.rotations.default_rotation().unwrap().clone();
+        r.apply(Command::UpdateRotation(fp_model::rotation::Rotation {
+            steps,
+            ..rot
+        }));
+    } else {
+        r.apply(Command::CreateRotation {
+            name: "With ID".into(),
+            steps,
+        });
+        let id = r.s.rotations.iter().last().unwrap().id;
+        r.apply(Command::SetFillerRotation(Some(id)));
+    }
+    r.at_hms(8, 0, 0);
+    r.apply(Command::StartAutomation);
+    for s in 1..30 {
+        r.at_hms(8, 0, s);
+    }
+    r
+}
+
+#[test]
+fn an_empty_step_never_plays_the_other_step_back_to_back() {
+    for as_default in [true, false] {
+        let r = id_rotation(as_default);
+        assert_eq!(longest_run(&r, TrackId(950)), 1, "default: {as_default}");
+        let f = r.s.filler.as_ref().unwrap();
+        let list = r.s.playlists.get(f.playlist).unwrap();
+        // Music stood in for the empty step.
+        assert!(
+            list.entries.iter().any(|e| e.track.0 <= 40),
+            "default: {as_default}"
+        );
+    }
+}
