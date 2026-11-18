@@ -469,3 +469,58 @@ fn an_empty_step_never_plays_the_other_step_back_to_back() {
         );
     }
 }
+
+#[test]
+fn separation_never_starves_a_step_into_back_to_back_ids() {
+    use fp_model::rotation::{RotationStep, StepSource};
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)])]);
+    r.s.config.automation = fp_model::Config::default().automation;
+    let category = |r: &mut Rig, name: &str| {
+        r.apply(Command::CreateCategory {
+            parent: None,
+            name: name.into(),
+            color: None,
+            kind: TrackKind::Music,
+        });
+        r.s.categories.iter().last().unwrap().id
+    };
+    let music: CategoryId = category(&mut r, "Musica");
+    let ids: CategoryId = category(&mut r, "ID");
+    for n in 1..=3 {
+        r.s.library.get_mut(TrackId(n)).unwrap().category = Some(music);
+    }
+    let mut t = Track::new(TrackId(950), PathBuf::from("/m/id.wav"));
+    t.duration_secs = 5.0;
+    t.category = Some(ids);
+    t.kind = TrackKind::Jingle;
+    r.s.library.insert(t);
+    let rot = r.s.rotations.default_rotation().unwrap().clone();
+    r.apply(Command::UpdateRotation(fp_model::rotation::Rotation {
+        steps: vec![
+            RotationStep {
+                source: StepSource::Category(music),
+                min: 1,
+                max: 5,
+            },
+            RotationStep {
+                source: StepSource::Category(ids),
+                min: 1,
+                max: 1,
+            },
+        ],
+        ..rot
+    }));
+    r.at_hms(8, 0, 0);
+    r.apply(Command::StartAutomation);
+    let f = r.filler_player();
+    for m in 0..60 {
+        r.at_hms(8, m, 0);
+        r.end_current(f);
+    }
+    let fl = r.s.filler.as_ref().unwrap();
+    let list = r.s.playlists.get(fl.playlist).unwrap();
+    // Three songs cannot keep the default separations: they are relaxed,
+    // the music step still plays and the ID stays between songs.
+    assert!(list.entries.iter().filter(|e| e.track.0 <= 3).count() > 20);
+    assert_eq!(longest_run(&r, TrackId(950)), 1);
+}
