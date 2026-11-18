@@ -361,7 +361,8 @@ subtree), and shown after it played. `choose_ahead`, run by
 `reducer::settle_all` after `settle_next`, chooses it as soon as the item
 is next or after next in a block not yet loaded, so the Log shows what
 will play; the items whose category has nothing to play go into
-`nothing_to_play`. After a date edit `log_edit::keep_chosen` gives each
+`nothing_to_play`, and a next set by hand that would load nothing
+(`plays_nothing`) does not hold the filler. After a date edit `log_edit::keep_chosen` gives each
 category item of the touched blocks a track chosen for its category back,
 wherever the item moved.
 

@@ -238,7 +238,8 @@ and the Edit button.
   the block loads (another is chosen only if it no longer plays or left
   the category) *(maintainer)*. A category item with nothing to play
   says so in amber ("No track to play in this category") before it is
-  missed. A live
+  missed; a next set by hand that would load nothing for that reason does
+  not hold the music fill (no stop at end for it) *(maintainer)*. A live
   edit that inserts, removes or moves rows of a loaded block keeps each
   chosen track with its category item, wherever the item now is (items
   of one category are interchangeable), so a reload never plays a track

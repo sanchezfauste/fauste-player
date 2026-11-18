@@ -379,6 +379,9 @@ fn during_the_fill_an_empty_category_set_as_next_says_so() {
         panic!()
     };
     assert!(nothing_to_play);
+    // It would be missed: the filler is not held for it.
+    r.at_hms(8, 0, 3);
+    assert!(!r.player(r.filler_player()).stop_after_current);
 }
 
 /// The longest run of `track` in a row in the filler's list.

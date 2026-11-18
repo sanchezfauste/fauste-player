@@ -1170,7 +1170,9 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
                 play_schedule(state, fade, out);
             }
         } else {
-            set_filler_hold(state, true);
+            // A next that would load nothing (AR15: its categories have
+            // nothing to play) is missed: the filler is not held for it.
+            set_filler_hold(state, !plays_nothing(state, next));
         }
         return;
     }
@@ -1206,6 +1208,30 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
     } else if !handing {
         play_filler(state, out);
     }
+}
+
+/// Loading `from` would queue nothing: every item from it up to its
+/// block's Music fill is a category with nothing to play (as
+/// `choose_ahead` found) or a track that cannot play.
+fn plays_nothing(state: &AppState, from: ItemRef) -> bool {
+    let Some(a) = state.automation.as_ref() else {
+        return false;
+    };
+    let Some(items) = block_items(state, from.date, from.block) else {
+        return false;
+    };
+    let mut ahead = items
+        .iter()
+        .enumerate()
+        .skip(from.index)
+        .take_while(|(_, i)| !matches!(i, Item::Rotation { .. }))
+        .peekable();
+    ahead.peek().is_some()
+        && ahead.all(|(index, item)| match item {
+            Item::Category { .. } => a.nothing_to_play.contains(&ItemRef { index, ..from }),
+            Item::Track { track, .. } => !state.library.is_playable(*track),
+            Item::Rotation { .. } => false,
+        })
 }
 
 /// Holds the filler (stop after its song) for a next set by hand, or
