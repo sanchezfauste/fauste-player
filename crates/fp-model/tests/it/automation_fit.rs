@@ -117,6 +117,41 @@ mod choosing {
         assert!(p.unfitted);
     }
 
+    /// Found by the simulated night: when nothing fits, the least cut
+    /// came from the whole pool, separation rules or not: an artist aired
+    /// a quarter of an hour before came back.
+    #[test]
+    fn when_nothing_fits_the_separation_rules_still_come_first() {
+        let mut s = library(&[240.0, 180.0, 200.0]);
+        s.config.automation.track_separation_mins = 60;
+        s.config.automation.artist_separation_mins = 30;
+        for (id, artist) in [(901, "A"), (902, "B"), (903, "C"), (904, "B")] {
+            if id == 904 {
+                let mut t = Track::new(TrackId(id), PathBuf::from("/m/904.wav"));
+                t.duration_secs = 200.0;
+                t.kind = TrackKind::Music;
+                s.library.insert(t);
+            }
+            s.library.get_mut(TrackId(id)).unwrap().artist = artist.into();
+        }
+        // B aired a quarter of an hour ago: 902, the shortest, is held back
+        // by its artist; 903 by its own last airing.
+        s.air_times
+            .record(TrackId(904), WallTime(NOW.0 - 15 * 60_000));
+        s.air_times
+            .record(TrackId(903), WallTime(NOW.0 - 20 * 60_000));
+        for seed in 0..20 {
+            let p = choose(&s, 100.0, seed);
+            assert_eq!(p.track, TrackId(901), "seed {seed}");
+            assert!(p.unfitted);
+        }
+        // With every track held back, the artist rule gives way first.
+        s.air_times
+            .record(TrackId(901), WallTime(NOW.0 - 10 * 60_000));
+        let p = choose(&s, 100.0, 1);
+        assert_eq!(p.track, TrackId(902));
+    }
+
     #[test]
     fn a_track_of_unknown_length_is_never_a_fit() {
         let s = library(&[0.0, 210.0]);
@@ -363,4 +398,96 @@ fn a_next_before_the_row_on_air_keeps_it_in_the_list() {
     let rows = &r.s.playlists.get(list).unwrap().entries;
     assert!(rows.iter().any(|e| e.id == current), "the row on air stays");
     assert_eq!(r.player(filler).current, Some(current));
+}
+
+/// Found by the simulated night: the queue the filler built while
+/// automation was stopped (no block coming, nothing to fit) played as it
+/// was when the Log's Play started the filler before a block, so its
+/// second song was faded after half a minute.
+#[test]
+fn the_queue_built_while_stopped_is_fitted_when_automation_starts() {
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)])]);
+    for n in 2..=40 {
+        r.s.library.get_mut(TrackId(n)).unwrap().duration_secs =
+            if n <= 20 { 200.0 } else { 310.0 };
+    }
+    // Stopped, the filler queued half an hour of music with no fit.
+    r.at_hms(9, 50, 0);
+    // 4 min 58 s before the fade: one song of 310 s ends it within the cut.
+    r.at_hms(9, 55, 0);
+    r.apply(Command::StartAutomation);
+    let first = r.playing(r.filler_player()).unwrap();
+    assert!(first.0 > 20, "{first:?} does not fit the gap");
+}
+
+/// A filler song: its row, track, when it started and how long it has
+/// played (pauses do not count).
+type Song = (fp_model::EntryId, TrackId, chrono::NaiveDateTime, f64);
+
+/// Runs the rig to `until`, ending each filler song exactly when its
+/// length has played.
+fn play_filler_until(r: &mut Rig, until: chrono::NaiveDateTime, songs: &mut Vec<Song>) {
+    let f = r.filler_player();
+    while r.s.local_now < until {
+        let p = r.player(f).clone();
+        let now = r.s.local_now;
+        let playing = p.transport == fp_model::Transport::Playing && !p.fading;
+        let mut left = f64::INFINITY;
+        if let (Some(track), Some(entry)) = (r.playing(f), p.current) {
+            if songs.last().is_none_or(|s| s.0 != entry) {
+                songs.push((entry, track, now, 0.0));
+            }
+            if playing {
+                left = r.s.library.get(track).unwrap().duration_secs - songs.last().unwrap().3;
+            }
+        }
+        let end = now + chrono::TimeDelta::milliseconds((left.min(1e7) * 1000.0) as i64);
+        let target = end.min(until).min(now + chrono::TimeDelta::seconds(30));
+        r.at(target);
+        if playing {
+            let song = songs.last_mut().unwrap();
+            song.3 += (target - now).num_milliseconds() as f64 / 1000.0;
+            if target == end {
+                r.end_current(f);
+            }
+        }
+    }
+}
+
+/// Found by the simulated night: a pause of the Log during the music
+/// moved every song after it, but the loaded next (chosen for the old
+/// timeline) was never fitted again: the last song before the block lost
+/// a minute and a half.
+#[test]
+fn after_a_pause_the_last_song_before_the_block_still_fits() {
+    let mut bad = Vec::new();
+    for (pause_at, pause) in [0, 3, 6, 9, 11, 14, 16, 18, 19]
+        .into_iter()
+        .flat_map(|m| [20, 60, 100, 140, 180].map(move |k| (m, k)))
+    {
+        let mut r = Rig::new(vec![(10, 0, vec![song(1)])]);
+        for n in 2..=40u64 {
+            r.s.library.get_mut(TrackId(n)).unwrap().duration_secs = 150.0 + (n * 37 % 170) as f64;
+        }
+        r.at_hms(9, 30, 0);
+        r.apply(Command::StartAutomation);
+        let mut songs = Vec::new();
+        let at = today().and_hms_opt(9, 35 + pause_at, 0).unwrap();
+        play_filler_until(&mut r, at, &mut songs);
+        let log = r.schedule_player();
+        r.apply(Command::Pause(log));
+        play_filler_until(&mut r, at + chrono::TimeDelta::seconds(pause), &mut songs);
+        r.apply(Command::Play(log));
+        r.slow_fades = true;
+        play_filler_until(&mut r, today().and_hms_opt(9, 59, 58).unwrap(), &mut songs);
+        let (_, last, _, played) = *songs.last().unwrap();
+        let cut = r.s.library.get(last).unwrap().duration_secs - played;
+        // The shortest song lasts 150 s: a gap under 120 s fits none, and
+        // the one that cuts least plays (AU25).
+        let fittable = played + 30.0 >= 150.0;
+        if fittable && !(played >= 45.0 && cut <= 30.0) {
+            bad.push((pause_at, pause, played, cut));
+        }
+    }
+    assert!(bad.is_empty(), "{bad:?}");
 }

@@ -976,6 +976,7 @@ fn play_filler(state: &mut AppState, out: &mut Vec<EngineAction>) {
     if let Some(f) = filler
         && !is_playing(state, filler)
     {
+        crate::filler::requeue(state, out);
         let _ = crate::reducer::play(state, f, out);
     }
 }
@@ -1095,8 +1096,22 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
             .get(a.playlist)
             .map(|l| l.entries.iter().map(|e| e.id).collect())
             .unwrap_or_default();
+        // AU23: a row skipped because its file could not be read never
+        // aired.
+        let unread: Vec<ItemRef> = state
+            .playlists
+            .get(a.playlist)
+            .map(|l| {
+                l.entries
+                    .iter()
+                    .filter(|e| !e.is_played_by(a.player) && !state.library.is_playable(e.track))
+                    .filter_map(|e| a.rows.get(&e.id).copied())
+                    .collect()
+            })
+            .unwrap_or_default();
         crate::reducer::take_out_entries(state, &rows, out);
         if let Some(a) = state.automation.as_mut() {
+            a.missed.extend(unread);
             a.on_air = None;
             a.rows.clear();
             a.row_since = None;
@@ -1207,6 +1222,11 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
         }
     } else if !handing {
         play_filler(state, out);
+    } else if load_block(state, next, true, out) {
+        // The song handed over ended by itself before the block's start
+        // (within the fade): the block starts now rather than leave
+        // silence until its start.
+        play_schedule(state, 0, out);
     }
 }
 

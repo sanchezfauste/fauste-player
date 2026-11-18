@@ -188,7 +188,8 @@ pub(crate) fn fits(state: &AppState, track: TrackId, fit: &Fit) -> bool {
 /// a later track that could close it, then one that leaves any room. Each
 /// class tries both separation rules, then the track rule alone; then
 /// each class with separation relaxed. When no track fits, the one that
-/// cuts least wins (then the one that leaves least, then the order), and
+/// cuts least wins (then the one that leaves least, then the order) among
+/// the tracks the separation rules allow, relaxed in the same order, and
 /// the pick says so.
 pub fn pick_fitted(
     state: &AppState,
@@ -271,39 +272,37 @@ pub fn pick_fitted(
             unfitted: false,
         });
     }
-    // Nothing fits: the least cut, then the least left, then the order;
-    // a track of unknown length comes last.
+    // Nothing fits: the least cut, then the least left, then the order,
+    // among the tracks that meet the separation rules, relaxed as for any
+    // choice (AU34); a track of unknown length comes last.
     let cost = |timing: Option<(f64, f64)>| match timing {
         Some((length, _)) if length >= fit.gap_secs => (length - fit.gap_secs, 0.0),
         Some((_, lead)) => (0.0, (fit.gap_secs - lead).max(0.0)),
         None => (f64::INFINITY, f64::INFINITY),
     };
-    let best = ctx
-        .ordered
-        .iter()
-        .zip(&timings)
-        .map(|((_, t), timing)| (*t, cost(*timing)))
-        .reduce(|best, next| {
-            let (b, n) = (best.1, next.1);
-            if n.0.total_cmp(&b.0).then(n.1.total_cmp(&b.1)).is_lt() {
-                next
-            } else {
-                best
-            }
-        })?;
-    let track = best.0;
-    let relaxed = if meets(track, Relaxed::None) {
-        Relaxed::None
-    } else if meets(track, Relaxed::Artist) {
-        Relaxed::Artist
-    } else {
-        Relaxed::Track
-    };
-    Some(Picked {
-        track,
-        relaxed,
-        unfitted: true,
-    })
+    [Relaxed::None, Relaxed::Artist, Relaxed::Track]
+        .into_iter()
+        .find_map(|relaxed| {
+            let best = ctx
+                .ordered
+                .iter()
+                .zip(&timings)
+                .filter(|((_, t), _)| meets(*t, relaxed))
+                .map(|((_, t), timing)| (*t, cost(*timing)))
+                .reduce(|best, next| {
+                    let (b, n) = (best.1, next.1);
+                    if n.0.total_cmp(&b.0).then(n.1.total_cmp(&b.1)).is_lt() {
+                        next
+                    } else {
+                        best
+                    }
+                })?;
+            Some(Picked {
+                track: best.0,
+                relaxed,
+                unfitted: true,
+            })
+        })
 }
 
 /// What one choice needs, computed once.

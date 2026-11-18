@@ -222,3 +222,108 @@ fn the_filler_looks_ahead_only_to_the_coming_block() {
     // the fade at 10:59:58 (10:53, 10:56, 10:59), not 30 minutes' worth.
     assert_eq!(rows, 4, "{rows} rows queued");
 }
+
+/// Found by the simulated night: a block whose Music fill rotation differs
+/// from the filler's replaced the filler's queue, and the stopped filler
+/// started again from the top of its list, replaying the songs it had
+/// just aired.
+#[test]
+fn after_a_rotation_change_the_filler_never_replays_an_aired_row() {
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)])]);
+    r.apply(Command::CreateRotation {
+        name: "Night".into(),
+        steps: r.s.rotations.default_rotation().unwrap().steps.clone(),
+    });
+    let night = r.s.rotations.iter().last().unwrap().id;
+    let base = r.base;
+    let ten = r.block(10, 0);
+    r.apply(Command::UpdateBlock {
+        template: base,
+        block: Block {
+            id: ten,
+            start: tod(10, 0),
+            items: vec![song(1), Item::Rotation { rotation: night }],
+        },
+    });
+    r.at_hms(9, 50, 0);
+    r.apply(Command::StartAutomation);
+    let mut aired = vec![r.playing(r.filler_player()).unwrap()];
+    r.end_current(r.filler_player());
+    r.at_hms(9, 53, 1);
+    aired.push(r.playing(r.filler_player()).unwrap());
+    r.at_hms(10, 0, 0);
+    assert_eq!(r.playing(r.schedule_player()), Some(TrackId(1)));
+    r.end_current(r.schedule_player());
+    r.at_hms(10, 3, 1);
+    assert_eq!(r.s.filler.as_ref().unwrap().rotation, Some(night));
+    let now = r.playing(r.filler_player()).unwrap();
+    assert!(
+        !aired.contains(&now),
+        "{now:?} aired just before: {aired:?}"
+    );
+}
+
+/// Found by the simulated night: a spot whose file turned out damaged
+/// when it was prepared was skipped, as it must be, but it was neither
+/// missed in the Log nor in the as-run log: the station could not tell
+/// it never aired.
+#[test]
+fn an_item_skipped_for_a_damaged_file_is_missed() {
+    let mut r = Rig::new(vec![(10, 0, vec![song(1), song(2), song(3)])]);
+    r.at_hms(9, 59, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(10, 0, 0);
+    let log = r.schedule_player();
+    assert_eq!(r.playing(log), Some(TrackId(1)));
+    let damaged = r.player(log).next.unwrap();
+    let more = fp_model::on_event(
+        &mut r.s,
+        fp_model::EngineEvent::PreloadFailed {
+            player: log,
+            entry: damaged,
+        },
+    );
+    r.engine(&more);
+    r.end_current(log);
+    r.at_hms(10, 3, 1);
+    assert_eq!(r.playing(log), Some(TrackId(3)));
+    r.end_current(log);
+    r.at_hms(10, 6, 1);
+    assert_eq!(r.playing(log), None);
+    let skipped = r.item(today(), 10, 0, 1);
+    assert!(r.missed().contains(&skipped), "{:?}", r.missed());
+    assert!(
+        r.s.as_run.entries().any(|e| e.item == Some(skipped)
+            && e.outcome == fp_model::as_run::AsRunOutcome::Missed),
+        "not in the as-run log as missed"
+    );
+}
+
+/// Found by the simulated night: the filler's last song before a block
+/// ended by itself during the hand-over's fade, and the block waited for
+/// its start: almost a second of dead air. Silence never waits for the
+/// clock: the block starts as soon as the song ends (at most
+/// `block_fade_ms` early).
+#[test]
+fn a_song_that_ends_during_the_hand_over_leaves_no_silence() {
+    let mut r = Rig::new(vec![(11, 0, vec![song(2)])]);
+    r.slow_fades = true;
+    r.at_hms(10, 30, 0);
+    r.apply(Command::StartAutomation);
+    let f = r.filler_player();
+    assert_eq!(fades(&r.at_hms(10, 59, 58), f), Some(2000));
+    // The song reaches its own end a second into the fade.
+    r.at(today().and_hms_milli_opt(10, 59, 59, 60).unwrap());
+    // A fading source that runs out reports its end (the engine starts
+    // nothing during a fade stop).
+    let entry = r.player(f).current.unwrap();
+    let more = fp_model::on_event(
+        &mut r.s,
+        fp_model::EngineEvent::ReachedEnd { player: f, entry },
+    );
+    r.engine(&more);
+    r.at(today().and_hms_milli_opt(10, 59, 59, 65).unwrap());
+    assert_eq!(r.playing(f), None);
+    assert_eq!(r.playing(r.schedule_player()), Some(TrackId(2)));
+    assert!(r.missed().is_empty(), "{:?}", r.missed());
+}
