@@ -147,7 +147,11 @@ those. Rules about sound (on air, playout, pre-listen) see the filler too.
 operator inserts or moves is not in it, and `SetFillerRotation` replaces
 only generated rows after the current one (keeping the next of a playing
 filler, already loaded for the hand-over). A removed row was never aired,
-so it does not count for separation.
+so it does not count for separation. A stopped filler left with no next
+takes the first row after the last one it aired (`filler::first_ahead`,
+used by `reducer::fill_empty_next`): its aired rows are history and never
+play again by order, even when a new rotation replaced every row queued
+after them.
 
 The filler's list is not an operator playlist. The reducer refuses with
 `ModelError::FillerPlaylist`:
@@ -271,10 +275,18 @@ AU40). The schedule plays through its own player and list, made by
   - **A block ends** when its player is idle. The filler takes the block's
     rotation or the default (AU20). If the block played in order, the
     earliest block that came due meanwhile plays now (AU21). Otherwise next
-    from the clock plays at its time.
+    from the clock plays at its time. A row of the block that never aired
+    because its file could not be read (a failed preload marks the track
+    unreadable and the player skips it) is missed (AU23), so the as-run
+    log records it.
   - **The hand-over (AU24):** `automation.block_fade_ms` before a block, the
     filler fades out (`reducer::fade_stop_over`), and `handing_over` keeps
-    it from restarting. At the start the block plays.
+    it from restarting. At the start the block plays. If the song reaches
+    its own end during the fade, the block starts then, at most
+    `block_fade_ms` early, rather than leave silence until its start.
+    Before automation starts a stopped filler (`play_filler`), the rows it
+    generated while no block was coming are chosen again for the gap
+    (`filler::requeue`), so the first songs fit too.
   - **A late hard-start item (AU22):** a next row that is hard-start
     and would start beyond the block's start plus the tolerance is taken
     out and missed. When it would start is estimated from when the row on
@@ -463,20 +475,26 @@ known lengths, a classic method.
   Each class is tried with both separation rules, then the track rule
   alone; then every class with the separation relaxed. When no track
   fits, the one that cuts least wins (then the one that leaves least, then
-  the least recently aired), `Picked::unfitted` says so, and
+  the least recently aired) among the tracks both separation rules allow,
+  else the track rule alone, else any; `Picked::unfitted` says so, and
   `FillerState::unfitted` counts it; the conductor logs a line when that
   count grows. Far from the block (a gap of at least twice the pool's
   longest track plus the minimum) every known track leaves room, and the
   choice is the ordinary `pick`, so tracks of unknown length still play
   then.
-- **The refit** (`filler::refit`): segues and edits make the queue drift.
-  Once per song on air (`FillerState::fitted_for`), the generated rows
-  after the loaded next are checked against the timeline; the first that
-  no longer fits (`selection::fits`) leaves with every generated row after
-  it and the generated row just before it (that one often left the gap
-  nothing closes), and the top-up chooses again. The current row, the loaded next and
-  the operator's rows are never touched, so a next loaded before
-  automation started may still be cut.
+- **Pauses** move the timeline: `FillerState::paused_since` notes when the
+  song on air was paused, and when it plays on, `current_since` moves on
+  by the pause's length, so every row ahead starts that much later.
+- **The refit** (`filler::refit`): segues, pauses and edits make the queue
+  drift. Once per song on air (`FillerState::fitted_for`), and again as
+  soon as a paused song plays on, the generated rows from the loaded next
+  on are checked against the timeline; the first that no longer fits
+  (`selection::fits`) leaves with every generated row after it and the
+  generated row just before it (that one often left the gap nothing
+  closes), and the top-up chooses again. The current row and the
+  operator's rows are never touched, nor a next the operator set or one
+  that starts in less than `NEXT_REFIT_LEAD_SECS` (20 s, so the engine
+  prepares the new one in time).
 
 ## The as-run log (`as_run.rs`)
 

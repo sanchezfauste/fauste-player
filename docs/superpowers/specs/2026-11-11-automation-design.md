@@ -210,8 +210,9 @@ hand plays in full.
   (`automation.late_tolerance_secs`). Skipping never cuts anything: the next
   item plays instead *(maintainer)*.
 - **AU23.** Every scheduled item that did not air (skipped, in a missed
-  block, or passed while stopped) shows as **missed** in the schedule column,
-  and the operator may still set it as next and play it.
+  block, passed while stopped, or skipped because its file could not be
+  read) shows as **missed** in the schedule column, and the operator may
+  still set it as next and play it.
 
 ### 5.3 Starting a block on time
 
@@ -223,7 +224,10 @@ hand plays in full.
   conductor tick (`tuning.conductor_tick_ms`, 5 ms by default), not to the
   sample: the hand-over is between two players, and a few milliseconds are
   inaudible and below the system clock's own accuracy *(maintainer,
-  2026-11-12: "5 ms es totalmente aceptable")*.
+  2026-11-12: "5 ms es totalmente aceptable")*. A song that reaches its own
+  end during the fade leaves no silence: the block starts then, at most
+  `automation.block_fade_ms` early *(my call, simulated-air run
+  2026-11-18: dead air is worse than an early start of a second)*.
 - **AU25.** **No fragments.** When the time left before a block is short, the
   filler chooses the last songs so that the faded part is small (at most
   `automation.max_fade_cut_secs`) and never starts a song that would play
@@ -231,9 +235,12 @@ hand plays in full.
   *(maintainer: the goal; the selection method is the builder's call within
   §6's classic methods)*. If no choice satisfies both, the one that cuts least
   wins and a line is logged. *(My call, plan 5: a greedy fit of known
-  lengths on the filler's timeline, segues included; the queue after the
-  loaded next is checked again once per song, since it drifts; see
-  `docs/technical/automation.md`.)*
+  lengths on the filler's timeline, segues and pauses included; the queue
+  from the loaded next on is checked again once per song and after a
+  pause, since it drifts, and the queue built while automation was
+  stopped is chosen again when automation starts the filler; when nothing
+  fits, the least cut still respects the separation rules, relaxed as in
+  AU34; see `docs/technical/automation.md`.)*
 - **AU26.** A schedule item is never faded or cut to keep the next block on
   time *(maintainer)*. Overruns are shown at edit time (AU37) and absorbed at
   play time by AU21–AU22.

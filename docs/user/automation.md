@@ -29,7 +29,8 @@ track** shows the track chosen for it as soon as it is next (or comes
 after next in its block), with the category after it: that is the track
 that plays. If the category has no track that can play (none assigned to
 it, or their files are missing), the row says so in amber, and the item
-will be missed. Assign tracks to a category in the library. The **music fill** row says until when it plays, and
+will be missed. An item whose file turns out unreadable when it is about
+to play is skipped and marked missed too. Assign tracks to a category in the library. The **music fill** row says until when it plays, and
 shows as on air while the music fill plays for the Log. A next whose
 time has passed shows its time in amber. Drag the line between two
 column headers to resize the columns, as on a playlist; the template and
@@ -222,9 +223,12 @@ Before a block of the log, the music fill also chooses its last songs by
 their length, so the music ends cleanly: the song that fades out when the
 block starts loses at most 30 seconds, and no song starts that would play
 for less than 45 seconds. When no song in the rotation can do both, the
-one that loses least plays. Both values can be changed for now only in the
-configuration file (`automation.max_fade_cut_secs` and
-`automation.min_song_play_secs`).
+one that loses least plays, still keeping the artist and track rules when
+it can. A pause of the music moves the songs after it, and the music fill
+chooses them again. If the last song ends by itself during the fade, the
+block starts then, a second or two early, rather than leave silence. Both
+values can be changed for now only in the configuration file
+(`automation.max_fade_cut_secs` and `automation.min_song_play_secs`).
 
 An **Hourly ID** is a track kind of its own (Library → Kind ▸ Hourly ID),
 for the station's identification at the top of the hour.
