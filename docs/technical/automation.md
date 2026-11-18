@@ -33,7 +33,8 @@ The first rotation created becomes the default; deleting the default makes
 the first remaining one the default; the last rotation cannot be deleted.
 At every start the app calls `rotation::ensure_default`, which creates
 "Music" (one step, all music, 1–1) when there is no rotation at all. A step
-on a deleted category stays stored; selection skips it.
+on a deleted category stays stored; in its turn selection plays a
+stand-in (`rotation_cursor::stand_in`, below).
 
 The walk (`rotation_cursor.rs`) draws a step's count each time it comes
 up; a draw of 0 passes the step over. `walk` goes over the steps at most
