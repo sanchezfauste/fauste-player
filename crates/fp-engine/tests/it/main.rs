@@ -10,6 +10,7 @@
 static ALLOCATOR: assert_no_alloc::AllocDisabler = assert_no_alloc::AllocDisabler;
 
 mod audio_path_audit;
+mod automation_day;
 mod bit_perfect;
 mod bus;
 mod cartwall;
