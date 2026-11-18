@@ -341,3 +341,42 @@ fn a_category_with_nothing_to_play_says_so() {
     assert_eq!(track, None);
     assert!(nothing_to_play);
 }
+
+#[test]
+fn during_the_fill_a_category_item_set_as_next_shows_its_track_and_follows_the_song() {
+    let (mut r, _) = spots_block(TrackKind::Ad);
+    r.at_hms(8, 0, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(8, 0, 1);
+    let f = r.filler_player();
+    assert!(r.playing(f).is_some());
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 0)));
+    r.at_hms(8, 0, 2);
+    let fp_model::automation::ScheduleRow::Item { track, .. } = spots_row(&r) else {
+        panic!()
+    };
+    assert_eq!(track, Some(TrackId(901)), "shown while the fill plays");
+    // The filler ends its song (held), then the Log plays the item.
+    assert!(r.player(f).stop_after_current);
+    r.end_current(f);
+    r.at_hms(8, 0, 3);
+    assert_eq!(r.playing(r.schedule_player()), Some(TrackId(901)));
+}
+
+#[test]
+fn during_the_fill_an_empty_category_set_as_next_says_so() {
+    let (mut r, _) = spots_block(TrackKind::Ad);
+    r.s.library.get_mut(TrackId(901)).unwrap().category = None;
+    r.at_hms(8, 0, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(8, 0, 1);
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 0)));
+    r.at_hms(8, 0, 2);
+    let fp_model::automation::ScheduleRow::Item {
+        nothing_to_play, ..
+    } = spots_row(&r)
+    else {
+        panic!()
+    };
+    assert!(nothing_to_play);
+}
