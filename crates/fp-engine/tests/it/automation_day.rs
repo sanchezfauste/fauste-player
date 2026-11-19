@@ -784,6 +784,15 @@ fn report(sim: &Sim, st: &Station, d0: NaiveDate, d1: NaiveDate) {
                 started.format("%H:%M:%S")
             ));
         }
+        // AU24: the fade ends at the block's start; nothing starts early.
+        if let (Some(sched), Some(started)) = (e.scheduled, e.started)
+            && started < sched - TimeDelta::milliseconds(100)
+        {
+            problems.push(format!(
+                "hourly ID of {sched} aired early at {}",
+                started.format("%H:%M:%S%.3f")
+            ));
+        }
     }
     // Artist and track separation among music.
     let sep = TimeDelta::minutes(i64::from(s.config.automation.artist_separation_mins));
@@ -824,7 +833,9 @@ fn report(sim: &Sim, st: &Station, d0: NaiveDate, d1: NaiveDate) {
     // Fragments (AU25): a fill song faded at a hand-over after less than
     // `min_song_play_secs`, or losing more than `max_fade_cut_secs`.
     let min_play = f64::from(s.config.automation.min_song_play_secs);
-    let max_cut = f64::from(s.config.automation.max_fade_cut_secs);
+    // The cut counts from the block's start, where the fade ends.
+    let fade = f64::from(s.config.automation.block_fade_ms) / 1000.0;
+    let max_cut = f64::from(s.config.automation.max_fade_cut_secs) + fade;
     let shortest = s
         .library
         .iter()

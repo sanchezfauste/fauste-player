@@ -138,7 +138,12 @@ those. Rules about sound (on air, playout, pre-listen) see the filler too.
 - **top up:** while the rows ahead play for less than
   `automation.filler_lookahead_mins`, it asks the rotation cursor for the
   next track (`next_track`, with every row ahead passed as `planned` at its
-  expected start) and appends it. A row whose track has no known length
+  expected start) and appends it. The tracks the blocks of the window
+  will play (track items, and the tracks chosen for category items;
+  `automation::scheduled_until`) are passed as `planned` too, at their
+  block's start, when that is within the larger separation of the pick,
+  so the filler does not play a song or an artist a block plays soon
+  after. A row whose track has no known length
   counts `UNKNOWN_LENGTH_SECS` (180 s), and one settle adds at most
   `MAX_ADDED_PER_SETTLE` (50) rows. When nothing can be added and nothing is
   ahead, `starved` is set for the column's alert.
@@ -281,9 +286,11 @@ AU40). The schedule plays through its own player and list, made by
     log records it.
   - **The hand-over (AU24):** `automation.block_fade_ms` before a block, the
     filler fades out (`reducer::fade_stop_over`), and `handing_over` keeps
-    it from restarting. At the start the block plays. If the song reaches
-    its own end during the fade, the block starts then, at most
-    `block_fade_ms` early, rather than leave silence until its start.
+    it from restarting. At the start the block plays. The fit makes the
+    last song last until the block's start, so the fade ends it; if a
+    song still reaches its own end during the fade (a length that was
+    wrong), the block starts then, at most `block_fade_ms` early, rather
+    than leave silence until its start.
     Before automation starts a stopped filler (`play_filler`), the rows it
     generated while no block was coming are chosen again for the gap
     (`filler::requeue`), so the first songs fit too.
@@ -339,6 +346,9 @@ rules for the Log (`log_availability`).
 - `halt` (and `log_stop`) pin next with `pin_next_after_stop`: the Log's
   loaded next row, else `row_below(last_on_air)`, else the next it had,
   with `next_by_hand` set, so `settle_next` keeps it while stopped (AR10).
+  Stopped during the music fill (no block on air) with a next the clock
+  chose, next is not pinned: it follows the clock as at start-up, so Play
+  plays music again and the coming block keeps its time (AR4).
   At start-up next comes from the clock (AR12).
 - `fill_on_air`, kept by `note_fill` after each tick and start, tells the
   operator's stop of the filler (it stops with no `handing_over` or
@@ -442,9 +452,10 @@ is no longer missed (a missed item played by hand).
 ## Fitting the last songs (AU25)
 
 Before a block, the filler chooses its last songs by length so that the
-song faded at the hand-over loses at most `automation.max_fade_cut_secs`,
-and no song starts that would play less than
-`automation.min_song_play_secs` before the fade. It is a greedy fit of
+song faded at the hand-over is still on air at the block's start and
+loses at most `automation.max_fade_cut_secs` after it, and no song starts
+that would play less than `automation.min_song_play_secs` before the
+block. It is a greedy fit of
 known lengths, a classic method.
 
 - **The timeline** (`filler::starts_ahead`): `FillerState::current_since`
@@ -454,13 +465,15 @@ known lengths, a classic method.
   range, as the player's own plan; otherwise to its end. The first row
   ahead starts when the row on air reaches its lead, and each next one a
   lead later. While a block is coming, the top-up and the drop of rows
-  beyond the block both use this timeline, up to the start of the fade
-  (`block_fade_ms` before the block). A row still audible when the fade
-  starts is the last: nothing is queued after it (even a loaded next
-  leaves when the row on air is that row), so the player plays it into
-  the fade instead of segueing into a song that would be cut at once.
+  beyond the block both use this timeline: no row starts after the start
+  of the fade (`block_fade_ms` before the block). A row still audible at
+  the block's start is the last: nothing is queued after it (even a
+  loaded next leaves when the row on air is that row), so the player
+  plays it through the fade instead of segueing into a song that would be
+  cut at once. A song that ended inside the fade would leave the block to
+  start early, so it does not count as the last.
 - **The choice** (`selection::pick_fitted` with a `Fit`: the gap from the
-  row's start to the fade, the cut, the minimum). Each track of known
+  row's start to the block's start, the cut, the minimum). Each track of known
   length falls in a class, best first:
   - *ends*: it is at least as long as the gap, the cut is within the
     limit, and the gap is at least the minimum (a track as long as the
@@ -472,8 +485,10 @@ known lengths, a classic method.
   - *loose room*: it is shorter than the gap and its lead leaves at least
     the minimum.
 
-  Each class is tried with both separation rules, then the track rule
-  alone; then every class with the separation relaxed. When no track
+  The fit and the separation rules both, whenever possible: *ends* and
+  *room* with both separation rules, then with the track rule alone; then
+  *loose room* the same way; then every class with the separation
+  relaxed. When no track
   fits, the one that cuts least wins (then the one that leaves least, then
   the least recently aired) among the tracks both separation rules allow,
   else the track rule alone, else any; `Picked::unfitted` says so, and

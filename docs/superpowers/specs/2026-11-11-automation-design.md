@@ -224,17 +224,25 @@ hand plays in full.
   conductor tick (`tuning.conductor_tick_ms`, 5 ms by default), not to the
   sample: the hand-over is between two players, and a few milliseconds are
   inaudible and below the system clock's own accuracy *(maintainer,
-  2026-11-12: "5 ms es totalmente aceptable")*. A song that reaches its own
-  end during the fade leaves no silence: the block starts then, at most
-  `automation.block_fade_ms` early *(my call, simulated-air run
-  2026-11-18: dead air is worse than an early start of a second)*.
+  2026-11-12: "5 ms es totalmente aceptable")*. The last song is chosen
+  to last until the block's start, so the fade ends it and the block
+  never starts early *(maintainer, 2026-11-19: "si sale 2 segundos antes
+  es que no hace el fundido bien")*. A song that still reaches its own end
+  during the fade (a wrong length) leaves no silence: the block starts
+  then, at most `automation.block_fade_ms` early *(my call, simulated-air
+  run 2026-11-18)*.
 - **AU25.** **No fragments.** When the time left before a block is short, the
   filler chooses the last songs so that the faded part is small (at most
-  `automation.max_fade_cut_secs`) and never starts a song that would play
-  for less than `automation.min_song_play_secs` before its fade
+  `automation.max_fade_cut_secs` after the block's start) and never
+  starts a song that would play
+  for less than `automation.min_song_play_secs` before the block
   *(maintainer: the goal; the selection method is the builder's call within
   §6's classic methods)*. If no choice satisfies both, the one that cuts least
-  wins and a line is logged. *(My call, plan 5: a greedy fit of known
+  wins and a line is logged: a fragment is to be avoided, and accepted
+  only when nothing else is possible *(maintainer, 2026-11-19)*. The fit
+  and the separation rules (AU31–AU32) are both kept whenever possible
+  *(maintainer, 2026-11-19)*: a song that fits while keeping them comes
+  before one that fits better but breaks them. *(My call, plan 5: a greedy fit of known
   lengths on the filler's timeline, segues and pauses included; the queue
   from the loaded next on is checked again once per song and after a
   pause, since it drifts, and the queue built while automation was
@@ -289,7 +297,11 @@ played order, simple separation rules (track library spec §12, patents).
   time)*.
 - **AU32.** **Artist separation.** A track whose artist (compared trimmed and
   case-insensitively) aired within `automation.artist_separation_mins` is
-  not eligible. Tracks without an artist are exempt.
+  not eligible. Tracks without an artist are exempt. For the filler, the
+  tracks a block of the window will play (its track items and the tracks
+  chosen for its category items) count as aired at the block's start, so
+  the filler does not play a song or an artist a block plays soon after
+  *(maintainer, 2026-11-19: "intentar evitar que suenen seguidas")*.
 - **AU33.** **Fair choice.** Among eligible tracks, the filler prefers those
   that have gone longest without airing, with some randomness among the
   oldest so the order does not become a fixed cycle *(maintainer: "not truly

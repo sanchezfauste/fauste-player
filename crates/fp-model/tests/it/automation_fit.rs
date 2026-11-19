@@ -152,6 +152,25 @@ mod choosing {
         assert_eq!(p.track, TrackId(902));
     }
 
+    /// Maintainer, 2026-11-19: the fit and the separation rules both,
+    /// whenever possible. A song that leaves room for another, separated,
+    /// beats one that ends the gap but repeats an artist.
+    #[test]
+    fn a_fit_that_keeps_the_separation_beats_a_closer_one_that_breaks_it() {
+        let mut s = library(&[210.0, 100.0, 180.0]);
+        s.config.automation.artist_separation_mins = 30;
+        for (id, artist) in [(901, "B"), (902, "C"), (903, "B")] {
+            s.library.get_mut(TrackId(id)).unwrap().artist = artist.into();
+        }
+        s.air_times
+            .record(TrackId(903), WallTime(NOW.0 - 10 * 60_000));
+        for seed in 0..20 {
+            let p = choose(&s, 200.0, seed);
+            assert_eq!(p.track, TrackId(902), "seed {seed}");
+            assert_eq!(p.relaxed, fp_model::selection::Relaxed::None);
+        }
+    }
+
     #[test]
     fn a_track_of_unknown_length_is_never_a_fit() {
         let s = library(&[0.0, 210.0]);
@@ -260,6 +279,25 @@ mod before_a_block {
         assert!(h.played >= 45.0, "{h:?}");
         assert!(h.left <= 30.0 + 2.0, "{h:?}");
         assert_eq!(r.s.filler.as_ref().unwrap().unfitted, 0);
+    }
+
+    #[test]
+    fn the_last_song_is_still_on_air_when_the_block_starts() {
+        // AU24: the fade ends at the block's start, so the last song must
+        // last until then; one that ends inside the fade would leave the
+        // block to start early (or silence).
+        let fade = 2.0;
+        for k in 0..60i64 {
+            let mut r = Rig::new(vec![(11, 0, vec![song(1)])]);
+            r.s.config.players.auto_segue = false;
+            r.s.config.automation.block_fade_ms = 2_000;
+            varied(&mut r);
+            let from = hms(10, 50, 0) + TimeDelta::seconds(k * 7);
+            r.jump(from);
+            r.apply(Command::StartAutomation);
+            let h = run(&mut r, from, hms(11, 0, 5), 0.0).expect("a hand-over");
+            assert!(h.left >= fade, "start +{}s: {h:?}", k * 7);
+        }
     }
 
     #[test]
@@ -481,10 +519,11 @@ fn after_a_pause_the_last_song_before_the_block_still_fits() {
         r.slow_fades = true;
         play_filler_until(&mut r, today().and_hms_opt(9, 59, 58).unwrap(), &mut songs);
         let (_, last, _, played) = *songs.last().unwrap();
-        let cut = r.s.library.get(last).unwrap().duration_secs - played;
+        // Measured at the block's start, 2 s after the fade starts.
+        let cut = r.s.library.get(last).unwrap().duration_secs - played - 2.0;
         // The shortest song lasts 150 s: a gap under 120 s fits none, and
         // the one that cuts least plays (AU25).
-        let fittable = played + 30.0 >= 150.0;
+        let fittable = played + 2.0 + 30.0 >= 150.0;
         if fittable && !(played >= 45.0 && cut <= 30.0) {
             bad.push((pause_at, pause, played, cut));
         }

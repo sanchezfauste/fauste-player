@@ -247,23 +247,30 @@ fn secs_between(from: NaiveDateTime, to: NaiveDateTime) -> f64 {
     (to - from).num_milliseconds() as f64 / 1000.0
 }
 
-/// AU25: the row starting at `start` is still audible when the fade
-/// starts, so it is the last before the block (unknown length: no).
-fn covers(state: &AppState, entry: EntryId, start: NaiveDateTime, fade_at: NaiveDateTime) -> bool {
-    start < fade_at
+/// AU25: the row starting at `start` is still audible at the block's
+/// start, so it is the last before the block (unknown length: no).
+fn covers(state: &AppState, entry: EntryId, start: NaiveDateTime, block: NaiveDateTime) -> bool {
+    start < block
         && state
             .track_for_entry(entry)
             .and_then(|t| crate::selection::timing(state, t.id))
-            .is_some_and(|(length, _)| start + millis(length) >= fade_at)
+            .is_some_and(|(length, _)| start + millis(length) >= block)
 }
 
-/// AU24, AU25: when the filler's fade before the coming block starts.
-fn fade_start(state: &AppState) -> Option<NaiveDateTime> {
-    let start = crate::automation::coming_start(state)?;
-    Some(start - chrono::TimeDelta::milliseconds(i64::from(state.config.automation.block_fade_ms)))
+/// AU24, AU25: what the filler's last song must reach, the coming
+/// block's start. The fade before it ends there, so a song that ends
+/// inside the fade would leave the block to start early.
+fn block_at(state: &AppState) -> Option<NaiveDateTime> {
+    crate::automation::coming_start(state)
 }
 
-/// AU25: what a row starting `gap_secs` before the fade must fit.
+/// AU24: when the filler's fade before the coming block starts; no row
+/// starts after it.
+fn fade_from(block: NaiveDateTime, state: &AppState) -> NaiveDateTime {
+    block - chrono::TimeDelta::milliseconds(i64::from(state.config.automation.block_fade_ms))
+}
+
+/// AU25: what a row starting `gap_secs` before the block must fit.
 fn fit_for(state: &AppState, gap_secs: f64) -> crate::selection::Fit {
     let a = &state.config.automation;
     crate::selection::Fit {
@@ -298,7 +305,7 @@ fn refit(state: &mut AppState, out: &mut Vec<EngineAction>) {
         }
         return;
     }
-    let Some(fade_at) = fade_start(state) else {
+    let Some(block) = block_at(state) else {
         return;
     };
     let current = player
@@ -326,7 +333,7 @@ fn refit(state: &mut AppState, out: &mut Vec<EngineAction>) {
             before = None;
             continue;
         }
-        let gap = secs_between(start, fade_at);
+        let gap = secs_between(start, block);
         let fits = || {
             state
                 .track_for_entry(entry)
@@ -360,7 +367,7 @@ pub(crate) fn requeue(state: &mut AppState, out: &mut Vec<EngineAction>) {
     let Some(p) = state.players.iter().find(|p| p.id == f.player) else {
         return;
     };
-    if p.transport != crate::player::Transport::Stopped || fade_start(state).is_none() {
+    if p.transport != crate::player::Transport::Stopped || block_at(state).is_none() {
         return;
     }
     let keep = p.next.filter(|_| p.next_explicit);
@@ -404,15 +411,15 @@ fn look_ahead_secs(state: &AppState) -> f64 {
 /// block leave the list (the operator's stay; the next of a playing filler
 /// is already loaded and stays).
 fn drop_beyond(state: &mut AppState, f: &FillerState, out: &mut Vec<EngineAction>) {
-    let Some(fade_at) = fade_start(state) else {
+    let Some(block) = block_at(state) else {
         return;
     };
     let player = state.players.iter().find(|p| p.id == f.player);
-    // A row on air still audible at the fade is the last: even the loaded
-    // next would start just before the fade (AU25).
+    // A row on air still audible at the block's start is the last: even
+    // the loaded next would start just before the block (AU25).
     let current_covers = f
         .current_since
-        .is_some_and(|(e, since)| covers(state, e, since, fade_at));
+        .is_some_and(|(e, since)| covers(state, e, since, block));
     let keep_next = player
         .filter(|p| p.transport != crate::player::Transport::Stopped)
         .and_then(|p| p.next)
@@ -420,10 +427,13 @@ fn drop_beyond(state: &mut AppState, f: &FillerState, out: &mut Vec<EngineAction
     let mut covered = current_covers;
     let mut drop = HashSet::new();
     for (e, start) in timeline(state, f).0 {
-        if (covered || start >= fade_at) && f.generated.contains(&e) && Some(e) != keep_next {
+        if (covered || start >= fade_from(block, state))
+            && f.generated.contains(&e)
+            && Some(e) != keep_next
+        {
             drop.insert(e);
         }
-        covered |= covers(state, e, start, fade_at);
+        covered |= covers(state, e, start, block);
     }
     if drop.is_empty() {
         return;
@@ -485,21 +495,32 @@ fn top_up(state: &mut AppState) {
     }
     let target = look_ahead_secs(state);
     // AU25: with a block coming, the rows are timed on the timeline and
-    // each is chosen to fit the time left before the fade.
-    let fade_at = fade_start(state);
+    // each is chosen to fit the time left before the block.
+    let block = block_at(state);
     let (rows, mut end) = timeline(state, &f);
-    // A row still audible at the fade is the last before the block.
-    let mut covered = fade_at.is_some_and(|fade| {
+    // A row still audible at the block's start is the last before it.
+    let mut covered = block.is_some_and(|b| {
         f.current_since
-            .is_some_and(|(e, since)| covers(state, e, since, fade))
-            || rows
-                .iter()
-                .any(|(e, start)| covers(state, *e, *start, fade))
+            .is_some_and(|(e, since)| covers(state, e, since, b))
+            || rows.iter().any(|(e, start)| covers(state, *e, *start, b))
     });
-    let horizon = fade_at.map(|fade| {
+    let horizon = block.map(|b| {
         let own = i64::from(state.config.automation.filler_lookahead_mins) * 60_000;
-        fade.min(state.local_now + chrono::TimeDelta::milliseconds(own))
+        fade_from(b, state).min(state.local_now + chrono::TimeDelta::milliseconds(own))
     });
+    // AU31, AU32: the songs the blocks play soon count as aired at their
+    // block's start, within the separation from each pick.
+    let cfg = &state.config.automation;
+    let separation = chrono::TimeDelta::minutes(i64::from(
+        cfg.track_separation_mins.max(cfg.artist_separation_mins),
+    ));
+    let own = chrono::TimeDelta::minutes(i64::from(cfg.filler_lookahead_mins));
+    let scheduled = if separation > chrono::TimeDelta::zero() {
+        crate::automation::scheduled_until(state, state.local_now + own + separation)
+    } else {
+        Vec::new()
+    };
+    let window_ms = separation.num_milliseconds();
     let mut cursor = f.cursor.clone();
     let mut rng = state.rng.clone();
     let mut added = Vec::new();
@@ -512,12 +533,19 @@ fn top_up(state: &mut AppState) {
         }
     {
         let at = now.plus_secs(remaining);
-        let fit = fade_at.map(|fade| fit_for(state, secs_between(end, fade)));
+        let fit = block.map(|b| fit_for(state, secs_between(end, b)));
+        let mut seen = planned.clone();
+        seen.extend(
+            scheduled
+                .iter()
+                .filter(|(_, when)| when.millis_since(at) < window_ms)
+                .copied(),
+        );
         let found = crate::rotation_cursor::next_track_fitted(
             state,
             &mut cursor,
             at,
-            &planned,
+            &seen,
             &mut rng,
             fit.as_ref(),
         );
@@ -533,8 +561,8 @@ fn top_up(state: &mut AppState) {
         }
         planned.push((picked.track, at));
         remaining += row_secs(state, entry);
-        if let Some(fade) = fade_at {
-            covered = covers(state, entry, end, fade);
+        if let Some(b) = block {
+            covered = covers(state, entry, end, b);
         }
         end += millis(lead_secs(state, entry));
         added.push(entry);

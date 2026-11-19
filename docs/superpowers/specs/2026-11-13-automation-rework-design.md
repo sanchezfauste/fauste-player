@@ -127,6 +127,10 @@ and the Edit button.
   case). Play while something is on air does what Play does on a player
   (go to next with the crossfade) *(my call: it is the operator's explicit
   action; AU26's "never cut a scheduled item" is about automatic cuts)*.
+  After a Stop during the music fill, Play plays music again and the
+  coming block starts at its time: such a stop does not pin next unless
+  the operator chose it, and next follows the clock as at start-up
+  *(maintainer, 2026-11-19)*.
 - **AR5. Pause, Stop, Fade stop** do what they do on a player to whatever
   is on air **for the Log**, and stop automation. "On air for the Log"
   includes the filler's song while a music fill row is current: Stop on the

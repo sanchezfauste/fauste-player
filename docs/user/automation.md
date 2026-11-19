@@ -74,6 +74,8 @@ player:
   (its item, or the music fill's song between blocks) and stop
   automation. Play after Pause goes on from where it was; while paused,
   next does not move, and once you resume the next block keeps its time.
+  Play after a Stop during the music plays music again, and the next
+  block starts at its time.
 - **Stop at end** lets what is on air end, and then automation stops. If
   the music is playing and a block's time comes first, the block starts
   on time and automation stops after its first item.
@@ -221,12 +223,14 @@ you make, rename and change rotations (see
 
 Before a block of the log, the music fill also chooses its last songs by
 their length, so the music ends cleanly: the song that fades out when the
-block starts loses at most 30 seconds, and no song starts that would play
-for less than 45 seconds. When no song in the rotation can do both, the
-one that loses least plays, still keeping the artist and track rules when
-it can. A pause of the music moves the songs after it, and the music fill
-chooses them again. If the last song ends by itself during the fade, the
-block starts then, a second or two early, rather than leave silence. Both
+block starts is still playing at the block's time and loses at most 30
+seconds after it, and no song starts that would play for less than 45
+seconds. It keeps the artist and track rules too whenever it can. When no
+song in the rotation can do both, the one that loses least plays, so a
+few seconds of a song may sometimes be heard. A pause of the music moves
+the songs after it, and the music fill chooses them again. The music
+fill also avoids the songs, and the artists, a block plays soon after.
+Both
 values can be changed for now only in the configuration file
 (`automation.max_fade_cut_secs` and `automation.min_song_play_secs`).
 

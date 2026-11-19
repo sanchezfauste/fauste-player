@@ -28,7 +28,7 @@ pub struct Picked {
 }
 
 /// The time a pick must fit before a block (AU25): `gap_secs` from the
-/// row's start to the start of the filler's fade.
+/// row's start to the block's start, which the filler's fade ends at.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Fit {
     pub gap_secs: f64,
@@ -184,10 +184,10 @@ pub(crate) fn fits(state: &AppState, track: TrackId, fit: &Fit) -> bool {
 
 /// `pick`, preferring with a `fit` the tracks that fill the gap before a
 /// block without a fragment (AU25), a greedy fit of known lengths: a
-/// track that ends the gap within the cut, then one that leaves room for
-/// a later track that could close it, then one that leaves any room. Each
-/// class tries both separation rules, then the track rule alone; then
-/// each class with separation relaxed. When no track fits, the one that
+/// track that ends the gap within the cut or leaves room for a later
+/// track that could close it, with both separation rules, then with the
+/// track rule alone; then one that leaves any room, the same way; then
+/// each with separation relaxed. When no track fits, the one that
 /// cuts least wins (then the one that leaves least, then the order) among
 /// the tracks the separation rules allow, relaxed in the same order, and
 /// the pick says so.
@@ -242,17 +242,27 @@ pub fn pick_fitted(
         None
     };
     let classes: Vec<Option<FitClass>> = timings.iter().map(|t| class_of(*t)).collect();
-    let tiers = [Relaxed::None, Relaxed::Artist];
-    let order = [FitClass::Ends, FitClass::Room, FitClass::LooseRoom];
     let meets = |track: TrackId, relaxed: Relaxed| match relaxed {
         Relaxed::None => ctx.track_ok(track) && ctx.artist_ok(track),
         Relaxed::Artist => ctx.track_ok(track),
         Relaxed::Track => true,
     };
-    let passes = order
-        .iter()
-        .flat_map(|c| tiers.iter().map(move |r| (*c, *r)))
-        .chain(order.iter().map(|c| (*c, Relaxed::Track)));
+    // The fit and the separation rules both, whenever possible: a song
+    // that ends the gap or leaves room a later one can close, with both
+    // rules, then with the artist rule relaxed; then one that leaves any
+    // room; then the track rule relaxed too.
+    let (ends, room, loose) = (FitClass::Ends, FitClass::Room, FitClass::LooseRoom);
+    let passes = [
+        (ends, Relaxed::None),
+        (room, Relaxed::None),
+        (ends, Relaxed::Artist),
+        (room, Relaxed::Artist),
+        (loose, Relaxed::None),
+        (loose, Relaxed::Artist),
+        (ends, Relaxed::Track),
+        (room, Relaxed::Track),
+        (loose, Relaxed::Track),
+    ];
     for (class, relaxed) in passes {
         let tier: Vec<TrackId> = ctx
             .ordered

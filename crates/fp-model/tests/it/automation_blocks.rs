@@ -327,3 +327,30 @@ fn a_song_that_ends_during_the_hand_over_leaves_no_silence() {
     assert_eq!(r.playing(r.schedule_player()), Some(TrackId(2)));
     assert!(r.missed().is_empty(), "{:?}", r.missed());
 }
+
+/// Maintainer, 2026-11-19: the filler avoids a song a block plays soon
+/// after (found by the simulated day: a block's song played by the filler
+/// 26 minutes before).
+#[test]
+fn the_filler_avoids_the_songs_of_the_coming_block() {
+    for seed in 0..10 {
+        let mut r = Rig::new(vec![(11, 0, vec![song(1), song(2), song(3)])]);
+        r.s.config.automation.track_separation_mins = 60;
+        r.s.rng = fp_model::SplitMix64(seed | 1);
+        r.at_hms(10, 30, 0);
+        r.apply(Command::StartAutomation);
+        let f = r.s.filler.as_ref().unwrap().playlist;
+        let queued: Vec<TrackId> =
+            r.s.playlists
+                .get(f)
+                .unwrap()
+                .entries
+                .iter()
+                .map(|e| e.track)
+                .collect();
+        assert!(!queued.is_empty());
+        for n in 1..=3 {
+            assert!(!queued.contains(&TrackId(n)), "seed {seed}: {queued:?}");
+        }
+    }
+}
