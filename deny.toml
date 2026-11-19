@@ -19,6 +19,11 @@ ignore = [
   { id = "RUSTSEC-2026-0370", reason = "unmaintained notice; zvariant via eframe's accesskit (atspi) on Linux" },
   { id = "RUSTSEC-2026-0371", reason = "unmaintained notice; zbus_names via eframe's accesskit (atspi) on Linux" },
   { id = "RUSTSEC-2026-0372", reason = "unmaintained notice; zvariant_derive via eframe's accesskit (atspi) on Linux" },
+  # `chrono` is an unmaintained notice (no vulnerability). The model, the
+  # schedule and the as-run log use its dates and times throughout, and
+  # many dependencies pull it in too. Moving to another date crate is a
+  # migration of its own. Revisit then, or when a vulnerability appears.
+  { id = "RUSTSEC-2026-0543", reason = "unmaintained notice; chrono is the workspace's date and time type" },
 ]
 
 [licenses]
