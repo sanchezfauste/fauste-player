@@ -220,7 +220,10 @@ and the Edit button.
   its total length, plus the overrun error of AU37 when it applies. Past
   rows look like played rows on a player; missed rows are struck through
   (AU23); a hard-start item shows a small clock icon *(my call; from the
-  icon set already in use)*.
+  icon set already in use)*. Its columns have the playlists' separator
+  lines and resize the same way, by dragging an edge; their widths are
+  stored as the Log player's (Time in the place of `#`) and shared by the
+  Log and its template and date popups *(maintainer)*.
 - **AR14b. Mock-ups approved** *(maintainer, 2026-11-13; Claude Design
   `Automatización v2.html`)*, with: a **Time** column (each row's planned
   start) on the Log only, not on the Music fill, which also runs on its
@@ -230,25 +233,41 @@ and the Edit button.
   track?")*. A category track row shows the category until its track is
   chosen, then the chosen track like any track row with the category as a
   secondary line or cell; after airing it shows what aired. The track is
-  chosen when the block is loaded for play *(today's behaviour, kept)*;
-  the builder may choose it earlier (for example when the block becomes
-  next) if that is cheap, so the operator sees it before Play.
+  chosen as soon as the item is next, or after next in a block not yet
+  loaded, so the operator sees it before Play, and that track plays when
+  the block loads (another is chosen only if it no longer plays or left
+  the category) *(maintainer)*. A category item with nothing to play
+  says so in amber ("No track to play in this category") before it is
+  missed; a next set by hand that would load nothing for that reason does
+  not hold the music fill (no stop at end for it) *(maintainer)*. A live
+  edit that inserts, removes or moves rows of a loaded block keeps each
+  chosen track with its own category item, wherever the item now is
+  (a removed item's track leaves with it), so a reload never plays a
+  track chosen for another item.
 - **AR16.** A music fill row shows "Music fill · *rotation name*"; while
   it is current it is shown as on air (the filler plays for it), and the
-  filler column's header shows the song.
+  filler column's header shows the song. The Log's header then says
+  "Music fill · *rotation name*" (the filler's rotation, else the
+  default) with the filler's transport state, and nothing of the song:
+  no cover, waveform, times or next line, and its own (silent) meter, so
+  the song's meter and waveform are not shown twice *(maintainer)*.
 - **AR17. Live editing** *(maintainer)*. The Log's list is edited like a
   playlist: drag tracks from the library or files from the system (each
   file joins the library as a playlist drop does; a drop on a locked row
-  goes nowhere, Q4.6), reorder by drag, remove, and an
-  **Add** menu with *Track…*, *Category track…*, *Music fill
-  (rotation)…*, *Block…*. The row menu also
-  has the item's *Hard start* toggle and, on a block header, *Change
-  time…* and *Remove block*. Every edit is saved at once as **date
+  goes nowhere, Q4.6), reorder by drag, remove, and **Add** buttons
+  along the footer (a playlist footer's tiles), *+ Track…*, *+ Category
+  track…*, *+ Music fill (rotation)…*, *+ Block…*; those that do not fit
+  the footer's width go behind a *⋯* menu. The row menu also has the
+  item's *Hard start* toggle. A block header opens its menu on a click
+  or a right-click: *Track…*, *Category track…* and *Music fill
+  (rotation)…* added at that block's end (unless it already played,
+  AR19), then *Change time…* and *Remove block*. Every edit is saved at once as **date
   changes** of the date the row belongs to (AU11–AU12; the template is not
   touched). Editing a template is only done in Settings (§7).
 - **AR18.** A block may be added at any time not taken by another block of
-  that date, from the Add menu anywhere in the list; its time is asked in
-  a small popup with the time field the app already uses. *(Maintainer's
+  that date, from the Add buttons anywhere in the list; its time is asked in
+  a small dialog (the app's modal look) with the time field the app
+  already uses. *(Maintainer's
   bug report: after adding a 23:00 block there was no way to add 23:30 or
   23:45.)* A test covers adding blocks after the last one of a day.
 - **AR19.** What may not be edited live *(my call)*: rows of past dates
@@ -258,7 +277,9 @@ and the Edit button.
 - **AR19b. Where a drop or an added row goes** *(my calls; plan 4
   ruling)*. Before the row it lands on, in that row's block, or after it
   when it lands on the row's lower half (as on a playlist), so a block's
-  end takes a drop too; on a block header: at the block's start; never
+  end takes a drop too; on a block header: at the block's start, with the
+  insertion line drawn under the header (not on its top edge, which reads
+  as the end of the block above); never
   after a Music fill row. A row dragged onto another date's rows does not
   move (no insertion line is shown there). Add puts its item at the end
   of next's block (before its Music fill row), never in a block that
@@ -279,15 +300,17 @@ and the Edit button.
   editor window and the Log column's "Edit log" button are removed.
 - **AR21.** Selecting a template, or a date, opens a **popup window that
   is the same playlist editor as the Log column** (§6, AR14–AR19): block
-  headers, items, the Add menu, drag from the library and files from
+  headers, items, the Add buttons, drag from the library and files from
   the system (as on the Log, AR17), reorder, remove. For a date it edits
   that date's changes and shows changed blocks as "changed for this day"
   with "Back to the template" in the block header's menu; the date's
   template is chosen in Settings (AR20). Settings is a modal
   dialog, so opening the popup **closes Settings** and the popup is a
-  non-modal floating window like the library, which can stay open while
-  tracks are dragged into it; closing it leaves the operator where they
-  were *(my call)*.
+  non-modal floating window like the library (its slim title bar with a
+  close button, its frame), which can stay open while tracks are dragged
+  into it; closing it leaves the operator where they were *(my call)*.
+  Its dialogs (category, Music fill, a block's time) are the app's
+  modal dialogs: Esc or a click outside cancels, Enter confirms.
 - **AR22.** The popup and the Log column share the list code *(builder's
   call how)*; anything that works in one works in the other, except
   playing (the popup does not play; its rows have no next). Today's
@@ -327,7 +350,8 @@ follows rule 4).
   live edits as date changes), including the two reported bugs (AR13,
   AR18) reproduced first.
 - `egui_kittest`: the Log and Music fill columns show a player header and
-  the playlist table; the Add menu; the template popup opens from Settings
+  the playlist table; the Add buttons and the block header's menu; the
+  template popup opens from Settings
   and accepts a dropped track.
 - The engine's timing tests and the long-run test (AU39) still pass
   unchanged.

@@ -226,3 +226,301 @@ fn after_a_restart_automation_is_stopped_and_silent() {
             .any(|a| matches!(a, EngineAction::StartCurrent { .. }))
     );
 }
+
+/// A 10:00 block holding only a "Spots" category item (track 901), and an
+/// 11:00 block with a song; `kind` is the category's kind.
+fn spots_block(kind: TrackKind) -> (Rig, CategoryId) {
+    let mut r = Rig::new(vec![(11, 0, vec![song(3)])]);
+    r.apply(Command::CreateCategory {
+        parent: None,
+        name: "Spots".into(),
+        color: None,
+        kind,
+    });
+    let spots: CategoryId = r.s.categories.iter().last().unwrap().id;
+    let mut t = Track::new(TrackId(901), PathBuf::from("/m/spot.wav"));
+    t.duration_secs = 30.0;
+    t.category = Some(spots);
+    t.kind = kind;
+    r.s.library.insert(t);
+    let base = r.base;
+    r.apply(Command::AddBlock {
+        template: base,
+        start: tod(10, 0),
+    });
+    let id =
+        r.s.schedule
+            .template(base)
+            .unwrap()
+            .blocks
+            .iter()
+            .find(|b| b.start == tod(10, 0))
+            .unwrap()
+            .id;
+    r.blocks.insert((10, 0), id);
+    r.apply(Command::UpdateBlock {
+        template: base,
+        block: Block {
+            id,
+            start: tod(10, 0),
+            items: vec![Item::Category {
+                category: spots,
+                time_critical: false,
+            }],
+        },
+    });
+    (r, spots)
+}
+
+#[test]
+fn play_on_a_category_item_set_as_next_plays_its_track() {
+    let (mut r, _) = spots_block(TrackKind::Ad);
+    r.at_hms(8, 0, 0);
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 0)));
+    r.apply(Command::Play(r.schedule_player()));
+    assert_eq!(r.playing(r.schedule_player()), Some(TrackId(901)));
+    assert_eq!(r.playing(r.filler_player()), None);
+}
+
+/// The row of the 10:00 Spots item in the Log's view.
+fn spots_row(r: &Rig) -> fp_model::automation::ScheduleRow {
+    let want = r.item(today(), 10, 0, 0);
+    fp_model::automation::schedule_view(&r.s)
+        .into_iter()
+        .find(|row| matches!(row, fp_model::automation::ScheduleRow::Item { item, .. } if *item == want))
+        .unwrap()
+}
+
+#[test]
+fn a_category_item_set_as_next_shows_its_track_and_plays_it() {
+    let (mut r, _) = spots_block(TrackKind::Ad);
+    let mut other = Track::new(TrackId(902), PathBuf::from("/m/spot2.wav"));
+    other.duration_secs = 20.0;
+    other.category = r.s.library.get(TrackId(901)).unwrap().category;
+    other.kind = TrackKind::Ad;
+    r.s.library.insert(other);
+    r.at_hms(8, 0, 0);
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 0)));
+    let fp_model::automation::ScheduleRow::Item {
+        track, length_secs, ..
+    } = spots_row(&r)
+    else {
+        panic!()
+    };
+    let shown = track.expect("chosen as soon as it is next");
+    assert!(length_secs.is_some());
+    // What was shown is what plays.
+    r.at_hms(8, 0, 1);
+    r.apply(Command::Play(r.schedule_player()));
+    assert_eq!(r.playing(r.schedule_player()), Some(shown));
+}
+
+#[test]
+fn the_clocks_next_category_item_shows_its_track() {
+    let (mut r, _) = spots_block(TrackKind::Ad);
+    r.at_hms(9, 0, 0);
+    let fp_model::automation::ScheduleRow::Item { track, .. } = spots_row(&r) else {
+        panic!()
+    };
+    assert_eq!(track, Some(TrackId(901)));
+}
+
+#[test]
+fn a_category_with_nothing_to_play_says_so() {
+    let (mut r, _) = spots_block(TrackKind::Ad);
+    r.s.library.get_mut(TrackId(901)).unwrap().category = None;
+    r.at_hms(9, 0, 0);
+    let fp_model::automation::ScheduleRow::Item {
+        track,
+        nothing_to_play,
+        ..
+    } = spots_row(&r)
+    else {
+        panic!()
+    };
+    assert_eq!(track, None);
+    assert!(nothing_to_play);
+}
+
+#[test]
+fn during_the_fill_a_category_item_set_as_next_shows_its_track_and_follows_the_song() {
+    let (mut r, _) = spots_block(TrackKind::Ad);
+    r.at_hms(8, 0, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(8, 0, 1);
+    let f = r.filler_player();
+    assert!(r.playing(f).is_some());
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 0)));
+    r.at_hms(8, 0, 2);
+    let fp_model::automation::ScheduleRow::Item { track, .. } = spots_row(&r) else {
+        panic!()
+    };
+    assert_eq!(track, Some(TrackId(901)), "shown while the fill plays");
+    // The filler ends its song (held), then the Log plays the item.
+    assert!(r.player(f).stop_after_current);
+    r.end_current(f);
+    r.at_hms(8, 0, 3);
+    assert_eq!(r.playing(r.schedule_player()), Some(TrackId(901)));
+}
+
+#[test]
+fn during_the_fill_an_empty_category_set_as_next_says_so() {
+    let (mut r, _) = spots_block(TrackKind::Ad);
+    r.s.library.get_mut(TrackId(901)).unwrap().category = None;
+    r.at_hms(8, 0, 0);
+    r.apply(Command::StartAutomation);
+    r.at_hms(8, 0, 1);
+    r.apply(Command::SetScheduleNext(r.item(today(), 10, 0, 0)));
+    r.at_hms(8, 0, 2);
+    let fp_model::automation::ScheduleRow::Item {
+        nothing_to_play, ..
+    } = spots_row(&r)
+    else {
+        panic!()
+    };
+    assert!(nothing_to_play);
+    // It would be missed: the filler is not held for it.
+    r.at_hms(8, 0, 3);
+    assert!(!r.player(r.filler_player()).stop_after_current);
+}
+
+/// The longest run of `track` in a row in the filler's list.
+fn longest_run(r: &Rig, track: TrackId) -> usize {
+    let f = r.s.filler.as_ref().unwrap();
+    let list = r.s.playlists.get(f.playlist).unwrap();
+    let (mut best, mut run) = (0, 0);
+    for e in &list.entries {
+        if e.track == track {
+            run += 1;
+            best = best.max(run);
+        } else {
+            run = 0;
+        }
+    }
+    best
+}
+
+/// A rotation of an empty "Music" category (1–5) and a station ID (1),
+/// as the default rotation or as another one the filler plays.
+fn id_rotation(as_default: bool) -> Rig {
+    use fp_model::rotation::{RotationStep, StepSource};
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)])]);
+    let category = |r: &mut Rig, name: &str| {
+        r.apply(Command::CreateCategory {
+            parent: None,
+            name: name.into(),
+            color: None,
+            kind: TrackKind::Music,
+        });
+        r.s.categories.iter().last().unwrap().id
+    };
+    let empty: CategoryId = category(&mut r, "Music");
+    let ids: CategoryId = category(&mut r, "ID");
+    let mut t = Track::new(TrackId(950), PathBuf::from("/m/id.wav"));
+    t.duration_secs = 5.0;
+    t.category = Some(ids);
+    t.kind = TrackKind::Jingle;
+    r.s.library.insert(t);
+    let steps = vec![
+        RotationStep {
+            source: StepSource::Category(empty),
+            min: 1,
+            max: 5,
+        },
+        RotationStep {
+            source: StepSource::Category(ids),
+            min: 1,
+            max: 1,
+        },
+    ];
+    if as_default {
+        let rot = r.s.rotations.default_rotation().unwrap().clone();
+        r.apply(Command::UpdateRotation(fp_model::rotation::Rotation {
+            steps,
+            ..rot
+        }));
+    } else {
+        r.apply(Command::CreateRotation {
+            name: "With ID".into(),
+            steps,
+        });
+        let id = r.s.rotations.iter().last().unwrap().id;
+        r.apply(Command::SetFillerRotation(Some(id)));
+    }
+    r.at_hms(8, 0, 0);
+    r.apply(Command::StartAutomation);
+    for s in 1..30 {
+        r.at_hms(8, 0, s);
+    }
+    r
+}
+
+#[test]
+fn an_empty_step_never_plays_the_other_step_back_to_back() {
+    for as_default in [true, false] {
+        let r = id_rotation(as_default);
+        assert_eq!(longest_run(&r, TrackId(950)), 1, "default: {as_default}");
+        let f = r.s.filler.as_ref().unwrap();
+        let list = r.s.playlists.get(f.playlist).unwrap();
+        // Music stood in for the empty step.
+        assert!(
+            list.entries.iter().any(|e| e.track.0 <= 40),
+            "default: {as_default}"
+        );
+    }
+}
+
+#[test]
+fn separation_never_starves_a_step_into_back_to_back_ids() {
+    use fp_model::rotation::{RotationStep, StepSource};
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)])]);
+    r.s.config.automation = fp_model::Config::default().automation;
+    let category = |r: &mut Rig, name: &str| {
+        r.apply(Command::CreateCategory {
+            parent: None,
+            name: name.into(),
+            color: None,
+            kind: TrackKind::Music,
+        });
+        r.s.categories.iter().last().unwrap().id
+    };
+    let music: CategoryId = category(&mut r, "Musica");
+    let ids: CategoryId = category(&mut r, "ID");
+    for n in 1..=3 {
+        r.s.library.get_mut(TrackId(n)).unwrap().category = Some(music);
+    }
+    let mut t = Track::new(TrackId(950), PathBuf::from("/m/id.wav"));
+    t.duration_secs = 5.0;
+    t.category = Some(ids);
+    t.kind = TrackKind::Jingle;
+    r.s.library.insert(t);
+    let rot = r.s.rotations.default_rotation().unwrap().clone();
+    r.apply(Command::UpdateRotation(fp_model::rotation::Rotation {
+        steps: vec![
+            RotationStep {
+                source: StepSource::Category(music),
+                min: 1,
+                max: 5,
+            },
+            RotationStep {
+                source: StepSource::Category(ids),
+                min: 1,
+                max: 1,
+            },
+        ],
+        ..rot
+    }));
+    r.at_hms(8, 0, 0);
+    r.apply(Command::StartAutomation);
+    let f = r.filler_player();
+    for m in 0..60 {
+        r.at_hms(8, m, 0);
+        r.end_current(f);
+    }
+    let fl = r.s.filler.as_ref().unwrap();
+    let list = r.s.playlists.get(fl.playlist).unwrap();
+    // Three songs cannot keep the default separations: they are relaxed,
+    // the music step still plays and the ID stays between songs.
+    assert!(list.entries.iter().filter(|e| e.track.0 <= 3).count() > 20);
+    assert_eq!(longest_run(&r, TrackId(950)), 1);
+}

@@ -72,6 +72,27 @@ fn during_music_the_log_header_shows_the_song() {
     );
 }
 
+#[test]
+fn during_music_the_log_header_names_the_fill_not_the_song() {
+    let mut s = with_schedule();
+    let f = s.filler.as_ref().unwrap().clone();
+    let entry = s.playlists.get(f.playlist).unwrap().entries[0].clone();
+    let title = s.library.get(entry.track).unwrap().title.clone();
+    let before = {
+        let (h, _fake) = harness(s.clone());
+        h.query_all_by_label(&title).count()
+    };
+    s.automation.as_mut().unwrap().running = true;
+    let p = s.players.iter_mut().find(|p| p.id == f.player).unwrap();
+    p.current = Some(entry.id);
+    p.transport = fp_model::Transport::Playing;
+    let (h, _fake) = harness(s);
+    // The filler's column (hidden here) shows the song, its meter and its
+    // waveform; the Log only says what plays for it.
+    assert!(h.query_by_label("Music fill · Music").is_some());
+    assert_eq!(h.query_all_by_label(&title).count(), before, "{title}");
+}
+
 /// Today at 08:00, a 10:00 block with "Top of the Hour" (id 9000) and a
 /// category item.
 fn with_block() -> (AppState, fp_model::automation::ItemRef) {
@@ -323,14 +344,22 @@ fn edits(sent: &[Command]) -> Vec<fp_model::log_edit::LogEdit> {
         .collect()
 }
 
+/// Presses the footer's Add tile `label`, from the ⋯ menu when the
+/// column is too narrow to show it.
+fn add(h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>, label: &str) {
+    if h.query_by_label(label).is_none() {
+        h.get_by_label("More to add").click();
+        h.run();
+    }
+    h.get_by_label(label).click();
+    h.run();
+}
+
 #[test]
 fn add_block_sends_add_block_with_a_free_time() {
     let (s, _) = with_block();
     let (mut h, fake) = harness(s);
-    h.get_by_label("Add to the log").click();
-    h.run();
-    h.get_by_label("Block…").click();
-    h.run();
+    add(&mut h, "Block…");
     h.get_by_label("OK").click();
     h.run();
     assert_eq!(
@@ -346,10 +375,7 @@ fn add_music_fill_sends_insert() {
     let (s, item) = with_block();
     let rotation = s.rotations.default_id().unwrap();
     let (mut h, fake) = harness(s);
-    h.get_by_label("Add to the log").click();
-    h.run();
-    h.get_by_label("Music fill (rotation)…").click();
-    h.run();
+    add(&mut h, "Music fill (rotation)…");
     h.get_by_label("OK").click();
     h.run();
     assert_eq!(
@@ -436,10 +462,7 @@ fn add_category_track_sends_insert() {
     .unwrap();
     let category = s.categories.iter().next().unwrap().id;
     let (mut h, fake) = harness(s);
-    h.get_by_label("Add to the log").click();
-    h.run();
-    h.get_by_label("Category track…").click();
-    h.run();
+    add(&mut h, "Category track…");
     h.get_by_label("OK").click();
     h.run();
     assert_eq!(
@@ -459,10 +482,7 @@ fn add_category_track_sends_insert() {
 fn cancel_sends_nothing() {
     let (s, _) = with_block();
     let (mut h, fake) = harness(s);
-    h.get_by_label("Add to the log").click();
-    h.run();
-    h.get_by_label("Block…").click();
-    h.run();
+    add(&mut h, "Block…");
     h.get_by_label("Cancel").click();
     h.run();
     assert!(edits(&fake.take_sent()).is_empty());
@@ -473,10 +493,7 @@ fn cancel_sends_nothing() {
 fn add_track_opens_the_library() {
     let (s, _) = with_block();
     let (mut h, fake) = harness(s);
-    h.get_by_label("Add to the log").click();
-    h.run();
-    h.get_by_label("Track…").click();
-    h.run();
+    add(&mut h, "Track…");
     assert!(
         fake.take_sent()
             .iter()
@@ -510,6 +527,38 @@ fn the_block_menu_changes_its_time() {
         vec![fp_model::log_edit::LogEdit::MoveBlock {
             block: item.block,
             start: fp_model::local_time::TimeOfDay::hms(10, 0, 0).unwrap()
+        }]
+    );
+}
+
+#[test]
+fn a_click_on_a_block_offers_to_add_to_it() {
+    let (s, item) = with_block();
+    let rotation = s.rotations.default_id().unwrap();
+    let (mut h, fake) = harness(s);
+    let at = todays_header(&h);
+    h.hover_at(at);
+    h.run();
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+    }
+    h.run();
+    assert!(h.query_by_label("Remove block").is_some());
+    h.get_by_label("Music fill (rotation)…").click();
+    h.run();
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Insert {
+            block: item.block,
+            index: usize::MAX,
+            items: vec![fp_model::schedule::Item::Rotation { rotation }],
         }]
     );
 }
@@ -625,9 +674,9 @@ fn add_skips_todays_block_that_already_played() {
     let a = s.automation.as_mut().unwrap();
     a.started.insert((item.date, item.block));
     a.next = None;
-    let (mut h, _fake) = harness(s);
-    h.get_by_label("Add to the log").click();
-    h.run();
+    let (h, _fake) = harness(s);
+    // Two tiles: no ⋯ menu, and Block… in sight.
+    assert!(h.query_by_label("More to add").is_none());
     assert!(h.query_by_label("Block…").is_some());
     assert!(h.query_by_label("Category track…").is_none());
 }
@@ -670,9 +719,7 @@ fn add_skips_a_coming_block_already_played_by_hand() {
     let a = s.automation.as_mut().unwrap();
     a.started.insert((item.date, item.block));
     a.next = None;
-    let (mut h, _fake) = harness(s);
-    h.get_by_label("Add to the log").click();
-    h.run();
+    let (h, _fake) = harness(s);
     assert!(h.query_by_label("Category track…").is_none());
 }
 
@@ -725,5 +772,46 @@ fn files_dropped_on_a_log_row_go_before_it() {
             .iter()
             .any(|c| matches!(c, Command::InsertPaths { .. })),
         "not into a player's list"
+    );
+}
+
+#[test]
+fn a_category_with_nothing_to_play_says_so_on_the_log() {
+    let (mut s, item) = with_block();
+    apply(
+        &mut s,
+        Command::CreateCategory {
+            parent: None,
+            name: "Spots".into(),
+            color: None,
+            kind: fp_model::TrackKind::Ad,
+        },
+    )
+    .unwrap();
+    let spots = s.categories.iter().last().unwrap().id;
+    apply(
+        &mut s,
+        Command::EditPlan {
+            target: fp_model::log_edit::EditTarget::Date(item.date),
+            edit: fp_model::log_edit::LogEdit::Insert {
+                block: item.block,
+                index: usize::MAX,
+                items: vec![fp_model::schedule::Item::Category {
+                    category: spots,
+                    time_critical: false,
+                }],
+            },
+        },
+    )
+    .unwrap();
+    apply(
+        &mut s,
+        Command::SetScheduleNext(fp_model::automation::ItemRef { index: 1, ..item }),
+    )
+    .unwrap();
+    let (h, _fake) = harness(s);
+    assert!(
+        h.query_by_label("No track to play in this category")
+            .is_some()
     );
 }

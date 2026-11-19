@@ -3,11 +3,16 @@
 //! floats over the main window, like the library, so tracks are dragged
 //! from the library into it.
 
-use egui::{Align, Layout, Rect, UiBuilder, pos2, vec2};
+use egui::{Align, Align2, Frame, Layout, Rect, Stroke, UiBuilder, pos2, vec2};
+use egui_phosphor::regular as icon;
 use fp_model::automation::{ScheduleRow, plan_view};
 use fp_model::log_edit::EditTarget;
 
 use super::app::{Scene, ViewState};
+use super::library::TITLE_BAR_HEIGHT;
+use super::panels;
+use super::theme;
+use super::widgets::{self, font, font_semibold};
 
 /// The footer's height, as a player's.
 const FOOTER_HEIGHT: f32 = 24.0;
@@ -78,9 +83,17 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
         EditTarget::Date(_) => None,
     };
     let mut open = true;
-    egui::Window::new(title)
+    // The library window's look: a slim title bar with a close button over
+    // the list, and the list's footer along the bottom edge.
+    egui::Window::new(title.clone())
         .id(egui::Id::unique("plan-window"))
-        .open(&mut open)
+        .title_bar(false)
+        .frame(
+            Frame::new()
+                .fill(theme::SURFACE)
+                .stroke(Stroke::new(1.0, theme::NEUTRAL_800))
+                .inner_margin(0.0),
+        )
         .default_size(vec2(620.0, 520.0))
         // First shown in the middle of the screen, clear of the top bar.
         .pivot(egui::Align2::CENTER_CENTER)
@@ -94,10 +107,17 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
                 area.min,
                 vec2(area.width(), area.height().max(ui.min_rect().height())),
             );
+            let bar = Rect::from_min_size(area.min, vec2(area.width(), TITLE_BAR_HEIGHT));
+            if title_bar(ui, scene, bar, &title) {
+                open = false;
+            }
             let footer_top = area.bottom() - FOOTER_HEIGHT;
             let mut table_ui = ui.new_child(
                 UiBuilder::new()
-                    .max_rect(Rect::from_min_max(area.min, pos2(area.right(), footer_top)))
+                    .max_rect(Rect::from_min_max(
+                        pos2(area.left(), bar.bottom()),
+                        pos2(area.right(), footer_top),
+                    ))
                     .layout(Layout::top_down(Align::Min)),
             );
             super::schedule::log_table(&mut table_ui, scene, view_state, &rows, template, false);
@@ -119,4 +139,48 @@ pub(crate) fn draw(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mut View
     if !open {
         close(view_state, target);
     }
+}
+
+/// The title bar: the title and a close button. Painted, not a label: the
+/// window carries the title for assistive technology. Dragging the bar
+/// moves the window. Returns whether close was pressed.
+fn title_bar(ui: &mut egui::Ui, scene: &Scene<'_>, bar: Rect, title: &str) -> bool {
+    let painter = ui.painter();
+    painter.rect_filled(bar, 0.0, theme::NEUTRAL_900);
+    painter.hline(
+        bar.x_range(),
+        bar.bottom() - 0.5,
+        Stroke::new(1.0, theme::DIVIDER),
+    );
+    let room = Rect::from_min_max(
+        pos2(bar.left() + 10.0, bar.top()),
+        pos2(
+            bar.right() - 10.0 - panels::HEADER_BUTTON_SIZE - 8.0,
+            bar.bottom(),
+        ),
+    );
+    painter.with_clip_rect(room.intersect(ui.clip_rect())).text(
+        pos2(room.left(), room.center().y),
+        Align2::LEFT_CENTER,
+        title,
+        font_semibold(12.0),
+        theme::TEXT,
+    );
+    let mut row = ui.new_child(
+        UiBuilder::new()
+            .max_rect(bar.shrink2(vec2(10.0, 0.0)))
+            .layout(Layout::right_to_left(Align::Center)),
+    );
+    let label = scene.i18n.tr("plan-window-close");
+    widgets::tile(
+        &mut row,
+        vec2(panels::HEADER_BUTTON_SIZE, panels::HEADER_BUTTON_SIZE),
+        &label,
+        true,
+        panels::header_button_style(),
+        |p, r, c| {
+            p.text(r.center(), Align2::CENTER_CENTER, icon::X, font(12.0), c);
+        },
+    )
+    .clicked()
 }

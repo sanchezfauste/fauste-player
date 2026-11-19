@@ -33,7 +33,8 @@ The first rotation created becomes the default; deleting the default makes
 the first remaining one the default; the last rotation cannot be deleted.
 At every start the app calls `rotation::ensure_default`, which creates
 "Music" (one step, all music, 1–1) when there is no rotation at all. A step
-on a deleted category stays stored; selection skips it.
+on a deleted category stays stored; in its turn selection plays a
+stand-in (`rotation_cursor::stand_in`, below).
 
 The walk (`rotation_cursor.rs`) draws a step's count each time it comes
 up; a draw of 0 passes the step over. `walk` goes over the steps at most
@@ -101,8 +102,13 @@ stands in its rotation; it is plain data, saved with the filler.
   next step comes up (after the last, the first again), with a count drawn
   afresh in its `min..=max` (AU2);
 - a step whose source yields nothing (a deleted or empty category, every
-  file missing) is skipped and listed in `skipped_steps` for the caller's
-  log; one call tries every step at most once;
+  file missing) is listed in `skipped_steps` for the caller's log and
+  plays a stand-in in its turn (`stand_in`): the default rotation's next
+  track on a cursor of its own (`used_default`), or any music for a step
+  of the default rotation itself; only when that yields nothing too is the
+  step skipped, so the other steps never play back to back in its place
+  (a music step left empty would otherwise queue a station ID over and
+  over); one call tries every step at most once;
 - an unknown rotation, one without steps, or one whose steps all came up
   empty falls back on the default rotation through a cursor of its own, so
   the caller's cursor keeps its place (`used_default`, AU34). With nothing
@@ -350,13 +356,24 @@ the block on air calls `automation::reload_after`, which loads the
 block again from the row after the one on air, by hand (so no hard-start
 item turns late), keeping next, a hand-over or hold, the missed marks and
 how the block was reached. `AutomationState::chosen` keeps the track
-chosen for each loaded category item (yesterday on): reused when the
-block is loaded again and shown after it played.
+chosen for each category item (yesterday on): reused when the block is
+loaded (again) while `still_fits` (playable and still in the category's
+subtree), and shown after it played. `choose_ahead`, run by
+`reducer::settle_all` after `settle_next`, chooses it as soon as the item
+is next or after next in a block not yet loaded, so the Log shows what
+will play; the items whose category has nothing to play go into
+`nothing_to_play`, and a next set by hand that would load nothing
+(`plays_nothing`) does not hold the filler. After a date edit `log_edit::keep_chosen` moves each
+chosen track of the touched blocks with its own item (`log_edit::moved_to`
+maps each old position to the new one for the edit: an insert shifts the
+items after it, a remove drops its item, a move takes the item out and
+puts it back, a revert drops the block's); a removed item's track leaves
+with it.
 
 `schedule_view` gives each item row its planned start (`starts_at`: the
 block's start plus the known lengths before it), the track it plays
-(`track`: a category item's chosen track while its block is loaded, from
-`rows`), `late` (AR11) and each block row its `total_secs` and
+(`track`: a category item's chosen track, from `chosen` and `rows`),
+`nothing_to_play`, `late` (AR11) and each block row its `total_secs` and
 `overrun_secs` (known lengths only; the library-wide category lengths are
 too costly per frame). `fill_item` is the rotation item whose music is
 on air, shown `OnAir` while `fill_is_current`.

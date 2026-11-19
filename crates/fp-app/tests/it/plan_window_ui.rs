@@ -105,8 +105,6 @@ fn add_block_in_the_popup_edits_the_template() {
     let (s, base, _) = with_templates();
     let (mut h, fake) = open(s, EditTarget::Template(base));
     fake.take_sent();
-    h.get_by_label("Add to the list").click();
-    h.run();
     h.get_by_label("Block…").click();
     h.run();
     h.get_by_label("OK").click();
@@ -221,20 +219,28 @@ fn a_past_dates_popup_closes() {
 }
 
 #[test]
-fn closing_the_popup_drops_its_open_dialog() {
+fn the_popups_close_button_closes_it() {
     let (s, base, _) = with_templates();
-    let (mut h, fake) = open(s, EditTarget::Template(base));
-    h.get_by_label("Add to the list").click();
-    h.run();
-    h.get_by_label("Block…").click();
-    h.run();
-    assert!(h.query_by_label("OK").is_some());
+    let (mut h, _fake) = open(s, EditTarget::Template(base));
     h.get_by_label("Close window").click();
     h.run();
     h.run();
     assert!(h.query_by_label_contains("Template ·").is_none());
-    assert!(h.query_by_label("OK").is_none(), "the dialog went with it");
+}
+
+#[test]
+fn escape_cancels_the_popups_dialog_and_keeps_the_popup() {
+    let (s, base, _) = with_templates();
+    let (mut h, fake) = open(s, EditTarget::Template(base));
     fake.take_sent();
+    h.get_by_label("Block…").click();
+    h.run();
+    assert!(h.query_by_label("OK").is_some());
+    h.key_press(egui::Key::Escape);
+    h.run();
+    assert!(h.query_by_label("OK").is_none());
+    assert!(h.query_by_label("Template · Base").is_some());
+    assert!(edits(&fake.take_sent()).is_empty());
 }
 
 #[test]
@@ -248,10 +254,8 @@ fn todays_popup_adds_nothing_to_a_block_that_already_played() {
         .unwrap()
         .started
         .insert((today, block));
-    let (mut h, _fake) = open(s, EditTarget::Date(today));
+    let (h, _fake) = open(s, EditTarget::Date(today));
     assert!(h.query_by_label("Day · 2026-11-17").is_some());
-    h.get_by_label("Add to the list").click();
-    h.run();
     assert!(h.query_by_label("Block…").is_some());
     assert!(h.query_by_label("Category track…").is_none());
 }
@@ -304,4 +308,72 @@ fn files_dropped_on_the_popup_go_into_the_template() {
             .iter()
             .any(|c| matches!(c, Command::InsertPaths { .. }))
     );
+}
+
+#[test]
+fn the_popups_footer_shows_every_add_button() {
+    let (s, base, _) = with_templates();
+    let (h, _fake) = open(s, EditTarget::Template(base));
+    for label in [
+        "Track…",
+        "Category track…",
+        "Music fill (rotation)…",
+        "Block…",
+    ] {
+        assert!(h.query_by_label(label).is_some(), "{label}");
+    }
+    assert!(h.query_by_label("More to add").is_none());
+}
+
+#[test]
+fn a_column_edge_of_the_list_resizes_like_a_playlists() {
+    let (s, base, _) = with_templates();
+    let log = s.automation.as_ref().unwrap().player;
+    let (mut h, fake) = open(s, EditTarget::Template(base));
+    // The popup's header: the one with a Time column.
+    let time = h.get_by_label("TIME").rect();
+    let artist = h
+        .query_all_by_label("ARTIST")
+        .map(|n| n.rect())
+        .find(|r| (r.center().y - time.center().y).abs() < 1.0)
+        .unwrap();
+    let from = egui::pos2(artist.left() - 8.0, artist.center().y);
+    h.event(egui::Event::PointerMoved(from));
+    h.run_steps(1);
+    let press = |h: &mut egui_kittest::Harness<'static, fp_app::ui::app::AppUi>,
+                 pos: egui::Pos2,
+                 pressed: bool| {
+        h.event(egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+    };
+    press(&mut h, from, true);
+    h.run_steps(2);
+    fake.take_sent();
+    let to = egui::pos2(from.x + 60.0, from.y);
+    for step in 1..=6 {
+        h.event(egui::Event::PointerMoved(egui::pos2(
+            from.x + step as f32 * 10.0,
+            from.y,
+        )));
+        h.run_steps(1);
+    }
+    press(&mut h, to, false);
+    h.run_steps(2);
+    let sent: Vec<_> = fake
+        .take_sent()
+        .into_iter()
+        .filter_map(|c| match c {
+            Command::SetColumnWidths(player, widths) => Some((player, widths)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(sent.len(), 1, "{sent:?}");
+    assert_eq!(sent[0].0, log);
+    let title = sent[0].1.fraction(fp_model::TableColumn::Title).unwrap();
+    let artist = sent[0].1.fraction(fp_model::TableColumn::Artist).unwrap();
+    assert!(title > artist, "{:?}", sent[0].1);
 }

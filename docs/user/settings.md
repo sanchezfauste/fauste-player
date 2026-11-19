@@ -287,7 +287,9 @@ and the music fill's rules (not on Android).
   kind), how many it plays each time (**At least** 0–99, **At most**
   1–99; at least 0 lets the step sit out some turns), **Up**, **Down** and
   **Remove**. **Add step** adds one at the end. A step
-  whose category was deleted says so; the music fill skips it.
+  whose category was deleted says so; in its turn the music fill plays a
+  song of the default rotation instead (any music, if the step is the
+  default rotation's own).
 - **Templates and days:** the templates, with **Edit…** (it opens the
   template as a list and closes Settings), **New template**,
   **Duplicate**, **Delete** and the name; the **week plan**, a template

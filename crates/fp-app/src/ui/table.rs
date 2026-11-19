@@ -160,7 +160,7 @@ pub(crate) struct LiveResize {
 /// dragged (or just released). Called before anything is drawn, so a drag
 /// shows in the same frame as the pointer move.
 #[allow(clippy::too_many_arguments)]
-fn live_widths(
+pub(crate) fn live_widths(
     ui: &Ui,
     scene: &Scene<'_>,
     view_state: &mut ViewState,
@@ -753,7 +753,7 @@ pub(crate) fn track_table(
 /// The grab zones on the column edges (feedback 2 spec O16): they start a
 /// drag, which `live_widths` follows from the next frame on, and draw the
 /// separator lines. They sit over the rows, as the table's own did.
-fn resize_handles(
+pub(crate) fn resize_handles(
     ui: &mut Ui,
     view_state: &mut ViewState,
     player: PlayerId,

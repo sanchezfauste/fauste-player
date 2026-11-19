@@ -2,8 +2,11 @@
 //! again from the first after the last, each playing a count drawn afresh
 //! in its range every time it comes up. A step that draws 0 sits out that
 //! turn; when every step of a pass draws 0, the next pass draws at least 1
-//! for each, so the rotation always plays. A step that yields nothing is
-//! skipped; a rotation that yields nothing falls back on the default.
+//! for each, so the rotation always plays. A step that yields nothing
+//! plays a stand-in instead (the default rotation's track, or any music
+//! when the step is the default's own), so the other steps never play back
+//! to back in its place; only when that yields nothing too is it skipped.
+//! A rotation that yields nothing falls back on the default.
 
 use serde::{Deserialize, Serialize};
 
@@ -86,6 +89,7 @@ pub fn next_track_fitted(
             rng,
             fit,
             &mut out.skipped_steps,
+            &mut out.used_default,
         );
         if out.picked.is_some() {
             return out;
@@ -105,6 +109,7 @@ pub fn next_track_fitted(
             rng,
             fit,
             &mut ignored,
+            &mut false,
         );
         out.used_default = true;
     } else if own.is_none() {
@@ -126,6 +131,8 @@ fn walk(
     rng: &mut SplitMix64,
     fit: Option<&Fit>,
     skipped: &mut Vec<usize>,
+    // Set when a stand-in came from the default rotation.
+    from_default: &mut bool,
 ) -> Option<Picked> {
     let len = rotation.steps.len();
     if len == 0 {
@@ -146,20 +153,73 @@ fn walk(
             continue;
         }
         let step = rotation.steps.get(cursor.step)?;
-        match pick_fitted(state, &step.source, at, planned, rng, fit) {
+        let own = pick_fitted(state, &step.source, at, planned, rng, fit);
+        if own.is_none() && !skipped.contains(&cursor.step) {
+            skipped.push(cursor.step);
+        }
+        let picked = match own {
+            Some(p) => Some(p),
+            None => {
+                let (p, default) = stand_in(state, rotation, at, planned, rng, fit);
+                *from_default |= default && p.is_some();
+                p
+            }
+        };
+        match picked {
             Some(picked) => {
                 cursor.left = cursor.left.saturating_sub(1);
                 return Some(picked);
             }
-            None => {
-                if !skipped.contains(&cursor.step) {
-                    skipped.push(cursor.step);
-                }
-                cursor.left = 0;
-            }
+            None => cursor.left = 0,
         }
     }
     None
+}
+
+/// AU34: what an empty step plays in its turn: the default rotation's
+/// next track (from its start, on a cursor of its own; `true` with it), or,
+/// for a step of the default rotation itself, any music. Without it a rotation of music
+/// and a station ID whose music step is empty plays the ID back to back.
+fn stand_in(
+    state: &AppState,
+    rotation: &Rotation,
+    at: WallTime,
+    planned: Planned<'_>,
+    rng: &mut SplitMix64,
+    fit: Option<&Fit>,
+) -> (Option<Picked>, bool) {
+    match state
+        .rotations
+        .default_rotation()
+        .filter(|d| d.id != rotation.id)
+    {
+        Some(default) => {
+            let mut cursor = RotationCursor::new(default.id);
+            let picked = walk(
+                state,
+                default,
+                &mut cursor,
+                at,
+                planned,
+                rng,
+                fit,
+                &mut Vec::new(),
+                &mut false,
+            );
+            (picked, true)
+        }
+        None => (
+            pick_fitted(
+                state,
+                &crate::rotation::StepSource::Kind(crate::track::TrackKind::Music),
+                at,
+                planned,
+                rng,
+                fit,
+            ),
+            false,
+        ),
+    }
 }
 
 /// A step's count for this turn, in its range; at least 1 when asked.

@@ -177,6 +177,56 @@ pub fn column_px(
     fit(&wanted, &mins, width)
 }
 
+/// The Log's columns (automation rework AR14), keyed as a playlist's so
+/// its widths are stored like a player's: Time takes the place of `#`.
+pub const LOG_COLUMNS: [TableColumn; 4] = [
+    TableColumn::Number,
+    TableColumn::Title,
+    TableColumn::Artist,
+    TableColumn::Duration,
+];
+
+/// The Time column's default width (`HH:MM:SS` with room) and minimum.
+const LOG_TIME_WIDTH: f32 = 76.0;
+const LOG_TIME_MIN: f32 = 66.0;
+/// The Duration column's default width.
+const LOG_DURATION_WIDTH: f32 = 60.0;
+
+/// The narrowest each of [`LOG_COLUMNS`] may be.
+pub fn log_mins() -> [f32; 4] {
+    [
+        LOG_TIME_MIN,
+        column_min(TableColumn::Title, 0),
+        column_min(TableColumn::Artist, 0),
+        column_min(TableColumn::Duration, 0),
+    ]
+}
+
+/// Pixel widths of [`LOG_COLUMNS`] for a table `width` wide: the stored
+/// fractions, else Time and Duration at their usual width, Artist 28 % and
+/// Title the rest. The minimums win; the widths add up to `width`.
+pub fn log_px(stored: &ColumnWidths, width: f32) -> Vec<f32> {
+    let width = if width.is_finite() {
+        width.max(0.0)
+    } else {
+        0.0
+    };
+    let stored = stored.clone().normalized();
+    let fractions: Option<Vec<f32>> = LOG_COLUMNS.iter().map(|c| stored.fraction(*c)).collect();
+    let wanted = match fractions.filter(|f| f.iter().sum::<f32>() > 0.0) {
+        Some(f) => {
+            let total: f32 = f.iter().sum();
+            f.iter().map(|x| x / total * width).collect()
+        }
+        None => {
+            let artist = (width * 0.28).max(column_min(TableColumn::Artist, 0));
+            let title = width - LOG_TIME_WIDTH - LOG_DURATION_WIDTH - artist;
+            vec![LOG_TIME_WIDTH, title, artist, LOG_DURATION_WIDTH]
+        }
+    };
+    fit(&wanted, &log_mins(), width)
+}
+
 /// The widths while the right edge of column `edge` is dragged so that the
 /// column is `new_width` wide (O16). The columns on its left keep their
 /// width; the ones on its right share what is left in proportion to their

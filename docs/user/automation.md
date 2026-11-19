@@ -25,27 +25,39 @@ block of yesterday and the first of tomorrow. The item on air and the
 next one are marked as on a player; items that already aired are dimmed,
 and an item that did not air (**missed**) is struck through. A clock
 marks a **hard start** item, which plays only at its time. A **category
-track** shows the track chosen for it once its block is loaded, with the
-category after it. The **music fill** row says until when it plays, and
+track** shows the track chosen for it as soon as it is next (or comes
+after next in its block), with the category after it: that is the track
+that plays. If the category has no track that can play (none assigned to
+it, or their files are missing), the row says so in amber, and the item
+will be missed. Assign tracks to a category in the library. The **music fill** row says until when it plays, and
 shows as on air while the music fill plays for the Log. A next whose
-time has passed shows its time in amber.
+time has passed shows its time in amber. Drag the line between two
+column headers to resize the columns, as on a playlist; the template and
+day windows use the same widths.
 
 ### Changing today's log
 
 You change the Log as you change a playlist, and the change is for that
 day only: the template stays as it is.
 
-- **Add**, at the bottom of the column: **Track…** opens the library, to
-  drag tracks onto the list; **Category track…** and **Music fill
-  (rotation)…** ask which one and add it to the coming block; **Block…**
-  asks for a time, with the first free one already filled in.
+- The buttons at the bottom of the column: **+ Track…** opens the
+  library, to drag tracks onto the list; **+ Category track…** and
+  **+ Music fill (rotation)…** ask which one and add it to the coming
+  block; **+ Block…** asks for a time, with the first free one already
+  filled in. When the column is too narrow for all of them, the ones
+  that do not fit are behind **⋯**.
 - Drag tracks from the library, or audio files from your file manager,
   onto a row to put them before it (or
   after it, on the row's lower half, as on a playlist: that is how they
   go at a block's end), and drag rows within the same day to move them.
-- Right-click a row for **Hard start** and **Remove from today's log**;
-  right-click a block header for **Change time…**, **Remove block** and,
-  on a changed block, **Back to the template**.
+- Right-click a row for **Hard start** and **Remove from today's log**.
+  Click (or right-click) a block header to add a **Track…**, a
+  **Category track…** or a **Music fill (rotation)…** at the end of that
+  block, or for **Change time…**, **Remove block** and, on a changed
+  block, **Back to the template**.
+- While you drag over a block header, the line under it shows that the
+  drop goes at the start of that block; to put rows at the end of the
+  block above, drop them on the lower half of its last row.
 - What already played, the item on air and past days cannot be changed.
   A change to the block on air takes effect after the item on air.
 
@@ -68,8 +80,10 @@ player:
 - **SINGLE** makes the Log manual: Play plays the next item, and it stops
   after it; no block starts by itself.
 
-While the music fill plays between blocks, the Log's header shows its
-song.
+While the music fill plays between blocks, the Log's header says
+**Music fill · *rotation*** (the rotation it plays) and its buttons
+still work; the song, its meter and its waveform are in the Music fill
+column only.
 
 When automation stops, next stays on the item below the one that played,
 and Play plays it, whatever the time: you choose. To change what plays
@@ -96,10 +110,10 @@ Android); the Log column changes only today, as above.
 
 A template or a date opens in its own window, which closes Settings. It
 is the same list as the Log column, and you change it the same way:
-**Add** at its bottom (Track…, Category track…, Music fill (rotation)…,
-Block…), tracks dragged from the library (or files from your file
+the buttons at its bottom (Track…, Category track…, Music fill
+(rotation)…, Block…), tracks dragged from the library (or files from your file
 manager) onto a row, rows dragged to
-move them, and the right-click menus of rows and block headers. It never
+move them, the right-click menu of rows and the block headers' menu. It never
 plays, and it can stay open beside the library. Today's window shows
 what played and what plays, as the Log does; a day's window closes at
 midnight, when that day can no longer change.
@@ -177,6 +191,11 @@ the next. A range from **0** lets a step sit out some turns: with Gold at
 0–1, a gold song plays after the station ID some times and not others.
 The most is always at least 1. One rotation is the **default**: a new
 installation has one, **Music**, which plays all your music.
+
+A step whose category has no track that can play (an empty category, or
+files that are missing) plays a song of the default rotation in its turn
+(any music, if the step is the default rotation's own), so the other
+steps keep their place: a station ID still comes between songs.
 
 Rotations are made in Settings → Automation:
 

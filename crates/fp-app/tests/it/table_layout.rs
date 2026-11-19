@@ -3,8 +3,8 @@
 
 use egui::{Rect, pos2, vec2};
 use fp_app::ui::table_layout::{
-    DRAG_SCROLL_EDGE, DRAG_SCROLL_MAX_SPEED, boundary_y, column_min, column_px, drag_scroll_speed,
-    drop_index, fit, fractions_of, on_column_edge, resize_px,
+    DRAG_SCROLL_EDGE, DRAG_SCROLL_MAX_SPEED, LOG_COLUMNS, boundary_y, column_min, column_px,
+    drag_scroll_speed, drop_index, fit, fractions_of, log_mins, log_px, on_column_edge, resize_px,
 };
 use fp_model::TableColumn::{Album, Artist, Date, Duration, FileName, Genre, Intro, Number, Title};
 use fp_model::{ColumnWidths, TableColumn, default_columns};
@@ -430,4 +430,33 @@ fn a_short_body_keeps_a_still_middle() {
     assert_eq!(drag_scroll_speed(body, pos2(50.0, 130.0)), 0.0);
     assert!(drag_scroll_speed(body, pos2(50.0, 105.0)) < 0.0);
     assert!(drag_scroll_speed(body, pos2(50.0, 155.0)) > 0.0);
+}
+
+// --- log_px (the Log's Time, Title, Artist and Duration)
+
+#[test]
+fn the_logs_default_layout_is_what_it_always_had() {
+    let px = log_px(&ColumnWidths::default(), 1000.0);
+    assert!(near(px[0], 76.0), "{px:?}");
+    assert!(near(px[2], 280.0), "{px:?}");
+    assert!(near(px[3], 60.0), "{px:?}");
+    assert!(near(sum(&px), 1000.0), "{px:?}");
+}
+
+#[test]
+fn the_logs_stored_widths_are_kept_and_scaled() {
+    let stored = fractions_of(&LOG_COLUMNS, &[100.0, 500.0, 300.0, 100.0]);
+    let px = log_px(&stored, 2000.0);
+    assert!(near(px[0], 200.0), "{px:?}");
+    assert!(near(px[1], 1000.0), "{px:?}");
+    assert!(near(sum(&px), 2000.0), "{px:?}");
+}
+
+#[test]
+fn the_logs_columns_never_go_under_their_minimum() {
+    let stored = fractions_of(&LOG_COLUMNS, &[1.0, 900.0, 98.0, 1.0]);
+    let px = log_px(&stored, 1000.0);
+    for (w, m) in px.iter().zip(log_mins()) {
+        assert!(*w + 0.01 >= m, "{px:?}");
+    }
 }
