@@ -235,7 +235,8 @@ hand plays in full.
   filler chooses the last songs so that the faded part is small (at most
   `automation.max_fade_cut_secs` after the block's start) and never
   starts a song that would play
-  for less than `automation.min_song_play_secs` before the block
+  for less than `automation.min_song_play_secs` (never less than the
+  fade) before the block
   *(maintainer: the goal; the selection method is the builder's call within
   §6's classic methods)*. If no choice satisfies both, the one that cuts least
   wins and a line is logged: a fragment is to be avoided, and accepted

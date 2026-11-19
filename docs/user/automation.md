@@ -88,8 +88,10 @@ While the music fill plays between blocks, the Log's header says
 still work; the song, its meter and its waveform are in the Music fill
 column only.
 
-When automation stops, next stays on the item below the one that played,
-and Play plays it, whatever the time: you choose. To change what plays
+When automation stops after an item, next stays on the item below the
+one that played, and Play plays it, whatever the time: you choose. When
+it stops during the music, Play plays music again until the next block,
+unless you chose another next. To change what plays
 next, double-click an item, or right-click it and choose **Play next**.
 **Back to the clock**, in the same menu, sets next to what the time says.
 

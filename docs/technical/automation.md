@@ -141,9 +141,12 @@ those. Rules about sound (on air, playout, pre-listen) see the filler too.
   expected start) and appends it. The tracks the blocks of the window
   will play (track items, and the tracks chosen for category items;
   `automation::scheduled_until`) are passed as `planned` too, at their
-  block's start, when that is within the larger separation of the pick,
-  so the filler does not play a song or an artist a block plays soon
-  after. A row whose track has no known length
+  block's start, so the filler does not play a song or an artist a block
+  plays soon after (only while automation runs, and not for a block
+  passed over). A planned time after the pick counts within each rule's
+  own separation: the track's time (the share of the pool has no meaning
+  ahead) and the artist's. The list is built once per top-up, and only
+  when a row is to be added. A row whose track has no known length
   counts `UNKNOWN_LENGTH_SECS` (180 s), and one settle adds at most
   `MAX_ADDED_PER_SETTLE` (50) rows. When nothing can be added and nothing is
   ahead, `starved` is set for the column's alert.
@@ -488,10 +491,13 @@ known lengths, a classic method.
   The fit and the separation rules both, whenever possible: *ends* and
   *room* with both separation rules, then with the track rule alone; then
   *loose room* the same way; then every class with the separation
-  relaxed. When no track
+  relaxed. The minimum a song leaves before the block is never below the
+  fade (`fit_for`), or the next song could not start before the fade and
+  the block would start early. When no track
   fits, the one that cuts least wins (then the one that leaves least, then
-  the least recently aired) among the tracks both separation rules allow,
-  else the track rule alone, else any; `Picked::unfitted` says so, and
+  the least recently aired) among the tracks of known length both
+  separation rules allow, else the track rule alone, else any; then the
+  same among tracks of unknown length; `Picked::unfitted` says so, and
   `FillerState::unfitted` counts it; the conductor logs a line when that
   count grows. Far from the block (a gap of at least twice the pool's
   longest track plus the minimum) every known track leaves room, and the

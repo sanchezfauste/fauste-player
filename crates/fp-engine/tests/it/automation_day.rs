@@ -822,10 +822,12 @@ fn report(sim: &Sim, st: &Station, d0: NaiveDate, d1: NaiveDate) {
                 );
             } else if ta.artist == tb.artist {
                 problems.push(format!(
-                    "artist {} at {} and {}",
+                    "artist {} at {} ({}) and {} ({})",
                     ta.artist,
                     a.started.format("%H:%M:%S"),
-                    b.started.format("%H:%M:%S")
+                    a.player,
+                    b.started.format("%H:%M:%S"),
+                    b.player
                 ));
             }
         }

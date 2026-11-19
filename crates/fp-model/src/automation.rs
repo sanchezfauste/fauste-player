@@ -1435,21 +1435,22 @@ pub fn coming_start(state: &AppState) -> Option<NaiveDateTime> {
     block_start(state, next.date, next.block)
 }
 
-/// AU31, AU32: the tracks the blocks of the window will play from now
-/// to `until` (their track items, and the tracks chosen for their
-/// category items), each at its block's start: the filler counts them as
+/// AU31, AU32: while automation runs, the tracks the blocks of the window
+/// will play from now to `until` (their track items, and the tracks
+/// chosen for their category items), each at its block's start: the filler counts them as
 /// aired then, so it does not play a song (or an artist) a block plays
 /// soon after.
 pub(crate) fn scheduled_until(
     state: &AppState,
     until: NaiveDateTime,
 ) -> Vec<(TrackId, crate::WallTime)> {
-    let Some(a) = state.automation.as_ref() else {
+    // Stopped, no block plays by the clock.
+    let Some(a) = state.automation.as_ref().filter(|a| a.running) else {
         return Vec::new();
     };
     let mut out = Vec::new();
     for (date, start, b) in window_blocks(state) {
-        if start <= state.local_now || start > until || started(state, date, b.id) {
+        if start <= state.local_now || start > until || passed_over(state, date, b.id) {
             continue;
         }
         let ms = (start - state.local_now).num_milliseconds();

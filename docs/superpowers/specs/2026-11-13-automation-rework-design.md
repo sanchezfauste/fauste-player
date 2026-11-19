@@ -195,7 +195,9 @@ and the Edit button.
 - **AR10. While stopped, next stays where it is.** It does not follow the
   clock (this removes AU16's "next follows the clock while stopped" and
   `next_by_hand`). Example: stopped after the 23:00 ID at 23:00:20, Play at
-  23:58 plays the row after the ID.
+  23:58 plays the row after the ID. The exception is a stop during the
+  music fill (AR4): next follows the clock, as at start-up, unless the
+  operator chose it *(maintainer, 2026-11-19)*.
 - **AR11.** A next whose block's start is more than the late tolerance in
   the past is shown as **late** (its time in the warning colour the players
   use for the end warning) *(my call)*. It still plays if the operator

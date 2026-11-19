@@ -171,6 +171,46 @@ mod choosing {
         }
     }
 
+    /// Review of #271: a song a block plays two hours ahead holds its
+    /// artist back only within the artist separation, and the track only
+    /// within the track separation.
+    #[test]
+    fn a_planned_time_far_ahead_holds_back_only_within_each_window() {
+        let mut s = library(&[200.0, 200.0]);
+        s.config.automation.track_separation_mins = 180;
+        s.config.automation.artist_separation_mins = 30;
+        for id in [901, 902] {
+            s.library.get_mut(TrackId(id)).unwrap().artist = "X".into();
+        }
+        let ahead = WallTime(NOW.0 + 120 * 60_000);
+        let planned = [(TrackId(901), ahead)];
+        let music = StepSource::Kind(TrackKind::Music);
+        for seed in 0..20 {
+            let p = pick(&s, &music, NOW, &planned, &mut SplitMix64(seed)).unwrap();
+            assert_eq!(p.track, TrackId(902), "seed {seed}");
+            assert_eq!(p.relaxed, fp_model::selection::Relaxed::None, "seed {seed}");
+        }
+    }
+
+    /// Review of #271: when nothing fits, a known length (even one that
+    /// relaxes the artist rule) beats an unknown one.
+    #[test]
+    fn when_nothing_fits_a_known_length_beats_an_unknown_one() {
+        let mut s = library(&[0.0, 300.0, 200.0]);
+        s.config.automation.artist_separation_mins = 30;
+        for (id, artist) in [(901, "A"), (902, "B"), (903, "B")] {
+            s.library.get_mut(TrackId(id)).unwrap().artist = artist.into();
+        }
+        s.air_times
+            .record(TrackId(903), WallTime(NOW.0 - 10 * 60_000));
+        s.config.automation.track_separation_mins = 60;
+        for seed in 0..20 {
+            let p = choose(&s, 100.0, seed);
+            assert_eq!(p.track, TrackId(902), "seed {seed}");
+            assert!(p.unfitted);
+        }
+    }
+
     #[test]
     fn a_track_of_unknown_length_is_never_a_fit() {
         let s = library(&[0.0, 210.0]);
@@ -298,6 +338,26 @@ mod before_a_block {
             let h = run(&mut r, from, hms(11, 0, 5), 0.0).expect("a hand-over");
             assert!(h.left >= fade, "start +{}s: {h:?}", k * 7);
         }
+    }
+
+    /// Review of #271: with no minimum play, a song that would end inside
+    /// the fade (and start the block early) is not a fit.
+    #[test]
+    fn with_no_minimum_no_song_ends_inside_the_fade() {
+        let mut r = Rig::new(vec![(11, 0, vec![song(1)])]);
+        r.s.config.players.auto_segue = false;
+        r.s.config.automation.min_song_play_secs = 0;
+        for n in 1..=40u64 {
+            let len = if n < 40 { 149.0 } else { 20.0 };
+            r.s.library.get_mut(TrackId(n)).unwrap().duration_secs = len;
+        }
+        // 299 s to the block: two songs of 149 s leave 1 s, which the
+        // 20 s song seems to close, but nothing may start in the fade.
+        let from = hms(10, 55, 1);
+        r.jump(from);
+        r.apply(Command::StartAutomation);
+        let h = run(&mut r, from, hms(11, 0, 5), 0.0).expect("a hand-over");
+        assert!(h.left >= 2.0, "{h:?}");
     }
 
     #[test]

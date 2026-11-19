@@ -284,20 +284,24 @@ pub fn pick_fitted(
     }
     // Nothing fits: the least cut, then the least left, then the order,
     // among the tracks that meet the separation rules, relaxed as for any
-    // choice (AU34); a track of unknown length comes last.
+    // choice (AU34); a track of unknown length comes after every known
+    // one, whatever the separation.
     let cost = |timing: Option<(f64, f64)>| match timing {
         Some((length, _)) if length >= fit.gap_secs => (length - fit.gap_secs, 0.0),
         Some((_, lead)) => (0.0, (fit.gap_secs - lead).max(0.0)),
         None => (f64::INFINITY, f64::INFINITY),
     };
-    [Relaxed::None, Relaxed::Artist, Relaxed::Track]
+    let tiers = [Relaxed::None, Relaxed::Artist, Relaxed::Track];
+    tiers
         .into_iter()
-        .find_map(|relaxed| {
+        .map(|r| (true, r))
+        .chain(tiers.into_iter().map(|r| (false, r)))
+        .find_map(|(known, relaxed)| {
             let best = ctx
                 .ordered
                 .iter()
                 .zip(&timings)
-                .filter(|((_, t), _)| meets(*t, relaxed))
+                .filter(|((_, t), timing)| meets(*t, relaxed) && (!known || timing.is_some()))
                 .map(|((_, t), timing)| (*t, cost(*timing)))
                 .reduce(|best, next| {
                     let (b, n) = (best.1, next.1);
@@ -362,17 +366,37 @@ impl<'a> Context<'a> {
             .map(|t| (last_of(t), t))
             .collect();
         ordered.sort();
-        let mut pool_times: Vec<WallTime> = ordered.iter().filter_map(|(w, _)| *w).collect();
+        // What aired (or is planned) up to `at`: a time planned after it
+        // (a block's song) is not an airing since.
+        let mut pool_times: Vec<WallTime> = ordered
+            .iter()
+            .filter_map(|(_, t)| {
+                let planned = planned
+                    .iter()
+                    .filter(|(p, w)| *p == *t && *w <= at)
+                    .map(|(_, w)| *w)
+                    .max();
+                state.air_times.get(*t).max(planned)
+            })
+            .collect();
         pool_times.sort();
         let mins = state.config.automation.artist_separation_mins;
         let mut recent_artists: Vec<(String, WallTime)> = Vec::new();
         if mins > 0 {
             let window = i64::from(mins) * 60_000;
+            // A planned time counts within the separation either side of
+            // `at` (a block's song ahead); an aired one after `at` (the
+            // clock gone back) counts as within.
             let recent = state
                 .air_times
                 .iter()
-                .chain(planned.iter().copied())
-                .filter(|(_, when)| at.millis_since(*when) < window);
+                .filter(|(_, when)| at.millis_since(*when) < window)
+                .chain(
+                    planned
+                        .iter()
+                        .copied()
+                        .filter(|(_, when)| at.millis_since(*when).abs() < window),
+                );
             for (track, when) in recent {
                 let Some(artist) = state.library.get(track).map(|t| norm(&t.artist)) else {
                     continue;
@@ -396,25 +420,44 @@ impl<'a> Context<'a> {
         }
     }
 
+    /// The track's last airing up to `at`, aired or planned.
     fn last(&self, track: TrackId) -> Option<WallTime> {
         let planned = self
             .planned
             .iter()
-            .filter(|(p, _)| *p == track)
+            .filter(|(p, w)| *p == track && *w <= self.at)
             .map(|(_, w)| *w)
             .max();
         self.state.air_times.get(track).max(planned)
+    }
+
+    /// The track's first planned airing after `at` (a block's song).
+    fn ahead(&self, track: TrackId) -> Option<WallTime> {
+        self.planned
+            .iter()
+            .filter(|(p, w)| *p == track && *w > self.at)
+            .map(|(_, w)| *w)
+            .min()
     }
 
     /// AU31: eligible again by time or by the share of the pool aired
     /// since; a criterion set to 0 is off, and with both off every track
     /// is eligible.
     fn track_ok(&self, track: TrackId) -> bool {
+        let cfg = &self.state.config.automation;
+        let (mins, pct) = (cfg.track_separation_mins, cfg.track_separation_percent);
+        // A planned airing ahead holds it back within the separation time
+        // (the share of the pool has no meaning ahead).
+        if mins > 0
+            && self
+                .ahead(track)
+                .is_some_and(|w| w.millis_since(self.at) < i64::from(mins) * 60_000)
+        {
+            return false;
+        }
         let Some(last) = self.last(track) else {
             return true;
         };
-        let cfg = &self.state.config.automation;
-        let (mins, pct) = (cfg.track_separation_mins, cfg.track_separation_percent);
         if mins == 0 && pct == 0 {
             return true;
         }

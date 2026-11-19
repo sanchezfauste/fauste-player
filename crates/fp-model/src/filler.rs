@@ -273,10 +273,13 @@ fn fade_from(block: NaiveDateTime, state: &AppState) -> NaiveDateTime {
 /// AU25: what a row starting `gap_secs` before the block must fit.
 fn fit_for(state: &AppState, gap_secs: f64) -> crate::selection::Fit {
     let a = &state.config.automation;
+    // A song must leave more than the fade before the block, or the next
+    // could not start before the fade and the block would start early.
+    let fade_secs = f64::from(a.block_fade_ms) / 1000.0;
     crate::selection::Fit {
         gap_secs,
         max_cut_secs: f64::from(a.max_fade_cut_secs),
-        min_play_secs: f64::from(a.min_song_play_secs),
+        min_play_secs: f64::from(a.min_song_play_secs).max(fade_secs + 0.001),
     }
 }
 
@@ -485,19 +488,22 @@ fn top_up(state: &mut AppState) {
         .map(|e| e.id)
         .collect();
     let now = state.wall_now;
-    let mut remaining = 0.0;
-    let mut planned = Vec::with_capacity(ahead.len());
-    for entry in &ahead {
-        if let Some(track) = state.track_for_entry(*entry).map(|t| t.id) {
-            planned.push((track, now.plus_secs(remaining)));
-        }
-        remaining += row_secs(state, *entry);
-    }
-    let target = look_ahead_secs(state);
+    let mut remaining: f64 = ahead.iter().map(|e| row_secs(state, *e)).sum();
     // AU25: with a block coming, the rows are timed on the timeline and
     // each is chosen to fit the time left before the block.
     let block = block_at(state);
     let (rows, mut end) = timeline(state, &f);
+    // AU31, AU32: each row counts as aired when the timeline starts it
+    // (segues and the song on air included), so the separation is measured
+    // between the times the songs really start.
+    let wall_at = |local: NaiveDateTime| {
+        crate::WallTime(now.0.saturating_add((local - state.local_now).num_milliseconds()))
+    };
+    let mut planned: Vec<(crate::TrackId, crate::WallTime)> = rows
+        .iter()
+        .filter_map(|(e, start)| state.track_for_entry(*e).map(|t| (t.id, wall_at(*start))))
+        .collect();
+    let target = look_ahead_secs(state);
     // A row still audible at the block's start is the last before it.
     let mut covered = block.is_some_and(|b| {
         f.current_since
@@ -509,18 +515,12 @@ fn top_up(state: &mut AppState) {
         fade_from(b, state).min(state.local_now + chrono::TimeDelta::milliseconds(own))
     });
     // AU31, AU32: the songs the blocks play soon count as aired at their
-    // block's start, within the separation from each pick.
+    // block's start; each rule holds a track back within its own
+    // separation. Listed once, when a row is to be added.
     let cfg = &state.config.automation;
-    let separation = chrono::TimeDelta::minutes(i64::from(
-        cfg.track_separation_mins.max(cfg.artist_separation_mins),
-    ));
-    let own = chrono::TimeDelta::minutes(i64::from(cfg.filler_lookahead_mins));
-    let scheduled = if separation > chrono::TimeDelta::zero() {
-        crate::automation::scheduled_until(state, state.local_now + own + separation)
-    } else {
-        Vec::new()
-    };
-    let window_ms = separation.num_milliseconds();
+    let separation = i64::from(cfg.track_separation_mins.max(cfg.artist_separation_mins));
+    let reach = chrono::TimeDelta::minutes(i64::from(cfg.filler_lookahead_mins) + separation);
+    let mut scheduled: Option<Vec<(crate::TrackId, crate::WallTime)>> = None;
     let mut cursor = f.cursor.clone();
     let mut rng = state.rng.clone();
     let mut added = Vec::new();
@@ -532,15 +532,17 @@ fn top_up(state: &mut AppState) {
             None => remaining < target,
         }
     {
-        let at = now.plus_secs(remaining);
+        let at = wall_at(end);
         let fit = block.map(|b| fit_for(state, secs_between(end, b)));
+        let ahead = scheduled.get_or_insert_with(|| {
+            if separation > 0 {
+                crate::automation::scheduled_until(state, state.local_now + reach)
+            } else {
+                Vec::new()
+            }
+        });
         let mut seen = planned.clone();
-        seen.extend(
-            scheduled
-                .iter()
-                .filter(|(_, when)| when.millis_since(at) < window_ms)
-                .copied(),
-        );
+        seen.extend(ahead.iter().copied());
         let found = crate::rotation_cursor::next_track_fitted(
             state,
             &mut cursor,
