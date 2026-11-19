@@ -497,7 +497,10 @@ fn top_up(state: &mut AppState) {
     // (segues and the song on air included), so the separation is measured
     // between the times the songs really start.
     let wall_at = |local: NaiveDateTime| {
-        crate::WallTime(now.0.saturating_add((local - state.local_now).num_milliseconds()))
+        crate::WallTime(
+            now.0
+                .saturating_add((local - state.local_now).num_milliseconds()),
+        )
     };
     let mut planned: Vec<(crate::TrackId, crate::WallTime)> = rows
         .iter()
