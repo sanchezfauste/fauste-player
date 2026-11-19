@@ -241,9 +241,9 @@ and the Edit button.
   missed; a next set by hand that would load nothing for that reason does
   not hold the music fill (no stop at end for it) *(maintainer)*. A live
   edit that inserts, removes or moves rows of a loaded block keeps each
-  chosen track with its category item, wherever the item now is (items
-  of one category are interchangeable), so a reload never plays a track
-  chosen for another item.
+  chosen track with its own category item, wherever the item now is
+  (a removed item's track leaves with it), so a reload never plays a
+  track chosen for another item.
 - **AR16.** A music fill row shows "Music fill · *rotation name*"; while
   it is current it is shown as on air (the filler plays for it), and the
   filler column's header shows the song. The Log's header then says

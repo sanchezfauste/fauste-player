@@ -279,6 +279,7 @@ fn apply_edit(
             .collect(),
         EditTarget::Template(_) => Vec::new(),
     };
+    let edited = edit.clone();
     let touched: Vec<BlockId> = match edit {
         LogEdit::Insert {
             block,
@@ -379,7 +380,7 @@ fn apply_edit(
         }
     };
     if let EditTarget::Date(date) = target {
-        keep_chosen(state, date, &earlier);
+        keep_chosen(state, date, &edited, &earlier);
     }
     // AR19b: an edit to the block on air takes effect at once, after the
     // row on air. A template edit never reloads (AU12: it reaches a date
@@ -394,48 +395,110 @@ fn apply_edit(
     Ok(())
 }
 
-/// AR15 after an edit of `date`: the tracks chosen for the category items
-/// of the blocks the edit touched (`earlier`: their items before it) stay
-/// with those items, wherever they now are. Each category item takes, in
-/// order, a track chosen for an item of the same category; items of one
-/// category are interchangeable. A chosen track kept by index would go to
+/// The tracks chosen for category items (AR15) of the blocks the edit
+/// touched (`earlier`: their items before it) stay with their own items,
+/// wherever the edit put them: a removed item's track leaves with it, and
+/// no item takes another's. A chosen track kept by index would go to
 /// whichever item now has that index.
-fn keep_chosen(state: &mut AppState, date: NaiveDate, earlier: &[(BlockId, Vec<Item>)]) {
+fn keep_chosen(
+    state: &mut AppState,
+    date: NaiveDate,
+    edit: &LogEdit,
+    earlier: &[(BlockId, Vec<Item>)],
+) {
     let Some(a) = state.automation.as_ref() else {
         return;
     };
-    let mut pool: Vec<(crate::CategoryId, TrackId)> = Vec::new();
-    for (block, items) in earlier {
-        for (index, item) in items.iter().enumerate() {
-            let at = ItemRef {
-                date,
-                block: *block,
-                index,
-            };
-            if let (Item::Category { category, .. }, Some(track)) = (item, a.chosen.get(&at)) {
-                pool.push((*category, *track));
-            }
-        }
-    }
-    let now: Vec<(BlockId, Vec<Item>)> = earlier
+    let moved: Vec<(ItemRef, TrackId)> = a
+        .chosen
         .iter()
-        .filter_map(|(b, _)| crate::automation::block_items(state, date, *b).map(|i| (*b, i)))
+        .filter(|(at, _)| at.date == date && earlier.iter().any(|(b, _)| *b == at.block))
+        .filter_map(|(at, track)| {
+            let (block, index) = moved_to(edit, earlier, at.block, at.index)?;
+            Some((ItemRef { date, block, index }, *track))
+        })
         .collect();
     let Some(a) = state.automation.as_mut() else {
         return;
     };
     a.chosen
         .retain(|at, _| at.date != date || !earlier.iter().any(|(b, _)| *b == at.block));
-    for (block, items) in now {
-        for (index, item) in items.iter().enumerate() {
-            let Item::Category { category, .. } = item else {
-                continue;
+    a.chosen.extend(moved);
+}
+
+/// Where the edit put the item at `index` of `block`: `None` when it was
+/// removed, or when its block went back to the template (its items are
+/// others).
+fn moved_to(
+    edit: &LogEdit,
+    earlier: &[(BlockId, Vec<Item>)],
+    block: BlockId,
+    index: usize,
+) -> Option<(BlockId, usize)> {
+    // Where `inserted` puts items at `at` in `items`: before a Music fill
+    // kept last.
+    let clamp = |items: &[Item], at: usize| {
+        let tail = match items.last() {
+            Some(Item::Rotation { .. }) => items.len() - 1,
+            _ => items.len(),
+        };
+        at.min(tail)
+    };
+    let items_of = |b: BlockId| {
+        earlier
+            .iter()
+            .find(|(e, _)| *e == b)
+            .map(|(_, i)| i.as_slice())
+            .unwrap_or_default()
+    };
+    match edit {
+        LogEdit::Insert {
+            block: b,
+            index: at,
+            items,
+        } if *b == block => {
+            let at = clamp(items_of(block), *at);
+            let added = items
+                .iter()
+                .filter(|i| !matches!(i, Item::Rotation { .. }))
+                .count();
+            Some((block, if index >= at { index + added } else { index }))
+        }
+        LogEdit::Remove {
+            block: b,
+            index: gone,
+        } if *b == block => match index.cmp(gone) {
+            std::cmp::Ordering::Less => Some((block, index)),
+            std::cmp::Ordering::Equal => None,
+            std::cmp::Ordering::Greater => Some((block, index - 1)),
+        },
+        LogEdit::Move { from, to } if from.0 == block || to.0 == block => {
+            // Taken out of `from`, then inserted at `to` (measured before
+            // the move) in what is left.
+            let mut source: Vec<Item> = items_of(from.0).to_vec();
+            if from.1 >= source.len() {
+                return Some((block, index));
+            }
+            source.remove(from.1);
+            let at = if from.0 == to.0 {
+                clamp(&source, if to.1 > from.1 { to.1 - 1 } else { to.1 })
+            } else {
+                clamp(items_of(to.0), to.1)
             };
-            if let Some(i) = pool.iter().position(|(c, _)| c == category) {
-                let (_, track) = pool.remove(i);
-                a.chosen.insert(ItemRef { date, block, index }, track);
+            let after_take = |i: usize| if i > from.1 { i - 1 } else { i };
+            let after_put = |i: usize| if i >= at { i + 1 } else { i };
+            if block == from.0 && index == from.1 {
+                Some((to.0, at))
+            } else if block == from.0 && from.0 == to.0 {
+                Some((block, after_put(after_take(index))))
+            } else if block == from.0 {
+                Some((block, after_take(index)))
+            } else {
+                Some((block, after_put(index)))
             }
         }
+        LogEdit::Revert { block: b } if *b == block => None,
+        _ => Some((block, index)),
     }
 }
 

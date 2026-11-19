@@ -363,9 +363,12 @@ subtree), and shown after it played. `choose_ahead`, run by
 is next or after next in a block not yet loaded, so the Log shows what
 will play; the items whose category has nothing to play go into
 `nothing_to_play`, and a next set by hand that would load nothing
-(`plays_nothing`) does not hold the filler. After a date edit `log_edit::keep_chosen` gives each
-category item of the touched blocks a track chosen for its category back,
-wherever the item moved.
+(`plays_nothing`) does not hold the filler. After a date edit `log_edit::keep_chosen` moves each
+chosen track of the touched blocks with its own item (`log_edit::moved_to`
+maps each old position to the new one for the edit: an insert shifts the
+items after it, a remove drops its item, a move takes the item out and
+puts it back, a revert drops the block's); a removed item's track leaves
+with it.
 
 `schedule_view` gives each item row its planned start (`starts_at`: the
 block's start plus the known lengths before it), the track it plays
