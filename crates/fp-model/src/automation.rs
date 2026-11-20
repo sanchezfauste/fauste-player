@@ -368,10 +368,17 @@ pub(crate) fn reload_after(state: &mut AppState, on_air: ItemRef, out: &mut Vec<
 /// AR10: automation stopped; next stays on the row below what was on air
 /// (the Log's loaded next row, else the row below the last item on air,
 /// else the next it had), pinned until the operator chooses another.
+/// Stopped during the music fill, next follows the clock as at start-up
+/// unless the operator chose it: Play plays music again and the block
+/// waits for its time (AR4).
 fn pin_next_after_stop(state: &mut AppState) {
     let Some(a) = state.automation.as_ref() else {
         return;
     };
+    let log_idle = transport_of(state, Some(a.player)) == Transport::Stopped;
+    if a.on_air.is_none() && log_idle && !a.next_by_hand {
+        return;
+    }
     let loaded = player_index(state, a.player)
         .and_then(|i| state.players.get(i))
         .and_then(|p| p.next)
@@ -976,6 +983,7 @@ fn play_filler(state: &mut AppState, out: &mut Vec<EngineAction>) {
     if let Some(f) = filler
         && !is_playing(state, filler)
     {
+        crate::filler::requeue(state, out);
         let _ = crate::reducer::play(state, f, out);
     }
 }
@@ -1095,8 +1103,22 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
             .get(a.playlist)
             .map(|l| l.entries.iter().map(|e| e.id).collect())
             .unwrap_or_default();
+        // AU23: a row skipped because its file could not be read never
+        // aired.
+        let unread: Vec<ItemRef> = state
+            .playlists
+            .get(a.playlist)
+            .map(|l| {
+                l.entries
+                    .iter()
+                    .filter(|e| !e.is_played_by(a.player) && !state.library.is_playable(e.track))
+                    .filter_map(|e| a.rows.get(&e.id).copied())
+                    .collect()
+            })
+            .unwrap_or_default();
         crate::reducer::take_out_entries(state, &rows, out);
         if let Some(a) = state.automation.as_mut() {
+            a.missed.extend(unread);
             a.on_air = None;
             a.rows.clear();
             a.row_since = None;
@@ -1207,6 +1229,11 @@ fn drive(state: &mut AppState, out: &mut Vec<EngineAction>, starting: bool) {
         }
     } else if !handing {
         play_filler(state, out);
+    } else if load_block(state, next, true, out) {
+        // The song handed over ended by itself before the block's start
+        // (within the fade): the block starts now rather than leave
+        // silence until its start.
+        play_schedule(state, 0, out);
     }
 }
 
@@ -1406,6 +1433,45 @@ pub fn coming_start(state: &AppState) -> Option<NaiveDateTime> {
     }
     let next = a.next?;
     block_start(state, next.date, next.block)
+}
+
+/// AU31, AU32: while automation runs, the tracks the blocks of the window
+/// will play from now to `until` (their track items, and the tracks
+/// chosen for their category items), each at its block's start: the filler counts them as
+/// aired then, so it does not play a song (or an artist) a block plays
+/// soon after.
+pub(crate) fn scheduled_until(
+    state: &AppState,
+    until: NaiveDateTime,
+) -> Vec<(TrackId, crate::WallTime)> {
+    // Stopped, no block plays by the clock.
+    let Some(a) = state.automation.as_ref().filter(|a| a.running) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for (date, start, b) in window_blocks(state) {
+        if start <= state.local_now || start > until || passed_over(state, date, b.id) {
+            continue;
+        }
+        let ms = (start - state.local_now).num_milliseconds();
+        let at = crate::WallTime(state.wall_now.0.saturating_add(ms));
+        for (index, item) in b.items.iter().enumerate() {
+            let track = match item {
+                Item::Rotation { .. } => break,
+                Item::Track { track, .. } => Some(*track),
+                Item::Category { .. } => a
+                    .chosen
+                    .get(&ItemRef {
+                        date,
+                        block: b.id,
+                        index,
+                    })
+                    .copied(),
+            };
+            out.extend(track.map(|t| (t, at)));
+        }
+    }
+    out
 }
 
 /// What is saved of the schedule's player (`kv` value `automation`): its

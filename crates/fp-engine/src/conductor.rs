@@ -397,6 +397,12 @@ impl Conductor {
         &self.state
     }
 
+    /// Seeds automation's random choices, so that a simulation (tests,
+    /// tools) repeats exactly.
+    pub fn reseed(&mut self, seed: u64) {
+        self.state.rng = SplitMix64(seed | 1);
+    }
+
     pub fn engine(&self) -> &Engine {
         &self.engine
     }
@@ -416,9 +422,15 @@ impl Conductor {
     /// One iteration: commands, engine, events, snapshots.
     pub fn tick(&mut self, now: Instant) {
         // The model never reads the clock: it is told the time here.
+        self.tick_at(now, WallTime::now(), chrono::Local::now().naive_local());
+    }
+
+    /// `tick` with the wall and local clocks given instead of read: a
+    /// simulation (tests, tools) runs the schedule on its own time.
+    pub fn tick_at(&mut self, now: Instant, wall: WallTime, local: chrono::NaiveDateTime) {
         let before = self.state.wall_now;
-        self.state.wall_now = WallTime::now();
-        self.state.local_now = chrono::Local::now().naive_local();
+        self.state.wall_now = wall;
+        self.state.local_now = local;
         if self.state.wall_now < before {
             settle_air_times(&mut self.state);
         }

@@ -613,3 +613,32 @@ fn after_pausing_the_music_the_next_block_waits_for_its_time() {
     r.at_hms(10, 35, 0);
     assert_eq!(r.playing(r.schedule_player()), None);
 }
+
+#[test]
+fn play_after_a_stop_during_music_plays_music_until_the_block() {
+    let mut r = music_at_half_past_ten();
+    let log = r.schedule_player();
+    r.apply(Command::Stop(log));
+    r.at_hms(10, 40, 0);
+    assert_eq!(next(&r), Some(r.item(today(), 11, 0, 0)));
+    r.apply(Command::Play(log));
+    r.at_hms(10, 40, 1);
+    assert!(running(&r));
+    assert_eq!(r.playing(log), None, "the block waits for its time");
+    assert!(r.playing(r.filler_player()).is_some(), "the music goes on");
+    r.at_hms(11, 0, 0);
+    assert_eq!(r.playing(log), Some(TrackId(3)));
+}
+
+#[test]
+fn a_next_chosen_during_music_stays_pinned_after_a_stop() {
+    let mut r = music_at_half_past_ten();
+    let log = r.schedule_player();
+    let chosen = r.item(today(), 10, 0, 1);
+    r.apply(Command::SetScheduleNext(chosen));
+    r.apply(Command::Stop(log));
+    r.at_hms(10, 40, 0);
+    assert_eq!(next(&r), Some(chosen));
+    r.apply(Command::Play(log));
+    assert_eq!(r.playing(log), Some(TrackId(2)));
+}

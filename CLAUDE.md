@@ -93,6 +93,7 @@ scripts/package/android.sh <debug|release>     # Android APK (release: also the 
 scripts/check-mobile-isolation.sh             # the fp-mobile unsafe exception stays isolated (CI runs it)
 scripts/prune-target.sh [minutes]             # free disk: drop test binaries and caches unused for 60 min
 cargo test --release -p fp-analysis --test it real_music:: -- --ignored   # real-music corpus (local only)
+cargo test --release -p fp-engine --test it automation_day:: -- --ignored --nocapture   # simulated night and day on air (local; SIM_SEED=<n>)
 cargo run --release -p fp-analysis --example marker_report -- [--set key=value]… [dir]
 cargo run -p fp-engine --example rate_cut_tail -- [card] [buffer]   # rate-cut play-out on a real ALSA device (local only; quiet tones)
 ```

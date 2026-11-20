@@ -1850,7 +1850,8 @@ pub(crate) fn refresh_next(state: &mut AppState) {
 }
 
 /// An idle player (stopped, nothing current, no next) picks the first playable
-/// entry of the playlist it shows. Used after entries appear or disappear.
+/// entry of the playlist it shows; the filler, the first after the rows it
+/// aired. Used after entries appear or disappear.
 pub(crate) fn fill_empty_next(state: &mut AppState) {
     let picks: Vec<(usize, Option<EntryId>)> = state
         .players
@@ -1860,10 +1861,12 @@ pub(crate) fn fill_empty_next(state: &mut AppState) {
             p.transport == Transport::Stopped && p.current.is_none() && p.next.is_none()
         })
         .map(|(i, p)| {
-            (
-                i,
-                state.playlists.first_playable(p.playlist, &state.library),
-            )
+            let pick = if state.is_filler(p.id) {
+                crate::filler::first_ahead(state, p.id)
+            } else {
+                state.playlists.first_playable(p.playlist, &state.library)
+            };
+            (i, pick)
         })
         .collect();
     for (i, pick) in picks {

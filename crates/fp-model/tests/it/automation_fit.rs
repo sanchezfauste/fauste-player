@@ -117,6 +117,100 @@ mod choosing {
         assert!(p.unfitted);
     }
 
+    /// Found by the simulated night: when nothing fits, the least cut
+    /// came from the whole pool, separation rules or not: an artist aired
+    /// a quarter of an hour before came back.
+    #[test]
+    fn when_nothing_fits_the_separation_rules_still_come_first() {
+        let mut s = library(&[240.0, 180.0, 200.0]);
+        s.config.automation.track_separation_mins = 60;
+        s.config.automation.artist_separation_mins = 30;
+        for (id, artist) in [(901, "A"), (902, "B"), (903, "C"), (904, "B")] {
+            if id == 904 {
+                let mut t = Track::new(TrackId(id), PathBuf::from("/m/904.wav"));
+                t.duration_secs = 200.0;
+                t.kind = TrackKind::Music;
+                s.library.insert(t);
+            }
+            s.library.get_mut(TrackId(id)).unwrap().artist = artist.into();
+        }
+        // B aired a quarter of an hour ago: 902, the shortest, is held back
+        // by its artist; 903 by its own last airing.
+        s.air_times
+            .record(TrackId(904), WallTime(NOW.0 - 15 * 60_000));
+        s.air_times
+            .record(TrackId(903), WallTime(NOW.0 - 20 * 60_000));
+        for seed in 0..20 {
+            let p = choose(&s, 100.0, seed);
+            assert_eq!(p.track, TrackId(901), "seed {seed}");
+            assert!(p.unfitted);
+        }
+        // With every track held back, the artist rule gives way first.
+        s.air_times
+            .record(TrackId(901), WallTime(NOW.0 - 10 * 60_000));
+        let p = choose(&s, 100.0, 1);
+        assert_eq!(p.track, TrackId(902));
+    }
+
+    /// Maintainer, 2026-11-19: the fit and the separation rules both,
+    /// whenever possible. A song that leaves room for another, separated,
+    /// beats one that ends the gap but repeats an artist.
+    #[test]
+    fn a_fit_that_keeps_the_separation_beats_a_closer_one_that_breaks_it() {
+        let mut s = library(&[210.0, 100.0, 180.0]);
+        s.config.automation.artist_separation_mins = 30;
+        for (id, artist) in [(901, "B"), (902, "C"), (903, "B")] {
+            s.library.get_mut(TrackId(id)).unwrap().artist = artist.into();
+        }
+        s.air_times
+            .record(TrackId(903), WallTime(NOW.0 - 10 * 60_000));
+        for seed in 0..20 {
+            let p = choose(&s, 200.0, seed);
+            assert_eq!(p.track, TrackId(902), "seed {seed}");
+            assert_eq!(p.relaxed, fp_model::selection::Relaxed::None);
+        }
+    }
+
+    /// Review of #271: a song a block plays two hours ahead holds its
+    /// artist back only within the artist separation, and the track only
+    /// within the track separation.
+    #[test]
+    fn a_planned_time_far_ahead_holds_back_only_within_each_window() {
+        let mut s = library(&[200.0, 200.0]);
+        s.config.automation.track_separation_mins = 180;
+        s.config.automation.artist_separation_mins = 30;
+        for id in [901, 902] {
+            s.library.get_mut(TrackId(id)).unwrap().artist = "X".into();
+        }
+        let ahead = WallTime(NOW.0 + 120 * 60_000);
+        let planned = [(TrackId(901), ahead)];
+        let music = StepSource::Kind(TrackKind::Music);
+        for seed in 0..20 {
+            let p = pick(&s, &music, NOW, &planned, &mut SplitMix64(seed)).unwrap();
+            assert_eq!(p.track, TrackId(902), "seed {seed}");
+            assert_eq!(p.relaxed, fp_model::selection::Relaxed::None, "seed {seed}");
+        }
+    }
+
+    /// Review of #271: when nothing fits, a known length (even one that
+    /// relaxes the artist rule) beats an unknown one.
+    #[test]
+    fn when_nothing_fits_a_known_length_beats_an_unknown_one() {
+        let mut s = library(&[0.0, 300.0, 200.0]);
+        s.config.automation.artist_separation_mins = 30;
+        for (id, artist) in [(901, "A"), (902, "B"), (903, "B")] {
+            s.library.get_mut(TrackId(id)).unwrap().artist = artist.into();
+        }
+        s.air_times
+            .record(TrackId(903), WallTime(NOW.0 - 10 * 60_000));
+        s.config.automation.track_separation_mins = 60;
+        for seed in 0..20 {
+            let p = choose(&s, 100.0, seed);
+            assert_eq!(p.track, TrackId(902), "seed {seed}");
+            assert!(p.unfitted);
+        }
+    }
+
     #[test]
     fn a_track_of_unknown_length_is_never_a_fit() {
         let s = library(&[0.0, 210.0]);
@@ -225,6 +319,45 @@ mod before_a_block {
         assert!(h.played >= 45.0, "{h:?}");
         assert!(h.left <= 30.0 + 2.0, "{h:?}");
         assert_eq!(r.s.filler.as_ref().unwrap().unfitted, 0);
+    }
+
+    #[test]
+    fn the_last_song_is_still_on_air_when_the_block_starts() {
+        // AU24: the fade ends at the block's start, so the last song must
+        // last until then; one that ends inside the fade would leave the
+        // block to start early (or silence).
+        let fade = 2.0;
+        for k in 0..60i64 {
+            let mut r = Rig::new(vec![(11, 0, vec![song(1)])]);
+            r.s.config.players.auto_segue = false;
+            r.s.config.automation.block_fade_ms = 2_000;
+            varied(&mut r);
+            let from = hms(10, 50, 0) + TimeDelta::seconds(k * 7);
+            r.jump(from);
+            r.apply(Command::StartAutomation);
+            let h = run(&mut r, from, hms(11, 0, 5), 0.0).expect("a hand-over");
+            assert!(h.left >= fade, "start +{}s: {h:?}", k * 7);
+        }
+    }
+
+    /// Review of #271: with no minimum play, a song that would end inside
+    /// the fade (and start the block early) is not a fit.
+    #[test]
+    fn with_no_minimum_no_song_ends_inside_the_fade() {
+        let mut r = Rig::new(vec![(11, 0, vec![song(1)])]);
+        r.s.config.players.auto_segue = false;
+        r.s.config.automation.min_song_play_secs = 0;
+        for n in 1..=40u64 {
+            let len = if n < 40 { 149.0 } else { 20.0 };
+            r.s.library.get_mut(TrackId(n)).unwrap().duration_secs = len;
+        }
+        // 299 s to the block: two songs of 149 s leave 1 s, which the
+        // 20 s song seems to close, but nothing may start in the fade.
+        let from = hms(10, 55, 1);
+        r.jump(from);
+        r.apply(Command::StartAutomation);
+        let h = run(&mut r, from, hms(11, 0, 5), 0.0).expect("a hand-over");
+        assert!(h.left >= 2.0, "{h:?}");
     }
 
     #[test]
@@ -363,4 +496,97 @@ fn a_next_before_the_row_on_air_keeps_it_in_the_list() {
     let rows = &r.s.playlists.get(list).unwrap().entries;
     assert!(rows.iter().any(|e| e.id == current), "the row on air stays");
     assert_eq!(r.player(filler).current, Some(current));
+}
+
+/// Found by the simulated night: the queue the filler built while
+/// automation was stopped (no block coming, nothing to fit) played as it
+/// was when the Log's Play started the filler before a block, so its
+/// second song was faded after half a minute.
+#[test]
+fn the_queue_built_while_stopped_is_fitted_when_automation_starts() {
+    let mut r = Rig::new(vec![(10, 0, vec![song(1)])]);
+    for n in 2..=40 {
+        r.s.library.get_mut(TrackId(n)).unwrap().duration_secs =
+            if n <= 20 { 200.0 } else { 310.0 };
+    }
+    // Stopped, the filler queued half an hour of music with no fit.
+    r.at_hms(9, 50, 0);
+    // 4 min 58 s before the fade: one song of 310 s ends it within the cut.
+    r.at_hms(9, 55, 0);
+    r.apply(Command::StartAutomation);
+    let first = r.playing(r.filler_player()).unwrap();
+    assert!(first.0 > 20, "{first:?} does not fit the gap");
+}
+
+/// A filler song: its row, track, when it started and how long it has
+/// played (pauses do not count).
+type Song = (fp_model::EntryId, TrackId, chrono::NaiveDateTime, f64);
+
+/// Runs the rig to `until`, ending each filler song exactly when its
+/// length has played.
+fn play_filler_until(r: &mut Rig, until: chrono::NaiveDateTime, songs: &mut Vec<Song>) {
+    let f = r.filler_player();
+    while r.s.local_now < until {
+        let p = r.player(f).clone();
+        let now = r.s.local_now;
+        let playing = p.transport == fp_model::Transport::Playing && !p.fading;
+        let mut left = f64::INFINITY;
+        if let (Some(track), Some(entry)) = (r.playing(f), p.current) {
+            if songs.last().is_none_or(|s| s.0 != entry) {
+                songs.push((entry, track, now, 0.0));
+            }
+            if playing {
+                left = r.s.library.get(track).unwrap().duration_secs - songs.last().unwrap().3;
+            }
+        }
+        let end = now + chrono::TimeDelta::milliseconds((left.min(1e7) * 1000.0) as i64);
+        let target = end.min(until).min(now + chrono::TimeDelta::seconds(30));
+        r.at(target);
+        if playing {
+            let song = songs.last_mut().unwrap();
+            song.3 += (target - now).num_milliseconds() as f64 / 1000.0;
+            if target == end {
+                r.end_current(f);
+            }
+        }
+    }
+}
+
+/// Found by the simulated night: a pause of the Log during the music
+/// moved every song after it, but the loaded next (chosen for the old
+/// timeline) was never fitted again: the last song before the block lost
+/// a minute and a half.
+#[test]
+fn after_a_pause_the_last_song_before_the_block_still_fits() {
+    let mut bad = Vec::new();
+    for (pause_at, pause) in [0, 3, 6, 9, 11, 14, 16, 18, 19]
+        .into_iter()
+        .flat_map(|m| [20, 60, 100, 140, 180].map(move |k| (m, k)))
+    {
+        let mut r = Rig::new(vec![(10, 0, vec![song(1)])]);
+        for n in 2..=40u64 {
+            r.s.library.get_mut(TrackId(n)).unwrap().duration_secs = 150.0 + (n * 37 % 170) as f64;
+        }
+        r.at_hms(9, 30, 0);
+        r.apply(Command::StartAutomation);
+        let mut songs = Vec::new();
+        let at = today().and_hms_opt(9, 35 + pause_at, 0).unwrap();
+        play_filler_until(&mut r, at, &mut songs);
+        let log = r.schedule_player();
+        r.apply(Command::Pause(log));
+        play_filler_until(&mut r, at + chrono::TimeDelta::seconds(pause), &mut songs);
+        r.apply(Command::Play(log));
+        r.slow_fades = true;
+        play_filler_until(&mut r, today().and_hms_opt(9, 59, 58).unwrap(), &mut songs);
+        let (_, last, _, played) = *songs.last().unwrap();
+        // Measured at the block's start, 2 s after the fade starts.
+        let cut = r.s.library.get(last).unwrap().duration_secs - played - 2.0;
+        // The shortest song lasts 150 s: a gap under 120 s fits none, and
+        // the one that cuts least plays (AU25).
+        let fittable = played + 2.0 + 30.0 >= 150.0;
+        if fittable && !(played >= 45.0 && cut <= 30.0) {
+            bad.push((pause_at, pause, played, cut));
+        }
+    }
+    assert!(bad.is_empty(), "{bad:?}");
 }

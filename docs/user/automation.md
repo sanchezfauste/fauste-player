@@ -29,7 +29,8 @@ track** shows the track chosen for it as soon as it is next (or comes
 after next in its block), with the category after it: that is the track
 that plays. If the category has no track that can play (none assigned to
 it, or their files are missing), the row says so in amber, and the item
-will be missed. Assign tracks to a category in the library. The **music fill** row says until when it plays, and
+will be missed. An item whose file turns out unreadable when it is about
+to play is skipped and marked missed too. Assign tracks to a category in the library. The **music fill** row says until when it plays, and
 shows as on air while the music fill plays for the Log. A next whose
 time has passed shows its time in amber. Drag the line between two
 column headers to resize the columns, as on a playlist; the template and
@@ -73,6 +74,8 @@ player:
   (its item, or the music fill's song between blocks) and stop
   automation. Play after Pause goes on from where it was; while paused,
   next does not move, and once you resume the next block keeps its time.
+  Play after a Stop during the music plays music again, and the next
+  block starts at its time.
 - **Stop at end** lets what is on air end, and then automation stops. If
   the music is playing and a block's time comes first, the block starts
   on time and automation stops after its first item.
@@ -85,8 +88,10 @@ While the music fill plays between blocks, the Log's header says
 still work; the song, its meter and its waveform are in the Music fill
 column only.
 
-When automation stops, next stays on the item below the one that played,
-and Play plays it, whatever the time: you choose. To change what plays
+When automation stops after an item, next stays on the item below the
+one that played, and Play plays it, whatever the time: you choose. When
+it stops during the music, Play plays music again until the next block,
+unless you chose another next. To change what plays
 next, double-click an item, or right-click it and choose **Play next**.
 **Back to the clock**, in the same menu, sets next to what the time says.
 
@@ -220,11 +225,16 @@ you make, rename and change rotations (see
 
 Before a block of the log, the music fill also chooses its last songs by
 their length, so the music ends cleanly: the song that fades out when the
-block starts loses at most 30 seconds, and no song starts that would play
-for less than 45 seconds. When no song in the rotation can do both, the
-one that loses least plays. Both values can be changed for now only in the
-configuration file (`automation.max_fade_cut_secs` and
-`automation.min_song_play_secs`).
+block starts is still playing at the block's time and loses at most 30
+seconds after it, and no song starts that would play for less than 45
+seconds. It keeps the artist and track rules too whenever it can. When no
+song in the rotation can do both, the one that loses least plays, so a
+few seconds of a song may sometimes be heard. A pause of the music moves
+the songs after it, and the music fill chooses them again. The music
+fill also avoids the songs, and the artists, a block plays soon after.
+Both
+values can be changed for now only in the configuration file
+(`automation.max_fade_cut_secs` and `automation.min_song_play_secs`).
 
 An **Hourly ID** is a track kind of its own (Library → Kind ▸ Hourly ID),
 for the station's identification at the top of the hour.
