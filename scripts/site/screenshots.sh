@@ -644,8 +644,9 @@ shoot_automation() {
     sleep 1.5
     # The popup opens in the middle of the screen at its default size,
     # whatever the language: found from its footer (empty right of Add),
-    # widened to the whole window.
-    capture_window "$guide/template-popup.png" 1130 781 6 6 489 6 6
+    # widened up to the window's top edge. The footer spans the window's
+    # width and sits on its bottom edge (the window has no frame margin).
+    capture_window "$guide/template-popup.png" 1130 781 6 0 495 0 0
     key Escape
 }
 
