@@ -43,14 +43,18 @@ day only: the template stays as it is.
 
 - The buttons at the bottom of the column: **+ Track…** opens the
   library, to drag tracks onto the list; **+ Category track…** and
-  **+ Music fill (rotation)…** ask which one and add it to the coming
-  block; **+ Block…** asks for a time, with the first free one already
-  filled in. When the column is too narrow for all of them, the ones
+  **+ Music fill (rotation)…** ask which one and add it just below the
+  row you selected (click a row to select it; select a block header to
+  add at the start of that block), or, with nothing selected, at the
+  end of the coming block; **+ Block…** asks for a time, with the first
+  free one already filled in. When the column is too narrow for all of them, the ones
   that do not fit are behind **⋯**.
 - Drag tracks from the library, or audio files from your file manager,
   onto a row to put them before it (or
   after it, on the row's lower half, as on a playlist: that is how they
   go at a block's end), and drag rows within the same day to move them.
+  The row you add is selected and scrolled into view, so the next one
+  you add goes below it.
 - Right-click a row for **Hard start** and **Remove from today's log**.
   Click (or right-click) a block header to add a **Track…**, a
   **Category track…** or a **Music fill (rotation)…** at the end of that

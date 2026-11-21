@@ -815,3 +815,190 @@ fn a_category_with_nothing_to_play_says_so_on_the_log() {
             .is_some()
     );
 }
+
+/// `with_block` with a second track, "Station ID" (id 9001), after "Top
+/// of the Hour", and a "Spots" category.
+fn with_two_rows() -> (
+    AppState,
+    fp_model::automation::ItemRef,
+    fp_model::CategoryId,
+) {
+    use fp_model::schedule::{Block, Item};
+    let (mut s, item) = with_block();
+    let mut t = fp_model::Track::new(fp_model::TrackId(9001), "/m/id.wav".into());
+    t.title = "Station ID".into();
+    t.duration_secs = 5.0;
+    s.library.insert(t);
+    let base = s.schedule.templates()[0].id;
+    let start = fp_model::local_time::TimeOfDay::hms(10, 0, 0).unwrap();
+    let track = |n| Item::Track {
+        track: fp_model::TrackId(n),
+        time_critical: false,
+    };
+    apply(
+        &mut s,
+        Command::UpdateBlock {
+            template: base,
+            block: Block {
+                id: item.block,
+                start,
+                items: vec![track(9000), track(9001)],
+            },
+        },
+    )
+    .unwrap();
+    apply(
+        &mut s,
+        Command::CreateCategory {
+            parent: None,
+            name: "Spots".into(),
+            color: None,
+            kind: fp_model::TrackKind::Ad,
+        },
+    )
+    .unwrap();
+    let category = s.categories.iter().next().unwrap().id;
+    (s, item, category)
+}
+
+/// The first "Top of the Hour" row under the block header whose text
+/// has `day` ("" for today's).
+fn first_row_of(h: &egui_kittest::Harness<'_, fp_app::ui::app::AppUi>, day: &str) -> egui::Pos2 {
+    let header = h
+        .query_all_by_label_contains("Block ·")
+        .find(|n| {
+            let text = format!("{n:?}");
+            match day {
+                "" => !text.contains("tomorrow") && !text.contains("yesterday"),
+                day => text.contains(day),
+            }
+        })
+        .unwrap()
+        .rect();
+    h.query_all_by_label_contains("Top of the Hour")
+        .map(|n| n.rect())
+        .filter(|r| r.top() > header.top())
+        .min_by(|a, b| a.top().total_cmp(&b.top()))
+        .unwrap()
+        .center()
+}
+
+fn click_at(h: &mut egui_kittest::Harness<'_, fp_app::ui::app::AppUi>, pos: egui::Pos2) {
+    h.hover_at(pos);
+    h.run();
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+    }
+    h.run();
+}
+
+fn spot(category: fp_model::CategoryId) -> fp_model::schedule::Item {
+    fp_model::schedule::Item::Category {
+        category,
+        time_critical: false,
+    }
+}
+
+#[test]
+fn add_puts_a_category_track_below_the_selected_row() {
+    let (s, item, category) = with_two_rows();
+    let (mut h, fake) = harness(s);
+    let at = first_row_of(&h, "");
+    click_at(&mut h, at);
+    fake.take_sent();
+    add(&mut h, "Category track…");
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Insert {
+            block: item.block,
+            index: 1,
+            items: vec![spot(category)],
+        }]
+    );
+}
+
+#[test]
+fn the_added_row_is_selected_so_the_next_add_follows_it() {
+    let (s, item, category) = with_two_rows();
+    let (mut h, fake) = harness(s);
+    let at = first_row_of(&h, "");
+    click_at(&mut h, at);
+    for _ in 0..2 {
+        add(&mut h, "Category track…");
+        h.get_by_label("OK").click();
+        h.run();
+    }
+    assert_eq!(
+        edits(&fake.take_sent()),
+        [1, 2]
+            .map(|index| fp_model::log_edit::LogEdit::Insert {
+                block: item.block,
+                index,
+                items: vec![spot(category)],
+            })
+            .to_vec()
+    );
+}
+
+#[test]
+fn a_selected_block_header_takes_add_at_its_start() {
+    let (s, item, category) = with_two_rows();
+    let (mut h, fake) = harness(s);
+    let at = todays_header(&h);
+    click_at(&mut h, at);
+    // The click also opened the header's menu: Esc closes it.
+    h.key_press(egui::Key::Escape);
+    h.run();
+    fake.take_sent();
+    add(&mut h, "Category track…");
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Insert {
+            block: item.block,
+            index: 0,
+            items: vec![spot(category)],
+        }]
+    );
+}
+
+#[test]
+fn a_selected_row_that_played_leaves_add_at_the_coming_block() {
+    let (s, item, category) = with_two_rows();
+    let (mut h, fake) = harness(s);
+    // Yesterday's row: past days are not edited (AR19).
+    // Scrolled up to yesterday's block.
+    let today = first_row_of(&h, "");
+    h.hover_at(today);
+    h.run();
+    h.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, 20000.0),
+        modifiers: egui::Modifiers::NONE,
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+    });
+    h.run_steps(30);
+    let at = first_row_of(&h, "yesterday");
+    click_at(&mut h, at);
+    fake.take_sent();
+    add(&mut h, "Category track…");
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Insert {
+            block: item.block,
+            index: usize::MAX,
+            items: vec![spot(category)],
+        }]
+    );
+}

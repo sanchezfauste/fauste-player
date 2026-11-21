@@ -377,3 +377,159 @@ fn a_column_edge_of_the_list_resizes_like_a_playlists() {
     let artist = sent[0].1.fraction(fp_model::TableColumn::Artist).unwrap();
     assert!(title > artist, "{:?}", sent[0].1);
 }
+
+#[test]
+fn the_popups_add_goes_below_the_selected_row_and_shows_it() {
+    let (mut s, base, _) = with_templates();
+    let rotation = s.rotations.default_id().unwrap();
+    // A block every hour, each a song and a Music fill: more rows than
+    // the popup shows.
+    for hour in (0..24u32).filter(|h| *h != 10) {
+        let start = fp_model::local_time::TimeOfDay::hms(hour, 0, 0).unwrap();
+        apply(
+            &mut s,
+            Command::AddBlock {
+                template: base,
+                start,
+            },
+        )
+        .unwrap();
+    }
+    let blocks: Vec<_> = s.schedule.template(base).unwrap().blocks.clone();
+    for b in blocks {
+        let items = vec![
+            Item::Track {
+                track: fp_model::TrackId(9000),
+                time_critical: false,
+            },
+            Item::Rotation { rotation },
+        ];
+        apply(
+            &mut s,
+            Command::UpdateBlock {
+                template: base,
+                block: Block { items, ..b },
+            },
+        )
+        .unwrap();
+    }
+    apply(
+        &mut s,
+        Command::CreateCategory {
+            parent: None,
+            name: "Spots".into(),
+            color: None,
+            kind: fp_model::TrackKind::Ad,
+        },
+    )
+    .unwrap();
+    let category = s.categories.iter().next().unwrap().id;
+    let first = s
+        .schedule
+        .template(base)
+        .unwrap()
+        .blocks
+        .iter()
+        .min_by_key(|b| b.start)
+        .unwrap()
+        .id;
+    let (mut h, fake) = open(s, EditTarget::Template(base));
+    let at = h
+        .query_all_by_label_contains("Top of the Hour")
+        .next()
+        .unwrap()
+        .rect()
+        .center();
+    h.hover_at(at);
+    h.run();
+    for pressed in [true, false] {
+        h.event(egui::Event::PointerButton {
+            pos: at,
+            button: egui::PointerButton::Primary,
+            pressed,
+            modifiers: egui::Modifiers::NONE,
+        });
+    }
+    h.run();
+    // Scrolled to the end: the selected row is out of sight.
+    h.event(egui::Event::MouseWheel {
+        unit: egui::MouseWheelUnit::Point,
+        delta: egui::vec2(0.0, -20000.0),
+        modifiers: egui::Modifiers::NONE,
+        phase: egui::TouchPhase::Move,
+        source: egui::MouseWheelSource::Unknown,
+    });
+    h.run_steps(30);
+    assert!(h.query_by_label_contains("00:00:00").is_none());
+    fake.take_sent();
+    h.get_by_label("Category track…").click();
+    h.run();
+    h.get_by_label("OK").click();
+    h.run_steps(30);
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![(
+            EditTarget::Template(base),
+            LogEdit::Insert {
+                block: first,
+                index: 1,
+                items: vec![Item::Category {
+                    category,
+                    time_critical: false,
+                }],
+            }
+        )]
+    );
+    // The added row is brought into view.
+    assert!(h.query_by_label_contains("Spots").is_some());
+}
+
+#[test]
+fn a_dropped_track_is_selected_so_add_follows_it() {
+    let (mut s, base, _) = with_templates();
+    apply(
+        &mut s,
+        Command::CreateCategory {
+            parent: None,
+            name: "Spots".into(),
+            color: None,
+            kind: fp_model::TrackKind::Ad,
+        },
+    )
+    .unwrap();
+    let category = s.categories.iter().next().unwrap().id;
+    let block = s.schedule.template(base).unwrap().blocks[0].id;
+    let (mut h, fake) = open(s, EditTarget::Template(base));
+    // Before "Top of the Hour", on its upper half.
+    let at = h.get_by_label_contains("Top of the Hour").rect().left_top() + egui::vec2(4.0, 1.0);
+    h.event(egui::Event::PointerMoved(at));
+    h.run();
+    fp_app::ui::app::AppUi::start_track_drag(&h.ctx, vec![fp_model::TrackId(1)]);
+    h.run();
+    h.event(egui::Event::PointerButton {
+        pos: at,
+        button: egui::PointerButton::Primary,
+        pressed: false,
+        modifiers: egui::Modifiers::NONE,
+    });
+    h.run();
+    fake.take_sent();
+    h.get_by_label("Category track…").click();
+    h.run();
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![(
+            EditTarget::Template(base),
+            LogEdit::Insert {
+                block,
+                index: 1,
+                items: vec![Item::Category {
+                    category,
+                    time_critical: false,
+                }],
+            }
+        )]
+    );
+}

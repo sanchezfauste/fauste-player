@@ -418,6 +418,18 @@ each path becomes a library track (`library_rules::track_for_path`) and
 the edit goes on as an `Insert`, so a refused drop adds nothing to the
 library.
 
+`log_edit::landing(items, index, adding)` says where the last of the
+inserted items lands (as `Insert` places them), so the interface selects
+the row it just added (AR19c). In `fp-app`, `ViewState::log_selection`
+is the row selected on the Log or in a popup (`schedule::LogSelection`:
+the list, the target, the block and the item, or `None` for the
+header); `schedule::selected_place` turns it into where the footer's Add
+goes (below the row, a header's block at its start) when that place is
+not locked, else Add goes to the end of next's block (the popup: its last
+block not played). `schedule::insert_at` sends the `Insert` (Add and a
+library drop) and selects the landing row; `ViewState::log_reveal`
+scrolls it into view once the list shows it.
+
 ## Editing helpers (`schedule.rs`)
 
 `schedule::overrun_secs(state, items, start, next_start)` is AU37's figure:
