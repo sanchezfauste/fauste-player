@@ -287,7 +287,7 @@ and the Edit button.
   insertion line drawn under the header (not on its top edge, which reads
   as the end of the block above); never
   after a Music fill row. A row dragged onto another date's rows does not
-  move (no insertion line is shown there). Add puts its item at the end
+  move (no insertion line is shown there). With nothing selected (AR19c), Add puts its item at the end
   of next's block (before its Music fill row), never in a block that
   already played. A refused edit changes nothing. Editing the
   upcoming rows of the block on air takes effect at once (the Log

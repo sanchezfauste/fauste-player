@@ -45,8 +45,8 @@ day only: the template stays as it is.
   library, to drag tracks onto the list; **+ Category track…** and
   **+ Music fill (rotation)…** ask which one and add it just below the
   row you selected (click a row to select it; select a block header to
-  add at the start of that block), or, with nothing selected, at the
-  end of the coming block; **+ Block…** asks for a time, with the first
+  add at the start of that block), or, with nothing selected or below a row
+  that can no longer change, at the end of the coming block; **+ Block…** asks for a time, with the first
   free one already filled in. When the column is too narrow for all of them, the ones
   that do not fit are behind **⋯**.
 - Drag tracks from the library, or audio files from your file manager,
@@ -120,7 +120,7 @@ Android); the Log column changes only today, as above.
 A template or a date opens in its own window, which closes Settings. It
 is the same list as the Log column, and you change it the same way:
 the buttons at its bottom (Track…, Category track…, Music fill
-(rotation)…, Block…), tracks dragged from the library (or files from your file
+(rotation)…, Block…, which add below the row you select), tracks dragged from the library (or files from your file
 manager) onto a row, rows dragged to
 move them, the right-click menu of rows and the block headers' menu. It never
 plays, and it can stay open beside the library. Today's window shows
