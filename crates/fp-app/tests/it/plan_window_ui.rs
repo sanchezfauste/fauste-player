@@ -533,3 +533,44 @@ fn a_dropped_track_is_selected_so_add_follows_it() {
         )]
     );
 }
+
+#[test]
+fn a_far_date_popup_adds_below_the_selected_row() {
+    let (mut s, _, _) = with_templates();
+    apply(
+        &mut s,
+        Command::CreateCategory {
+            parent: None,
+            name: "Spots".into(),
+            color: None,
+            kind: fp_model::TrackKind::Ad,
+        },
+    )
+    .unwrap();
+    let category = s.categories.iter().next().unwrap().id;
+    // Past tomorrow: outside the Log's days.
+    let thursday = chrono::NaiveDate::from_ymd_opt(2026, 11, 19).unwrap();
+    let (mut h, fake) = open(s, EditTarget::Date(thursday));
+    // Its row menu has the item's Hard start too.
+    h.get_by_label_contains("Top of the Hour").click_secondary();
+    h.run();
+    assert!(h.query_by_label("Hard start").is_some());
+    h.key_press(egui::Key::Escape);
+    h.run();
+    h.get_by_label_contains("Top of the Hour").click();
+    h.run();
+    fake.take_sent();
+    h.get_by_label("Category track…").click();
+    h.run();
+    h.get_by_label("OK").click();
+    h.run();
+    let sent = edits(&fake.take_sent());
+    assert!(
+        matches!(
+            sent.as_slice(),
+            [(EditTarget::Date(d), LogEdit::Insert { index: 1, items, .. })]
+                if *d == thursday && items == &vec![Item::Category { category, time_critical: false }]
+        ),
+        "{sent:?}"
+    );
+}

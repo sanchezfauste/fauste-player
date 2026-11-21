@@ -1002,3 +1002,26 @@ fn a_selected_row_that_played_leaves_add_at_the_coming_block() {
         }]
     );
 }
+
+#[test]
+fn removing_the_selected_row_leaves_nothing_selected() {
+    let (s, item, category) = with_two_rows();
+    let (mut h, fake) = harness(s);
+    let at = first_row_of(&h, "");
+    click_at(&mut h, at);
+    secondary_at(&mut h, at);
+    h.get_by_label("Remove from today's log").click();
+    h.run();
+    fake.take_sent();
+    add(&mut h, "Category track…");
+    h.get_by_label("OK").click();
+    h.run();
+    assert_eq!(
+        edits(&fake.take_sent()),
+        vec![fp_model::log_edit::LogEdit::Insert {
+            block: item.block,
+            index: usize::MAX,
+            items: vec![spot(category)],
+        }]
+    );
+}

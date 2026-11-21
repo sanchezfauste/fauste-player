@@ -139,6 +139,9 @@ fn selected_place(
     (!locked(scene, s.target, s.block, index)).then_some((s.target, s.block, index))
 }
 
+/// How long a row just added is waited for, to bring it into view.
+const REVEAL_WAIT_SECS: f64 = 2.0;
+
 /// Where items are added: before `index` of a block of a date or a
 /// template (`usize::MAX`: at its end).
 pub(crate) type Place = (EditTarget, fp_model::BlockId, usize);
@@ -172,7 +175,7 @@ fn insert_at(
             index: Some(index),
         };
         view_state.log_selection = Some(added);
-        view_state.log_reveal = Some(added);
+        view_state.log_reveal = Some((added, scene.ctx.input(|i| i.time)));
     }
 }
 
@@ -279,11 +282,20 @@ pub(crate) fn log_table(
         .column(column(1))
         .column(column(2))
         .column(column(3));
-    // A row just added comes into view (AR19c), else the row on air.
+    // A row just added comes into view (AR19c), else the row on air. The
+    // added row shows a frame or so after its edit was sent; one the model
+    // refused never does, and is given up.
+    let now = scene.ctx.input(|i| i.time);
+    if view_state
+        .log_reveal
+        .is_some_and(|(_, sent)| now - sent > REVEAL_WAIT_SECS)
+    {
+        view_state.log_reveal = None;
+    }
     let reveal = view_state
         .log_reveal
-        .filter(|r| r.log == playing)
-        .and_then(|r| rows.iter().position(|row| r.is_row(row, template)));
+        .filter(|(r, _)| r.log == playing)
+        .and_then(|(r, _)| rows.iter().position(|row| r.is_row(row, template)));
     if let Some(index) = reveal {
         view_state.log_reveal = None;
         builder = builder.scroll_to_row(index, None);
@@ -345,7 +357,9 @@ pub(crate) fn log_table(
                         let edits = target_of(template, item.date);
                         item_row(&mut row, scene, r);
                         let response = row.response();
-                        row_actions(scene, &response, edits, *item, playing);
+                        if row_actions(scene, &response, edits, *item, playing) {
+                            view_state.log_selection = None;
+                        }
                         select_on_click(view_state, &response, playing, r, template);
                         if response.drag_started() && !locked(scene, edits, item.block, item.index)
                         {
@@ -371,7 +385,8 @@ pub(crate) fn log_table(
                 }
             });
         });
-    if scroll_now {
+    // The row on air is scrolled to on a frame without a reveal.
+    if scroll_now && reveal.is_none() {
         ui.data_mut(|d| d.insert_temp(memory, target));
     }
     if let Some(owner) = owner {
@@ -488,14 +503,16 @@ fn block_row(
 /// A row's menu. On the Log (`playing`), setting next: a double-click or
 /// the menu's "Play next"; on a next set by hand, "Back to the clock"
 /// (AU16). Then the edits (AR17), unless the row is locked (AR19).
+/// Whether the row was removed (its selection then goes too).
 fn row_actions(
     scene: &Scene<'_>,
     response: &egui::Response,
     target: EditTarget,
     item: ItemRef,
     playing: bool,
-) {
+) -> bool {
     let t = scene.i18n;
+    let mut removed = false;
     if playing && response.double_clicked() {
         scene.ctl.send(Command::SetScheduleNext(item));
     }
@@ -506,7 +523,7 @@ fn row_actions(
         .is_some_and(|a| a.next_by_hand && a.next == Some(item));
     let editable = !locked(scene, target, item.block, item.index);
     if !playing && !editable {
-        return;
+        return false;
     }
     response.context_menu(|ui| {
         if playing {
@@ -560,15 +577,24 @@ fn row_actions(
                     index: item.index,
                 },
             );
+            removed = true;
             ui.close();
         }
     });
+    removed
 }
 
-/// A block's items on the target.
+/// A block's items on the target: any date's (a date's popup reaches
+/// past the Log's days), or a template's.
 fn items_of(scene: &Scene<'_>, target: EditTarget, block: fp_model::BlockId) -> Option<Vec<Item>> {
     match target {
-        EditTarget::Date(date) => fp_model::automation::block_items(scene.state, date, block),
+        EditTarget::Date(date) => scene
+            .state
+            .schedule
+            .day(date)
+            .into_iter()
+            .find(|b| b.id == block)
+            .map(|b| b.items),
         EditTarget::Template(template) => scene
             .state
             .schedule

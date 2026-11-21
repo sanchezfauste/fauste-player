@@ -132,7 +132,7 @@ pub(crate) struct ViewState {
     /// (rework AR19c).
     pub log_selection: Option<super::schedule::LogSelection>,
     /// A row just added, to bring into view once its list shows it.
-    pub log_reveal: Option<super::schedule::LogSelection>,
+    pub log_reveal: Option<(super::schedule::LogSelection, f64)>,
     /// The template or date open in its popup (rework AR21).
     pub plan_window: Option<fp_model::log_edit::EditTarget>,
     /// Settings asked for `plan_window` this frame (Edit…, Edit day…): it

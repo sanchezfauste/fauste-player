@@ -216,7 +216,8 @@ fn inserted(mut list: Vec<Item>, index: usize, items: Vec<Item>) -> Vec<Item> {
 
 /// Where the last of `items` lands when they are inserted before `index`
 /// of `list` (as `inserted` puts them), so the list can select the row
-/// just added (AR19c); `None` when `items` is empty.
+/// just added (AR19c): with a Music fill among them, the fill's place
+/// (it goes last); `None` when `items` is empty.
 pub fn landing(list: &[Item], index: usize, items: &[Item]) -> Option<usize> {
     let rotation = |i: &Item| matches!(i, Item::Rotation { .. });
     let plain = items.iter().filter(|i| !rotation(i)).count();
