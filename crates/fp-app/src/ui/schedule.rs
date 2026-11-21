@@ -49,6 +49,136 @@ fn target_of(template: Option<TemplateId>, date: chrono::NaiveDate) -> EditTarge
     template.map_or(EditTarget::Date(date), EditTarget::Template)
 }
 
+/// A row selected on the Log (`log`) or in a popup (rework AR19c): an
+/// item of `block`, or its header (`index: None`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct LogSelection {
+    pub log: bool,
+    pub target: EditTarget,
+    pub block: fp_model::BlockId,
+    pub index: Option<usize>,
+}
+
+impl LogSelection {
+    /// The selection of `row`, in a list of `template` (else of dates).
+    fn of(row: &ScheduleRow, log: bool, template: Option<TemplateId>) -> Self {
+        match row {
+            ScheduleRow::Block { date, block, .. } => Self {
+                log,
+                target: target_of(template, *date),
+                block: *block,
+                index: None,
+            },
+            ScheduleRow::Item { item, .. } => Self {
+                log,
+                target: target_of(template, item.date),
+                block: item.block,
+                index: Some(item.index),
+            },
+        }
+    }
+
+    /// Whether `row` of a list of `template` is this one.
+    fn is_row(&self, row: &ScheduleRow, template: Option<TemplateId>) -> bool {
+        let LogSelection {
+            target,
+            block,
+            index,
+            ..
+        } = Self::of(row, self.log, template);
+        (target, block, index) == (self.target, self.block, self.index)
+    }
+}
+
+/// A click on a row selects it (AR19c).
+fn select_on_click(
+    view_state: &mut ViewState,
+    response: &egui::Response,
+    log: bool,
+    row: &ScheduleRow,
+    template: Option<TemplateId>,
+) {
+    if response.clicked() || response.secondary_clicked() {
+        view_state.log_selection = Some(LogSelection::of(row, log, template));
+    }
+}
+
+/// The selected row's outline, as on a playlist.
+fn outline(response: &egui::Response) {
+    response
+        .ctx
+        .layer_painter(response.layer_id)
+        .with_clip_rect(response.interact_rect)
+        .rect_stroke(
+            response.rect,
+            0.0,
+            egui::Stroke::new(2.0, theme::SELECTION_OUTLINE),
+            egui::StrokeKind::Inside,
+        );
+}
+
+/// Where Add puts items when a row of this list is selected (AR19c):
+/// just below it, at its block's start for a header; `None` when nothing
+/// here is selected or that place may not change. `log`: the Log's list,
+/// else a popup's of `popup`.
+fn selected_place(
+    scene: &Scene<'_>,
+    view_state: &ViewState,
+    log: bool,
+    popup: EditTarget,
+) -> Option<Place> {
+    let s = view_state
+        .log_selection
+        .filter(|s| s.log == log && (log || s.target == popup))?;
+    let items = items_of(scene, s.target, s.block)?;
+    let index = match s.index {
+        Some(i) if i < items.len() => i + 1,
+        Some(_) => return None,
+        None => 0,
+    };
+    (!locked(scene, s.target, s.block, index)).then_some((s.target, s.block, index))
+}
+
+/// How long a row just added is waited for, to bring it into view.
+const REVEAL_WAIT_SECS: f64 = 2.0;
+
+/// Where items are added: before `index` of a block of a date or a
+/// template (`usize::MAX`: at its end).
+pub(crate) type Place = (EditTarget, fp_model::BlockId, usize);
+
+/// Sends the insert of `items` at `place`, and selects the last of them
+/// once added, brought into view (AR19c), so the next Add follows it.
+fn insert_at(
+    scene: &Scene<'_>,
+    view_state: &mut ViewState,
+    log: bool,
+    place: Place,
+    items: Vec<Item>,
+) {
+    let (target, block, index) = place;
+    let landing = items_of(scene, target, block)
+        .and_then(|list| fp_model::log_edit::landing(&list, index, &items));
+    send_edit(
+        scene,
+        target,
+        LogEdit::Insert {
+            block,
+            index,
+            items,
+        },
+    );
+    if let Some(index) = landing {
+        let added = LogSelection {
+            log,
+            target,
+            block,
+            index: Some(index),
+        };
+        view_state.log_selection = Some(added);
+        view_state.log_reveal = Some((added, scene.ctx.input(|i| i.time)));
+    }
+}
+
 /// Whether a row may not change (AR19): only a date's rows are locked.
 fn locked(scene: &Scene<'_>, target: EditTarget, block: fp_model::BlockId, index: usize) -> bool {
     match target {
@@ -152,7 +282,24 @@ pub(crate) fn log_table(
         .column(column(1))
         .column(column(2))
         .column(column(3));
-    if scroll_now
+    // A row just added comes into view (AR19c), else the row on air. The
+    // added row shows a frame or so after its edit was sent; one the model
+    // refused never does, and is given up.
+    let now = scene.ctx.input(|i| i.time);
+    if view_state
+        .log_reveal
+        .is_some_and(|(_, sent)| now - sent > REVEAL_WAIT_SECS)
+    {
+        view_state.log_reveal = None;
+    }
+    let reveal = view_state
+        .log_reveal
+        .filter(|(r, _)| r.log == playing)
+        .and_then(|(r, _)| rows.iter().position(|row| r.is_row(row, template)));
+    if let Some(index) = reveal {
+        view_state.log_reveal = None;
+        builder = builder.scroll_to_row(index, None);
+    } else if scroll_now
         && let Some(index) = rows
             .iter()
             .position(|r| matches!(r, ScheduleRow::Item { item, .. } if Some(*item) == target))
@@ -194,14 +341,26 @@ pub(crate) fn log_table(
                             origin: *origin,
                             count: *count,
                         };
-                        block_actions(scene, view_state, &response, header);
-                        drop_tracks(scene, view_state, &response, edits, *block, 0, false);
+                        block_actions(scene, view_state, &response, header, playing);
+                        select_on_click(view_state, &response, playing, r, template);
+                        drop_tracks(
+                            scene, view_state, &response, edits, *block, 0, false, playing,
+                        );
+                        if view_state
+                            .log_selection
+                            .is_some_and(|s| s.log == playing && s.is_row(r, template))
+                        {
+                            outline(&response);
+                        }
                     }
                     ScheduleRow::Item { item, what, .. } => {
                         let edits = target_of(template, item.date);
                         item_row(&mut row, scene, r);
                         let response = row.response();
-                        row_actions(scene, &response, edits, *item, playing);
+                        if row_actions(scene, &response, edits, *item, playing) {
+                            view_state.log_selection = None;
+                        }
+                        select_on_click(view_state, &response, playing, r, template);
                         if response.drag_started() && !locked(scene, edits, item.block, item.index)
                         {
                             response.dnd_set_drag_payload(DragLogItem {
@@ -214,12 +373,20 @@ pub(crate) fn log_table(
                         let fill = matches!(what, Item::Rotation { .. });
                         drop_tracks(
                             scene, view_state, &response, edits, item.block, item.index, !fill,
+                            playing,
                         );
+                        if view_state
+                            .log_selection
+                            .is_some_and(|s| s.log == playing && s.is_row(r, template))
+                        {
+                            outline(&response);
+                        }
                     }
                 }
             });
         });
-    if scroll_now {
+    // The row on air is scrolled to on a frame without a reveal.
+    if scroll_now && reveal.is_none() {
         ui.data_mut(|d| d.insert_temp(memory, target));
     }
     if let Some(owner) = owner {
@@ -336,14 +503,16 @@ fn block_row(
 /// A row's menu. On the Log (`playing`), setting next: a double-click or
 /// the menu's "Play next"; on a next set by hand, "Back to the clock"
 /// (AU16). Then the edits (AR17), unless the row is locked (AR19).
+/// Whether the row was removed (its selection then goes too).
 fn row_actions(
     scene: &Scene<'_>,
     response: &egui::Response,
     target: EditTarget,
     item: ItemRef,
     playing: bool,
-) {
+) -> bool {
     let t = scene.i18n;
+    let mut removed = false;
     if playing && response.double_clicked() {
         scene.ctl.send(Command::SetScheduleNext(item));
     }
@@ -354,7 +523,7 @@ fn row_actions(
         .is_some_and(|a| a.next_by_hand && a.next == Some(item));
     let editable = !locked(scene, target, item.block, item.index);
     if !playing && !editable {
-        return;
+        return false;
     }
     response.context_menu(|ui| {
         if playing {
@@ -408,15 +577,24 @@ fn row_actions(
                     index: item.index,
                 },
             );
+            removed = true;
             ui.close();
         }
     });
+    removed
 }
 
-/// A block's items on the target.
+/// A block's items on the target: any date's (a date's popup reaches
+/// past the Log's days), or a template's.
 fn items_of(scene: &Scene<'_>, target: EditTarget, block: fp_model::BlockId) -> Option<Vec<Item>> {
     match target {
-        EditTarget::Date(date) => fp_model::automation::block_items(scene.state, date, block),
+        EditTarget::Date(date) => scene
+            .state
+            .schedule
+            .day(date)
+            .into_iter()
+            .find(|b| b.id == block)
+            .map(|b| b.items),
         EditTarget::Template(template) => scene
             .state
             .schedule
@@ -449,6 +627,7 @@ fn block_actions(
     view_state: &mut ViewState,
     response: &egui::Response,
     header: BlockHeader,
+    log: bool,
 ) {
     let BlockHeader {
         target,
@@ -472,7 +651,8 @@ fn block_actions(
                     egui::WidgetInfo::labeled(egui::Role::Button, true, text.clone())
                 });
                 if item.clicked() {
-                    start_add(scene, view_state, kind, target, Some((target, block)));
+                    let place = (target, block, usize::MAX);
+                    start_add(scene, view_state, kind, target, Some(place), log);
                     ui.close();
                 }
             }
@@ -520,6 +700,7 @@ fn drop_tracks(
     block: fp_model::BlockId,
     index: usize,
     item: bool,
+    log: bool,
 ) {
     let r = response.rect;
     let ctx = &response.ctx;
@@ -589,15 +770,7 @@ fn drop_tracks(
                 time_critical: false,
             })
             .collect();
-        send_edit(
-            scene,
-            target,
-            LogEdit::Insert {
-                block,
-                index,
-                items,
-            },
-        );
+        insert_at(scene, view_state, log, (target, block, index), items);
     }
 }
 
@@ -613,13 +786,13 @@ struct DragLogItem {
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) enum LogDialog {
     Category {
-        target: EditTarget,
-        block: fp_model::BlockId,
+        place: Place,
+        log: bool,
         choice: Option<fp_model::CategoryId>,
     },
     MusicFill {
-        target: EditTarget,
-        block: fp_model::BlockId,
+        place: Place,
+        log: bool,
         choice: Option<fp_model::RotationId>,
     },
     AddBlock {
@@ -637,10 +810,8 @@ impl LogDialog {
     /// The date or template the dialog edits.
     pub(crate) fn target(&self) -> EditTarget {
         match self {
-            Self::Category { target, .. }
-            | Self::MusicFill { target, .. }
-            | Self::AddBlock { target, .. }
-            | Self::MoveBlock { target, .. } => *target,
+            Self::Category { place, .. } | Self::MusicFill { place, .. } => place.0,
+            Self::AddBlock { target, .. } | Self::MoveBlock { target, .. } => *target,
         }
     }
 }
@@ -732,14 +903,15 @@ impl AddKind {
     }
 }
 
-/// Starts adding `kind`: items go to the end of `add_to`'s block, a block
-/// to `blocks`.
+/// Starts adding `kind`: items go to `add_to`, a block to `blocks`;
+/// `log`: from the Log's list, else a popup's.
 pub(crate) fn start_add(
     scene: &Scene<'_>,
     view_state: &mut ViewState,
     kind: AddKind,
     blocks: EditTarget,
-    add_to: Option<(EditTarget, fp_model::BlockId)>,
+    add_to: Option<Place>,
+    log: bool,
 ) {
     match (kind, add_to) {
         (AddKind::Track, _) => {
@@ -747,21 +919,13 @@ pub(crate) fn start_add(
             view.open = true;
             scene.ctl.send(Command::SetLibraryView(Box::new(view)));
         }
-        (AddKind::CategoryTrack, Some((target, block))) => {
+        (AddKind::CategoryTrack, Some(place)) => {
             let choice = scene.state.categories.iter().next().map(|c| c.id);
-            view_state.log_dialog = Some(LogDialog::Category {
-                target,
-                block,
-                choice,
-            });
+            view_state.log_dialog = Some(LogDialog::Category { place, log, choice });
         }
-        (AddKind::MusicFill, Some((target, block))) => {
+        (AddKind::MusicFill, Some(place)) => {
             let choice = scene.state.rotations.default_id();
-            view_state.log_dialog = Some(LogDialog::MusicFill {
-                target,
-                block,
-                choice,
-            });
+            view_state.log_dialog = Some(LogDialog::MusicFill { place, log, choice });
         }
         (AddKind::Block, _) => {
             let time = fp_model::schedule::free_start(starts_of(scene, blocks))
@@ -786,9 +950,10 @@ fn footer_tile_width(ui: &Ui, shown: &str) -> f32 {
 }
 
 /// A Log, template or date footer (AR17, AR21): one Add tile per kind
-/// (a playlist footer's look), whose items go to `add_to`'s block and
-/// whose Block… adds to `blocks`; the tiles that do not fit go behind ⋯.
-/// On the Log (`playing`), when the next block starts, if it fits.
+/// (a playlist footer's look), whose items go below the selected row
+/// (AR19c), else to the end of `add_to`'s block, and whose Block… adds
+/// to `blocks`; the tiles that do not fit go behind ⋯. On the Log
+/// (`playing`), when the next block starts, if it fits.
 pub(crate) fn plan_footer(
     ui: &mut Ui,
     scene: &Scene<'_>,
@@ -797,6 +962,8 @@ pub(crate) fn plan_footer(
     add_to: Option<(EditTarget, fp_model::BlockId)>,
     playing: bool,
 ) {
+    let add_to = selected_place(scene, view_state, playing, blocks)
+        .or(add_to.map(|(target, block)| (target, block, usize::MAX)));
     let t = scene.i18n;
     let rect = ui.max_rect();
     ui.painter().rect_filled(rect, 0.0, theme::NEUTRAL_900);
@@ -895,7 +1062,7 @@ pub(crate) fn plan_footer(
         });
     }
     if let Some(kind) = chosen {
-        start_add(scene, view_state, kind, blocks, add_to);
+        start_add(scene, view_state, kind, blocks, add_to, playing);
     }
     if let Some(start) = fp_model::automation::coming_start(scene.state).filter(|_| playing) {
         let text = RichText::new(t.tr_args(
@@ -1048,33 +1215,29 @@ pub(crate) fn log_dialog(ctx: &egui::Context, scene: &Scene<'_>, view_state: &mu
             let parse = |s: &str| fp_model::local_time::TimeOfDay::parse(s);
             match dialog.clone() {
                 LogDialog::Category {
-                    target,
-                    block,
+                    place,
+                    log,
                     choice: Some(category),
-                } => send_edit(
+                } => insert_at(
                     scene,
-                    target,
-                    LogEdit::Insert {
-                        block,
-                        index: usize::MAX,
-                        items: vec![Item::Category {
-                            category,
-                            time_critical: false,
-                        }],
-                    },
+                    view_state,
+                    log,
+                    place,
+                    vec![Item::Category {
+                        category,
+                        time_critical: false,
+                    }],
                 ),
                 LogDialog::MusicFill {
-                    target,
-                    block,
+                    place,
+                    log,
                     choice: Some(rotation),
-                } => send_edit(
+                } => insert_at(
                     scene,
-                    target,
-                    LogEdit::Insert {
-                        block,
-                        index: usize::MAX,
-                        items: vec![Item::Rotation { rotation }],
-                    },
+                    view_state,
+                    log,
+                    place,
+                    vec![Item::Rotation { rotation }],
                 ),
                 LogDialog::AddBlock { target, time } => {
                     if let Some(start) = parse(&time) {

@@ -54,9 +54,13 @@ fn add_to(
         .map(|block| (target, block))
 }
 
-/// Closes the popup, and the dialog it opened.
+/// Closes the popup, the dialog it opened and its selection.
 fn close(view_state: &mut ViewState, target: EditTarget) {
     view_state.plan_window = None;
+    // Its selection goes with it (AR19c).
+    if view_state.log_selection.is_some_and(|s| !s.log) {
+        view_state.log_selection = None;
+    }
     if view_state
         .log_dialog
         .as_ref()

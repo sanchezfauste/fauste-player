@@ -214,6 +214,24 @@ fn inserted(mut list: Vec<Item>, index: usize, items: Vec<Item>) -> Vec<Item> {
     list
 }
 
+/// Where the last of `items` lands when they are inserted before `index`
+/// of `list` (as `inserted` puts them), so the list can select the row
+/// just added (AR19c): with a Music fill among them, the fill's place
+/// (it goes last); `None` when `items` is empty.
+pub fn landing(list: &[Item], index: usize, items: &[Item]) -> Option<usize> {
+    let rotation = |i: &Item| matches!(i, Item::Rotation { .. });
+    let plain = items.iter().filter(|i| !rotation(i)).count();
+    let kept = list.iter().filter(|i| !rotation(i)).count();
+    if items.iter().any(rotation) {
+        return Some(kept + plain);
+    }
+    let tail = match list.last() {
+        Some(Item::Rotation { .. }) => list.len() - 1,
+        _ => list.len(),
+    };
+    (plain > 0).then(|| index.min(tail) + plain - 1)
+}
+
 /// Applies one edit. On `Err` the schedule is unchanged: a move between
 /// blocks, or a template edit that first keeps today's block on air as
 /// loaded (AR22b), stores more than one block.

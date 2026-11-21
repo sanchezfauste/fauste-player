@@ -128,6 +128,11 @@ pub(crate) struct TabScroll {
 pub(crate) struct ViewState {
     /// The Log's open Add or Change time dialog (rework AR17).
     pub log_dialog: Option<super::schedule::LogDialog>,
+    /// The row selected on the Log or in a popup, where Add puts items
+    /// (rework AR19c).
+    pub log_selection: Option<super::schedule::LogSelection>,
+    /// A row just added, to bring into view once its list shows it.
+    pub log_reveal: Option<(super::schedule::LogSelection, f64)>,
     /// The template or date open in its popup (rework AR21).
     pub plan_window: Option<fp_model::log_edit::EditTarget>,
     /// Settings asked for `plan_window` this frame (Edit…, Edit day…): it

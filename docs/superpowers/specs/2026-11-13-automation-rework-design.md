@@ -287,7 +287,7 @@ and the Edit button.
   insertion line drawn under the header (not on its top edge, which reads
   as the end of the block above); never
   after a Music fill row. A row dragged onto another date's rows does not
-  move (no insertion line is shown there). Add puts its item at the end
+  move (no insertion line is shown there). With nothing selected (AR19c), Add puts its item at the end
   of next's block (before its Music fill row), never in a block that
   already played. A refused edit changes nothing. Editing the
   upcoming rows of the block on air takes effect at once (the Log
@@ -295,6 +295,18 @@ and the Edit button.
   the whole block as changed for that date (AU12, unchanged): later
   template edits no longer reach that block on that date, which is
   acceptable because the change is for one date only.
+- **AR19c. Add below the selected row** *(maintainer, 2026-11-21)*. A
+  click (or right-click) on a row of the Log or a popup selects it, with
+  a playlist's selection outline; a click on a block header selects the
+  header. The footer's *Category track…* and *Music fill (rotation)…*
+  then add just below the selected row (at the block's start for a
+  header), instead of at the end of next's block, unless that place may
+  not change (AR19): then Add goes where AR19b says. The row an Add or a
+  library drop adds becomes the selection and is scrolled into view, so
+  the next Add follows it and a row added at the list's edge never goes
+  out of sight. The block header's own menu still adds at that block's
+  end. *(Maintainer: "it is impractical that added items always go to
+  the end".)*
 
 ## 7. Templates and dates in Settings (replaces §8.2)
 

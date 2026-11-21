@@ -816,3 +816,49 @@ fn an_item_moved_into_the_block_on_air_keeps_every_track_in_place() {
     .unwrap();
     assert_eq!(queued(&r), vec![TrackId(3), before[1], before[0]]);
 }
+
+#[test]
+fn landing_names_the_row_an_insert_adds() {
+    let default = Rig::new(vec![]).s.rotations.default_id().unwrap();
+    let fill = Item::Rotation { rotation: default };
+    let cases: Vec<(Vec<Item>, usize, Vec<Item>)> = vec![
+        (vec![song(3)], 0, vec![song(7)]),
+        (vec![song(3)], 1, vec![song(7), song(8)]),
+        (vec![song(3), fill.clone()], 9, vec![song(7)]),
+        (
+            vec![song(3), fill.clone()],
+            usize::MAX,
+            vec![song(7), song(8)],
+        ),
+        (vec![song(3), fill.clone()], 0, vec![fill.clone()]),
+        (vec![song(3)], 0, vec![fill.clone()]),
+    ];
+    // Each added item is in no list before, so its place names it.
+    for (items, index, adding) in cases {
+        let mut r = Rig::new(vec![(11, 0, items.clone())]);
+        r.at_hms(9, 0, 0);
+        let block = r.block(11, 0);
+        let want = fp_model::log_edit::landing(&items, index, &adding).unwrap();
+        let last = adding.last().unwrap().clone();
+        edit(
+            &mut r,
+            LogEdit::Insert {
+                block,
+                index,
+                items: adding,
+            },
+        )
+        .unwrap();
+        let after = items_of_block(&r, 11);
+        assert_eq!(
+            after.get(want),
+            Some(&last),
+            "{items:?} at {index}: {after:?}"
+        );
+    }
+    assert_eq!(fp_model::log_edit::landing(&[song(3)], 0, &[]), None);
+}
+
+fn items_of_block(r: &Rig, h: u32) -> Vec<Item> {
+    items(r, today(), h).0
+}
