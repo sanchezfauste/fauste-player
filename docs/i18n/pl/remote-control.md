@@ -143,7 +143,7 @@ podsieci w `remote.osc.allowed_sources` (na przykład `"192.168.1.0/24"`). OSC
 nie ma hasła, więc trzymaj go w zaufanej sieci studia.
 
 Odtwarzacze są numerowane 1, 2, 3… tak, jak pojawiają się na ekranie. Kolumna
-**Muzyka** (wypełniacz muzyczny, zob. [Automatyzacja](automation.md)) nie ma
+**Wypełniacz muzyczny** (wypełniacz muzyczny, zob. [Automatyzacja](automation.md)) nie ma
 numeru i nie jest częścią zdalnego sterowania. Carty
 są numerowane na pokazywanej stronie.
 

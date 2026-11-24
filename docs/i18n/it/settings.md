@@ -91,7 +91,7 @@ dopo aver scambiato due dispositivi) li mantiene.
 | Sistema audio | L'ultima scelta, **Nessuna uscita (silenzio)**, non riproduce nulla: le linee temporali scorrono a passo reale senza scheda audio (per una macchina che non ne ha una, o per fare prove). Linux: PipeWire (nelle build che lo includono), PulseAudio, JACK o ALSA. Windows: WASAPI, ASIO (nelle build che lo includono) o JACK. macOS: Core Audio o JACK. I sistemi assenti su questo computer, o senza dispositivo di uscita (un server JACK non in esecuzione), sono mostrati come non disponibili. «Predefinito di sistema» usa il primo disponibile in quell'ordine. |
 | Frequenza di campionamento | La frequenza a cui funziona ogni uscita, a meno che un dispositivo non ne abbia una propria (Avanzate); i file vengono convertiti a essa con un ricampionamento di alta qualità. I dispositivi bit-perfect partono alla loro frequenza e poi seguono i file. |
 | Dimensione del buffer | Frame per blocco audio, a meno che un dispositivo non ne abbia uno proprio; la latenza risultante è mostrata sotto. Le uscite attraverso un server audio o un mixer di sistema (PulseAudio, il dispositivo ALSA `default`) chiedono almeno 50 ms qualunque sia questa dimensione, o quanto il dispositivo accetta, così un computer occupato non si sente; la latenza lo dice allora (`shared_buffer_ms` nel file di configurazione) |
-| Uscite per lettore | Per ogni lettore, un dispositivo **Main** (in onda) e un dispositivo **Cue** (preascolto), ciascuno con una coppia di canali. Una scheda audio che offre più profili di uscita (ALSA elenca anteriore, surround, hardware diretto…) mostra ciascuno come *scheda — profilo*; due voci che altrimenti risulterebbero uguali ricevono tra parentesi l'id del dispositivo. Le interfacce multicanale possono portare più lettori su coppie diverse. Un'uscita Cue che condivide un'uscita in onda (il Main di qualsiasi lettore o quello della cartwall) è consentita: una nota sotto di essa dice che il suo preascolto si sente in onda e che chiede prima finché lì suona qualcosa. |
+| Uscite per lettore | Per ogni lettore, e per la colonna **Riempitivo musicale** (il [riempitivo musicale](automation.md)), un dispositivo **Main** (in onda) e un dispositivo **Cue** (preascolto), ciascuno con una coppia di canali. Una scheda audio che offre più profili di uscita (ALSA elenca anteriore, surround, hardware diretto…) mostra ciascuno come *scheda — profilo*; due voci che altrimenti risulterebbero uguali ricevono tra parentesi l'id del dispositivo. Le interfacce multicanale possono portare più lettori su coppie diverse. Un'uscita Cue che condivide un'uscita in onda (il Main di qualsiasi lettore o quello della cartwall) è consentita: una nota sotto di essa dice che il suo preascolto si sente in onda e che chiede prima finché lì suona qualcosa. |
 | Prova Main / Prova Cue | Riproduce un breve tono (1 kHz su Main, 440 Hz su Cue, 1,5 s, −18 dBFS) sull'uscita scelta, così puoi controllare i collegamenti prima di andare in onda |
 | Libreria | L'uscita Cue della libreria, con il suo **Prova Cue**: dove si sente il [preascolto](library.md#pre-listening) della finestra della libreria (su un telefono, quello della scheda Libreria). Senza, il Play della barra di preascolto è attenuato. Su Android la sua scelta vuota si legge *Predefinito di sistema* invece di *Nessuna*: il preascolto e **Prova Cue** suonano allora sull'uscita predefinita (vedi [Android → Libreria](android.md#library)). Un'uscita Libreria su un'uscita in onda funziona come il Cue di un lettore: una nota sotto di essa dice che il suo preascolto si sente in onda e che chiede prima finché lì suona qualcosa. È nelle viste Base e Avanzate, anche su un telefono |
 | Cartwall | Le uscite Main e Cue della cartwall. Main usa per impostazione predefinita l'uscita di sistema. Senza un Cue non c'è il preascolto dei cart; un Cue su un'uscita in onda funziona come per i lettori. |
@@ -296,10 +296,10 @@ dice. La riga non è mostrata su Android, né nelle build Flatpak e snap. Vedi
 
 ## Automazione {#automation}
 
-Le rotazioni e le regole del [riempitivo musicale](automation.md) (non su
-Android).
+Le rotazioni del [riempitivo musicale](automation.md), i modelli e giorni del
+Palinsesto e le regole del riempitivo musicale (non su Android).
 
-![Impostazioni, Automazione: le rotazioni Music (la predefinita) e Hits, la Music selezionata con il suo unico passo su tutta la musica, e le regole del riempitivo musicale](../../images/guide/settings-automation.png)
+![Impostazioni, Automazione: le rotazioni Music (la predefinita) e Hits, la Music selezionata con il suo unico passo su tutta la musica, e l'inizio di Modelli e giorni](../../images/guide/settings-automation.png)
 
 - **Rotazioni:** l'elenco, con la predefinita contrassegnata. **Nuova
   rotazione** ne aggiunge una che riproduce tutta la musica, **Rendi
@@ -311,7 +311,15 @@ Android).
   (**Almeno** 0–99, **Al massimo** 1–99; un minimo di 0 permette al passo di
   saltare alcuni turni), **Su**, **Giù** e **Rimuovi**. **Aggiungi passo** ne
   aggiunge uno in fondo. Un passo la cui categoria è stata eliminata lo dice;
-  il riempitivo lo salta.
+  al suo turno il riempitivo musicale riproduce al suo posto un brano della
+  rotazione predefinita (musica qualsiasi, se il passo è della rotazione
+  predefinita stessa).
+- **Modelli e giorni:** i modelli, con **Modifica…** (apre il modello come
+  elenco e chiude le Impostazioni), **Nuovo modello**, **Duplica**,
+  **Elimina** e il nome; la **settimana tipo**, un modello per ogni giorno
+  della settimana; e un mese di date (in ambra: modificate), con il modello
+  della data scelta e **Modifica giorno…**. Vedi [Modelli e
+  giorni](automation.md#templates-and-days).
 - **Riempitivo musicale:** quanto tempo deve passare prima che lo stesso brano
   possa suonare di nuovo (3 ore, o quando è andata in onda la metà degli
   altri brani del suo passo, a seconda di quale accade prima; 0 disattiva

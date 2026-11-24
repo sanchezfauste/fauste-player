@@ -3,115 +3,198 @@
 Automatyzacja utrzymuje stację na antenie, gdy nikogo nie ma w studiu. Ta
 wersja ma **wypełniacz muzyczny**, odtwarzacz, który sam wybiera muzykę
 według ustawionych przez Ciebie reguł i nigdy nie staje z braku listy, oraz
-kolumnę **Ramówka**, która odtwarza bloki dnia o ustalonych godzinach, wraz z
-edytorem, w którym je tworzysz.
+kolumnę **Ramówka**, która odtwarza bloki dnia o ustalonych godzinach,
+zbudowane z szablonów w Ustawieniach.
 Odtwarzacze, których już używasz (P1 … Pn), pozostają nietknięte: nadal są
 Twoje, do audycji, które przygotowujesz i grasz na żywo.
 
-## Kolumna Ramówka {#the-schedule-column}
+## Kolumna Ramówka {#the-log-column}
 
 Kolumna **Ramówka** odtwarza **bloki** dnia: grupy elementów z godziną
 rozpoczęcia (sygnał godzinowy, spoty, audycja). Pokaż ją kafelkiem
 **Ramówka** na górnym pasku, tak jak odtwarzacz.
 
-![Działająca kolumna Ramówka obok kolumny Muzyka: bloki dnia według godziny rozpoczęcia, każdy z sygnałem stacji (zegar oznacza go jako punktualny), spotami i rotacją, którą wypełniacz muzyczny gra po nim; utwór wypełniacza na antenie i następne](../../images/guide/automation-columns.png)
+![Działająca kolumna Ramówka obok kolumny Wypełniacz muzyczny: bloki dnia według godziny rozpoczęcia, każdy z sygnałem stacji (zegar oznacza go jako element o stałej godzinie), spotami i rotacją, którą wypełniacz muzyczny gra po nim; utwór wypełniacza muzycznego na antenie i następne](../../images/guide/automation-columns.png)
 
-Jej lista to ramówka, pogrupowana według bloków: godzina rozpoczęcia każdego
-bloku, potem jego elementy. Pokazuje dzisiaj, ostatni blok z wczoraj i
-pierwszy z jutra. Blok zmieniony na jeden dzień mówi o tym. Element na antenie
-i następny są oznaczone jak w odtwarzaczu; elementy, które już poszły na
+Jej lista wygląda jak playlista, pogrupowana według bloków. Każdy blok
+zaczyna się wierszem nagłówka: godziną rozpoczęcia, liczbą elementów i ich
+łącznym czasem, napisem „zmienione na ten dzień”, gdy zmieniłeś go dzisiaj,
+oraz, na bursztynowo, o ile wchodzi na następny blok. Potem idą jego
+elementy, z **Godziną**, o której każdy ma się zacząć. Lista pokazuje
+dzisiaj, ostatni blok z wczoraj i pierwszy z jutra. Element na antenie i
+następny są oznaczone jak w odtwarzaczu; elementy, które już poszły na
 antenę, są przyciemnione, a element, który nie poszedł (**nienadany**), jest
-przekreślony. Zegar oznacza element **punktualny**, który gra tylko o swojej
-porze.
+przekreślony. Zegar oznacza element o **stałej godzinie**, który gra tylko o
+swojej porze. **Utwór z kategorii** pokazuje wybrany dla niego utwór, gdy
+tylko staje się następny (albo w swoim bloku przychodzi po następnym), z
+kategorią za nim: to ten utwór zagra. Jeśli kategoria nie ma żadnego utworu,
+który może zagrać (żaden nie jest do niej przypisany albo brakuje ich plików),
+wiersz mówi o tym na bursztynowo, a element nie zostanie nadany. Element,
+którego plik okaże się nieczytelny tuż przed odtworzeniem, jest pomijany i
+również oznaczany jako nienadany. Utwory przypisuje się do kategorii w
+bibliotece. Wiersz **wypełniacza muzycznego** mówi, do kiedy gra, i jest
+pokazany jako na antenie, gdy wypełniacz muzyczny gra dla Ramówki. Następny,
+którego godzina minęła, pokazuje ją na bursztynowo. Przeciągnij linię między
+dwoma nagłówkami kolumn, aby zmienić szerokość kolumn, jak na playliście;
+okna szablonu i dnia używają tych samych szerokości.
 
-Nad listą:
+### Zmiana dzisiejszej ramówki {#changing-todays-log}
 
-- **Uruchom** uruchamia ramówkę: każdy blok gra o swojej porze, a wypełniacz
-  muzyczny gra między blokami. Nic nie rusza samo: po każdym uruchomieniu
-  aplikacji automatyka jest zatrzymana, dopóki nie naciśniesz Uruchom.
-- **Zatrzymaj po bieżącym** pozwala skończyć się temu, co jest na antenie, a
-  potem nic więcej nie gra samo.
-- **Działa** lub **Zatrzymana** mówi, który to stan.
+Ramówkę zmienia się jak playlistę, a zmiana dotyczy tylko tego dnia: szablon
+zostaje bez zmian.
 
-Aby zmienić to, co zagra dalej, kliknij element dwukrotnie albo kliknij go
-prawym przyciskiem i wybierz **Zagraj jako następne**; wchodzi po utworze na
-antenie. **Wróć do zegara**, w tym samym menu, pozwala ramówce znów wybierać
-według godziny.
+- Przyciski na dole kolumny: **+ Utwór…** otwiera bibliotekę, aby przeciągać
+  utwory na listę; **+ Utwór z kategorii…** i
+  **+ Wypełniacz muzyczny (rotacja)…** pytają, który, i dodają go tuż pod
+  zaznaczonym wierszem (kliknij wiersz, aby go zaznaczyć; zaznacz nagłówek
+  bloku, aby dodać na początku tego bloku), a gdy nic nie jest zaznaczone lub
+  pod wierszem, którego nie można już zmienić, na końcu nadchodzącego bloku;
+  **+ Blok…** pyta o godzinę, z wpisaną już pierwszą wolną. Gdy kolumna jest
+  za wąska na wszystkie, te, które się nie mieszczą, są pod **⋯**.
+- Przeciągnij utwory z biblioteki albo pliki audio z menedżera plików na
+  wiersz, aby wstawić je przed nim (albo za nim, na dolnej połowie wiersza,
+  jak na playliście: tak trafiają na koniec bloku), i przeciągaj wiersze w
+  obrębie tego samego dnia, aby je przenieść. Dodany wiersz zostaje
+  zaznaczony i przewinięty do widoku, więc następny, który dodasz, trafi pod
+  nim.
+- Kliknij wiersz prawym przyciskiem, aby wybrać **Stała godzina** i **Usuń z
+  dzisiejszej ramówki**. Kliknij (lub kliknij prawym przyciskiem) nagłówek
+  bloku, aby dodać na końcu tego bloku **Utwór…**, **Utwór z kategorii…** lub
+  **Wypełniacz muzyczny (rotacja)…**, albo wybrać **Zmień godzinę…**, **Usuń
+  blok** i, w zmienionym bloku, **Wróć do szablonu**.
+- Gdy przeciągasz nad nagłówkiem bloku, linia pod nim pokazuje, że upuszczenie
+  trafi na początek tego bloku; aby wstawić wiersze na koniec bloku powyżej,
+  upuść je na dolnej połowie jego ostatniego wiersza.
+- Tego, co już zagrało, elementu na antenie i minionych dni nie można
+  zmienić. Zmiana bloku na antenie zaczyna działać po elemencie na antenie.
 
-## Edycja ramówki {#editing-the-schedule}
+Kolumna Ramówka ma nagłówek i przyciski odtwarzacza i działają one jak w
+odtwarzaczu:
 
-**Edytuj ramówkę**, w kolumnie Ramówka, otwiera edytor. Ma trzy karty, a
-**Rotacje…** prowadzi do Ustawienia → Automatyzacja, gdzie tworzy się
-rotacje.
+- **Odtwarzaj** odtwarza element oznaczony jako następny i uruchamia
+  automatyzację: każdy blok gra wtedy o swojej porze, a wypełniacz muzyczny
+  gra między blokami. Gdy następny wybrał zegar, a jego blok zaczyna się
+  później, do tego czasu gra muzyka. Nic nie startuje samo: po każdym
+  uruchomieniu aplikacji automatyzacja jest zatrzymana, dopóki nie naciśniesz
+  Odtwarzaj.
+- **Pauza**, **Stop** i **Stop z wyciszeniem** działają na to, co jest na
+  antenie dla Ramówki (jej element albo, między blokami, utwór wypełniacza
+  muzycznego), i zatrzymują automatyzację. Odtwarzaj po Pauzie wznawia od
+  miejsca, w którym było; w czasie pauzy następny się nie przesuwa, a po
+  wznowieniu następny blok zachowuje swoją godzinę. Odtwarzaj po Stopie w
+  czasie muzyki znów puszcza muzykę, a następny blok zaczyna się o swojej
+  porze.
+- **Stop po** pozwala dokończyć to, co jest na antenie, a potem automatyzacja
+  się zatrzymuje. Jeśli gra muzyka, a wcześniej nadejdzie godzina bloku, blok
+  zaczyna się punktualnie, a automatyzacja zatrzymuje się po jego pierwszym
+  elemencie.
+- **Poprzedni utwór** nic nie robi w Ramówce.
+- **SINGLE** czyni Ramówkę ręczną: Odtwarzaj odtwarza następny element i
+  zatrzymuje się po nim; żaden blok nie zaczyna się sam.
 
-![Edytor ramówki, karta Szablony: szablony Base i Weekend po lewej; bloki Base po prawej, każdy z początkiem, elementami, Dodaj z kategorii i rotacją muzyki po nim](../../images/guide/template-popup.png)
+Gdy wypełniacz muzyczny gra między blokami, nagłówek Ramówki pokazuje
+**Wypełniacz muzyczny · *rotacja*** (rotację, którą gra), a jej przyciski
+nadal działają; utwór, jego miernik i przebieg są tylko w kolumnie
+Wypełniacz muzyczny.
 
-- **Szablony.** Szablon to dzień bloków; nowa instalacja ma jeden, „Base”, na
-  każdy dzień. Szablony tworzysz, powielasz, zmieniasz im nazwy lub usuwasz po
-  lewej; bloki wybranego są po prawej. Początek bloku wpisz jako `HH:MM:SS`
-  (godzina, która nie istnieje, zostaje w polu z uwagą i nic się nie zmienia).
-  Przeciągnij utwory z biblioteki na blok, aby je dodać; **Dodaj z
-  kategorii** dodaje element, który gra jeden utwór z tej kategorii, za każdym
-  razem inny; **Muzyka potem** wybiera rotację, którą wypełniacz muzyczny gra
-  po bloku (rotację domyślną, gdy żadnej nie wybrano). Każdy element można
-  oznaczyć jako **Punktualny**, przesunąć lub usunąć. Gdy elementy bloku są
-  dłuższe niż czas do następnego bloku, blok mówi o ile, na bursztynowo; nadal
-  możesz go tak zostawić.
+Gdy automatyzacja zatrzyma się po elemencie, następny zostaje na elemencie
+pod tym, który zagrał, a Odtwarzaj go odtwarza, niezależnie od godziny: Ty
+decydujesz. Gdy zatrzyma się w czasie muzyki, Odtwarzaj znów puszcza muzykę
+do następnego bloku, chyba że wybrałeś inny następny. Aby zmienić, co zagra
+dalej, kliknij dwukrotnie element albo kliknij go prawym przyciskiem i wybierz
+**Zagraj jako następne**. **Wróć do zegara** w tym samym menu ustawia jako
+następny to, co wynika z godziny.
+
+## Szablony i dni {#templates-and-days}
+
+Ramówka gra każdy dzień według **szablonu**: dnia złożonego z bloków. Nowa
+instalacja ma jeden, „Podstawowy”, na każdy dzień. Szablony tworzy się w
+Ustawienia → **Automatyzacja**, w sekcji **Szablony i dni** (nie w
+Androidzie); kolumna Ramówka zmienia tylko dzisiejszy dzień, jak opisano
+wyżej.
+
+![Ustawienia, Automatyzacja, Szablony i dni: szablony Podstawowy i Weekend z Edytuj…, Nowy szablon, Duplikuj, Usuń i nazwą; tydzień wzorcowy, Podstawowy od poniedziałku do piątku i Weekend w sobotę i niedzielę; miesiąc z wybranym dniem dzisiejszym, daty ze zmianami na bursztynowo, szablon daty i Edytuj dzień…](../../images/guide/settings-plans.png)
+
+- **Szablony.** Wybierz jeden i naciśnij **Edytuj…** (albo kliknij go
+  dwukrotnie), aby go otworzyć; **Nowy szablon**, **Duplikuj** i **Usuń** są
+  obok, a jego nazwa poniżej.
 - **Tydzień wzorcowy.** Którego szablonu używa każdy dzień tygodnia.
-
-  ![Karta Tydzień wzorcowy: Base od poniedziałku do piątku, Weekend w sobotę i niedzielę](../../images/guide/settings-plans.png)
-
 - **Dni.** Wybierz datę w kalendarzu (daty ze zmianami są bursztynowe). Data
   może używać innego szablonu niż jej dzień tygodnia (święto w czwartek może
-  używać weekendowego). Jej bloki można zmienić tylko dla tej daty: zmiana
-  jest oznaczona, a **Wróć do szablonu** ją cofa. **Nie tego dnia** usuwa
-  blok tylko z tej daty, a **Dodaj blok tego dnia** dodaje jeden. Późniejsze
-  zmiany szablonu nadal docierają do bloków, których w tej dacie nie
-  zmieniłeś.
+  używać weekendowego). **Edytuj dzień…** otwiera tę datę, aby zmienić jej
+  bloki tylko na tę datę; minionych dat nie można zmieniać.
 
-  ![Karta Dni: kalendarz z wybranym dzisiaj i datami ze zmianami na bursztynowo; pierwszy blok dzisiejszego dnia ma jeden spot więcej, oznaczony „zmienione na ten dzień”, z przyciskiem Wróć do szablonu](../../images/guide/settings-plans.png)
+Szablon lub data otwiera się we własnym oknie, które zamyka Ustawienia. To ta
+sama lista co kolumna Ramówka i zmienia się ją tak samo: przyciski na dole
+(Utwór…, Utwór z kategorii…, Wypełniacz muzyczny (rotacja)…, Blok…, które
+dodają pod zaznaczonym wierszem), utwory przeciągnięte z biblioteki (lub pliki
+z menedżera plików) na wiersz, wiersze przeciągane, aby je przenieść, menu
+prawego przycisku wierszy i menu nagłówków bloków. Nigdy nie gra i może
+zostać otwarte obok biblioteki. Okno dzisiejszego dnia pokazuje, co zagrało i
+co gra, jak Ramówka; okno dnia zamyka się o północy, gdy tego dnia nie można
+już zmienić.
 
-## Wypełniacz muzyczny {#the-music-filler}
+![Szablon otwarty w swoim oknie: bloki szablonu Podstawowy według godziny rozpoczęcia, każdy z sygnałem stacji, spotami i po nich wypełniaczem muzycznym, oraz Dodaj na dole](../../images/guide/template-popup.png)
 
-Wypełniacz muzyczny to kolumna **Muzyka**. Jest ukryta, dopóki jej nie
-pokażesz: kliknij kafelek **Muzyka** po lewej stronie górnego paska. Leży na
-lewo od P1.
+**Utwór z kategorii** w szablonie gra jeden utwór z tej kategorii, za każdym
+razem inny. Element **Wypełniacz muzyczny** wybiera rotację, którą wypełniacz
+muzyczny gra po bloku (domyślną rotację, gdy blok nie ma żadnej). Gdy
+elementy bloku trwają dłużej niż czas do następnego bloku, jego nagłówek mówi
+na bursztynowo, o ile; mimo to możesz to tak zostawić.
+
+Zmiana daty jest oznaczona na jej bloku napisem „zmienione na ten dzień”, a
+**Wróć do szablonu** w menu nagłówka bloku ją cofa. Późniejsze zmiany
+szablonu nadal docierają do bloków, których w tej dacie nie zmieniłeś. Zmiana
+szablonu dokonana, gdy jeden z jego bloków jest na antenie, zostawia ten blok
+na dziś bez zmian (pokazuje „zmienione na ten dzień”); zmiana dociera do niego
+od następnego dnia.
+
+## Wypełniacz muzyczny {#the-music-fill}
+
+Wypełniacz muzyczny to kolumna **Wypełniacz muzyczny**. Jest ukryta, dopóki
+jej nie pokażesz: kliknij kafelek **Wypełniacz muzyczny** po lewej stronie
+górnego paska. Leży na lewo od P1.
 
 Wygląda i działa jak odtwarzacz: duży zegar, przebieg, przyciski transportu,
 suwak i lista utworów. Różnica to lista:
 
-- **wypełnia się sama** z **rotacji** (niżej), zawsze mniej więcej pół godziny
-  do przodu (*wyprzedzenie*, w Ustawienia → Automatyzacja);
-- **przycina się sama**: zachowuje ostatnie 50 odtworzonych utworów i usuwa
+- **wypełnia się sama** z **rotacji** (poniżej), zawsze około pół godziny do
+  przodu (*wyprzedzenie*, w Ustawienia → Automatyzacja);
+- **sama się przycina**: zachowuje ostatnie 50 zagranych utworów i usuwa
   starsze, więc może działać tygodniami;
-- przed blokiem ramówki może **zamienić utwory, które sam wybrał**, na inne,
-  których długość pasuje do pozostałego czasu (zob. niżej); utwory, które
-  dodałeś, nigdy nie są ruszane;
-- nadal możesz go **zmieniać ręcznie**: przeciągaj utwory z biblioteki,
-  zmieniaj kolejność wierszy, usuwaj utwór, którego nie chcesz. Wiersz, który
-  dodasz, jest oznaczony dłonią i nigdy nie jest zastępowany; wiersz, który
-  usuniesz, nie liczy się jako odtworzony.
+- przed blokiem ramówki może **zamienić utwory, które sama wybrała**, na
+  inne, których długość pasuje do pozostałego czasu (zob. niżej); utworów
+  dodanych przez Ciebie nigdy nie rusza;
+- nadal możesz ją **zmieniać ręcznie**: przeciągać utwory z biblioteki,
+  zmieniać kolejność wierszy, usunąć niechciany utwór. Dodany przez Ciebie
+  wiersz jest oznaczony ręką i nigdy nie jest zastępowany; usunięty wiersz nie
+  liczy się jako zagrany.
 
-Jego wyjścia ustawia się w Ustawienia → Wyjścia audio, w wierszu **Muzyka**,
-jak dla każdego odtwarzacza. Nie ma numeru, skrótów klawiszowych ani
-przypisań MIDI, a zdalne sterowanie go nie widzi.
+Jej wyjścia ustawia się w Ustawienia → Wyjścia audio, w wierszu **Wypełniacz
+muzyczny**, jak dla każdego odtwarzacza. Nie ma numeru, skrótów klawiszowych
+ani przypisań MIDI, a zdalne sterowanie jej nie widzi.
 
-Naciśnij **Play**, aby go uruchomić, i **Zatrzymaj po bieżącym**, aby
-utwór na antenie się skończył i kolumna się zatrzymała. Jak każdy odtwarzacz,
-nigdy nie startuje sam, nawet po ponownym uruchomieniu.
+Naciśnij **Odtwarzaj**, aby go uruchomić, i **Stop po**, aby utwór na antenie
+się skończył i kolumna się zatrzymała. Jak każdy odtwarzacz, nigdy nie
+startuje sam, nawet po ponownym uruchomieniu. Gdy gra dla Ramówki między
+blokami, zatrzymanie go lub pauza zatrzymuje też automatyzację, a jego Stop po
+zatrzymuje automatyzację, gdy utwór się skończy; jeśli wcześniej nadejdzie
+godzina bloku, blok gra, a oznaczenie znika. Po zapauzowaniu Ramówki w czasie
+muzyki Odtwarzaj w kolumnie Wypełniacz muzyczny gra utwór samodzielnie:
+Odtwarzaj Ramówki już go nie wznawia, a jej Stop już go nie zatrzymuje.
 
-Nad jego listą, tam gdzie odtwarzacz ma karty playlist, kolumna Muzyka
-pokazuje **rotację**, którą gra. Wybierz tam inną: utwory, które miała w
-kolejce, są zastępowane, te dodane przez Ciebie zostają. Gdy rotacja nie
-znajduje nic do odtworzenia (jej kategorie są puste albo każdy plik jest
+Nad jego listą, tam gdzie odtwarzacz ma karty playlist, kolumna Wypełniacz
+muzyczny pokazuje **rotację**, którą gra. Wybierz tam inną: utwory, które
+miała w kolejce, są zastępowane, te dodane przez Ciebie zostają. Gdy rotacja
+nie znajduje nic do odtworzenia (jej kategorie są puste albo każdy plik jest
 brakujący), pasek o tym mówi.
 
 ## Rotacje {#rotations}
 
-**Rotacja** to krótka lista **kroków**, które wypełniacz gra po kolei, a potem
-znów od pierwszego. Każdy krok wskazuje, skąd pochodzą jego utwory (kategoria
-biblioteki z jej podkategoriami albo każdy utwór danego rodzaju) i ile ich
-gra za każdym razem, jako zakres:
+**Rotacja** to krótka lista **kroków**, które wypełniacz muzyczny gra po
+kolei, a potem znowu od pierwszego. Każdy krok mówi, skąd pochodzą jego
+utwory (kategoria biblioteki z jej podkategoriami albo każdy utwór danego
+rodzaju) i ile ich gra za każdym razem, jako zakres:
 
 | Krok | Gra |
 |---|---|
@@ -123,37 +206,47 @@ Przy zakresie sygnał stacji raz następuje po dwóch piosenkach, a następnym
 razem po trzech. Zakres od **0** pozwala krokowi pominąć niektóre kolejki:
 przy złotych przebojach 0–1 złoty przebój raz gra po sygnale stacji, a raz nie.
 Maksimum to zawsze co najmniej 1. Jedna rotacja jest **domyślna**: nowa
-instalacja ma jedną, **Music**, która gra całą Twoją muzykę.
+instalacja ma jedną, **Muzyka**, która gra całą Twoją muzykę.
+
+Krok, którego kategoria nie ma żadnego utworu, który może zagrać (pusta
+kategoria albo brakujące pliki), gra w swojej kolejce utwór z domyślnej
+rotacji (dowolną muzykę, jeśli krok należy do samej domyślnej rotacji), więc
+pozostałe kroki zachowują swoje miejsce: sygnał stacji nadal pojawia się
+między piosenkami.
 
 Rotacje tworzy się w Ustawienia → Automatyzacja:
 
-![Ustawienia, Automatyzacja: rotacje Music (domyślna) i Hits, zaznaczona Music z jednym krokiem obejmującym całą muzykę, jej liczby Co najmniej i Co najwyżej oraz reguły wypełniacza muzycznego](../../images/guide/settings-automation.png)
+![Ustawienia, Automatyzacja: rotacje Music (domyślna) i Hits, zaznaczona Music z jednym krokiem obejmującym całą muzykę, jej liczby Co najmniej i Co najwyżej oraz początek sekcji Szablony i dni](../../images/guide/settings-automation.png)
 
 ## Jak wybiera {#how-it-chooses}
 
-W obrębie kroku wypełniacz preferuje utwory, które najdłużej nie szły na
-antenę, z niewielką losowością między nimi, aby kolejność nigdy nie stała się
-stałym cyklem. Pilnuje też odstępu:
+W obrębie kroku wypełniacz muzyczny preferuje utwory, które najdłużej nie
+były na antenie, z niewielką losowością między nimi, aby kolejność nigdy nie
+stała się stałym cyklem. Pilnuje też odstępu:
 
 - **ten sam utwór:** może zagrać ponownie, gdy minęły 3 godziny albo od tego
   czasu zagrała połowa pozostałych utworów jego kroku, zależnie od tego, co
   nastąpi pierwsze;
 - **ten sam wykonawca:** nie w ciągu 30 minut.
 
-Liczy się wszystko, co poszło na antenę: z wypełniacza, odtwarzacza lub
-cartwalla; odsłuch wstępny się nie liczy. Gdy mała kategoria nie może
-dotrzymać reguł, wypełniacz ustępuje, zamiast zamilknąć: najpierw co do
-wykonawcy, potem co do utworu. Ustawienia → Automatyzacja zawiera każdą
-wartość i tam tworzy się, zmienia nazwy i zmienia rotacje (zob.
+Liczy się wszystko, co poszło na antenę: z wypełniacza muzycznego,
+odtwarzacza lub cartwalla; odsłuch wstępny się nie liczy. Gdy mała kategoria
+nie może dotrzymać reguł, wypełniacz muzyczny ustępuje, zamiast zamilknąć:
+najpierw co do wykonawcy, potem co do utworu. Ustawienia → Automatyzacja
+zawiera każdą wartość i tam tworzy się, zmienia nazwy i zmienia rotacje (zob.
 [Ustawienia](settings.md#automation)).
 
-Przed blokiem ramówki wypełniacz wybiera też swoje ostatnie utwory według ich
-długości, aby muzyka kończyła się czysto: utwór, który wycisza się, gdy
-zaczyna się blok, traci najwyżej 30 sekund, a nie startuje żaden utwór, który
-grałby krócej niż 45 sekund. Gdy żaden utwór rotacji nie spełnia obu
-warunków, gra ten, który traci najmniej. Obie wartości można na razie zmienić
-tylko w pliku konfiguracji (`automation.max_fade_cut_secs` i
-`automation.min_song_play_secs`).
+Przed blokiem ramówki wypełniacz muzyczny wybiera też swoje ostatnie utwory
+według długości, aby muzyka kończyła się czysto: utwór wyciszany na początku
+bloku gra jeszcze o godzinie bloku i traci po niej najwyżej 30 sekund, a nie
+zaczyna się żaden utwór, który grałby krócej niż 45 sekund. Reguł wykonawcy
+i utworu też przestrzega, kiedy tylko może. Gdy żaden utwór rotacji nie może
+spełnić obu warunków, gra ten, który traci najmniej, więc czasem może być
+słychać kilka sekund utworu. Pauza muzyki przesuwa następujące po niej
+utwory, a wypełniacz muzyczny wybiera je na nowo. Wypełniacz muzyczny unika
+też utworów i wykonawców, które blok gra wkrótce potem. Obie wartości można
+na razie zmienić tylko w pliku konfiguracyjnym
+(`automation.max_fade_cut_secs` i `automation.min_song_play_secs`).
 
 **Sygnał godzinowy** to osobny rodzaj utworu (Biblioteka → Rodzaj ▸ Sygnał
-godzinowy), przeznaczony na identyfikację stacji na początku godziny.
+godzinowy) do identyfikacji stacji o pełnej godzinie.

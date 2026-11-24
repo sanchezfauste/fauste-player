@@ -91,7 +91,7 @@ valeurs globales. D'ici là, le choisir de nouveau (par exemple après avoir
 | Système audio | Le dernier choix, **Aucune sortie (silence)**, ne joue rien : les lignes de temps tournent en temps réel sans carte son (pour une machine qui n'en a pas, ou pour répéter). Linux : PipeWire (dans les versions qui l'incluent), PulseAudio, JACK ou ALSA. Windows : WASAPI, ASIO (dans les versions qui l'incluent) ou JACK. macOS : Core Audio ou JACK. Les systèmes absents de cet ordinateur, ou sans périphérique de sortie (un serveur JACK qui ne tourne pas), sont indiqués comme indisponibles. « Par défaut du système » utilise le premier disponible dans cet ordre. |
 | Fréquence d'échantillonnage | La fréquence à laquelle chaque sortie tourne, sauf si un périphérique a la sienne (Avancé) ; les fichiers y sont convertis avec un rééchantillonnage de haute qualité. Les périphériques bit-perfect démarrent à leur fréquence puis suivent les fichiers. |
 | Taille du tampon | Trames par bloc audio, sauf si un périphérique a le sien ; la latence qui en résulte est affichée en dessous. Les sorties passant par un serveur de son ou un mélangeur du système (PulseAudio, le périphérique ALSA `default`) demandent au moins 50 ms quelle que soit cette taille, ou autant que le périphérique en accepte, afin qu'un ordinateur occupé ne s'entende pas ; la latence l'indique alors (`shared_buffer_ms` dans le fichier de configuration) |
-| Sorties par lecteur | Pour chaque lecteur, et pour la colonne **Musique** (le [remplissage musical](automation.md)), un périphérique **Main** (antenne) et un périphérique **Cue** (pré-écoute), chacun avec une paire de canaux. Une carte son qui propose plusieurs profils de sortie (ALSA liste frontal, surround, matériel direct…) montre chacun sous la forme *carte — profil* ; deux entrées qui se liraient encore pareil reçoivent l'identifiant de leur périphérique entre parenthèses. Les interfaces multicanaux peuvent porter plusieurs lecteurs sur des paires différentes. Une sortie Cue qui partage une sortie d'antenne (le Main d'un lecteur quelconque ou celui du mur de cartouches) est permise : une note en dessous dit que sa pré-écoute s'entend à l'antenne et qu'elle demande d'abord tant que quelque chose y joue. |
+| Sorties par lecteur | Pour chaque lecteur, et pour la colonne **Remplissage musical** (le [remplissage musical](automation.md)), un périphérique **Main** (antenne) et un périphérique **Cue** (pré-écoute), chacun avec une paire de canaux. Une carte son qui propose plusieurs profils de sortie (ALSA liste frontal, surround, matériel direct…) montre chacun sous la forme *carte — profil* ; deux entrées qui se liraient encore pareil reçoivent l'identifiant de leur périphérique entre parenthèses. Les interfaces multicanaux peuvent porter plusieurs lecteurs sur des paires différentes. Une sortie Cue qui partage une sortie d'antenne (le Main d'un lecteur quelconque ou celui du mur de cartouches) est permise : une note en dessous dit que sa pré-écoute s'entend à l'antenne et qu'elle demande d'abord tant que quelque chose y joue. |
 | Tester Main / Tester Cue | Joue une courte tonalité (1 kHz sur Main, 440 Hz sur Cue, 1,5 s, −18 dBFS) sur la sortie choisie, pour vérifier le câblage avant de passer à l'antenne |
 | Bibliothèque | La sortie Cue de la bibliothèque, avec son propre **Tester Cue** : là où s'entend la [pré-écoute](library.md#pre-listening) de la fenêtre de la bibliothèque (sur un téléphone, celle de l'onglet Bibliothèque). Sans elle, le bouton de lecture de la barre de pré-écoute est grisé. Sur Android, son choix vide se lit *Par défaut du système* au lieu de *Aucune* : la pré-écoute et **Tester Cue** jouent alors sur la sortie par défaut (voir [Android → Bibliothèque](android.md#library)). Une sortie Bibliothèque sur une sortie d'antenne fonctionne comme le Cue d'un lecteur : une note en dessous dit que sa pré-écoute s'entend à l'antenne et qu'elle demande d'abord tant que quelque chose y joue. Elle est dans les vues Simple et Avancé, aussi sur un téléphone |
 | Mur de cartouches | Les sorties Main et Cue du mur de cartouches. Main prend par défaut la sortie du système. Sans Cue, il n'y a pas de pré-écoute des cartouches ; un Cue sur une sortie d'antenne fonctionne comme pour les lecteurs. |
@@ -302,10 +302,10 @@ change](library.md#when-a-file-changes).
 
 ## Automatisation {#automation}
 
-Les rotations et les règles du [remplissage musical](automation.md) (pas sur
-Android).
+Les rotations du [remplissage musical](automation.md), les modèles et jours de
+la Grille, et les règles du remplissage musical (pas sur Android).
 
-![Paramètres, Automatisation : les rotations Music (par défaut) et Hits, Music sélectionnée avec son unique étape sur toute la musique, et les règles du remplissage musical](../../images/guide/settings-automation.png)
+![Paramètres, Automatisation : les rotations Music (par défaut) et Hits, Music sélectionnée avec son unique étape sur toute la musique, et le début de Modèles et jours](../../images/guide/settings-automation.png)
 
 - **Rotations :** la liste, avec celle par défaut marquée. **Nouvelle
   rotation** en ajoute une qui joue toute la musique, **Définir par défaut**
@@ -316,8 +316,16 @@ Android).
   d'un type), combien elle en joue à chaque fois (**Au moins** 0–99, **Au
   plus** 1–99 ; au moins 0 permet à l'étape de sauter certains tours),
   **Monter**, **Descendre** et **Retirer**. **Ajouter une étape** en ajoute une
-  à la fin. Une étape dont la catégorie a été supprimée le dit ; le
-  remplissage la saute.
+  à la fin. Une étape dont la catégorie a été supprimée le dit ; à son tour,
+  le remplissage musical joue à la place un morceau de la rotation par défaut
+  (n'importe quelle musique, si l'étape appartient à la rotation par défaut
+  elle-même).
+- **Modèles et jours :** les modèles, avec **Modifier…** (ouvre le modèle sous
+  forme de liste et ferme les Paramètres), **Nouveau modèle**, **Dupliquer**,
+  **Supprimer** et le nom ; la **semaine type**, un modèle par jour de la
+  semaine ; et un mois de dates (en ambre : modifiées), avec le modèle de la
+  date choisie et **Modifier le jour…**. Voir [Modèles et
+  jours](automation.md#templates-and-days).
 - **Remplissage musical :** le délai avant qu'une même piste puisse rejouer
   (3 heures, ou dès que la moitié des autres pistes de son étape sont passées
   à l'antenne, selon ce qui arrive en premier ; 0 désactive l'un ou l'autre),

@@ -10,9 +10,9 @@ sous eux.
 
 ## Afficher et masquer des panneaux {#show-and-hide-panels}
 
-Les tuiles à gauche de la barre supérieure, **Grille** et **Musique** (la
-[grille](automation.md#the-schedule-column) et le
-[remplissage musical](automation.md#the-music-filler), tous deux masqués tant que
+Les tuiles à gauche de la barre supérieure, **Grille** et **Remplissage musical** (la
+[grille](automation.md#the-log-column) et le
+[remplissage musical](automation.md#the-music-fill), tous deux masqués tant que
 vous ne les affichez pas), **P1** … **Pn** et **Cartouches**, montrent quels
 panneaux sont à l'écran : une tuile allumée est affichée. Cliquez sur une
 tuile pour masquer ou afficher son panneau. Avec de nombreux lecteurs, les

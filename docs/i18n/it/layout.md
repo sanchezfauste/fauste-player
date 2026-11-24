@@ -9,9 +9,9 @@ cartwall sotto di essi.
 
 ## Mostrare e nascondere i pannelli {#show-and-hide-panels}
 
-Le tessere a sinistra della barra superiore, **Palinsesto** e **Musica** (il
-[palinsesto](automation.md#the-schedule-column) e il
-[riempitivo musicale](automation.md#the-music-filler), entrambi nascosti
+Le tessere a sinistra della barra superiore, **Palinsesto** e **Riempitivo musicale** (il
+[palinsesto](automation.md#the-log-column) e il
+[riempitivo musicale](automation.md#the-music-fill), entrambi nascosti
 finché non li mostri), **P1** … **Pn** e **Cartwall**, mostrano quali pannelli
 sono sullo schermo: una tessera accesa è mostrata. Fai clic su una tessera
 per nascondere o mostrare il suo pannello. Con molti lettori, le tessere

@@ -1,6 +1,6 @@
 # Fauste Player — Guia do utilizador
 
-<div class="ai-notice" role="note">Este guia foi traduzido com IA a partir do guia em inglês (v0.14.0-144-g8517d951, commit 8517d95) e pode conter erros. Em caso de diferença, prevalece a versão em inglês. <a href="../index.html" hreflang="en">Ler o original em inglês</a></div>
+<div class="ai-notice" role="note">Este guia foi traduzido com IA a partir do guia em inglês (v0.14.0-255-g7b5ae8b7, commit 7b5ae8b) e pode conter erros. Em caso de diferença, prevalece a versão em inglês. <a href="../index.html" hreflang="en">Ler o original em inglês</a></div>
 
 O Fauste Player é uma aplicação de emissão (playout) para estúdios de rádio.
 Executa vários **leitores** independentes, lado a lado. Cada leitor tem as
@@ -24,7 +24,7 @@ sobreviver a falhas sem pôr nada no ar por si sós.
 | [Cartucheira](cartwall.md) | Cartuchos instantâneos: disparo, páginas, ciclos, cartuchos exclusivos, configuração |
 | [Biblioteca](library.md) | A janela da biblioteca de faixas: categorias, tipos, pesquisa, pré-escuta, o editor externo e os ficheiros alterados |
 | [Disposição](layout.md) | Mostrar e ocultar painéis, larguras dos leitores, mover e redimensionar a cartucheira, maximizar um painel, o menu da disposição |
-| [Automatização](automation.md) | A coluna Grelha, o seu editor, o musicalizador e as suas rotações |
+| [Automatização](automation.md) | A coluna Grelha, os seus modelos e dias, o musicalizador e as suas rotações |
 | [Marcadores e mistura](markers-and-mixing.md) | Cue-in/cue-out, o ponto MIX, intro e outro, análise automática |
 | [Definições](settings.md) | Saídas de áudio, leitores, análise, listas, MIDI, controlo remoto |
 | [Normalização do loudness](loudness.md) | Todas as faixas e cartuchos com o mesmo loudness graças a um ganho fixo por faixa: o indicador de ganho, excluir e ajustar uma faixa, saídas bit-perfect |

@@ -4,82 +4,164 @@ La automatización mantiene la emisora al aire cuando no hay nadie en el
 estudio. Esta versión tiene el **musicalizador**, un player que elige la
 música por sí solo, a partir de las reglas que fijas, y que nunca se detiene
 por falta de lista, y la columna **Parrilla**, que ejecuta los bloques
-horarios del día, con el editor donde los creas.
+horarios del día, hechos a partir de plantillas en Configuración.
 Los players que ya usas (P1 … Pn) no se tocan: siguen siendo tuyos para los
 programas que preparas y emites en directo.
 
-## La columna Parrilla {#the-schedule-column}
+## La columna Parrilla {#the-log-column}
 
 La columna **Parrilla** reproduce los **bloques** del día: grupos de
 elementos con una hora de inicio (un indicativo horario, cuñas, un
 programa). Muéstrala con el mosaico **Parrilla** de la barra superior, igual
 que muestras un player.
 
-![La columna Parrilla en marcha, junto a la columna Música: los bloques del día por hora de inicio, cada uno con su indicativo de la emisora (el reloj lo marca como puntual), cuñas y la rotación que el musicalizador reproduce después; la canción del musicalizador al aire y las siguientes](../../images/guide/automation-columns.png)
+![La columna Parrilla en marcha, junto a la columna Musicalizador: los bloques del día por hora de inicio, cada uno con su indicativo de la emisora (el reloj lo marca como de hora fija), cuñas y la rotación que el musicalizador reproduce después; la canción del musicalizador al aire y las siguientes](../../images/guide/automation-columns.png)
 
-Su lista es la parrilla, agrupada por bloques: la hora de inicio de cada
-bloque y luego sus elementos. Muestra hoy, el último bloque de ayer y el
-primero de mañana. Un bloque cambiado para un día lo indica. El elemento al
-aire y el siguiente se marcan como en un player; los elementos que ya se
-emitieron aparecen atenuados, y un elemento que no se emitió (**No
-emitido**) aparece tachado. Un reloj marca un elemento **puntual**, que solo
-suena a su hora.
+Su lista parece una playlist, agrupada por bloques. Cada bloque empieza con
+una fila de cabecera: su hora de inicio, cuántos elementos tiene y cuánto
+duran, "cambiado para este día" cuando lo cambiaste hoy y, en ámbar, cuánto
+se pasa del bloque siguiente. Luego vienen sus elementos, con la **Hora** a
+la que está previsto que empiece cada uno. La lista muestra hoy, el último
+bloque de ayer y el primero de mañana. El elemento al aire y el siguiente se
+marcan como en un player; los elementos que ya se emitieron aparecen
+atenuados, y un elemento que no se emitió (**no emitido**) aparece tachado.
+Un reloj marca un elemento de **hora fija**, que solo suena a su hora. Una
+**pista de categoría** muestra la pista elegida para ella en cuanto pasa a
+ser la siguiente (o viene después de la siguiente en su bloque), con la
+categoría detrás: esa es la pista que suena. Si la categoría no tiene
+ninguna pista que pueda sonar (no tiene ninguna asignada, o faltan sus
+archivos), la fila lo dice en ámbar, y el elemento no se emitirá. Un
+elemento cuyo archivo resulta ilegible cuando va a sonar se salta y también
+se marca como no emitido. Las pistas se asignan a una categoría en la
+biblioteca. La fila del **musicalizador** dice hasta cuándo suena, y se
+muestra al aire mientras el musicalizador suena para la Parrilla. Un
+siguiente cuya hora ya ha pasado muestra la hora en ámbar. Arrastra la línea
+entre dos cabeceras de columna para cambiar el ancho de las columnas, como
+en una playlist; las ventanas de plantilla y de día usan los mismos anchos.
 
-Encima de la lista:
+### Cambiar la parrilla de hoy {#changing-todays-log}
 
-- **Iniciar** pone en marcha la parrilla: cada bloque suena a su hora y el
-  musicalizador suena entre bloques. Nada se pone en marcha por sí solo:
-  después de cada arranque de la aplicación, la automatización está
-  detenida hasta que pulsas Iniciar.
-- **Detener tras la actual** deja que termine lo que está al aire, y luego
-  ya no suena nada por sí solo.
-- **En marcha** o **Detenida** dice en qué estado está.
+La Parrilla se cambia como una playlist, y el cambio es solo para ese día:
+la plantilla se queda como está.
 
-Para cambiar lo que suena a continuación, haz doble clic en un elemento, o
-haz clic derecho en él y elige **Que suene a continuación**; sigue a la
-canción que está al aire. **Volver al reloj**, en el mismo menú, deja que la
-parrilla vuelva a elegir según la hora.
+- Los botones de la parte inferior de la columna: **+ Pista…** abre la
+  biblioteca, para arrastrar pistas a la lista; **+ Pista de categoría…** y
+  **+ Musicalizador (rotación)…** preguntan cuál y la añaden justo debajo de
+  la fila que seleccionaste (haz clic en una fila para seleccionarla;
+  selecciona una cabecera de bloque para añadir al principio de ese bloque),
+  o, sin nada seleccionado o debajo de una fila que ya no puede cambiar, al
+  final del próximo bloque; **+ Bloque horario…** pide una hora, con la
+  primera libre ya puesta. Cuando la columna es demasiado estrecha para
+  todos, los que no caben están detrás de **⋯**.
+- Arrastra pistas de la biblioteca, o archivos de audio de tu gestor de
+  archivos, a una fila para ponerlos delante de ella (o detrás, en la mitad
+  inferior de la fila, como en una playlist: así van al final de un bloque),
+  y arrastra filas dentro del mismo día para moverlas. La fila que añades
+  queda seleccionada y a la vista, así que la siguiente que añadas va debajo.
+- Haz clic derecho en una fila para **Hora fija** y **Quitar de la parrilla
+  de hoy**. Haz clic (o clic derecho) en una cabecera de bloque para añadir
+  una **Pista…**, una **Pista de categoría…** o un **Musicalizador
+  (rotación)…** al final de ese bloque, o para **Cambiar hora…**, **Quitar
+  bloque** y, en un bloque cambiado, **Volver a la plantilla**.
+- Mientras arrastras sobre una cabecera de bloque, la línea que aparece
+  debajo indica que lo sueltas al principio de ese bloque; para poner filas
+  al final del bloque de arriba, suéltalas en la mitad inferior de su última
+  fila.
+- Lo que ya sonó, el elemento al aire y los días pasados no se pueden
+  cambiar. Un cambio en el bloque al aire tiene efecto después del elemento
+  al aire.
 
-## Editar la parrilla {#editing-the-schedule}
+La columna Parrilla tiene la cabecera y los botones de un player, y
+funcionan como en un player:
 
-**Editar parrilla**, en la columna Parrilla, abre el editor. Tiene tres
-pestañas, y **Rotaciones…** te lleva a Configuración → Automatización, donde
-se crean las rotaciones.
+- **Reproducir** reproduce el elemento marcado como siguiente y pone en
+  marcha la automatización: cada bloque suena entonces a su hora, y el
+  musicalizador suena entre bloques. Cuando el siguiente lo eligió el reloj
+  y su bloque empieza más tarde, la música suena hasta entonces. Nada se pone
+  en marcha por sí solo: después de cada arranque de la aplicación, la
+  automatización está detenida hasta que pulsas Reproducir.
+- **Pausa**, **Stop** y **Stop con fundido** actúan sobre lo que está al
+  aire para la Parrilla (su elemento, o la canción del musicalizador entre
+  bloques) y detienen la automatización. Reproducir después de Pausa sigue
+  desde donde estaba; mientras está en pausa, el siguiente no se mueve, y al
+  reanudar el bloque siguiente mantiene su hora. Reproducir después de un
+  Stop durante la música vuelve a poner música, y el bloque siguiente
+  empieza a su hora.
+- **Stop al final** deja que termine lo que está al aire, y luego la
+  automatización se detiene. Si está sonando la música y antes llega la hora
+  de un bloque, el bloque empieza puntual y la automatización se detiene
+  después de su primer elemento.
+- **Pista anterior** no hace nada en la Parrilla.
+- **SINGLE** hace manual la Parrilla: Reproducir reproduce el elemento
+  siguiente, y se detiene después de él; ningún bloque empieza por sí solo.
 
-![El editor de parrilla, pestaña Plantillas: las plantillas Base y Weekend a la izquierda; los bloques de Base a la derecha, cada uno con su inicio, sus elementos, Añadir de categoría y la rotación de la música que va después](../../images/guide/template-popup.png)
+Mientras el musicalizador suena entre bloques, la cabecera de la Parrilla
+dice **Musicalizador · *rotación*** (la rotación que reproduce) y sus
+botones siguen funcionando; la canción, su medidor y su forma de onda están
+solo en la columna Musicalizador.
 
-- **Plantillas.** Una plantilla es un día de bloques; una instalación nueva
-  tiene una, "Base", para todos los días. Crea, duplica, renombra o elimina
-  plantillas a la izquierda; los bloques de la elegida están a la derecha.
-  Escribe el inicio de un bloque como `HH:MM:SS` (una hora que no existe se
-  queda en el campo con una nota, y no cambia nada). Arrastra pistas de la
-  biblioteca a un bloque para añadirlas; **Añadir de categoría** añade un
-  elemento que reproduce una pista de esa categoría, una distinta cada vez;
-  **Música después** elige la rotación que el musicalizador reproduce
-  después del bloque (la rotación por defecto si no se elige ninguna). Cada
-  elemento se puede marcar como **Puntual**, mover o quitar. Cuando los
-  elementos de un bloque duran más que el tiempo hasta el bloque siguiente,
-  el bloque dice en cuánto, en ámbar; aun así puedes dejarlo así.
+Cuando la automatización se detiene después de un elemento, el siguiente
+queda en el elemento de debajo del que sonó, y Reproducir lo reproduce, sea
+la hora que sea: eliges tú. Cuando se detiene durante la música, Reproducir
+vuelve a poner música hasta el bloque siguiente, salvo que hayas elegido
+otro siguiente. Para cambiar lo que suena a continuación, haz doble clic en
+un elemento, o haz clic derecho en él y elige **Que suene a continuación**.
+**Volver al reloj**, en el mismo menú, pone como siguiente lo que dice la
+hora.
+
+## Plantillas y días {#templates-and-days}
+
+La Parrilla reproduce cada día a partir de una **plantilla**: un día de
+bloques. Una instalación nueva tiene una, "Base", para todos los días. Las
+plantillas se hacen en Configuración → **Automatización**, en **Plantillas
+y días** (no en Android); la columna Parrilla solo cambia el día de hoy,
+como se ha visto arriba.
+
+![Configuración, Automatización, Plantillas y días: las plantillas Base y Weekend con Editar…, Nueva plantilla, Duplicar, Eliminar y el nombre; la semana tipo, Base de lunes a viernes y Weekend el sábado y el domingo; el mes con hoy elegido, las fechas con cambios en ámbar, la plantilla de la fecha y Editar día…](../../images/guide/settings-plans.png)
+
+- **Plantillas.** Elige una y pulsa **Editar…** (o haz doble clic en ella)
+  para abrirla; **Nueva plantilla**, **Duplicar** y **Eliminar** están al
+  lado, y su nombre debajo.
 - **Semana tipo.** Qué plantilla usa cada día de la semana.
-
-  ![La pestaña Semana tipo: Base de lunes a viernes, Weekend el sábado y el domingo](../../images/guide/settings-plans.png)
-
 - **Días.** Elige una fecha en el calendario (las fechas con cambios están
   en ámbar). Una fecha puede usar otra plantilla distinta de la de su día de
-  la semana (un festivo en jueves puede usar la del fin de semana). Sus
-  bloques se pueden cambiar solo para esa fecha: el cambio queda marcado, y
-  **Volver a la plantilla** lo deshace. **Este día no** quita un bloque solo
-  de esa fecha, y **Añadir bloque este día** añade uno. Los cambios
-  posteriores en la plantilla siguen llegando a los bloques que no cambiaste
-  en esa fecha.
+  la semana (un festivo en jueves puede usar la del fin de semana).
+  **Editar día…** abre esa fecha, para cambiar sus bloques solo para esa
+  fecha; las fechas pasadas no se pueden cambiar.
 
-  ![La pestaña Días: el calendario con hoy elegido y las fechas con cambios en ámbar; el primer bloque de hoy tiene una cuña más, marcado como "cambiado para este día", con Volver a la plantilla](../../images/guide/settings-plans.png)
+Una plantilla o una fecha se abre en su propia ventana, que cierra
+Configuración. Es la misma lista que la columna Parrilla, y se cambia igual:
+los botones de su parte inferior (Pista…, Pista de categoría…, Musicalizador
+(rotación)…, Bloque horario…, que añaden debajo de la fila que seleccionas),
+pistas arrastradas desde la biblioteca (o archivos desde tu gestor de
+archivos) a una fila, filas arrastradas para moverlas, el menú de clic
+derecho de las filas y el menú de las cabeceras de bloque. Nunca suena, y
+puede quedarse abierta junto a la biblioteca. La ventana de hoy muestra lo
+que sonó y lo que suena, como la Parrilla; la ventana de un día se cierra a
+medianoche, cuando ese día ya no puede cambiar.
 
-## El musicalizador {#the-music-filler}
+![Una plantilla abierta en su ventana: los bloques de la plantilla Base por hora de inicio, cada uno con su indicativo de la emisora, sus cuñas y el musicalizador después, y Añadir en la parte inferior](../../images/guide/template-popup.png)
 
-El musicalizador es la columna **Música**. Está oculta hasta que la
-muestras: haz clic en el mosaico **Música** de la izquierda de la barra
-superior. Se sitúa a la izquierda de P1.
+Una **pista de categoría** en una plantilla reproduce una pista de esa
+categoría, una distinta cada vez. El elemento **Musicalizador** elige la
+rotación que el musicalizador reproduce después del bloque (la rotación por
+defecto cuando el bloque no tiene ninguna). Cuando los elementos de un
+bloque duran más que el tiempo hasta el bloque siguiente, su cabecera dice
+en cuánto, en ámbar; aun así puedes dejarlo así.
+
+Un cambio en una fecha queda marcado como "cambiado para este día" en su
+bloque, y **Volver a la plantilla**, en el menú de la cabecera del bloque,
+lo deshace. Los cambios posteriores en la plantilla siguen llegando a los
+bloques que no cambiaste en esa fecha. Un cambio en una plantilla hecho
+mientras uno de sus bloques está al aire deja ese bloque como está para hoy
+(muestra "cambiado para este día"); el cambio le llega a partir del día
+siguiente.
+
+## El musicalizador {#the-music-fill}
+
+El musicalizador es la columna **Musicalizador**. Está oculta hasta que la
+muestras: haz clic en el mosaico **Musicalizador** de la izquierda de la
+barra superior. Se sitúa a la izquierda de P1.
 
 Tiene el aspecto de un player y funciona como tal: el reloj grande, la forma
 de onda, los botones de transporte, el fader y la lista de pistas. La
@@ -99,19 +181,25 @@ diferencia está en la lista:
   no cuenta como reproducida.
 
 Sus salidas se ajustan en Configuración → Salidas de audio, en la fila
-**Música**, como para cualquier player. No tiene número, ni atajos de
+**Musicalizador**, como para cualquier player. No tiene número, ni atajos de
 teclado ni asignaciones MIDI, y el control remoto no la ve.
 
-Pulsa **Play** para ponerla en marcha y **Detener tras la actual** para
-dejar que termine la canción que está al aire y se detenga. Como todos los
+Pulsa **Reproducir** para ponerla en marcha y **Stop al final** para dejar
+que termine la canción que está al aire y se detenga. Como todos los
 players, nunca se pone en marcha por sí sola, ni siquiera después de un
-reinicio.
+reinicio. Mientras suena para la Parrilla entre bloques, detenerla o
+ponerla en pausa también detiene la automatización, y su Stop al final
+detiene la automatización cuando termina la canción; si antes llega la hora
+de un bloque, el bloque suena y la marca se quita. Después de poner en
+pausa la Parrilla durante la música, Reproducir en la columna Musicalizador
+reproduce la canción por su cuenta: el Reproducir de la Parrilla ya no la
+reanuda, y su Stop ya no la detiene.
 
 Encima de su lista, donde un player tiene las pestañas de sus playlists, la
-columna Música muestra la **rotación** que reproduce. Elige otra allí: las
-canciones que tenía en cola se sustituyen y las que añadiste se quedan.
-Cuando la rotación no encuentra nada que reproducir (sus categorías están
-vacías, o faltan todos los archivos), la barra lo dice.
+columna Musicalizador muestra la **rotación** que reproduce. Elige otra
+allí: las canciones que tenía en cola se sustituyen y las que añadiste se
+quedan. Cuando la rotación no encuentra nada que reproducir (sus categorías
+están vacías, o faltan todos los archivos), la barra lo dice.
 
 ## Rotaciones {#rotations}
 
@@ -134,9 +222,15 @@ después del indicativo unas veces y otras no. El máximo siempre es al menos
 1. Una rotación es la **por defecto**: una instalación nueva tiene una,
 **Música**, que reproduce toda tu música.
 
+Un paso cuya categoría no tiene ninguna pista que pueda sonar (una
+categoría vacía, o archivos que faltan) reproduce en su turno una canción
+de la rotación por defecto (cualquier música, si el paso es de la propia
+rotación por defecto), de modo que los demás pasos mantienen su lugar: un
+indicativo de la emisora sigue llegando entre canciones.
+
 Las rotaciones se crean en Configuración → Automatización:
 
-![Configuración, Automatización: las rotaciones Música (la por defecto) y Hits, la Música seleccionada con su único paso sobre toda la música, sus cantidades Como mínimo y Como máximo, y las reglas del musicalizador](../../images/guide/settings-automation.png)
+![Configuración, Automatización: las rotaciones Música (la por defecto) y Hits, la Música seleccionada con su único paso sobre toda la música, sus cantidades Como mínimo y Como máximo, y el principio de Plantillas y días](../../images/guide/settings-automation.png)
 
 ## Cómo elige {#how-it-chooses}
 
@@ -158,12 +252,17 @@ los valores, y es donde creas, renombras y cambias las rotaciones (véase
 
 Antes de un bloque de la parrilla, el musicalizador también elige sus
 últimas canciones por su duración, para que la música termine limpiamente:
-la canción que baja con un fundido cuando empieza el bloque pierde como
-mucho 30 segundos, y no empieza ninguna canción que fuera a sonar menos de
-45 segundos. Cuando ninguna canción de la rotación puede cumplir las dos
-cosas, suena la que menos pierde. Por ahora, los dos valores solo se pueden
-cambiar en el archivo de configuración (`automation.max_fade_cut_secs` y
-`automation.min_song_play_secs`).
+la canción que baja con un fundido cuando empieza el bloque sigue sonando a
+la hora del bloque y pierde como mucho 30 segundos después de ella, y no
+empieza ninguna canción que fuera a sonar menos de 45 segundos. También
+mantiene las reglas de artista y de pista siempre que puede. Cuando ninguna
+canción de la rotación puede cumplir las dos cosas, suena la que menos
+pierde, así que a veces se pueden oír unos segundos de una canción. Una
+pausa de la música mueve las canciones que van detrás, y el musicalizador
+las vuelve a elegir. El musicalizador también evita las canciones, y los
+artistas, que un bloque reproduce poco después. Por ahora, los dos valores
+solo se pueden cambiar en el archivo de configuración
+(`automation.max_fade_cut_secs` y `automation.min_song_play_secs`).
 
 Un **Indicativo horario** es un tipo de pista propio (Biblioteca → Tipo ▸
 Indicativo horario), para la identificación de la emisora a la hora en

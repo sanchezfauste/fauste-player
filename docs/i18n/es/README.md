@@ -1,6 +1,6 @@
 # Fauste Player — Guía del usuario
 
-<div class="ai-notice" role="note">Esta guía se ha traducido con IA a partir de la guía en inglés (v0.14.0-144-g8517d951, commit 8517d95) y puede contener errores. Ante cualquier diferencia, vale la versión en inglés. <a href="../index.html" hreflang="en">Leer el original en inglés</a></div>
+<div class="ai-notice" role="note">Esta guía se ha traducido con IA a partir de la guía en inglés (v0.14.0-255-g7b5ae8b7, commit 7b5ae8b) y puede contener errores. Ante cualquier diferencia, vale la versión en inglés. <a href="../index.html" hreflang="en">Leer el original en inglés</a></div>
 
 Fauste Player es una aplicación de emisión (playout) para estudios de radio.
 Ejecuta varios **players** independientes, uno al lado del otro. Cada player
@@ -24,7 +24,7 @@ aparte y sobrevivir a fallos sin poner nada al aire por sí solos.
 | [Cartuchera](cartwall.md) | Cartuchos instantáneos: disparo, páginas, bucles, cartuchos exclusivos, configuración |
 | [Biblioteca](library.md) | La ventana de la biblioteca: categorías, tipos, búsqueda, preescucha, el editor externo y los archivos cambiados |
 | [Distribución](layout.md) | Mostrar y ocultar paneles, el ancho de los players, mover y redimensionar la cartuchera, maximizar un panel, el menú de distribución |
-| [Automatización](automation.md) | La columna Parrilla, su editor, el musicalizador y sus rotaciones |
+| [Automatización](automation.md) | La columna Parrilla, sus plantillas y días, el musicalizador y sus rotaciones |
 | [Marcadores y mezcla](markers-and-mixing.md) | Cue-in/cue-out, el punto MIX, intro y outro, análisis automático |
 | [Configuración](settings.md) | Salidas de audio, players, análisis, playlists, MIDI, control remoto |
 | [Normalización de la sonoridad](loudness.md) | Todas las pistas y cartuchos con la misma sonoridad mediante una ganancia fija por pista: el distintivo de ganancia, excluir y ajustar una pista, salidas bit-perfect |

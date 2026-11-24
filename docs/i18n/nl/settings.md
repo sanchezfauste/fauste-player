@@ -84,7 +84,7 @@ het opnieuw kiezen ervan (bijvoorbeeld na het omwisselen van twee apparaten) ze.
 | Audiosysteem | De laatste keuze, **Geen uitgang (stil)**, speelt niets af: tijdlijnen lopen in realtime zonder geluidskaart (voor een machine zonder kaart, of om te oefenen). Linux: PipeWire (in builds die het bevatten), PulseAudio, JACK of ALSA. Windows: WASAPI, ASIO (in builds die het bevatten) of JACK. macOS: Core Audio of JACK. Systemen die op deze computer ontbreken, of zonder uitvoerapparaat (een JACK-server die niet draait), worden als niet beschikbaar getoond. “Systeemstandaard” gebruikt de eerste beschikbare in die volgorde. |
 | Samplefrequentie | De frequentie waarop elke uitgang draait, tenzij een apparaat een eigen heeft (Geavanceerd); bestanden worden ernaar omgezet met hoogwaardige resampling. Bit-perfect apparaten starten op hun frequentie en volgen daarna de bestanden. |
 | Buffergrootte | Frames per audioblok, tenzij een apparaat een eigen heeft; de resulterende latentie wordt eronder getoond. Uitgangen via een geluidsserver of een systeemmixer (PulseAudio, het ALSA-apparaat `default`) vragen om minstens 50 ms, wat deze grootte ook is, of zoveel als het apparaat aanneemt, zodat een drukke computer niet te horen is; de latentie zegt dat dan (`shared_buffer_ms` in het configuratiebestand) |
-| Uitgangen per speler | Voor elke speler, en voor de kolom **Muziek** (de [muziekvuller](automation.md)), een **Main**-apparaat (on air) en een **Cue**-apparaat (voorbeluisteren), elk met een kanaalpaar. Een geluidskaart die meerdere uitvoerprofielen biedt (ALSA toont front, surround, direct hardware…) toont elk als *kaart — profiel*; twee items die nog steeds hetzelfde zouden lezen, krijgen hun apparaat-id tussen haakjes. Meerkanaals interfaces kunnen meerdere spelers op verschillende paren dragen. Een Cue-uitgang die een on-air uitgang deelt (de Main van een speler of die van de cartwall) is toegestaan: een opmerking eronder zegt dat zijn voorbeluistering on air te horen is en vraagt eerst om bevestiging terwijl daar iets speelt. |
+| Uitgangen per speler | Voor elke speler, en voor de kolom **Muziekvuller** (de [muziekvuller](automation.md)), een **Main**-apparaat (on air) en een **Cue**-apparaat (voorbeluisteren), elk met een kanaalpaar. Een geluidskaart die meerdere uitvoerprofielen biedt (ALSA toont front, surround, direct hardware…) toont elk als *kaart — profiel*; twee items die nog steeds hetzelfde zouden lezen, krijgen hun apparaat-id tussen haakjes. Meerkanaals interfaces kunnen meerdere spelers op verschillende paren dragen. Een Cue-uitgang die een on-air uitgang deelt (de Main van een speler of die van de cartwall) is toegestaan: een opmerking eronder zegt dat zijn voorbeluistering on air te horen is en vraagt eerst om bevestiging terwijl daar iets speelt. |
 | Main testen / Cue testen | Speelt een korte toon (1 kHz op Main, 440 Hz op Cue, 1,5 s, −18 dBFS) af op de gekozen uitgang, zodat je de bedrading kunt controleren voordat je on air gaat |
 | Bibliotheek | De Cue-uitgang van de bibliotheek, met een eigen **Cue testen**: waar het [voorbeluisteren](library.md#pre-listening) van het bibliotheekvenster (op een telefoon dat van het tabblad Bibliotheek) te horen is. Zonder die uitgang is Play van de voorbeluisterbalk gedimd. Op Android luidt de lege keuze *Systeemstandaard* in plaats van *Geen*: het voorbeluisteren en **Cue testen** spelen dan op de standaarduitgang (zie [Android → Bibliotheek](android.md#library)). Een Bibliotheek-uitgang op een on-air uitgang werkt zoals de Cue van een speler: een opmerking eronder zegt dat zijn voorbeluistering on air te horen is en vraagt eerst om bevestiging terwijl daar iets speelt. Hij staat in de weergaven Basis en Geavanceerd, ook op een telefoon |
 | Cartwall | De Main- en Cue-uitgangen van de cartwall. Main staat standaard op de systeemuitgang. Zonder Cue is er geen voorbeluisteren van carts; een Cue op een on-air uitgang werkt zoals bij spelers. |
@@ -287,9 +287,10 @@ verandert](library.md#when-a-file-changes).
 
 ## Automatisering {#automation}
 
-De rotaties en regels van de [muziekvuller](automation.md) (niet op Android).
+De rotaties van de [muziekvuller](automation.md), de sjablonen en dagen van de
+Programmering, en de regels van de muziekvuller (niet op Android).
 
-![Instellingen, Automatisering: de rotaties Music (de standaard) en Hits, de geselecteerde Music met zijn ene stap over alle muziek, en de regels van de muziekvuller](../../images/guide/settings-automation.png)
+![Instellingen, Automatisering: de rotaties Music (de standaard) en Hits, de geselecteerde Music met zijn ene stap over alle muziek, en het begin van Sjablonen en dagen](../../images/guide/settings-automation.png)
 
 - **Rotaties:** de lijst, met de standaard gemarkeerd. **Nieuwe rotatie**
   voegt er een toe die alle muziek speelt, **Standaard maken** maakt de
@@ -300,8 +301,16 @@ De rotaties en regels van de [muziekvuller](automation.md) (niet op Android).
   van een soort), hoeveel hij er elke keer speelt (**Minstens** 0–99,
   **Hoogstens** 1–99; minstens 0 laat de stap sommige beurten overslaan),
   **Omhoog**, **Omlaag** en **Verwijderen**. **Stap toevoegen** voegt er een
-  toe aan het eind. Een stap waarvan de categorie is verwijderd zegt dat; de
-  vuller slaat hem over.
+  toe aan het eind. Een stap waarvan de categorie is verwijderd zegt dat; op
+  zijn beurt speelt de muziekvuller in plaats daarvan een nummer van de
+  standaardrotatie (willekeurige muziek, als de stap van de standaardrotatie
+  zelf is).
+- **Sjablonen en dagen:** de sjablonen, met **Bewerken…** (opent het sjabloon
+  als een lijst en sluit Instellingen), **Nieuw sjabloon**, **Dupliceren**,
+  **Verwijderen** en de naam; het **weekplan**, een sjabloon per weekdag; en
+  een maand met datums (amber: gewijzigd), met het sjabloon van de gekozen
+  datum en **Dag bewerken…**. Zie [Sjablonen en
+  dagen](automation.md#templates-and-days).
 - **Muziekvuller:** hoe lang voordat hetzelfde nummer weer mag spelen (3 uur,
   of zodra de helft van de andere nummers van zijn stap is uitgezonden, wat het
   eerst komt; 0 zet elk van beide uit), dezelfde artiest (30 minuten), het

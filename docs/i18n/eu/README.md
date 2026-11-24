@@ -1,6 +1,6 @@
 # Fauste Player — Erabiltzailearen gida
 
-<div class="ai-notice" role="note">Gida hau AArekin itzuli da ingelesezko gidatik abiatuta (v0.14.0-144-g8517d951, 8517d95 commita), eta akatsak izan ditzake. Desberdintasunik badago, ingelesezko bertsioa da baliozkoa. <a href="../index.html" hreflang="en">Irakurri jatorrizkoa ingelesez</a></div>
+<div class="ai-notice" role="note">Gida hau AArekin itzuli da ingelesezko gidatik abiatuta (v0.14.0-255-g7b5ae8b7, 7b5ae8b commita), eta akatsak izan ditzake. Desberdintasunik badago, ingelesezko bertsioa da baliozkoa. <a href="../index.html" hreflang="en">Irakurri jatorrizkoa ingelesez</a></div>
 
 Fauste Player irrati-estudioetarako emisio-aplikazio (playout) bat da.
 Hainbat **erreproduzitzaile** independente exekutatzen ditu, bata bestearen
@@ -24,7 +24,7 @@ diezaiekete ezer bere kabuz airera atera gabe.
 | [Kartutxo-panela](cartwall.md) | Berehalako kartutxoak: jaurtitzea, orriak, begiztak, kartutxo esklusiboak, konfigurazioa |
 | [Liburutegia](library.md) | Pisten liburutegiaren leihoa: kategoriak, motak, bilaketa, aurrez entzutea, kanpoko editorea eta aldatutako fitxategiak |
 | [Diseinua](layout.md) | Panelak erakutsi eta ezkutatzea, erreproduzitzaileen zabalera, kartutxo-panela mugitu eta tamainaz aldatzea, panel bat maximizatzea, diseinu-menua |
-| [Automatizazioa](automation.md) | Programazio zutabea, bere editorea, musika-betegarria eta bere errotazioak |
+| [Automatizazioa](automation.md) | Programazio zutabea, bere txantiloiak eta egunak, musika-betegarria eta bere errotazioak |
 | [Markatzaileak eta nahasketa](markers-and-mixing.md) | Cue-in/cue-out, MIX puntua, introa eta outroa, analisi automatikoa |
 | [Ezarpenak](settings.md) | Audio-irteerak, erreproduzitzaileak, analisia, zerrendak, MIDI, urruneko kontrola |
 | [Bolumen-normalizazioa](loudness.md) | Pista eta kartutxo guztiak bolumen berean, pista bakoitzeko irabazi finko batekin: irabazi-ikurra, pista bat baztertzea eta doitzea, bit perfect irteerak |
