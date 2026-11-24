@@ -85,7 +85,7 @@ nou (per exemple després d'intercanviar dos dispositius) els conserva.
 | Sistema d'àudio | L'última opció, **Sense sortida (silenci)**, no reprodueix res: les línies de temps avancen al ritme del temps real sense targeta de so (per a una màquina que no en té, o per assajar). Linux: PipeWire (a les compilacions que l'inclouen), PulseAudio, JACK o ALSA. Windows: WASAPI, ASIO (a les compilacions que l'inclouen) o JACK. macOS: Core Audio o JACK. Els sistemes que falten en aquest ordinador, o sense dispositiu de sortida (un servidor JACK que no s'està executant), es mostren com a no disponibles. «Predeterminat del sistema» usa el primer disponible en aquest ordre. |
 | Freqüència de mostreig | La freqüència a la qual funciona cada sortida tret que un dispositiu en tingui una de pròpia (Avançat); els fitxers s'hi converteixen amb un remostreig d'alta qualitat. Els dispositius bit perfect comencen a la seva freqüència i després segueixen els fitxers. |
 | Mida del búfer | Fotogrames per bloc d'àudio, tret que un dispositiu en tingui una de pròpia; la latència resultant es mostra a sota. Les sortides a través d'un servidor de so o d'un mesclador del sistema (PulseAudio, el dispositiu `default` d'ALSA) demanen almenys 50 ms sigui quina sigui aquesta mida, o tant com accepti el dispositiu, perquè no se senti un ordinador ocupat; la latència llavors ho diu (`shared_buffer_ms` al fitxer de configuració) |
-| Sortides per reproductor | Per a cada reproductor, i per a la columna **Música** (el [musicalitzador](automation.md)), un dispositiu **Main** (en antena) i un dispositiu **Cue** (preescolta), cadascun amb un parell de canals. Una targeta de so que ofereix diversos perfils de sortida (ALSA llista frontal, surround, maquinari directe…) mostra cadascun com a *targeta — perfil*; dues entrades que encara es llegirien igual reben l'identificador del dispositiu entre parèntesis. Les interfícies multicanal poden portar diversos reproductors en parells diferents. Es permet una sortida Cue que comparteix una sortida d'antena (el Main de qualsevol reproductor o el de la cartutxera): una nota a sota diu que la seva preescolta se sent a l'antena i que pregunta primer mentre hi sona alguna cosa. |
+| Sortides per reproductor | Per a cada reproductor, i per a la columna **Musicalitzador** (el [musicalitzador](automation.md)), un dispositiu **Main** (en antena) i un dispositiu **Cue** (preescolta), cadascun amb un parell de canals. Una targeta de so que ofereix diversos perfils de sortida (ALSA llista frontal, surround, maquinari directe…) mostra cadascun com a *targeta — perfil*; dues entrades que encara es llegirien igual reben l'identificador del dispositiu entre parèntesis. Les interfícies multicanal poden portar diversos reproductors en parells diferents. Es permet una sortida Cue que comparteix una sortida d'antena (el Main de qualsevol reproductor o el de la cartutxera): una nota a sota diu que la seva preescolta se sent a l'antena i que pregunta primer mentre hi sona alguna cosa. |
 | Provar Main / Provar Cue | Reprodueix un to breu (1 kHz a Main, 440 Hz a Cue, 1,5 s, −18 dBFS) a la sortida triada, de manera que puguis comprovar el cablejat abans de sortir en antena |
 | Biblioteca | La sortida Cue de la biblioteca, amb el seu propi **Provar Cue**: on se sent la [preescolta](library.md#pre-listening) de la finestra de la biblioteca (en un mòbil, la de la pestanya Biblioteca). Sense ella, Preescolta de la barra de previsualització és atenuat. A Android la seva elecció buida diu *Predeterminat del sistema* en lloc de *Cap*: la preescolta i **Provar Cue** sonen llavors per la sortida predeterminada (vegeu [Android → Biblioteca](android.md#library)). Una sortida Biblioteca en una sortida d'antena funciona com el Cue d'un reproductor: una nota a sota diu que la seva preescolta se sent a l'antena i que pregunta primer mentre hi sona alguna cosa. És a les vistes Bàsic i Avançat, també en un mòbil |
 | Cartutxera | Les sortides Main i Cue de la cartutxera. Main per defecte és la sortida del sistema. Sense Cue no hi ha preescolta dels cartutxos; un Cue en una sortida d'antena funciona com als reproductors. |
@@ -291,9 +291,10 @@ fitxer canvia](library.md#when-a-file-changes).
 
 ## Automatització {#automation}
 
-Les rotacions i les regles del [musicalitzador](automation.md) (no a Android).
+Les rotacions del [musicalitzador](automation.md), les plantilles i dies de la
+Graella, i les regles del musicalitzador (no a Android).
 
-![Configuració, Automatització: les rotacions Música (la per defecte) i Hits, la Música seleccionada amb el seu únic pas sobre tota la música, i les regles del musicalitzador](../../images/guide/settings-automation.png)
+![Configuració, Automatització: les rotacions Música (la per defecte) i Hits, la Música seleccionada amb el seu únic pas sobre tota la música, i el començament de Plantilles i dies](../../images/guide/settings-automation.png)
 
 - **Rotacions:** la llista, amb la per defecte marcada. **Nova rotació** n'afegeix
   una que reprodueix tota la música, **Fes-la per defecte** converteix la
@@ -304,7 +305,15 @@ Les rotacions i les regles del [musicalitzador](automation.md) (no a Android).
   *Tot* d'un tipus), quantes en reprodueix cada vegada (**Com a mínim** 0–99,
   **Com a màxim** 1–99; amb mínim 0 el pas es salta alguns torns), **Puja**,
   **Baixa** i **Treu**. **Afegeix un pas** n'afegeix un al final. Un pas la
-  categoria del qual s'ha esborrat ho diu; el musicalitzador se'l salta.
+  categoria del qual s'ha esborrat ho diu; en el seu torn el musicalitzador
+  reprodueix en lloc seu una cançó de la rotació per defecte (qualsevol
+  música, si el pas és de la mateixa rotació per defecte).
+- **Plantilles i dies:** les plantilles, amb **Edita…** (obre la plantilla com
+  una llista i tanca Configuració), **Plantilla nova**, **Duplica**,
+  **Elimina** i el nom; la **setmana tipus**, una plantilla per a cada dia de
+  la setmana; i un mes de dates (en ambre: canviades), amb la plantilla de la
+  data triada i **Edita el dia…**. Vegeu [Plantilles i
+  dies](automation.md#templates-and-days).
 - **Musicalitzador:** quant temps ha de passar abans que la mateixa pista pugui
   tornar a sonar (3 hores, o quan hagi sonat la meitat de les altres pistes del
   seu pas, el que passi primer; 0 desactiva qualsevol dels dos), el mateix

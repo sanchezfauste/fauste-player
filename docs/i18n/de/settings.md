@@ -86,7 +86,7 @@ Tausch zweier Geräte).
 | Audiosystem | Die letzte Wahl, **Keine Ausgabe (stumm)**, spielt nichts ab: Die Zeitachsen laufen in Echtzeit ohne Soundkarte (für eine Maschine ohne eine oder zum Proben). Linux: PipeWire (in Builds, die es enthalten), PulseAudio, JACK oder ALSA. Windows: WASAPI, ASIO (in Builds, die es enthalten) oder JACK. macOS: Core Audio oder JACK. Systeme, die auf diesem Computer fehlen oder kein Ausgabegerät haben (ein JACK-Server, der nicht läuft), werden als nicht verfügbar angezeigt. „Systemstandard“ verwendet in dieser Reihenfolge das erste verfügbare. |
 | Abtastrate | Die Rate, mit der jeder Ausgang läuft, sofern ein Gerät keine eigene hat (Erweitert); Dateien werden mit hochwertigem Resampling in sie umgewandelt. Bit-perfect-Geräte starten mit ihrer Rate und folgen dann den Dateien. |
 | Puffergröße | Frames pro Audioblock, sofern ein Gerät keine eigene hat; die resultierende Latenz steht darunter. Ausgänge über einen Soundserver oder einen System-Mixer (PulseAudio, das ALSA-Gerät `default`) verlangen mindestens 50 ms, egal welche Größe hier steht, oder so viel, wie das Gerät annimmt, damit ein ausgelasteter Computer nicht zu hören ist; die Latenz sagt es dann (`shared_buffer_ms` in der Konfigurationsdatei) |
-| Ausgänge pro Player | Für jeden Player und für die Spalte **Musik** (den [Musikfüller](automation.md)) ein **Main**-Gerät (On Air) und ein **Cue**-Gerät (Vorhören), jeweils mit einem Kanalpaar. Eine Soundkarte, die mehrere Ausgabeprofile anbietet (ALSA listet Front, Surround, direkte Hardware…), zeigt jedes als *Karte — Profil*; zwei Einträge, die dennoch gleich lauten würden, erhalten ihre Geräte-ID in Klammern. Mehrkanal-Interfaces können mehrere Player auf verschiedenen Paaren tragen. Ein Cue-Ausgang, der einen Sendeausgang teilt (den Main eines Players oder den der Cartwall), ist erlaubt: Ein Hinweis darunter sagt, dass sein Vorhören auf Sendung zu hören ist und dass zuerst gefragt wird, solange dort etwas spielt. |
+| Ausgänge pro Player | Für jeden Player und für die Spalte **Musikfüller** (den [Musikfüller](automation.md)) ein **Main**-Gerät (On Air) und ein **Cue**-Gerät (Vorhören), jeweils mit einem Kanalpaar. Eine Soundkarte, die mehrere Ausgabeprofile anbietet (ALSA listet Front, Surround, direkte Hardware…), zeigt jedes als *Karte — Profil*; zwei Einträge, die dennoch gleich lauten würden, erhalten ihre Geräte-ID in Klammern. Mehrkanal-Interfaces können mehrere Player auf verschiedenen Paaren tragen. Ein Cue-Ausgang, der einen Sendeausgang teilt (den Main eines Players oder den der Cartwall), ist erlaubt: Ein Hinweis darunter sagt, dass sein Vorhören auf Sendung zu hören ist und dass zuerst gefragt wird, solange dort etwas spielt. |
 | Main testen / Cue testen | Spielt einen kurzen Ton (1 kHz auf Main, 440 Hz auf Cue, 1,5 s, −18 dBFS) auf dem gewählten Ausgang ab, damit du die Verkabelung prüfen kannst, bevor du auf Sendung gehst |
 | Bibliothek | Der Cue-Ausgang der Bibliothek, mit eigenem **Cue testen**: wo das [Vorhören](library.md#pre-listening) des Bibliotheksfensters (auf einem Telefon das des Tabs Bibliothek) zu hören ist. Ohne ihn ist Vorhören in der Vorhörleiste abgeblendet. Unter Android lautet seine leere Auswahl *Systemstandard* statt *Keiner*: Das Vorhören und **Cue testen** spielen dann auf dem Standardausgang (siehe [Android → Bibliothek](android.md#library)). Ein Ausgang Bibliothek auf einem Sendeausgang funktioniert wie der Cue eines Players: Ein Hinweis darunter sagt, dass sein Vorhören auf Sendung zu hören ist und dass zuerst gefragt wird, solange dort etwas spielt. Er steht in der Ansicht Einfach und Erweitert, auch auf einem Telefon |
 | Cartwall | Die Main- und Cue-Ausgänge der Cartwall. Main ist standardmäßig der Systemausgang. Ohne Cue gibt es kein Cart-Vorhören; ein Cue auf einem Sendeausgang funktioniert wie bei den Playern. |
@@ -299,10 +299,10 @@ Datei ändert](library.md#when-a-file-changes).
 
 ## Automatisierung {#automation}
 
-Die Rotationen und Regeln des [Musikfüllers](automation.md) (nicht unter
-Android).
+Die Rotationen des [Musikfüllers](automation.md), die Vorlagen und Tage des
+Sendeplans und die Regeln des Musikfüllers (nicht unter Android).
 
-![Einstellungen, Automatisierung: die Rotationen Music (der Standard) und Hits, die gewählte Music mit ihrem einen Schritt über die gesamte Musik, und die Regeln des Musikfüllers](../../images/guide/settings-automation.png)
+![Einstellungen, Automatisierung: die Rotationen Music (der Standard) und Hits, die gewählte Music mit ihrem einen Schritt über die gesamte Musik, und der Anfang von Vorlagen und Tage](../../images/guide/settings-automation.png)
 
 - **Rotationen:** die Liste, der Standard ist markiert. **Neue Rotation** fügt
   eine hinzu, die die gesamte Musik spielt, **Zum Standard machen** macht die
@@ -313,8 +313,16 @@ Android).
   *Alle* einer Art), wie viele er jedes Mal spielt (**Mindestens** 0–99,
   **Höchstens** 1–99; bei Mindestens 0 setzt der Schritt manche Durchgänge
   aus), **Nach oben**, **Nach unten** und **Entfernen**. **Schritt
-  hinzufügen** fügt am Ende einen hinzu. Ein Schritt, dessen Kategorie gelöscht
-  wurde, sagt es; der Füller überspringt ihn.
+  hinzufügen** fügt am Ende einen hinzu. Ein Schritt, dessen Kategorie
+  gelöscht wurde, sagt es; an seiner Stelle spielt der Musikfüller einen Song
+  der Standardrotation (beliebige Musik, wenn der Schritt zur Standardrotation
+  selbst gehört).
+- **Vorlagen und Tage:** die Vorlagen, mit **Bearbeiten…** (öffnet die Vorlage
+  als Liste und schließt die Einstellungen), **Neue Vorlage**,
+  **Duplizieren**, **Löschen** und dem Namen; der **Wochenplan**, eine Vorlage
+  pro Wochentag; und ein Monat mit Daten (bernsteinfarben: geändert), mit der
+  Vorlage des gewählten Datums und **Tag bearbeiten…**. Siehe [Vorlagen und
+  Tage](automation.md#templates-and-days).
 - **Musikfüller:** wie lange es dauert, bis derselbe Track wieder spielen darf
   (3 Stunden oder sobald die Hälfte der anderen Tracks seines Schritts gelaufen
   ist, was zuerst eintritt; 0 schaltet jeweils eines ab), derselbe Interpret

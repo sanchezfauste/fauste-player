@@ -86,7 +86,7 @@ elegirlo (por ejemplo, tras intercambiar dos dispositivos) los conserva.
 | Sistema de audio | La última opción, **Sin salida (silencio)**, no reproduce nada: las líneas de tiempo avanzan a ritmo real sin tarjeta de sonido (para una máquina que no la tiene, o para ensayar). Linux: PipeWire (en las compilaciones que lo incluyen), PulseAudio, JACK o ALSA. Windows: WASAPI, ASIO (en las compilaciones que lo incluyen) o JACK. macOS: Core Audio o JACK. Los sistemas que no existen en este ordenador, o que no tienen ningún dispositivo de salida (un servidor JACK que no está en marcha), aparecen como no disponibles. «Predeterminado del sistema» usa el primero disponible en ese orden. |
 | Frecuencia de muestreo | La frecuencia a la que funcionan todas las salidas salvo que un dispositivo tenga la suya (Avanzado); los archivos se convierten a ella con un remuestreo de alta calidad. Los dispositivos bit-perfect empiezan a su frecuencia y luego siguen a los archivos. |
 | Tamaño de búfer | Fotogramas por bloque de audio, salvo que un dispositivo tenga el suyo; debajo se muestra la latencia resultante. Las salidas a través de un servidor de sonido o un mezclador del sistema (PulseAudio, el dispositivo `default` de ALSA) piden al menos 50 ms sea cual sea este tamaño, o lo que admita el dispositivo, para que un ordenador ocupado no se oiga; la latencia lo indica entonces (`shared_buffer_ms` en el archivo de configuración) |
-| Salidas por player | Para cada player, y para la columna **Música** (el [musicalizador](automation.md)), un dispositivo **Main** (al aire) y uno **Cue** (preescucha), cada uno con un par de canales. Una tarjeta de sonido que ofrece varios perfiles de salida (ALSA lista front, surround, hardware directo…) muestra cada uno como *tarjeta — perfil*; dos entradas que seguirían leyéndose igual llevan entre paréntesis el identificador del dispositivo. Las interfaces multicanal pueden llevar varios players en pares distintos. Se permite una salida Cue que comparta una salida en antena (la Main de cualquier player o la de la cartuchera): una nota debajo dice que su preescucha se oye en antena y que pregunta primero si algo suena allí. |
+| Salidas por player | Para cada player, y para la columna **Musicalizador** (el [musicalizador](automation.md)), un dispositivo **Main** (al aire) y uno **Cue** (preescucha), cada uno con un par de canales. Una tarjeta de sonido que ofrece varios perfiles de salida (ALSA lista front, surround, hardware directo…) muestra cada uno como *tarjeta — perfil*; dos entradas que seguirían leyéndose igual llevan entre paréntesis el identificador del dispositivo. Las interfaces multicanal pueden llevar varios players en pares distintos. Se permite una salida Cue que comparta una salida en antena (la Main de cualquier player o la de la cartuchera): una nota debajo dice que su preescucha se oye en antena y que pregunta primero si algo suena allí. |
 | Probar Main / Probar Cue | Reproduce un tono breve (1 kHz en Main, 440 Hz en Cue, 1,5 s, −18 dBFS) en la salida elegida, para comprobar el cableado antes de salir al aire |
 | Biblioteca | La salida Cue de la biblioteca, con su propio **Probar Cue**: donde se oye la [preescucha](library.md#pre-listening) de la ventana de la biblioteca (en un teléfono, la de la pestaña Biblioteca). Sin ella, Preescuchar en la barra de preescucha está atenuado. En Android su opción vacía dice *Predeterminado del sistema* en lugar de *Ninguna*: la preescucha y **Probar Cue** suenan entonces en la salida por defecto (véase [Android → Biblioteca](android.md#library)). Una salida Biblioteca en una salida en antena funciona como la Cue de un player: una nota debajo dice que su preescucha se oye en antena y que pregunta primero si algo suena allí. Está en las vistas Básico y Avanzado, también en un teléfono |
 | Cartuchera | Las salidas Main y Cue de la cartuchera. Main es por defecto la salida del sistema. Sin Cue no hay preescucha de cartuchos; una Cue en una salida en antena funciona como en los players. |
@@ -292,10 +292,10 @@ cambia](library.md#when-a-file-changes).
 
 ## Automatización {#automation}
 
-Las rotaciones y las reglas del [musicalizador](automation.md) (no en
-Android).
+Las rotaciones del [musicalizador](automation.md), las plantillas y días
+de la Parrilla, y las reglas del musicalizador (no en Android).
 
-![Configuración, Automatización: las rotaciones Música (la por defecto) y Hits, la Música seleccionada con su único paso sobre toda la música, y las reglas del musicalizador](../../images/guide/settings-automation.png)
+![Configuración, Automatización: las rotaciones Música (la por defecto) y Hits, la Música seleccionada con su único paso sobre toda la música, y el principio de Plantillas y días](../../images/guide/settings-automation.png)
 
 - **Rotaciones:** la lista, con la por defecto marcada. **Nueva rotación**
   añade una que reproduce toda la música, **Hacer por defecto** convierte la
@@ -306,8 +306,16 @@ Android).
   o *Todo* de un tipo), cuántas reproduce cada vez (**Como mínimo** 0–99,
   **Como máximo** 1–99; un mínimo de 0 permite que el paso se salte algunos
   turnos), **Subir**, **Bajar** y **Quitar**. **Añadir paso** añade uno al
-  final. Un paso cuya categoría se borró lo dice; el musicalizador se lo
-  salta.
+  final. Un paso cuya categoría se borró lo dice; en su turno el
+  musicalizador reproduce en su lugar una canción de la rotación por
+  defecto (cualquier música, si el paso es de la propia rotación por
+  defecto).
+- **Plantillas y días:** las plantillas, con **Editar…** (abre la plantilla
+  como una lista y cierra Configuración), **Nueva plantilla**,
+  **Duplicar**, **Eliminar** y el nombre; la **semana tipo**, una plantilla
+  por día de la semana; y un mes de fechas (en ámbar: cambiadas), con la
+  plantilla de la fecha elegida y **Editar día…**. Véase
+  [Plantillas y días](automation.md#templates-and-days).
 - **Musicalizador:** cuánto tiempo debe pasar antes de que la misma pista
   pueda volver a sonar (3 horas, o cuando haya sonado la mitad de las demás
   pistas de su paso, lo que ocurra primero; 0 desactiva cualquiera de las

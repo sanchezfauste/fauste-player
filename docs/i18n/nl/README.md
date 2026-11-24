@@ -1,6 +1,6 @@
 # Fauste Player — Gebruikershandleiding
 
-<div class="ai-notice" role="note">Deze handleiding is met AI vertaald uit de Engelse handleiding (v0.14.0-144-g8517d951, commit 8517d95) en kan fouten bevatten. Bij verschillen geldt de Engelse versie. <a href="../index.html" hreflang="en">Lees het origineel in het Engels</a></div>
+<div class="ai-notice" role="note">Deze handleiding is met AI vertaald uit de Engelse handleiding (v0.14.0-255-g7b5ae8b7, commit 7b5ae8b) en kan fouten bevatten. Bij verschillen geldt de Engelse versie. <a href="../index.html" hreflang="en">Lees het origineel in het Engels</a></div>
 
 Fauste Player is een playout-applicatie voor radiostudio’s. Het draait
 meerdere onafhankelijke **spelers** naast elkaar. Elke speler heeft zijn eigen
@@ -24,7 +24,7 @@ doorstaan zonder zelf iets on air te brengen.
 | [Cartwall](cartwall.md) | Instant carts: starten, pagina’s, loops, exclusieve carts, instellen |
 | [Bibliotheek](library.md) | Het bibliotheekvenster: categorieën, soorten, zoeken, voorbeluisteren, de externe editor en gewijzigde bestanden |
 | [Indeling](layout.md) | Panelen tonen en verbergen, spelerbreedtes, de cartwall verplaatsen en vergroten of verkleinen, een paneel maximaliseren, het indelingsmenu |
-| [Automatisering](automation.md) | De kolom Programmering, de editor ervan, de muziekvuller en zijn rotaties |
+| [Automatisering](automation.md) | De kolom Programmering, de sjablonen en dagen ervan, de muziekvuller en zijn rotaties |
 | [Markers en mixen](markers-and-mixing.md) | Cue-in/-out, het MIX-punt, intro en outro, automatische analyse |
 | [Instellingen](settings.md) | Audio-uitgangen, spelers, analyse, playlists, MIDI, bediening op afstand |
 | [Loudness-normalisatie](loudness.md) | Elk nummer en elke cart op dezelfde luidheid met een vaste versterking per nummer: de gain-badge, een nummer uitsluiten en bijstellen, bit-perfect uitgangen |

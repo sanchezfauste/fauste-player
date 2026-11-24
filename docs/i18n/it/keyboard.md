@@ -31,7 +31,7 @@ il tasto (con Ctrl, Alt, Shift o Cmd, se vuoi). Se un'altra azione usa già
 quel tasto, ne viene mostrato il nome. Scegli **Assegna** per spostare il
 tasto, oppure **Annulla**. **Rimuovi** elimina una scorciatoia e **Ripristina
 i valori predefiniti** (in alto a destra nella sezione) ripristina la tabella
-qui sopra. Azioni disponibili, per ogni lettore (P1 … Pn; la colonna **Musica** non ha
+qui sopra. Azioni disponibili, per ogni lettore (P1 … Pn; la colonna **Riempitivo musicale** non ha
 scorciatoie) e cart:
 
 - play, precedente, riavvia, pausa, stop, stop in dissolvenza e CUE su un

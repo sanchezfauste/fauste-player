@@ -1,6 +1,6 @@
 # Fauste Player — Podręcznik użytkownika
 
-<div class="ai-notice" role="note">Ten podręcznik został przetłumaczony za pomocą AI z angielskiego podręcznika (v0.14.0-144-g8517d951, commit 8517d95) i może zawierać błędy. W razie różnic obowiązuje wersja angielska. <a href="../index.html" hreflang="en">Przeczytaj oryginał po angielsku</a></div>
+<div class="ai-notice" role="note">Ten podręcznik został przetłumaczony za pomocą AI z angielskiego podręcznika (v0.14.0-255-g7b5ae8b7, commit 7b5ae8b) i może zawierać błędy. W razie różnic obowiązuje wersja angielska. <a href="../index.html" hreflang="en">Przeczytaj oryginał po angielsku</a></div>
 
 Fauste Player to aplikacja do emisji (playout) dla studiów radiowych.
 Uruchamia kilka niezależnych **odtwarzaczy** obok siebie. Każdy odtwarzacz
@@ -23,7 +23,7 @@ przetrwać awarie, nie wypuszczając niczego na antenę samodzielnie.
 | [Cartwall](cartwall.md) | Carty natychmiastowe: odpalanie, strony, pętle, carty wyłączne, konfiguracja |
 | [Biblioteka](library.md) | Okno biblioteki utworów: kategorie, rodzaje, wyszukiwanie, odsłuch wstępny, zewnętrzny edytor i zmienione pliki |
 | [Układ](layout.md) | Pokazywanie i ukrywanie paneli, szerokości odtwarzaczy, przenoszenie i zmiana rozmiaru cartwalla, maksymalizowanie panelu, menu układu |
-| [Automatyzacja](automation.md) | Kolumna Ramówka, jej edytor, wypełniacz muzyczny i jego rotacje |
+| [Automatyzacja](automation.md) | Kolumna Ramówka, jej szablony i dni, wypełniacz muzyczny i jego rotacje |
 | [Markery i miksowanie](markers-and-mixing.md) | Cue-in/cue-out, punkt MIX, intro i outro, automatyczna analiza |
 | [Ustawienia](settings.md) | Wyjścia audio, odtwarzacze, analiza, playlisty, MIDI, zdalne sterowanie |
 | [Normalizacja głośności](loudness.md) | Każdy utwór i cart z tą samą głośnością przy stałym wzmocnieniu dla każdego utworu: znaczek wzmocnienia, wyłączanie i korekta utworu, wyjścia bit-perfect |

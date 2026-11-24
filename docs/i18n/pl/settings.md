@@ -85,7 +85,7 @@ ponowny wybór (na przykład po zamianie dwóch urządzeń) je zachowuje.
 | System audio | Ostatni wybór, **Brak wyjścia (cisza)**, nie odtwarza niczego: osie czasu biegną w tempie rzeczywistym bez karty dźwiękowej (dla komputera bez niej lub do prób). Linux: PipeWire (w wersjach, które go zawierają), PulseAudio, JACK lub ALSA. Windows: WASAPI, ASIO (w wersjach, które go zawierają) lub JACK. macOS: Core Audio lub JACK. Systemy, których nie ma na tym komputerze, lub bez urządzenia wyjściowego (niedziałający serwer JACK), są pokazywane jako niedostępne. „Domyślny systemowy” używa pierwszego dostępnego w tej kolejności. |
 | Częstotliwość próbkowania | Częstotliwość, z jaką działa każde wyjście, chyba że urządzenie ma własną (Zaawansowane); pliki są do niej konwertowane resamplingiem wysokiej jakości. Urządzenia bit-perfect startują z własną częstotliwością, a potem podążają za plikami. |
 | Rozmiar bufora | Ramki na blok audio, chyba że urządzenie ma własny; wynikające z niego opóźnienie jest pokazane pod spodem. Wyjścia przez serwer dźwięku lub mikser systemowy (PulseAudio, urządzenie ALSA `default`) proszą o co najmniej 50 ms bez względu na ten rozmiar, albo tyle, ile przyjmie urządzenie, aby zajęty komputer nie był słyszalny; opóźnienie mówi wtedy o tym (`shared_buffer_ms` w pliku konfiguracyjnym) |
-| Wyjścia odtwarzaczy | Dla każdego odtwarzacza oraz dla kolumny **Muzyka** ([wypełniacz muzyczny](automation.md)) urządzenie **Main** (na antenę) i urządzenie **Cue** (odsłuch wstępny), każde z parą kanałów. Karta dźwiękowa oferująca kilka profili wyjściowych (ALSA wymienia front, surround, bezpośredni sprzęt…) pokazuje każdy jako *karta — profil*; dwie pozycje, które nadal brzmiałyby tak samo, dostają w nawiasie identyfikator urządzenia. Interfejsy wielokanałowe mogą obsługiwać kilka odtwarzaczy na różnych parach. Wyjście Cue dzielące wyjście antenowe (Main dowolnego odtwarzacza lub cartwalla) jest dozwolone: uwaga pod nim mówi, że jego odsłuch wstępny jest słyszalny na antenie, i pyta najpierw, gdy coś tam gra. |
+| Wyjścia odtwarzaczy | Dla każdego odtwarzacza oraz dla kolumny **Wypełniacz muzyczny** ([wypełniacz muzyczny](automation.md)) urządzenie **Main** (na antenę) i urządzenie **Cue** (odsłuch wstępny), każde z parą kanałów. Karta dźwiękowa oferująca kilka profili wyjściowych (ALSA wymienia front, surround, bezpośredni sprzęt…) pokazuje każdy jako *karta — profil*; dwie pozycje, które nadal brzmiałyby tak samo, dostają w nawiasie identyfikator urządzenia. Interfejsy wielokanałowe mogą obsługiwać kilka odtwarzaczy na różnych parach. Wyjście Cue dzielące wyjście antenowe (Main dowolnego odtwarzacza lub cartwalla) jest dozwolone: uwaga pod nim mówi, że jego odsłuch wstępny jest słyszalny na antenie, i pyta najpierw, gdy coś tam gra. |
 | Test Main / Test Cue | Odtwarza krótki ton (1 kHz na Main, 440 Hz na Cue, 1,5 s, −18 dBFS) na wybranym wyjściu, abyś mógł sprawdzić okablowanie przed wejściem na antenę |
 | Biblioteka | Wyjście Cue biblioteki, z własnym przyciskiem **Test Cue**: tam słychać [odsłuch wstępny](library.md#pre-listening) okna biblioteki (na telefonie: karty Biblioteka). Bez niego przycisk Odsłuch paska odsłuchu jest przyciemniony. W Androidzie jego pusty wybór brzmi *Domyślne systemowe* zamiast *Brak*: odsłuch wstępny i **Test Cue** grają wtedy na wyjściu domyślnym (zob. [Android → Biblioteka](android.md#library)). Wyjście Biblioteki na wyjściu antenowym działa jak Cue odtwarzacza: uwaga pod nim mówi, że jego odsłuch wstępny jest słyszalny na antenie, i pyta najpierw, gdy coś tam gra. Jest w widokach Podstawowe i Zaawansowane, także na telefonie |
 | Cartwall | Wyjścia Main i Cue cartwalla. Main domyślnie jest wyjściem systemowym. Bez Cue nie ma odsłuchu wstępnego cartów; Cue na wyjściu antenowym działa jak w odtwarzaczach. |
@@ -284,9 +284,10 @@ Zob. [Gdy plik się zmienia](library.md#when-a-file-changes).
 
 ## Automatyzacja {#automation}
 
-Rotacje i reguły [wypełniacza muzycznego](automation.md) (nie w Androidzie).
+Rotacje [wypełniacza muzycznego](automation.md), szablony i dni Ramówki oraz
+reguły wypełniacza muzycznego (nie w Androidzie).
 
-![Ustawienia, Automatyzacja: rotacje Music (domyślna) i Hits, zaznaczona Music z jednym krokiem obejmującym całą muzykę oraz reguły wypełniacza muzycznego](../../images/guide/settings-automation.png)
+![Ustawienia, Automatyzacja: rotacje Music (domyślna) i Hits, zaznaczona Music z jednym krokiem obejmującym całą muzykę oraz początek sekcji Szablony i dni](../../images/guide/settings-automation.png)
 
 - **Rotacje:** lista z zaznaczoną domyślną. **Nowa rotacja** dodaje rotację
   grającą całą muzykę, **Ustaw jako domyślną** czyni zaznaczoną rotację
@@ -296,7 +297,14 @@ Rotacje i reguły [wypełniacza muzycznego](automation.md) (nie w Androidzie).
   danego rodzaju), ile gra za każdym razem (**Co najmniej** 0–99, **Co
   najwyżej** 1–99; co najmniej 0 pozwala krokowi pominąć niektóre kolejki),
   **W górę**, **W dół** i **Usuń**. **Dodaj krok** dodaje jeden na końcu.
-  Krok, którego kategorię usunięto, mówi o tym; wypełniacz go pomija.
+  Krok, którego kategorię usunięto, mówi o tym; w jego kolejce wypełniacz
+  muzyczny gra zamiast niego utwór z domyślnej rotacji (dowolną muzykę, jeśli
+  krok należy do samej domyślnej rotacji).
+- **Szablony i dni:** szablony, z **Edytuj…** (otwiera szablon jako listę i
+  zamyka Ustawienia), **Nowy szablon**, **Duplikuj**, **Usuń** i nazwą;
+  **tydzień wzorcowy**, szablon na każdy dzień tygodnia; oraz miesiąc dat
+  (bursztynowe: zmienione), z szablonem wybranej daty i **Edytuj dzień…**.
+  Zobacz [Szablony i dni](automation.md#templates-and-days).
 - **Wypełniacz muzyczny:** po jakim czasie ten sam utwór może zagrać
   ponownie (3 godziny albo gdy zagra połowa pozostałych utworów jego kroku,
   zależnie od tego, co nastąpi pierwsze; 0 wyłącza każde z tych kryteriów),

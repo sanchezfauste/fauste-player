@@ -9,9 +9,9 @@ cartucheira por baixo deles.
 
 ## Mostrar e ocultar painéis {#show-and-hide-panels}
 
-Os mosaicos à esquerda da barra superior, **Grelha** e **Música** (a
-[grelha](automation.md#the-schedule-column) e o
-[musicalizador](automation.md#the-music-filler), ambos ocultos até os
+Os mosaicos à esquerda da barra superior, **Grelha** e **Musicalizador** (a
+[grelha](automation.md#the-log-column) e o
+[musicalizador](automation.md#the-music-fill), ambos ocultos até os
 mostrar), **P1** … **Pn** e **Cartucheira**, mostram que painéis estão no
 ecrã: um mosaico aceso está visível. Clique num mosaico para ocultar ou
 mostrar o seu painel. Com muitos leitores, os mosaicos deslocam-se para os

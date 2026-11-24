@@ -153,7 +153,7 @@ llista-ne les adreces o subxarxes a `remote.osc.allowed_sources` (per exemple
 xarxa d'estudi de confiança.
 
 Els reproductors es numeren 1, 2, 3… tal com apareixen a la pantalla. La
-columna **Música** (el musicalitzador, vegeu [Automatització](automation.md))
+columna **Musicalitzador** (el musicalitzador, vegeu [Automatització](automation.md))
 no té número i no forma part del control remot. Els cartutxos es numeren a la
 pàgina mostrada.
 

@@ -91,7 +91,7 @@ badu, balio orokorretatik hasten da. Ordura arte, berriro aukeratzeak
 | Audio-sistema | Azken aukerak, **Irteerarik ez (isilik)**, ez du ezer jotzen: denbora-lerroak denbora errealeko abiaduran doaz soinu-txartelik gabe (txartelik gabeko makina baterako, edo entseatzeko). Linux: PipeWire (hura barne duten konpilazioetan), PulseAudio, JACK edo ALSA. Windows: WASAPI, ASIO (hura barne duten konpilazioetan) edo JACK. macOS: Core Audio edo JACK. Ordenagailu honetan falta diren sistemak, edo irteera-gailurik ez dutenak (abian ez dagoen JACK zerbitzari bat), erabilgarri ez gisa agertzen dira. "Sistemaren lehenetsia" aukerak ordena horretan erabilgarri dagoen lehena erabiltzen du. |
 | Lagintze-maiztasuna | Irteera guztiek erabiltzen duten maiztasuna, gailu batek berea ez badu (Aurreratua); fitxategiak maiztasun horretara bihurtzen dira kalitate handiko birlaginketarekin. Bit perfect gailuak beren maiztasunean hasten dira eta ondoren fitxategiak jarraitzen dituzte. |
 | Bufferraren tamaina | Audio-bloke bakoitzeko frameak, gailu batek berea ez badu; ondoriozko latentzia azpian erakusten da. Soinu-zerbitzari baten edo sistemaren nahasgailu baten bidezko irteerek (PulseAudio, ALSA `default` gailua) gutxienez 50 ms eskatzen dituzte tamaina honek dioena edozein dela ere, edo gailuak hartzen duen bezainbeste, ordenagailu lanpetu bat entzun ez dadin; latentziak orduan hala dio (`shared_buffer_ms` konfigurazio-fitxategian) |
-| Irteerak erreproduzitzaileko | Erreproduzitzaile bakoitzeko, eta **Musika** zutabeko ([musika-betegarria](automation.md)), **Main** gailu bat (airerakoa) eta **Cue** gailu bat (aurrez entzuteko), bakoitza kanal-bikote batekin. Hainbat irteera-profil eskaintzen dituen soinu-txartel batek (ALSAk front, surround, direct hardware… zerrendatzen ditu) bakoitza *txartela — profila* gisa erakusten du; berdin irakurtzen jarraituko luketen bi sarrerek beren gailu-identifikatzailea jasotzen dute kortxete artean. Kanal anitzeko interfazeek hainbat erreproduzitzaile eraman ditzakete bikote desberdinetan. Aireko irteera bat (edozein erreproduzitzaileren Main edo kartutxo-panelarena) partekatzen duen Cue irteera bat baimenduta dago: azpiko ohar batek dio bere aurrez entzutea airean entzuten dela eta han zerbait jotzen ari den bitartean lehenik galdetzen duela. |
+| Irteerak erreproduzitzaileko | Erreproduzitzaile bakoitzeko, eta **Musika-betegarria** zutabeko ([musika-betegarria](automation.md)), **Main** gailu bat (airerakoa) eta **Cue** gailu bat (aurrez entzuteko), bakoitza kanal-bikote batekin. Hainbat irteera-profil eskaintzen dituen soinu-txartel batek (ALSAk front, surround, direct hardware… zerrendatzen ditu) bakoitza *txartela — profila* gisa erakusten du; berdin irakurtzen jarraituko luketen bi sarrerek beren gailu-identifikatzailea jasotzen dute kortxete artean. Kanal anitzeko interfazeek hainbat erreproduzitzaile eraman ditzakete bikote desberdinetan. Aireko irteera bat (edozein erreproduzitzaileren Main edo kartutxo-panelarena) partekatzen duen Cue irteera bat baimenduta dago: azpiko ohar batek dio bere aurrez entzutea airean entzuten dela eta han zerbait jotzen ari den bitartean lehenik galdetzen duela. |
 | Probatu Main / Probatu Cue | Tonu labur bat jotzen du (1 kHz Main irteeran, 440 Hz Cue irteeran, 1,5 s, −18 dBFS) aukeratutako irteeran, airera atera aurretik kableatua egiaztatu ahal izateko |
 | Liburutegia | Liburutegiaren Cue irteera, bere **Probatu Cue** botoiarekin: liburutegiaren leihoko [aurrez entzutea](library.md#pre-listening) (telefono batean, Liburutegi fitxakoa) non entzuten den. Hura gabe, aurrez entzuteko barrako Play ilunduta dago. Androiden, bere aukera hutsak *Sistemaren lehenetsia* dio *Bat ere ez* ordez: aurrez entzuteak eta **Probatu Cue** botoiak irteera lehenetsian jotzen dute (ikus [Android → Liburutegia](android.md#library)). Aireko irteera batean dagoen Liburutegiko irteera batek erreproduzitzaile baten Cue-k bezala jokatzen du: azpiko ohar batek dio bere aurrez entzutea airean entzuten dela eta han zerbait jotzen ari den bitartean lehenik galdetzen duela. Oinarrizko eta Aurreratua ikuspegietan dago, telefono batean ere |
 | Kartutxo-panela | Kartutxo-panelaren Main eta Cue irteerak. Main lehenespenez sistemaren irteera da. Cue irteerarik gabe, ez dago kartutxoak aurrez entzuterik; aireko irteera batean dagoen Cue batek erreproduzitzaileetan bezala jokatzen du. |
@@ -305,9 +305,10 @@ denean](library.md#when-a-file-changes).
 
 ## Automatizazioa {#automation}
 
-[Musika-betegarriaren](automation.md) errotazioak eta arauak (ez Androiden).
+[Musika-betegarriaren](automation.md) errotazioak, Programazioaren txantiloiak
+eta egunak, eta musika-betegarriaren arauak (ez Androiden).
 
-![Ezarpenak, Automatizazioa: Music (lehenetsia) eta Hits errotazioak, hautatutako Music bere urrats bakarrarekin musika guztiaren gainean, eta musika-betegarriaren arauak](../../images/guide/settings-automation.png)
+![Ezarpenak, Automatizazioa: Music (lehenetsia) eta Hits errotazioak, hautatutako Music bere urrats bakarrarekin musika guztiaren gainean, eta Txantiloiak eta egunak ataleko hasiera](../../images/guide/settings-automation.png)
 
 - **Errotazioak:** zerrenda, lehenetsia markatuta. **Errotazio berria** aukerak
   musika guztia jotzen duen bat gehitzen du, **Egin lehenetsi** aukerak
@@ -319,7 +320,16 @@ denean](library.md#when-a-file-changes).
   (**Gutxienez** 0–99, **Gehienez** 1–99; gutxienez 0 jarrita urratsak txanda
   batzuk saltatzen ditu), **Gora**, **Behera** eta **Kendu**. **Gehitu
   urratsa** aukerak bat gehitzen du amaieran. Kategoria ezabatu zaion urrats
-  batek hala dio; betegarriak saltatu egiten du.
+  batek hala dio; bere txandan, musika-betegarriak errotazio lehenetsiko
+  abesti bat jotzen du haren ordez (edozein musika, urratsa errotazio
+  lehenetsiarena bera bada).
+- **Txantiloiak eta egunak:** txantiloiak, **Editatu…** aukerarekin
+  (txantiloia zerrenda gisa irekitzen du eta Ezarpenak ixten ditu),
+  **Txantiloi berria**, **Bikoiztu**, **Ezabatu** eta izena; **aste mota**,
+  txantiloi bat asteko egun bakoitzeko; eta data-hilabete bat (anbarrez:
+  aldatuak), aukeratutako dataren txantiloiarekin eta **Editatu eguna…**
+  aukerarekin. Ikus [Txantiloiak eta
+  egunak](automation.md#templates-and-days).
 - **Musika-betegarria:** pista bera berriro jo aurretik zenbat denbora (3 ordu,
   edo bere urratseko beste pisten erdia jo denean, lehenik gertatzen dena; 0k
   bietako bat desaktibatzen du), artista bera (30 minutu), **aurrerako tartea**

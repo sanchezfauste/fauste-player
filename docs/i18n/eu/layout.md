@@ -10,9 +10,9 @@ hasten ditu.
 
 ## Erakutsi eta ezkutatu panelak {#show-and-hide-panels}
 
-Goiko barraren ezkerreko lauzek, **Programazioa** eta **Musika**
-([programazioa](automation.md#the-schedule-column) eta
-[musika-betegarria](automation.md#the-music-filler), biak ezkutuan daude
+Goiko barraren ezkerreko lauzek, **Programazioa** eta **Musika-betegarria**
+([programazioa](automation.md#the-log-column) eta
+[musika-betegarria](automation.md#the-music-fill), biak ezkutuan daude
 erakutsi arte), **P1** … **Pn** eta **Kartutxoak**, pantailan zein panel
 dauden erakusten dute: piztutako lauza bat erakusten da. Egin klik lauza
 batean bere panela ezkutatzeko edo erakusteko. Erreproduzitzaile askorekin,

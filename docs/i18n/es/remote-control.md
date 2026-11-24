@@ -155,7 +155,7 @@ ejemplo `"192.168.1.0/24"`). OSC no tiene contraseña, así que mantenlo en
 una red de estudio de confianza.
 
 Los players se numeran 1, 2, 3… tal como aparecen en pantalla. La columna
-**Música** (el musicalizador, véase [Automatización](automation.md)) no tiene
+**Musicalizador** (el musicalizador, véase [Automatización](automation.md)) no tiene
 número y no forma parte del control remoto. Los cartuchos se numeran dentro de la página que se ve.
 
     oscsend localhost 7381 /fauste/player/1/play

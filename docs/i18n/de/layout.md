@@ -9,9 +9,9 @@ und der Cartwall unter ihnen.
 
 ## Panels ein- und ausblenden {#show-and-hide-panels}
 
-Die Kacheln links in der oberen Leiste, **Sendeplan** und **Musik** (der
-[Sendeplan](automation.md#the-schedule-column) und der
-[Musik-Filler](automation.md#the-music-filler), beide ausgeblendet, bis du sie
+Die Kacheln links in der oberen Leiste, **Sendeplan** und **Musikfüller** (der
+[Sendeplan](automation.md#the-log-column) und der
+[Musik-Filler](automation.md#the-music-fill), beide ausgeblendet, bis du sie
 einblendest), **P1** … **Pn** und **Cartwall**, zeigen, welche Panels auf dem
 Bildschirm sind: Eine leuchtende Kachel ist sichtbar. Klicke auf eine Kachel, um ihr Panel aus- oder einzublenden. Bei
 vielen Playern scrollen die Kacheln seitwärts (drehe das Mausrad über ihnen),

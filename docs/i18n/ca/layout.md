@@ -9,9 +9,9 @@ sota ells.
 
 ## Mostrar i amagar panells {#show-and-hide-panels}
 
-Els mosaics de l'esquerra de la barra superior, **Graella** i **Música** (la
-[graella](automation.md#the-schedule-column) i el
-[musicalitzador](automation.md#the-music-filler), tots dos amagats fins que
+Els mosaics de l'esquerra de la barra superior, **Graella** i **Musicalitzador** (la
+[graella](automation.md#the-log-column) i el
+[musicalitzador](automation.md#the-music-fill), tots dos amagats fins que
 els mostres), **P1** … **Pn** i **Cartutxera**, mostren quins panells hi ha a
 la pantalla: un mosaic il·luminat és mostrat. Fes clic en un mosaic per
 amagar o mostrar el seu panell. Amb molts reproductors, els mosaics es

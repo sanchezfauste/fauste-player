@@ -153,7 +153,7 @@ endereços ou sub-redes em `remote.osc.allowed_sources` (por exemplo,
 `"192.168.1.0/24"`). O OSC não tem palavra-passe, por isso mantenha-o numa
 rede de estúdio de confiança.
 
-Os leitores são numerados 1, 2, 3… como aparecem no ecrã. A coluna **Música**
+Os leitores são numerados 1, 2, 3… como aparecem no ecrã. A coluna **Musicalizador**
 (o musicalizador, ver [Automatização](automation.md)) não tem número e não faz
 parte do controlo remoto. Os cartuchos são
 numerados na página visível.

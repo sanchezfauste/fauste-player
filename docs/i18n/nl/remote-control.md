@@ -153,7 +153,7 @@ of subnetten in `remote.osc.allowed_sources` (bijvoorbeeld
 studionetwerk.
 
 Spelers zijn genummerd 1, 2, 3… zoals ze op het scherm staan. De kolom
-**Muziek** (de muziekvuller, zie [Automatisering](automation.md)) heeft geen
+**Muziekvuller** (de muziekvuller, zie [Automatisering](automation.md)) heeft geen
 nummer en maakt geen deel uit van de bediening op afstand. Carts zijn
 genummerd binnen de getoonde pagina.
 

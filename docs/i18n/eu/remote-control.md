@@ -158,7 +158,7 @@ aukeran (adibidez `"192.168.1.0/24"`). OSCk ez du pasahitzik; beraz,
 mantendu estudioko sare fidagarri batean.
 
 Erreproduzitzaileak 1, 2, 3… zenbakitzen dira, pantailan agertzen diren
-bezala. **Musika** zutabeak (musika-betegarria, ikus
+bezala. **Musika-betegarria** zutabeak (musika-betegarria, ikus
 [Automatizazioa](automation.md)) ez du zenbakirik eta ez da urruneko kontrolaren
 parte. Kartutxoak erakutsitako orrian zenbakitzen dira.
 

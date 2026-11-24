@@ -152,7 +152,7 @@ UDP-Port 7381 dieses Computers. Um Pakete anderer Computer anzunehmen, setze
 `remote.osc.allowed_sources` auf (zum Beispiel `"192.168.1.0/24"`). OSC hat kein
 Passwort, betreibe es also in einem vertrauenswürdigen Studionetzwerk.
 
-Die Player sind so nummeriert, wie sie auf dem Bildschirm erscheinen: 1, 2, 3… Die Spalte **Musik**
+Die Player sind so nummeriert, wie sie auf dem Bildschirm erscheinen: 1, 2, 3… Die Spalte **Musikfüller**
 (der Musik-Filler, siehe [Automatisierung](automation.md)) hat keine Nummer und
 gehört nicht zur Fernsteuerung. Carts sind in der angezeigten Seite nummeriert.
 

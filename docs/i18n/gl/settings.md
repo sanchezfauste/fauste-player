@@ -85,7 +85,7 @@ dispositivos) conserva eses axustes.
 | Sistema de audio | A última opción, **Sen saída (silencio)**, non reproduce nada: as liñas de tempo avanzan a ritmo de tempo real sen tarxeta de son (para un computador que non a ten, ou para ensaiar). Linux: PipeWire (nas compilacións que o inclúen), PulseAudio, JACK ou ALSA. Windows: WASAPI, ASIO (nas compilacións que o inclúen) ou JACK. macOS: Core Audio ou JACK. Os sistemas que faltan neste computador, ou sen dispositivo de saída (un servidor JACK que non está en execución), móstranse como non dispoñibles. «Predeterminado do sistema» usa o primeiro dispoñible nesa orde. |
 | Frecuencia de mostraxe | A frecuencia á que funciona cada saída salvo que un dispositivo teña a súa propia (Avanzado); os ficheiros convértense a ela con remostraxe de alta calidade. Os dispositivos bit-perfect empezan á súa frecuencia e despois seguen os ficheiros. |
 | Tamaño do búfer | Frames por bloque de audio, salvo que un dispositivo teña o seu propio; a latencia resultante móstrase debaixo. As saídas a través dun servidor de son ou dun mesturador do sistema (PulseAudio, o dispositivo ALSA `default`) piden polo menos 50 ms sexa cal for este tamaño, ou todo o que acepte o dispositivo, para que un computador ocupado non se note; a latencia dío entón (`shared_buffer_ms` no ficheiro de configuración) |
-| Saídas por reprodutor | Para cada reprodutor, e para a columna **Música** (o [musicalizador](automation.md)), un dispositivo **Main** (en antena) e un **Cue** (preescoita), cada un cun par de canles. Unha tarxeta de son que ofrece varios perfís de saída (ALSA lista frontal, surround, hardware directo…) mostra cada un como *tarxeta — perfil*; dúas entradas que aínda se lerían igual reciben o seu identificador de dispositivo entre corchetes. As interfaces multicanle poden levar varios reprodutores en pares distintos. Unha saída Cue que comparte unha saída de antena (a Main de calquera reprodutor ou a da cartucheira) está permitida: un aviso debaixo dela di que a súa preescoita óese en antena e que pregunta antes mentres algo soa alí. |
+| Saídas por reprodutor | Para cada reprodutor, e para a columna **Musicalizador** (o [musicalizador](automation.md)), un dispositivo **Main** (en antena) e un **Cue** (preescoita), cada un cun par de canles. Unha tarxeta de son que ofrece varios perfís de saída (ALSA lista frontal, surround, hardware directo…) mostra cada un como *tarxeta — perfil*; dúas entradas que aínda se lerían igual reciben o seu identificador de dispositivo entre corchetes. As interfaces multicanle poden levar varios reprodutores en pares distintos. Unha saída Cue que comparte unha saída de antena (a Main de calquera reprodutor ou a da cartucheira) está permitida: un aviso debaixo dela di que a súa preescoita óese en antena e que pregunta antes mentres algo soa alí. |
 | Probar Main / Probar Cue | Reproduce un ton curto (1 kHz en Main, 440 Hz en Cue, 1,5 s, −18 dBFS) na saída escollida, para comprobar a conexión antes de saír en antena |
 | Biblioteca | A saída Cue da biblioteca, co seu propio **Probar Cue**: onde se oe a [preescoita](library.md#pre-listening) da xanela da biblioteca (nun teléfono, a da lapela Biblioteca). Sen ela, o Play da barra de preescoita aparece atenuado. En Android a súa opción baleira le *Predeterminado do sistema* en lugar de *Ningunha*: a preescoita e **Probar Cue** soan entón na saída predeterminada (consulta [Android → Biblioteca](android.md#library)). Unha saída da biblioteca nunha saída de antena funciona como o Cue dun reprodutor: un aviso debaixo dela di que a súa preescoita óese en antena e pregunta antes mentres algo soa alí. Está nas vistas Básico e Avanzado, tamén nun teléfono |
 | Cartucheira | As saídas Main e Cue da cartucheira. Main toma como predeterminada a saída do sistema. Sen Cue non hai preescoita de cartuchos; un Cue nunha saída de antena funciona como nos reprodutores. |
@@ -287,9 +287,10 @@ fila non se mostra en Android, nin nas versións Flatpak e snap. Consulta
 
 ## Automatización {#automation}
 
-As rotacións e as regras do [musicalizador](automation.md) (non en Android).
+As rotacións do [musicalizador](automation.md), os modelos e días da Grella, e
+as regras do musicalizador (non en Android).
 
-![Configuración, Automatización: as rotacións Music (a predeterminada) e Hits, a Music seleccionada co seu único paso sobre toda a música, e as regras do musicalizador](../../images/guide/settings-automation.png)
+![Configuración, Automatización: as rotacións Music (a predeterminada) e Hits, a Music seleccionada co seu único paso sobre toda a música, e o comezo de Modelos e días](../../images/guide/settings-automation.png)
 
 - **Rotacións:** a lista, coa predeterminada marcada. **Nova rotación**
   engade unha que reproduce toda a música, **Facer predeterminada** converte
@@ -300,8 +301,14 @@ As rotacións e as regras do [musicalizador](automation.md) (non en Android).
   subcategorías, ou *Todo* dun tipo), cantas reproduce cada vez (**Como
   mínimo** 0–99, **Como máximo** 1–99; un mínimo de 0 permite que o paso se
   salte algúns turnos), **Subir**, **Baixar** e **Quitar**. **Engadir paso**
-  engade un ao final. Un paso cuxa categoría se borrou dío; o musicalizador
-  sáltao.
+  engade un ao final. Un paso cuxa categoría se borrou dío; na súa quenda o
+  musicalizador reproduce no seu lugar unha canción da rotación predeterminada
+  (calquera música, se o paso é da propia rotación predeterminada).
+- **Modelos e días:** os modelos, con **Editar…** (abre o modelo como unha
+  lista e pecha Configuración), **Novo modelo**, **Duplicar**, **Eliminar** e
+  o nome; a **semana tipo**, un modelo por día da semana; e un mes de datas
+  (en ámbar: cambiadas), co modelo da data escollida e **Editar día…**. Véxase
+  [Modelos e días](automation.md#templates-and-days).
 - **Musicalizador:** canto tempo debe pasar antes de que a mesma pista poida
   volver soar (3 horas, ou cando soase a metade das demais pistas do seu
   paso, o que ocorra primeiro; 0 desactiva calquera das dúas), o mesmo
