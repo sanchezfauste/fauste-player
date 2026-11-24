@@ -55,8 +55,12 @@ jobs:
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
     secrets: inherit
+    # A called workflow gets at most these: every permission a job of
+    # stores.yml asks for must be listed, or GitHub refuses to start the
+    # whole run (its plan job reads pull request files).
     permissions:
       contents: read
+      pull-requests: read
 
   # The site's download links follow the latest release, so rebuild it once
   # the assets are attached.
