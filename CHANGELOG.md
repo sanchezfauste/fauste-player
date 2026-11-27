@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.15.1](https://github.com/sanchezfauste/fauste-player/compare/v0.15.0...v0.15.1) (2026-11-27)
+
+
+### Build System
+
+* **deps:** Bump notify from 8.2.2 to 9.0.0 ([22c2f4e](https://github.com/sanchezfauste/fauste-player/commit/22c2f4eb4981f62d9e12e2f35798fb503e6f8537))
+* **deps:** Bump notify from 8.2.2 to 9.0.0 ([26762b9](https://github.com/sanchezfauste/fauste-player/commit/26762b9c4aa5bc451d2c05b0291cc416d5be9242))
+* **deps:** Bump postcard from 1.1.3 to 1.2.0 ([7faf373](https://github.com/sanchezfauste/fauste-player/commit/7faf373e8aa63a6ca1f277bdd637c911dfb36a42))
+* **deps:** Bump postcard from 1.1.3 to 1.2.0 ([980b47f](https://github.com/sanchezfauste/fauste-player/commit/980b47fe38c8b7749c5ca04d9c86486e8e5c89b4))
+* **deps:** Bump the cargo-patch group across 1 directory with 2 updates ([58f840f](https://github.com/sanchezfauste/fauste-player/commit/58f840f91a9c17aa30d76a70a03a10d2c755e367))
+* **deps:** Bump the cargo-patch group across 1 directory with 2 updates ([e253022](https://github.com/sanchezfauste/fauste-player/commit/e2530228a0f4b063cd732ba604f4bd9bcb25c258))
+
 ## [0.15.0](https://github.com/sanchezfauste/fauste-player/compare/v0.14.0...v0.15.0) (2026-11-24)
 
 
